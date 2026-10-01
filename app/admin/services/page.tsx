@@ -134,6 +134,7 @@ export default function ServicesPage() {
       <AdminPageHeader
         title="Services"
         description={`${filtered.length} of ${rows.length} · ${pendingCount} pending approval`}
+        stackOnSmall
         actions={
           pendingCount > 0 ? (
             <button
@@ -179,17 +180,17 @@ export default function ServicesPage() {
           />
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
+            <table className="min-w-[960px] w-full text-left text-sm">
               <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
                 <tr>
-                  <th className="px-4 py-3 font-semibold">Service</th>
-                  <th className="px-4 py-3 font-semibold">Provider</th>
-                  <th className="px-4 py-3 font-semibold">Category</th>
-                  <th className="px-4 py-3 font-semibold">Price</th>
-                  <th className="px-4 py-3 font-semibold">Rating</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 font-semibold">Created</th>
-                  <th className="px-4 py-3 font-semibold">Actions</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-semibold">Service</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-semibold">Provider</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-semibold">Category</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-semibold">Price</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-semibold">Rating</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-semibold">Status</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-semibold">Created</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>

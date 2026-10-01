@@ -2,6 +2,21 @@
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import Link from "next/link";
+import {
+  MapPin,
+  Star,
+  Users,
+  Search,
+  Plus,
+  Pencil,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Eye,
+  Ban,
+  Sparkles,
+  ChevronDown,
+} from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -219,6 +234,188 @@ function GymImagePicker({
     </div>
   );
 }
+
+/* ─── Gym Card (Mobile) ─── */
+
+function GymCard({
+  row,
+  catalog,
+  canWrite,
+  busyId,
+  onEdit,
+  onApprove,
+  onReview,
+  onToggleFeature,
+  onApproveFeature,
+  onRejectFeature,
+  onSuspend,
+}: {
+  row: GymRow;
+  catalog: GymCategoryRow[];
+  canWrite: boolean;
+  busyId: string | null;
+  onEdit: () => void;
+  onApprove: () => void;
+  onReview: () => void;
+  onToggleFeature: () => void;
+  onApproveFeature: () => void;
+  onRejectFeature: () => void;
+  onSuspend: () => void;
+}) {
+  const cover = row.cover_url || row.logo_url;
+  const isBusy = busyId === row.id;
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+      {/* Header */}
+      <div className="mb-3 flex items-start gap-3">
+        {cover ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={cover}
+            alt=""
+            className="h-14 w-14 shrink-0 rounded-lg object-cover"
+          />
+        ) : (
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-muted text-[10px] text-text-secondary">
+            No img
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <Link
+            href={`/admin/gyms/${row.id}`}
+            className="block truncate font-medium text-text-primary hover:text-primary"
+          >
+            {row.name}
+          </Link>
+          <p className="flex items-center gap-1 text-xs text-text-secondary">
+            <MapPin className="h-3 w-3" />
+            {locationLabel(row.city, row.location) !== "—"
+              ? [row.city, row.location].filter(Boolean).join(" · ")
+              : locationLabel(row.city, row.country)}
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-hint">
+            <span className="flex items-center gap-1">
+              <Star className="h-3 w-3" />
+              {(row.rating_avg ?? 0).toFixed(1)}
+            </span>
+            <span className="flex items-center gap-1">
+              <Users className="h-3 w-3" />
+              {row.follower_count ?? 0}
+            </span>
+            {row.owner_name ? <span>· {row.owner_name}</span> : null}
+          </div>
+        </div>
+      </div>
+
+      {/* Badges */}
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        <StatusBadge tone={requestTone(row.status)}>{row.status}</StatusBadge>
+        <StatusBadge tone={requestTone(row.verification_status)}>
+          {row.verification_status.replace(/_/g, " ")}
+        </StatusBadge>
+        <StatusBadge
+          tone={
+            row.is_featured
+              ? "success"
+              : row.feature_status === "pending"
+                ? "warning"
+                : row.feature_status === "rejected"
+                  ? "danger"
+                  : "neutral"
+          }
+        >
+          {gymFeatureLabel(row.feature_status, row.is_featured)}
+        </StatusBadge>
+      </div>
+
+      {/* Meta */}
+      <div className="mb-3 flex items-center justify-between text-xs text-text-secondary">
+        <span>{gymCategoryLabel(row.category, catalog)}</span>
+        <span className="tabular-nums font-medium text-text-primary">
+          {formatMoney(row.monthly_payment ?? 0)}/mo
+        </span>
+      </div>
+
+      {/* Actions */}
+      {canWrite ? (
+        <div className="flex flex-wrap gap-1.5 border-t border-border pt-3">
+          <Link
+            href={`/admin/gyms/${row.id}`}
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+          >
+            <Eye className="h-3 w-3" /> Manage
+          </Link>
+          <button
+            type="button"
+            disabled={isBusy}
+            onClick={onEdit}
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
+          >
+            <Pencil className="h-3 w-3" /> Edit
+          </button>
+          <button
+            type="button"
+            disabled={isBusy}
+            onClick={onApprove}
+            className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+          >
+            <CheckCircle2 className="h-3 w-3" /> Approve
+          </button>
+          {row.feature_status === "pending" ? (
+            <>
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={onApproveFeature}
+                className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
+              >
+                <Sparkles className="h-3 w-3" /> Feature
+              </button>
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={onRejectFeature}
+                className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+              >
+                <XCircle className="h-3 w-3" /> Reject
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={onToggleFeature}
+              className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
+            >
+              <Sparkles className="h-3 w-3" />
+              {row.is_featured ? "Unfeature" : "Feature"}
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={isBusy}
+            onClick={onSuspend}
+            className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+          >
+            <Ban className="h-3 w-3" /> Suspend
+          </button>
+        </div>
+      ) : (
+        <div className="border-t border-border pt-3">
+          <Link
+            href={`/admin/gyms/${row.id}`}
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
+          >
+            <Eye className="h-3 w-3" /> Manage
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Main Page ─── */
 
 export default function GymsAdminPage() {
   const { can } = useAdminPermissions();
@@ -619,9 +816,11 @@ export default function GymsAdminPage() {
             <button
               type="button"
               onClick={openCreate}
-              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
             >
-              Add gym
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Add gym</span>
+              <span className="sm:hidden">Add</span>
             </button>
           ) : null
         }
@@ -629,7 +828,8 @@ export default function GymsAdminPage() {
 
       {error ? <AdminErrorAlert message={error} /> : null}
 
-      <section className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
+      {/* Stat Cards */}
+      <section className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <AdminStatCard title="Shown" value={`${filtered.length}`} />
         <AdminStatCard title="Active" value={`${totals.active}`} />
         <AdminStatCard title="Verified" value={`${totals.verified}`} />
@@ -637,8 +837,9 @@ export default function GymsAdminPage() {
         <AdminStatCard title="Feature pending" value={`${totals.featurePending}`} />
       </section>
 
+      {/* Filters */}
       <AdminFilterPanel>
-        <div className="grid gap-3 md:grid-cols-[1fr_140px_140px_160px_160px]">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <AdminSearchInput
             value={query}
             onChange={setQuery}
@@ -679,6 +880,58 @@ export default function GymsAdminPage() {
 
       {loading ? <AdminLoadingRow label="Loading gyms…" /> : null}
 
+      {/* Mobile Card Layout */}
+      {!loading && filtered.length > 0 ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 lg:hidden">
+          {filtered.map((row) => (
+            <GymCard
+              key={row.id}
+              row={row}
+              catalog={catalog}
+              canWrite={canWrite}
+              busyId={busyId}
+              onEdit={() => openEdit(row)}
+              onApprove={() =>
+                updateGym(row.id, {
+                  status: "active",
+                  verification_status: "verified",
+                })
+              }
+              onReview={() =>
+                updateGym(row.id, {
+                  verification_status: "under_review",
+                })
+              }
+              onToggleFeature={() =>
+                updateGym(row.id, {
+                  is_featured: !row.is_featured,
+                })
+              }
+              onApproveFeature={() =>
+                updateGym(row.id, {
+                  action: "review_featured",
+                  approve: true,
+                })
+              }
+              onRejectFeature={() =>
+                updateGym(row.id, {
+                  action: "review_featured",
+                  approve: false,
+                })
+              }
+              onSuspend={() =>
+                updateGym(row.id, {
+                  status: "inactive",
+                  verification_status: "suspended",
+                })
+              }
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {/* Desktop Table Layout */}
+      <div className="hidden lg:block">
       <AdminTableShell>
         {!loading && filtered.length === 0 ? (
           <AdminEmpty
@@ -889,7 +1142,23 @@ export default function GymsAdminPage() {
           </div>
         ) : null}
       </AdminTableShell>
+      </div>
 
+      {/* Mobile Empty State */}
+      {!loading && filtered.length === 0 ? (
+        <div className="lg:hidden">
+          <AdminEmpty
+            title="No gyms"
+            description={
+              canWrite
+                ? "Add a gym venue, or wait for submissions from the app."
+                : "Gym venues from SpoJex appear here."
+            }
+          />
+        </div>
+      ) : null}
+
+      {/* Create Modal */}
       <AdminModal
         open={createOpen}
         title="Add gym"
@@ -898,6 +1167,7 @@ export default function GymsAdminPage() {
           setCreateOpen(false);
         }}
         className="max-w-2xl"
+        sheet
         footer={
           <AdminModalFooter
             onCancel={() => setCreateOpen(false)}
@@ -1151,6 +1421,7 @@ export default function GymsAdminPage() {
         </div>
       </AdminModal>
 
+      {/* Edit Modal */}
       <AdminModal
         open={editOpen && !!draft}
         title="Edit gym"
@@ -1322,6 +1593,8 @@ export default function GymsAdminPage() {
                     className={fieldClass}
                   />
                 </label>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
                 <label className="grid gap-1 text-sm">
                   <span className="text-text-secondary">Phone</span>
                   <input
@@ -1346,14 +1619,6 @@ export default function GymsAdminPage() {
                     onChange={(event) => setDraft({ ...draft, website: event.target.value })}
                     className={fieldClass}
                     placeholder="https://"
-                  />
-                </label>
-                <label className="grid gap-1 text-sm sm:col-span-2">
-                  <span className="text-text-secondary">Owner display name</span>
-                  <input
-                    value={draft.owner_name}
-                    onChange={(event) => setDraft({ ...draft, owner_name: event.target.value })}
-                    className={fieldClass}
                   />
                 </label>
               </div>

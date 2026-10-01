@@ -12,5 +12,32 @@ export async function GET() {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
-  return NextResponse.json({ data: data ?? [] });
+  const messages = (data ?? []) as Array<{
+    id: string;
+    conversation_id: string;
+    sender_id: string;
+    body: string | null;
+    media_path?: string | null;
+    created_at: string;
+  }>;
+  const conversationIds = [...new Set(messages.map((row) => row.conversation_id))];
+  const conversationMap = new Map<string, { type: string; title: string | null; state: string }>();
+  if (conversationIds.length > 0) {
+    const { data: conversations } = await auth.context.client
+      .from("conversations")
+      .select("id, type, title, state")
+      .in("id", conversationIds);
+    for (const conversation of conversations ?? []) {
+      conversationMap.set(conversation.id, {
+        type: conversation.type,
+        title: conversation.title,
+        state: conversation.state,
+      });
+    }
+  }
+  const enriched = messages.map((row) => ({
+    ...row,
+    conversation: conversationMap.get(row.conversation_id) ?? null,
+  }));
+  return NextResponse.json({ data: enriched });
 }

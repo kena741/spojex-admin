@@ -40,6 +40,8 @@ import {
   Settings,
   ScrollText,
   Dumbbell,
+  Menu,
+  X,
 } from "lucide-react";
 import { getSupabase } from "@/lib/supabase/client";
 import { canReadRadioChat } from "@/lib/admin-permissions";
@@ -271,6 +273,7 @@ export default function Sidebar() {
     return defaults;
   });
   const [hydrated, setHydrated] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const { can, staff } = useAdminPermissions();
 
   const visibleSections = NAV_SECTIONS.map((section) => ({
@@ -318,6 +321,23 @@ export default function Sidebar() {
     });
   }, [pathname, hydrated]);
 
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  // Prevent body scroll when mobile sidebar is open
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileOpen]);
+
   const toggleSection = (id: string) => {
     setOpenSections((prev) => {
       const next = { ...prev, [id]: !prev[id] };
@@ -344,8 +364,8 @@ export default function Sidebar() {
     router.replace("/login");
   };
 
-  return (
-    <aside className="admin-shell fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+  const sidebarContent = (
+    <>
       <div className="flex h-16 shrink-0 items-center gap-3 border-b border-sidebar-border px-5">
         <LogoMark />
         <span className="font-heading text-[15px] font-semibold tracking-normal">SpoJex Admin</span>
@@ -432,6 +452,52 @@ export default function Sidebar() {
           <span>Sign out</span>
         </button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile hamburger — visible only on small screens */}
+      <button
+        type="button"
+        onClick={() => setMobileOpen(true)}
+        className="fixed left-4 top-4 z-50 grid h-10 w-10 place-items-center rounded-lg border border-border bg-card shadow-sm lg:hidden"
+        aria-label="Open menu"
+      >
+        <Menu className="h-5 w-5 text-text-primary" />
+      </button>
+
+      {/* Mobile overlay */}
+      {mobileOpen ? (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 lg:hidden"
+          onClick={() => setMobileOpen(false)}
+          aria-hidden
+        />
+      ) : null}
+
+      {/* Mobile sidebar (slide-over) */}
+      <aside
+        className={cn(
+          "fixed left-0 top-0 z-50 flex h-screen w-72 max-w-[85vw] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-300 ease-in-out lg:hidden",
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
+        )}
+      >
+        <button
+          type="button"
+          onClick={() => setMobileOpen(false)}
+          className="absolute right-3 top-4 grid h-8 w-8 place-items-center rounded-lg text-text-secondary hover:bg-sidebar-accent"
+          aria-label="Close menu"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        {sidebarContent}
+      </aside>
+
+      {/* Desktop sidebar (fixed) */}
+      <aside className="admin-shell fixed left-0 top-0 z-40 hidden h-screen w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex">
+        {sidebarContent}
+      </aside>
+    </>
   );
 }

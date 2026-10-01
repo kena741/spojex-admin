@@ -380,6 +380,7 @@ export type MessageRow = {
   media_path?: string | null;
   image_url?: string | null;
   created_at: string;
+  conversation?: { type: string; title: string | null; state: string } | null;
 };
 
 export type NotificationRow = {

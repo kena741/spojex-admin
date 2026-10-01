@@ -125,3 +125,10 @@
     @apply bg-background font-sans text-base leading-normal text-text-primary antialiased;
   }
 }
+
+.pac-container {
+  z-index: 200 !important;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}

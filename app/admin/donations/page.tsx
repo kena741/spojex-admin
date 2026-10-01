@@ -8,6 +8,8 @@ import {
   AdminErrorAlert,
   AdminFilterPanel,
   AdminLoadingRow,
+  AdminModal,
+  AdminModalFooter,
   AdminSearchInput,
   AdminSelect,
   AdminTableActions,
@@ -46,6 +48,7 @@ export default function DonationsPage() {
   const [title, setTitle] = useState("");
   const [goal, setGoal] = useState("");
   const [creating, setCreating] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<DonationDraft | null>(null);
   const [saving, setSaving] = useState(false);
@@ -76,9 +79,8 @@ export default function DonationsPage() {
     });
   }, [query, rows, status]);
 
-  const create = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!canWrite) return;
+  const create = async () => {
+    if (!canWrite || !title.trim()) return;
     setCreating(true);
     setError(null);
     try {
@@ -92,6 +94,7 @@ export default function DonationsPage() {
       });
       setTitle("");
       setGoal("");
+      setCreateOpen(false);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
@@ -144,37 +147,22 @@ export default function DonationsPage() {
 
   return (
     <>
-      <AdminPageHeader title="Donations" description="Fundraising campaigns" />
+      <AdminPageHeader
+        title="Donations"
+        description="Fundraising campaigns"
+        actions={
+          canWrite ? (
+            <button
+              type="button"
+              onClick={() => setCreateOpen(true)}
+              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+            >
+              Add donation
+            </button>
+          ) : null
+        }
+      />
       {error ? <AdminErrorAlert message={error} /> : null}
-      {canWrite ? (
-        <form
-          onSubmit={create}
-          className="mb-6 grid gap-3 rounded-xl border border-border bg-card p-4 shadow-sm md:grid-cols-[1fr_160px_auto]"
-        >
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Campaign title"
-            required
-            className="h-10 rounded-lg border border-border px-3 text-sm"
-          />
-          <input
-            value={goal}
-            onChange={(e) => setGoal(e.target.value)}
-            placeholder="Goal (coins)"
-            type="number"
-            min={0}
-            className="h-10 rounded-lg border border-border px-3 text-sm"
-          />
-          <button
-            type="submit"
-            disabled={creating || !title.trim()}
-            className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
-          >
-            New campaign
-          </button>
-        </form>
-      ) : null}
       <AdminFilterPanel>
         <div className="grid gap-3 md:grid-cols-[1fr_180px]">
           <AdminSearchInput value={query} onChange={setQuery} placeholder="Search title or summary" />
@@ -296,6 +284,48 @@ export default function DonationsPage() {
           </div>
         )}
       </AdminTableShell>
+
+      <AdminModal
+        open={createOpen}
+        title="Add donation"
+        onClose={() => {
+          if (creating) return;
+          setCreateOpen(false);
+        }}
+        sheet
+        footer={
+          <AdminModalFooter
+            onCancel={() => setCreateOpen(false)}
+            onSave={() => void create()}
+            saving={creating}
+            saveLabel="Create campaign"
+          />
+        }
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void create();
+          }}
+          className="grid gap-3"
+        >
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Campaign title"
+            required
+            className="h-10 rounded-lg border border-border px-3 text-sm"
+          />
+          <input
+            value={goal}
+            onChange={(e) => setGoal(e.target.value)}
+            placeholder="Goal (coins)"
+            type="number"
+            min={0}
+            className="h-10 rounded-lg border border-border px-3 text-sm"
+          />
+        </form>
+      </AdminModal>
     </>
   );
 }

@@ -161,12 +161,13 @@ export default function ServiceDetailPage() {
       <AdminPageHeader
         title={service.title}
         backHref="/admin/services"
+        stackOnSmall
         breadcrumbs={[
           { label: "Services", href: "/admin/services" },
           { label: service.title },
         ]}
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={togglePublished}
@@ -205,7 +206,7 @@ export default function ServiceDetailPage() {
             </StatusBadge>
           </div>
           {photos.length > 0 ? (
-            <div className="mb-4 grid grid-cols-3 gap-2">
+            <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
               {photos.map((src) => (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img key={src} src={src} alt="" className="h-24 w-full rounded-lg object-cover" />
@@ -348,13 +349,13 @@ export default function ServiceDetailPage() {
           <p className="text-sm text-text-secondary">No bookings for this listing yet.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
+            <table className="min-w-[640px] w-full text-left text-sm">
               <thead className="border-b border-border text-xs uppercase text-text-secondary">
                 <tr>
-                  <th className="py-2 font-semibold">Customer</th>
-                  <th className="py-2 font-semibold">When</th>
-                  <th className="py-2 font-semibold">Payment</th>
-                  <th className="py-2 font-semibold">Status</th>
+                  <th className="whitespace-nowrap py-2 font-semibold">Customer</th>
+                  <th className="whitespace-nowrap py-2 font-semibold">When</th>
+                  <th className="whitespace-nowrap py-2 font-semibold">Payment</th>
+                  <th className="whitespace-nowrap py-2 font-semibold">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -405,8 +406,8 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 function Item({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-3">
-      <dt className="text-text-secondary">{label}</dt>
-      <dd className="font-medium">{value}</dd>
+      <dt className="shrink-0 text-text-secondary">{label}</dt>
+      <dd className="text-right font-medium">{value}</dd>
     </div>
   );
 }

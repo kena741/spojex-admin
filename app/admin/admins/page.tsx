@@ -7,6 +7,8 @@ import {
   AdminErrorAlert,
   AdminFilterPanel,
   AdminLoadingRow,
+  AdminModal,
+  AdminModalFooter,
   AdminSearchInput,
   AdminSelect,
   AdminTableShell,
@@ -35,6 +37,7 @@ export default function AdminsPage() {
   const [query, setQuery] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const load = async () => {
     const [adminsRes, rolesRes] = await Promise.all([
@@ -62,13 +65,13 @@ export default function AdminsPage() {
     );
   }, [query, rows]);
 
-  const create = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const create = async () => {
     setSaving(true);
     setError(null);
     try {
       await postAdmin("/api/admin/admins", form);
       setForm(emptyForm);
+      setCreateOpen(false);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
@@ -109,54 +112,19 @@ export default function AdminsPage() {
       <AdminPageHeader
         title="Admins"
         description="Staff who can sign in to SpoJex Admin"
+        actions={
+          canWrite ? (
+            <button
+              type="button"
+              onClick={() => setCreateOpen(true)}
+              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+            >
+              Add admin
+            </button>
+          ) : null
+        }
       />
       {error ? <AdminErrorAlert message={error} /> : null}
-      {canWrite ? (
-        <form
-          onSubmit={create}
-          className="mb-6 grid gap-3 rounded-xl border border-border bg-card p-4 shadow-sm md:grid-cols-2 lg:grid-cols-5"
-        >
-          <input
-            value={form.full_name}
-            onChange={(event) => setForm((current) => ({ ...current, full_name: event.target.value }))}
-            placeholder="Full name"
-            className="h-10 rounded-lg border border-border px-3 text-sm"
-            required
-          />
-          <input
-            type="email"
-            value={form.email}
-            onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
-            placeholder="Email"
-            className="h-10 rounded-lg border border-border px-3 text-sm"
-            required
-          />
-          <AdminSelect
-            value={form.role}
-            onChange={(value) => setForm((current) => ({ ...current, role: value }))}
-          >
-            {(roles.length ? roles : [{ slug: "viewer", name: "Viewer" }]).map((role) => (
-              <option key={role.slug} value={role.slug}>
-                {role.name}
-              </option>
-            ))}
-          </AdminSelect>
-          <input
-            type="password"
-            value={form.password}
-            onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-            placeholder="Password (optional)"
-            className="h-10 rounded-lg border border-border px-3 text-sm"
-          />
-          <button
-            type="submit"
-            disabled={saving}
-            className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
-          >
-            {saving ? "Adding…" : "Add admin"}
-          </button>
-        </form>
-      ) : null}
       <AdminFilterPanel>
         <AdminSearchInput value={query} onChange={setQuery} placeholder="Search name, email, role" />
       </AdminFilterPanel>
@@ -235,6 +203,65 @@ export default function AdminsPage() {
           </div>
         )}
       </AdminTableShell>
+
+      <AdminModal
+        open={createOpen}
+        title="Add admin"
+        onClose={() => {
+          if (saving) return;
+          setCreateOpen(false);
+        }}
+        sheet
+        footer={
+          <AdminModalFooter
+            onCancel={() => setCreateOpen(false)}
+            onSave={() => void create()}
+            saving={saving}
+            saveLabel="Add admin"
+          />
+        }
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void create();
+          }}
+          className="grid gap-3"
+        >
+          <input
+            value={form.full_name}
+            onChange={(event) => setForm((current) => ({ ...current, full_name: event.target.value }))}
+            placeholder="Full name"
+            className="h-10 rounded-lg border border-border px-3 text-sm"
+            required
+          />
+          <input
+            type="email"
+            value={form.email}
+            onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+            placeholder="Email"
+            className="h-10 rounded-lg border border-border px-3 text-sm"
+            required
+          />
+          <AdminSelect
+            value={form.role}
+            onChange={(value) => setForm((current) => ({ ...current, role: value }))}
+          >
+            {(roles.length ? roles : [{ slug: "viewer", name: "Viewer" }]).map((role) => (
+              <option key={role.slug} value={role.slug}>
+                {role.name}
+              </option>
+            ))}
+          </AdminSelect>
+          <input
+            type="password"
+            value={form.password}
+            onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
+            placeholder="Password (optional)"
+            className="h-10 rounded-lg border border-border px-3 text-sm"
+          />
+        </form>
+      </AdminModal>
     </>
   );
 }

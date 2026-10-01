@@ -3,7 +3,7 @@ import { Search } from "lucide-react";
 import Sidebar from "@/components/sidebar";
 import { cn } from "@/lib/utils";
 
-export const adminPageMainClassName = "ml-64 min-h-screen min-w-0 flex-1 overflow-x-hidden";
+export const adminPageMainClassName = "min-h-screen min-w-0 flex-1 overflow-x-hidden lg:ml-64";
 export const adminPageContentClassName = "mx-auto min-w-0 w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8";
 
 export function AdminShell({ children }: { children: ReactNode }) {
@@ -122,6 +122,7 @@ export function AdminModal({
   children,
   footer,
   className,
+  sheet = false,
 }: {
   open: boolean;
   title: string;
@@ -129,11 +130,18 @@ export function AdminModal({
   children: ReactNode;
   footer?: ReactNode;
   className?: string;
+  /** Full-width bottom sheet on small screens. */
+  sheet?: boolean;
 }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div
+      className={cn(
+        "fixed inset-0 z-50 flex justify-center",
+        sheet ? "items-end p-0 sm:items-center sm:p-4" : "items-center p-4",
+      )}
+    >
       <button
         type="button"
         aria-label="Close dialog"
@@ -145,7 +153,10 @@ export function AdminModal({
         aria-modal="true"
         aria-labelledby="admin-modal-title"
         className={cn(
-          "relative flex max-h-[90vh] w-full max-w-lg flex-col rounded-xl border border-border bg-card shadow-xl",
+          "relative flex w-full flex-col border border-border bg-card shadow-xl",
+          sheet
+            ? "max-h-[92vh] max-w-lg rounded-t-2xl sm:max-h-[90vh] sm:rounded-xl"
+            : "max-h-[90vh] max-w-lg rounded-xl",
           className,
         )}
       >
@@ -180,11 +191,11 @@ export function AdminModalFooter({
   saveLabel?: string;
 }) {
   return (
-    <div className="flex justify-end gap-2">
+    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
       <button
         type="button"
         onClick={onCancel}
-        className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted"
+        className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-card px-4 text-sm font-medium hover:bg-muted"
       >
         Cancel
       </button>
@@ -192,7 +203,7 @@ export function AdminModalFooter({
         type="button"
         disabled={saving}
         onClick={onSave}
-        className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+        className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
       >
         {saving ? "Saving…" : saveLabel}
       </button>

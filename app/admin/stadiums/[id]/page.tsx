@@ -447,19 +447,20 @@ export default function StadiumDetailPage() {
     <>
       <AdminPageHeader
         title={stadium.name || "Stadium"}
-        description={stadium.location || stadium.slug || ""}
+        description={stadium.location || stadium.address || stadium.slug || ""}
         backHref="/admin/stadiums"
+        stackOnSmall
         breadcrumbs={[
           { label: "Stadiums", href: "/admin/stadiums" },
           { label: stadium.name || "Detail" },
         ]}
         actions={
           canWrite ? (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex w-full flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => setEditOpen(true)}
-                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+                className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground"
               >
                 Edit
               </button>
@@ -467,7 +468,7 @@ export default function StadiumDetailPage() {
                 <button
                   type="button"
                   onClick={() => saveStadium({ status: "active" })}
-                  className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+                  className="inline-flex h-10 items-center justify-center rounded-lg bg-emerald-600 px-3 text-sm font-medium text-white hover:bg-emerald-700"
                 >
                   Approve
                 </button>
@@ -476,7 +477,7 @@ export default function StadiumDetailPage() {
                 <button
                   type="button"
                   onClick={() => saveStadium({ status: "inactive" })}
-                  className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-card px-3 text-sm font-medium hover:bg-muted"
                 >
                   Deactivate
                 </button>
@@ -485,7 +486,7 @@ export default function StadiumDetailPage() {
                 <button
                   type="button"
                   onClick={() => saveStadium({ status: "rejected" })}
-                  className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
+                  className="inline-flex h-10 items-center justify-center rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-700 hover:bg-red-100"
                 >
                   Reject
                 </button>
@@ -501,13 +502,13 @@ export default function StadiumDetailPage() {
         </div>
       ) : null}
 
-      <div className="mb-6 flex flex-wrap gap-1 border-b border-border">
+      <div className="-mx-4 mb-6 flex gap-1 overflow-x-auto border-b border-border px-4 pb-0 sm:-mx-6 sm:px-6 lg:-mx-8 lg:mx-0 lg:px-0">
         {tabs.map((item) => (
           <button
             key={item.id}
             type="button"
             onClick={() => setTab(item.id)}
-            className={`px-4 py-2.5 text-sm font-medium ${
+            className={`inline-flex h-10 shrink-0 items-center whitespace-nowrap px-3 text-sm font-medium ${
               tab === item.id
                 ? "border-b-2 border-primary text-primary"
                 : "text-text-secondary hover:text-text-primary"
@@ -522,12 +523,20 @@ export default function StadiumDetailPage() {
 
       {tab === "overview" ? (
         <div className="space-y-6">
-          <section className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+          {stadiumCoverUrl(stadium) ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={stadiumCoverUrl(stadium)}
+              alt=""
+              className="-mx-4 aspect-[16/9] w-[calc(100%+2rem)] object-cover sm:-mx-6 sm:w-[calc(100%+3rem)] sm:rounded-2xl lg:mx-0 lg:aspect-[21/9] lg:w-full"
+            />
+          ) : null}
+          <section className="rounded-2xl border border-border bg-card p-4 sm:p-6">
             <div className="mb-5 flex items-baseline justify-between gap-3">
               <h2 className="font-heading text-sm font-semibold">Revenue</h2>
               <p className="text-xs text-text-hint">Completed payments</p>
             </div>
-            <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-border">
               {[
                 { label: "Daily", hint: "Today", value: revenue.daily },
                 { label: "Weekly", hint: "Last 7 days", value: revenue.weekly },
@@ -535,7 +544,7 @@ export default function StadiumDetailPage() {
               ].map((item) => (
                 <div
                   key={item.label}
-                  className="py-4 first:pt-0 last:pb-0 sm:px-6 sm:py-1 sm:first:pl-0 sm:last:pr-0"
+                  className="rounded-lg bg-muted/30 p-4 sm:rounded-none sm:bg-transparent"
                 >
                   <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-text-hint">{item.label}</p>
                   <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-text-primary">
@@ -549,110 +558,115 @@ export default function StadiumDetailPage() {
 
           <div className="grid gap-6 lg:grid-cols-2">
             <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-heading text-sm font-semibold">Profile</h2>
-              <StatusBadge tone={requestTone(stadium.status)}>{stadiumStatusLabel(stadium.status)}</StatusBadge>
-            </div>
-            <dl className="space-y-2 text-sm">
-              <div className="flex justify-between gap-3">
-                <dt className="text-text-secondary">Size</dt>
-                <dd className="font-medium">
-                  {sizeTypeLabel(stadium.size_type)}
-                  {stadium.capacity > 0 ? ` · ${stadium.capacity} capacity` : ""}
-                </dd>
+              <div className="mb-4 flex items-center justify-between gap-2">
+                <h2 className="font-heading text-sm font-semibold">Profile</h2>
+                <StatusBadge tone={requestTone(stadium.status)}>{stadiumStatusLabel(stadium.status)}</StatusBadge>
               </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-text-secondary">Location</dt>
-                <dd className="font-medium text-right">{stadium.location || "—"}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-text-secondary">Address</dt>
-                <dd className="font-medium text-right">{stadium.address || "—"}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-text-secondary">Owner</dt>
-                <dd>
-                  {stadium.users ? (
-                    <Link href={`/admin/users/${stadium.users.id}`} className="font-medium text-primary">
-                      {stadium.users.display_name}
-                    </Link>
-                  ) : (
-                    stadium.owner_name || "—"
-                  )}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-text-secondary">Contact</dt>
-                <dd className="font-medium text-right">
-                  {stadium.contact_phone || "—"}
-                  {stadium.contact_email ? ` · ${stadium.contact_email}` : ""}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-text-secondary">Map</dt>
-                <dd className="font-medium text-right">
-                  {stadium.latitude != null && stadium.longitude != null
-                    ? `${stadium.latitude}, ${stadium.longitude}`
-                    : "—"}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-text-secondary">Created</dt>
-                <dd className="font-medium">{formatDate(stadium.created_at)}</dd>
-              </div>
-            </dl>
-            {stadium.facilities.length > 0 ? (
-              <p className="mt-4 text-sm text-text-secondary">Facilities: {stadium.facilities.join(", ")}</p>
-            ) : null}
-            <p className="mt-4 text-sm text-text-secondary">{stadium.description || "No description."}</p>
-            {stadiumCoverUrl(stadium) ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={stadiumCoverUrl(stadium)} alt="" className="mt-4 h-40 w-full rounded-lg object-cover" />
-            ) : null}
-            {stadiumPhotoUrls(stadium.photos).filter((url) => url !== stadiumCoverUrl(stadium)).length > 0 ? (
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                {stadiumPhotoUrls(stadium.photos)
-                  .filter((url) => url !== stadiumCoverUrl(stadium))
-                  .map((url) => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img key={url} src={url} alt="" className="h-20 w-full rounded-md object-cover" />
-                  ))}
-              </div>
-            ) : null}
-          </section>
-
-          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-heading text-sm font-semibold">Contact</h2>
-              {canWrite ? (
-                <button
-                  type="button"
-                  onClick={() => setEditOpen(true)}
-                  className="text-sm font-medium text-primary hover:underline"
-                >
-                  Edit
-                </button>
+              <dl className="text-sm">
+                <div className="flex flex-col gap-0.5 border-b border-border py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                  <dt className="shrink-0 text-text-secondary">Size</dt>
+                  <dd className="font-medium sm:text-right">
+                    {sizeTypeLabel(stadium.size_type)}
+                    {stadium.capacity > 0 ? ` · ${stadium.capacity} capacity` : ""}
+                  </dd>
+                </div>
+                <div className="flex flex-col gap-0.5 border-b border-border py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                  <dt className="shrink-0 text-text-secondary">Location</dt>
+                  <dd className="font-medium sm:text-right">{stadium.location || "—"}</dd>
+                </div>
+                <div className="flex flex-col gap-0.5 border-b border-border py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                  <dt className="shrink-0 text-text-secondary">Address</dt>
+                  <dd className="font-medium sm:text-right">{stadium.address || "—"}</dd>
+                </div>
+                <div className="flex flex-col gap-0.5 border-b border-border py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                  <dt className="shrink-0 text-text-secondary">Owner</dt>
+                  <dd className="sm:text-right">
+                    {stadium.users ? (
+                      <Link href={`/admin/users/${stadium.users.id}`} className="font-medium text-primary">
+                        {stadium.users.display_name}
+                      </Link>
+                    ) : (
+                      stadium.owner_name || "—"
+                    )}
+                  </dd>
+                </div>
+                <div className="flex flex-col gap-0.5 border-b border-border py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                  <dt className="shrink-0 text-text-secondary">Contact</dt>
+                  <dd className="break-all font-medium sm:text-right">
+                    {stadium.contact_phone || "—"}
+                    {stadium.contact_email ? ` · ${stadium.contact_email}` : ""}
+                  </dd>
+                </div>
+                <div className="flex flex-col gap-0.5 border-b border-border py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                  <dt className="shrink-0 text-text-secondary">Map</dt>
+                  <dd className="font-medium sm:text-right">
+                    {stadium.latitude != null && stadium.longitude != null ? (
+                      <a
+                        href={`https://www.google.com/maps?q=${stadium.latitude},${stadium.longitude}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-primary"
+                      >
+                        {stadium.address || stadium.location || "Open in Maps"}
+                      </a>
+                    ) : (
+                      stadium.address || stadium.location || "—"
+                    )}
+                  </dd>
+                </div>
+                <div className="flex flex-col gap-0.5 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                  <dt className="shrink-0 text-text-secondary">Created</dt>
+                  <dd className="font-medium sm:text-right">{formatDate(stadium.created_at)}</dd>
+                </div>
+              </dl>
+              {stadium.facilities.length > 0 ? (
+                <p className="mt-4 text-sm text-text-secondary">Facilities: {stadium.facilities.join(", ")}</p>
               ) : null}
-            </div>
-            <dl className="space-y-2 text-sm">
-              <div className="flex justify-between gap-3">
-                <dt className="text-text-secondary">Phone</dt>
-                <dd className="font-medium">{stadium.contact_phone || "—"}</dd>
+              <p className="mt-4 text-sm text-text-secondary">{stadium.description || "No description."}</p>
+              {stadiumPhotoUrls(stadium.photos).filter((url) => url !== stadiumCoverUrl(stadium)).length > 0 ? (
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {stadiumPhotoUrls(stadium.photos)
+                    .filter((url) => url !== stadiumCoverUrl(stadium))
+                    .map((url) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img key={url} src={url} alt="" className="h-20 w-full rounded-md object-cover" />
+                    ))}
+                </div>
+              ) : null}
+            </section>
+
+            <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="font-heading text-sm font-semibold">Contact</h2>
+                {canWrite ? (
+                  <button
+                    type="button"
+                    onClick={() => setEditOpen(true)}
+                    className="inline-flex h-10 items-center justify-center rounded-lg border border-border px-3 text-sm font-medium text-primary hover:bg-muted"
+                  >
+                    Edit
+                  </button>
+                ) : null}
               </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-text-secondary">Email</dt>
-                <dd className="font-medium text-right">{stadium.contact_email || "—"}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-text-secondary">Owner name</dt>
-                <dd className="font-medium text-right">{stadium.owner_name || "—"}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-text-secondary">Managers</dt>
-                <dd className="font-medium text-right">{managers.filter((row) => row.is_active).length}</dd>
-              </div>
-            </dl>
-          </section>
+              <dl className="space-y-2 text-sm">
+                <div className="flex justify-between gap-3">
+                  <dt className="shrink-0 text-text-secondary">Phone</dt>
+                  <dd className="font-medium">{stadium.contact_phone || "—"}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="shrink-0 text-text-secondary">Email</dt>
+                  <dd className="text-right font-medium">{stadium.contact_email || "—"}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="shrink-0 text-text-secondary">Owner name</dt>
+                  <dd className="text-right font-medium">{stadium.owner_name || "—"}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="shrink-0 text-text-secondary">Managers</dt>
+                  <dd className="text-right font-medium">{managers.filter((row) => row.is_active).length}</dd>
+                </div>
+              </dl>
+            </section>
           </div>
         </div>
       ) : null}
@@ -798,7 +812,7 @@ export default function StadiumDetailPage() {
                 <button
                   type="submit"
                   disabled={savingHours}
-                  className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                  className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
                 >
                   {savingHours ? "Saving…" : "Save hours"}
                 </button>
@@ -936,7 +950,7 @@ export default function StadiumDetailPage() {
                 <button
                   type="submit"
                   disabled={savingPlan}
-                  className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                  className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
                 >
                   {savingPlan ? "Saving…" : "Save pricing"}
                 </button>
@@ -957,11 +971,11 @@ export default function StadiumDetailPage() {
                 <ul className="space-y-2 text-sm">
                   {bookings.map((row) => (
                     <li key={row.id} className="flex items-center justify-between gap-3 border-b border-border pb-2 last:border-0">
-                      <div>
-                        <p className="font-medium">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">
                           {row.booking_date} · {row.start_time.slice(0, 5)}–{row.end_time.slice(0, 5)}
                         </p>
-                        <p className="text-text-secondary">
+                        <p className="truncate text-text-secondary">
                           {row.users?.display_name ?? "User"} · {row.status}
                         </p>
                       </div>
@@ -1084,7 +1098,7 @@ export default function StadiumDetailPage() {
                     setError(null);
                     setManagerOpen(true);
                   }}
-                  className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+                  className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground"
                 >
                   Create manager login
                 </button>
@@ -1097,7 +1111,7 @@ export default function StadiumDetailPage() {
             ) : (
               <AdminTableShell>
                 <div className="overflow-x-auto">
-                  <table className="min-w-full text-left text-sm">
+                  <table className="min-w-[640px] text-left text-sm">
                     <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
                       <tr>
                         <th className="px-4 py-3 font-semibold">Name</th>
@@ -1163,24 +1177,25 @@ export default function StadiumDetailPage() {
           if (savingManager) return;
           setManagerOpen(false);
         }}
-        className="max-w-2xl"
+        sheet
+        className="sm:max-w-2xl"
         footer={
           createdLogin ? (
             <div className="flex justify-end">
               <button
                 type="button"
                 onClick={() => setManagerOpen(false)}
-                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+                className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground"
               >
                 Done
               </button>
             </div>
           ) : (
-            <div className="flex justify-end gap-2">
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={() => setManagerOpen(false)}
-                className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted"
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-card px-4 text-sm font-medium hover:bg-muted"
               >
                 Cancel
               </button>
@@ -1188,7 +1203,7 @@ export default function StadiumDetailPage() {
                 type="submit"
                 form="create-manager-form"
                 disabled={savingManager}
-                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
               >
                 {savingManager ? "Creating…" : "Create manager"}
               </button>

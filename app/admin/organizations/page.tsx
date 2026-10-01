@@ -32,6 +32,8 @@ const createTypeOptions = [
   ...organizationTypes.filter((item) => item.id !== "club" && item.id !== "academy"),
 ];
 
+/* ─── Main Page ─── */
+
 export default function OrganizationsPage() {
   const router = useRouter();
   const { can } = useAdminPermissions();
@@ -223,6 +225,7 @@ export default function OrganizationsPage() {
       <AdminPageHeader
         title="Organizations"
         description={`${filtered.length} of ${rows.length} · clubs, academies, and more`}
+        stackOnSmall
         actions={
           canWrite ? (
             <div className="flex flex-wrap gap-2">
@@ -230,7 +233,7 @@ export default function OrganizationsPage() {
                 type="button"
                 disabled={creatingPlatform}
                 onClick={() => void createSpojexPlatform()}
-                className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/15 disabled:opacity-60"
+                className="h-9 rounded-md border border-primary/30 bg-primary/10 px-3 text-sm font-medium text-primary hover:bg-primary/15 disabled:opacity-60"
               >
                 {creatingPlatform
                   ? "Creating…"
@@ -241,21 +244,21 @@ export default function OrganizationsPage() {
               <button
                 type="button"
                 onClick={() => openCreate("club")}
-                className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
+                className="h-9 rounded-md border border-border bg-card px-3 text-sm font-medium hover:bg-muted"
               >
                 Add club
               </button>
               <button
                 type="button"
                 onClick={() => openCreate("academy")}
-                className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
+                className="h-9 rounded-md border border-border bg-card px-3 text-sm font-medium hover:bg-muted"
               >
                 Add academy
               </button>
               <button
                 type="button"
                 onClick={() => openCreate()}
-                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+                className="h-9 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground"
               >
                 Add organization
               </button>
@@ -263,8 +266,9 @@ export default function OrganizationsPage() {
           ) : null
         }
       />
+
       <AdminFilterPanel>
-        <div className="grid gap-3 md:grid-cols-[1fr_200px_160px]">
+        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-[1fr_200px_160px]">
           <AdminSearchInput value={query} onChange={setQuery} placeholder="Search name, public ID, city" />
           <AdminSelect value={type} onChange={setType}>
             <option value="all">All types</option>
@@ -281,8 +285,11 @@ export default function OrganizationsPage() {
           </AdminSelect>
         </div>
       </AdminFilterPanel>
+
       {loading ? <AdminLoadingRow label="Loading organizations…" /> : null}
       {error ? <AdminErrorAlert message={error} /> : null}
+
+      {/* Table Layout */}
       <AdminTableShell>
         {filtered.length === 0 && !loading ? (
           <AdminEmpty
@@ -313,42 +320,42 @@ export default function OrganizationsPage() {
                   const ownerReceived = ownerCoins[row.user_id]?.lifetime_received ?? 0;
                   const shown = liveGifts > 0 ? liveGifts : ownerReceived;
                   return (
-                  <tr key={row.id} className="border-b border-border last:border-0 hover:bg-muted/40">
-                    <td className="px-4 py-3">
-                      <Link href={`/admin/organizations/${row.id}`} className="font-medium text-text-primary">
-                        {row.name || "Unnamed"}
-                      </Link>
-                      <p className="text-xs text-text-secondary">
-                        {row.public_id}
-                        {row.is_platform ? " · Spojex platform" : ""}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-text-secondary">{organizationTypeLabel(row.organization_type)}</td>
-                    <td className="px-4 py-3">
-                      {row.users ? (
-                        <Link href={`/admin/users/${row.users.id}`} className="text-primary">
-                          {row.users.display_name}
+                    <tr key={row.id} className="border-b border-border last:border-0 hover:bg-muted/40">
+                      <td className="px-4 py-3">
+                        <Link href={`/admin/organizations/${row.id}`} className="font-medium text-text-primary">
+                          {row.name || "Unnamed"}
                         </Link>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="font-medium tabular-nums text-text-primary">{formatCoins(shown)}</span>
-                      {liveGifts > 0 ? (
-                        <span className="mt-0.5 block text-[11px] text-text-secondary">Live gifts</span>
-                      ) : ownerReceived > 0 ? (
-                        <span className="mt-0.5 block text-[11px] text-text-secondary">Owner wallet</span>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3 text-text-secondary">{locationLabel(row.city, row.country)}</td>
-                    <td className="px-4 py-3">
-                      <StatusBadge tone={verifiedTone(row.verified)}>
-                        {row.verified ? "Verified" : "Unverified"}
-                      </StatusBadge>
-                    </td>
-                    <td className="px-4 py-3 text-text-secondary">{formatDate(row.created_at)}</td>
-                  </tr>
+                        <p className="text-xs text-text-secondary">
+                          {row.public_id}
+                          {row.is_platform ? " · Spojex platform" : ""}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 text-text-secondary">{organizationTypeLabel(row.organization_type)}</td>
+                      <td className="px-4 py-3">
+                        {row.users ? (
+                          <Link href={`/admin/users/${row.users.id}`} className="text-primary">
+                            {row.users.display_name}
+                          </Link>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-medium tabular-nums text-text-primary">{formatCoins(shown)}</span>
+                        {liveGifts > 0 ? (
+                          <span className="mt-0.5 block text-[11px] text-text-secondary">Live gifts</span>
+                        ) : ownerReceived > 0 ? (
+                          <span className="mt-0.5 block text-[11px] text-text-secondary">Owner wallet</span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-text-secondary">{locationLabel(row.city, row.country)}</td>
+                      <td className="px-4 py-3">
+                        <StatusBadge tone={verifiedTone(row.verified)}>
+                          {row.verified ? "Verified" : "Unverified"}
+                        </StatusBadge>
+                      </td>
+                      <td className="px-4 py-3 text-text-secondary">{formatDate(row.created_at)}</td>
+                    </tr>
                   );
                 })}
               </tbody>
@@ -356,6 +363,20 @@ export default function OrganizationsPage() {
           </div>
         )}
       </AdminTableShell>
+
+      {/* Mobile Empty State */}
+      {!loading && filtered.length === 0 ? (
+        <div className="lg:hidden">
+          <AdminEmpty
+            title="No organizations"
+            description={
+              canWrite
+                ? "Add a club or academy, or wait for individuals to create them in the app."
+                : "Organizations created in admin or the superapp appear here."
+            }
+          />
+        </div>
+      ) : null}
 
       <AdminModal
         open={createOpen}

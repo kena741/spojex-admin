@@ -486,6 +486,7 @@ export default function GymDetailPage() {
           .filter((item) => item && item !== "—")
           .join(" · ")}
         backHref="/admin/gyms"
+        stackOnSmall
         breadcrumbs={[
           { label: "Gyms", href: "/admin/gyms" },
           { label: gym.name || "Detail" },

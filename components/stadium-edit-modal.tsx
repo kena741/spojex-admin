@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminModal, AdminModalFooter } from "@/components/admin-layout";
+import { StadiumLocationPicker } from "@/components/stadium-location-picker";
 import { patchAdmin, postAdminResponse } from "@/lib/hooks";
 import {
-  parseMapsCoordinates,
   stadiumCoverUrl,
   stadiumFacilityOptions,
   stadiumPhotoUrls,
@@ -29,7 +29,6 @@ type StadiumDraft = {
   description: string;
   latitude: string;
   longitude: string;
-  mapsLink: string;
   facilities: string[];
 };
 
@@ -49,7 +48,6 @@ function emptyDraft(): StadiumDraft {
     description: "",
     latitude: "",
     longitude: "",
-    mapsLink: "",
     facilities: [],
   };
 }
@@ -72,7 +70,6 @@ function draftFromRow(row: StadiumRow): StadiumDraft {
     description: row.description ?? "",
     latitude: row.latitude == null ? "" : String(row.latitude),
     longitude: row.longitude == null ? "" : String(row.longitude),
-    mapsLink: "",
     facilities: Array.isArray(row.facilities) ? row.facilities.filter(Boolean) : [],
   };
 }
@@ -128,17 +125,6 @@ export function StadiumEditModal({
     if (coverInputRef.current) coverInputRef.current.value = "";
     if (galleryInputRef.current) galleryInputRef.current.value = "";
   }, [open, stadium]);
-
-  const applyCoords = (input: string) => {
-    const parsed = parseMapsCoordinates(input);
-    if (!parsed || !draft) return;
-    setDraft({
-      ...draft,
-      mapsLink: input,
-      latitude: String(parsed.latitude),
-      longitude: String(parsed.longitude),
-    });
-  };
 
   const toggleFacility = (label: string) => {
     if (!draft) return;
@@ -247,7 +233,8 @@ export function StadiumEditModal({
       open={open && Boolean(draft)}
       title={isCreate ? "Add stadium" : "Edit stadium"}
       onClose={onClose}
-      className="max-w-3xl"
+      sheet
+      className="sm:max-w-3xl"
       footer={
         <AdminModalFooter
           onCancel={onClose}
@@ -318,46 +305,25 @@ export function StadiumEditModal({
                 className={fieldClass}
               />
             </label>
-            <label className="grid gap-1 text-sm md:col-span-2">
-              <span className="text-text-secondary">Address</span>
-              <input
-                value={draft.address}
-                onChange={(e) => setDraft({ ...draft, address: e.target.value })}
-                className={fieldClass}
-              />
-            </label>
           </div>
 
           <div className="grid gap-3 rounded-xl border border-border bg-muted/30 p-4">
             <p className="text-sm font-medium">Map pin</p>
-            <label className="grid gap-1 text-sm">
-              <span className="text-text-secondary">Google Maps link or lat,lng</span>
-              <input
-                value={draft.mapsLink}
-                onChange={(e) => setDraft({ ...draft, mapsLink: e.target.value })}
-                onBlur={(e) => applyCoords(e.target.value)}
-                placeholder="Paste a Maps URL or 9.03, 38.74"
-                className={fieldClass}
-              />
-            </label>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1 text-sm">
-                <span className="text-text-secondary">Latitude</span>
-                <input
-                  value={draft.latitude}
-                  onChange={(e) => setDraft({ ...draft, latitude: e.target.value })}
-                  className={fieldClass}
-                />
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="text-text-secondary">Longitude</span>
-                <input
-                  value={draft.longitude}
-                  onChange={(e) => setDraft({ ...draft, longitude: e.target.value })}
-                  className={fieldClass}
-                />
-              </label>
-            </div>
+            <StadiumLocationPicker
+              address={draft.address || draft.location}
+              latitude={draft.latitude.trim() ? Number(draft.latitude) : null}
+              longitude={draft.longitude.trim() ? Number(draft.longitude) : null}
+              disabled={saving}
+              onChange={(pin) =>
+                setDraft({
+                  ...draft,
+                  address: pin.address,
+                  location: draft.location.trim() ? draft.location : pin.address,
+                  latitude: pin.latitude == null ? "" : String(pin.latitude),
+                  longitude: pin.longitude == null ? "" : String(pin.longitude),
+                })
+              }
+            />
           </div>
 
           <div>
