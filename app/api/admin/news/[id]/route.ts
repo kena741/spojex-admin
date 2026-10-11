@@ -35,17 +35,36 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     patch.organization_id =
       typeof raw === "string" && raw.trim() ? raw.trim() : null;
   }
+  if ("image_url" in patch || "cover_url" in patch) {
+    const image = "image_url" in patch ? `${patch.image_url ?? ""}`.trim() : "";
+    const cover = "cover_url" in patch ? `${patch.cover_url ?? ""}`.trim() : "";
+    const url = image || cover;
+    patch.image_url = url;
+    patch.cover_url = url;
+  }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "No valid fields" }, { status: 400 });
   }
 
   const { data: current } = await auth.context.client
     .from("sport_news")
-    .select("video_url, audio_url")
+    .select("video_url, audio_url, status, published_at")
     .eq("id", id)
     .maybeSingle();
   const currentVideo = `${current?.video_url ?? ""}`.trim();
   const currentAudio = `${current?.audio_url ?? ""}`.trim();
+  const nextStatus = "status" in patch ? `${patch.status ?? ""}` : `${current?.status ?? ""}`;
+  const incomingPublished =
+    "published_at" in patch && patch.published_at != null && `${patch.published_at}`.trim()
+      ? `${patch.published_at}`
+      : "";
+  if (nextStatus === "active" && !`${current?.published_at ?? ""}`.trim()) {
+    patch.published_at = incomingPublished || new Date().toISOString();
+  } else if (incomingPublished) {
+    patch.published_at = incomingPublished;
+  } else if ("published_at" in patch) {
+    delete patch.published_at;
+  }
   const nextVideo =
     "video_url" in patch ? `${patch.video_url ?? ""}`.trim() : currentVideo;
   const nextAudio =
@@ -68,9 +87,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       { error: "Remove the video file before adding audio." },
       { status: 400 },
     );
-  }
-  if (nextVideo && "cover_url" in patch) {
-    patch.cover_url = "";
   }
 
   const { data, error: updateError } = await auth.context.client

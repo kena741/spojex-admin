@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { SpojexClient as SupabaseClient } from "@/lib/api/client";
 import { authenticatePushRequest } from "@/lib/push/pushRouteAuth";
 import { pushReadiness, sendUserPush } from "@/lib/push/sendUserPush";
 
@@ -135,11 +135,11 @@ export async function POST(request: Request) {
         .select("user_id")
         .eq("conversation_id", conversationId);
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      const ids = (members ?? []).map((row) => `${row.user_id}`);
+      const ids = (members ?? []).map((row: any) => `${row.user_id}`);
       if (!ids.includes(publicUserId)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
-      const otherId = ids.find((id) => id !== publicUserId);
+      const otherId = ids.find((id: any) => id !== publicUserId);
       if (!otherId) {
         return NextResponse.json({ ok: true, skipped: "No other member" });
       }

@@ -17,7 +17,8 @@ import {
 import { StatusBadge, verifiedTone } from "@/components/status-badge";
 import { organizationTypeLabel, organizationTypes } from "@/lib/catalog";
 import { loadCoinWalletsByUserIds, loadOrgLiveGiftTotals } from "@/lib/coin-wallets";
-import { postAdminResponse } from "@/lib/hooks";
+import { postAdminResponse, useIdentityCatalog } from "@/lib/hooks";
+import { generateStadiumManagerPassword } from "@/lib/stadiums";
 import { getSupabase } from "@/lib/supabase/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { CoinWalletRow, OrganizationRow, UserRow } from "@/lib/types";
@@ -52,6 +53,22 @@ export default function OrganizationsPage() {
   const [ownerQuery, setOwnerQuery] = useState("");
   const [ownerOptions, setOwnerOptions] = useState<OwnerOption[]>([]);
   const [ownerLoading, setOwnerLoading] = useState(false);
+  const [ownerCreateOpen, setOwnerCreateOpen] = useState(false);
+  const [ownerCreating, setOwnerCreating] = useState(false);
+  const [ownerCreateError, setOwnerCreateError] = useState<string | null>(null);
+  const [ownerPassword, setOwnerPassword] = useState<string | null>(null);
+  const [ownerNotice, setOwnerNotice] = useState<string | null>(null);
+  const [attachedOwner, setAttachedOwner] = useState<OwnerOption | null>(null);
+  const [ownerDraft, setOwnerDraft] = useState({
+    full_name: "",
+    email: "",
+    phone: "",
+    role: "administrator",
+    city: "",
+    country: "Ethiopia",
+    password: "",
+  });
+  const { roleOptions } = useIdentityCatalog();
   const [form, setForm] = useState({
     name: "",
     organization_type: "club",
@@ -132,7 +149,22 @@ export default function OrganizationsPage() {
     });
   }, [query, rows, type, verified]);
 
-  const selectedOwner = ownerOptions.find((item) => item.id === form.owner_user_id);
+  const selectedOwner =
+    attachedOwner && attachedOwner.id === form.owner_user_id
+      ? attachedOwner
+      : ownerOptions.find((item) => item.id === form.owner_user_id);
+
+  const ownerRoleGroups = useMemo(() => {
+    const groups = new Map<string, { id: string; label: string }[]>();
+    for (const option of roleOptions) {
+      if (!option.id) continue;
+      const group = option.group || "Role";
+      const list = groups.get(group) ?? [];
+      list.push({ id: option.id, label: option.label });
+      groups.set(group, list);
+    }
+    return [...groups.entries()];
+  }, [roleOptions]);
 
   const resetCreateForm = () => {
     setForm({
@@ -147,6 +179,65 @@ export default function OrganizationsPage() {
     });
     setOwnerQuery("");
     setOwnerOptions([]);
+    setAttachedOwner(null);
+    setOwnerPassword(null);
+    setOwnerNotice(null);
+    setOwnerCreateOpen(false);
+    setOwnerCreateError(null);
+  };
+
+  const openOwnerCreate = () => {
+    setOwnerCreateError(null);
+    setOwnerDraft({
+      full_name: "",
+      email: ownerQuery.includes("@") ? ownerQuery.trim() : "",
+      phone: "",
+      role: "administrator",
+      city: form.city,
+      country: form.country || "Ethiopia",
+      password: generateStadiumManagerPassword(),
+    });
+    setOwnerCreateOpen(true);
+  };
+
+  const createOwner = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!canWrite) return;
+    setOwnerCreating(true);
+    setOwnerCreateError(null);
+    try {
+      const payload = await postAdminResponse("/api/admin/users", {
+        full_name: ownerDraft.full_name,
+        email: ownerDraft.email,
+        phone: ownerDraft.phone,
+        role: ownerDraft.role,
+        city: ownerDraft.city,
+        country: ownerDraft.country,
+        password: ownerDraft.password,
+      });
+      const created = payload.data as OwnerOption | undefined;
+      if (!created?.id) throw new Error("User was not created");
+      setForm((prev) => ({
+        ...prev,
+        owner_user_id: created.id,
+        owner_email: created.email ?? ownerDraft.email,
+      }));
+      setAttachedOwner(created);
+      setOwnerOptions([created]);
+      setOwnerQuery(created.email || created.display_name);
+      const attachedExisting = Boolean(
+        (payload as { attached_existing?: boolean }).attached_existing,
+      );
+      setOwnerPassword(typeof payload.password === "string" ? payload.password : null);
+      setOwnerNotice(
+        attachedExisting ? "Existing account attached as owner. Their current role was kept." : null,
+      );
+      setOwnerCreateOpen(false);
+    } catch (err) {
+      setOwnerCreateError(err instanceof Error ? err.message : "Failed to create owner");
+    } finally {
+      setOwnerCreating(false);
+    }
   };
 
   const openCreate = (preferredType?: string) => {
@@ -447,12 +538,27 @@ export default function OrganizationsPage() {
               className={fieldClass}
             />
           </label>
-          <label className="grid gap-1 text-sm sm:col-span-2">
-            <span className="text-text-secondary">Owner (required)</span>
+          <div className="grid gap-1 text-sm sm:col-span-2">
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor="org-owner-search" className="text-text-secondary">
+                Owner (required)
+              </label>
+              <button
+                type="button"
+                onClick={openOwnerCreate}
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-card px-3 text-sm font-medium text-primary hover:bg-muted"
+              >
+                Create owner
+              </button>
+            </div>
             <input
+              id="org-owner-search"
               value={ownerQuery}
               onChange={(event) => {
                 setOwnerQuery(event.target.value);
+                setAttachedOwner(null);
+                setOwnerPassword(null);
+                setOwnerNotice(null);
                 setForm((prev) => ({ ...prev, owner_user_id: "", owner_email: event.target.value }));
               }}
               className={fieldClass}
@@ -460,14 +566,25 @@ export default function OrganizationsPage() {
             />
             {selectedOwner ? (
               <p className="text-xs text-text-secondary">
-                Selected: {selectedOwner.display_name}
+                Owner: {selectedOwner.display_name}
                 {selectedOwner.email ? ` · ${selectedOwner.email}` : ""}
+                {selectedOwner.role ? ` · ${selectedOwner.role}` : ""}
               </p>
             ) : (
               <p className="text-xs text-text-secondary">
-                Selected user becomes the organization owner. Paste an email if they are not listed.
+                Search an existing user, or create one with phone, email, and role. They are attached as owner immediately.
               </p>
             )}
+            {ownerPassword ? (
+              <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                New login created. Password: <span className="font-mono">{ownerPassword}</span>
+              </p>
+            ) : null}
+            {ownerNotice ? (
+              <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-text-secondary">
+                {ownerNotice}
+              </p>
+            ) : null}
             {ownerLoading ? <p className="text-xs text-text-hint">Searching…</p> : null}
             {ownerOptions.length > 0 ? (
               <ul className="max-h-40 overflow-y-auto rounded-lg border border-border">
@@ -481,6 +598,9 @@ export default function OrganizationsPage() {
                           owner_user_id: owner.id,
                           owner_email: owner.email ?? "",
                         }));
+                        setAttachedOwner(owner);
+                        setOwnerPassword(null);
+                        setOwnerNotice(null);
                         setOwnerQuery(owner.email || owner.display_name);
                       }}
                       className={`flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-muted ${
@@ -496,7 +616,7 @@ export default function OrganizationsPage() {
                 ))}
               </ul>
             ) : null}
-          </label>
+          </div>
           <label className="grid gap-1 text-sm sm:col-span-2">
             <span className="text-text-secondary">Description</span>
             <textarea
@@ -513,6 +633,133 @@ export default function OrganizationsPage() {
               onChange={(event) => setForm({ ...form, verified: event.target.checked })}
             />
             <span className="text-text-secondary">Mark as verified</span>
+          </label>
+        </form>
+      </AdminModal>
+
+      <AdminModal
+        open={ownerCreateOpen}
+        stacked
+        title="Create owner"
+        onClose={() => {
+          if (ownerCreating) return;
+          setOwnerCreateOpen(false);
+        }}
+        className="max-w-lg"
+        footer={
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={() => setOwnerCreateOpen(false)}
+              className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-card px-4 text-sm font-medium hover:bg-muted"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="create-owner-form"
+              disabled={ownerCreating}
+              className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
+            >
+              {ownerCreating ? "Creating…" : "Create and attach"}
+            </button>
+          </div>
+        }
+      >
+        <form id="create-owner-form" onSubmit={createOwner} className="grid gap-3 sm:grid-cols-2">
+          {ownerCreateError ? (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 sm:col-span-2">
+              {ownerCreateError}
+            </p>
+          ) : null}
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            <span className="text-text-secondary">Full name</span>
+            <input
+              required
+              value={ownerDraft.full_name}
+              onChange={(event) => setOwnerDraft({ ...ownerDraft, full_name: event.target.value })}
+              className={fieldClass}
+              placeholder="Owner name"
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-text-secondary">Email</span>
+            <input
+              required
+              type="email"
+              value={ownerDraft.email}
+              onChange={(event) => setOwnerDraft({ ...ownerDraft, email: event.target.value })}
+              className={fieldClass}
+              placeholder="owner@example.com"
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-text-secondary">Phone</span>
+            <input
+              value={ownerDraft.phone}
+              onChange={(event) => setOwnerDraft({ ...ownerDraft, phone: event.target.value })}
+              className={fieldClass}
+              placeholder="+251…"
+            />
+          </label>
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            <span className="text-text-secondary">Role</span>
+            <select
+              required
+              value={ownerDraft.role}
+              onChange={(event) => setOwnerDraft({ ...ownerDraft, role: event.target.value })}
+              className={fieldClass}
+            >
+              {ownerRoleGroups.length > 0 ? (
+                ownerRoleGroups.map(([group, options]) => (
+                  <optgroup key={group} label={group}>
+                    {options.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))
+              ) : (
+                <option value="administrator">Administrator</option>
+              )}
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-text-secondary">City</span>
+            <input
+              value={ownerDraft.city}
+              onChange={(event) => setOwnerDraft({ ...ownerDraft, city: event.target.value })}
+              className={fieldClass}
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-text-secondary">Country</span>
+            <input
+              value={ownerDraft.country}
+              onChange={(event) => setOwnerDraft({ ...ownerDraft, country: event.target.value })}
+              className={fieldClass}
+            />
+          </label>
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            <span className="text-text-secondary">Password</span>
+            <div className="flex gap-2">
+              <input
+                required
+                value={ownerDraft.password}
+                onChange={(event) => setOwnerDraft({ ...ownerDraft, password: event.target.value })}
+                className={fieldClass}
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  setOwnerDraft({ ...ownerDraft, password: generateStadiumManagerPassword() })
+                }
+                className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-border px-3 text-sm font-medium hover:bg-muted"
+              >
+                Generate
+              </button>
+            </div>
           </label>
         </form>
       </AdminModal>

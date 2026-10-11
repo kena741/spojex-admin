@@ -1,7 +1,7 @@
-import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import type { SpojexClient, SpojexUser } from "@/lib/api/client";
 import { createServerSupabase, requestAccessToken } from "@/lib/supabase/server";
-import { adminUsesServiceRole, createAdminClient } from "@/lib/supabase/admin";
+import { adminUsesServiceRole, createAdminClientFromRequest } from "@/lib/supabase/admin";
 import {
   hasPermission,
   permissionsForRole,
@@ -9,17 +9,17 @@ import {
 } from "@/lib/admin-permissions";
 
 export type AdminContext = {
-  user: User;
+  user: SpojexUser;
   staff: AdminRow;
   permissions: string[];
-  client: SupabaseClient;
+  client: SpojexClient;
 };
 
 export type AdminAuthResult =
   | { ok: true; context: AdminContext; error: null }
   | { ok: false; error: NextResponse; context: null };
 
-async function fetchStaffRow(client: SupabaseClient, userId: string) {
+async function fetchStaffRow(client: SpojexClient, userId: string) {
   const { data, error } = await client
     .from("admin")
     .select("id, user_id, full_name, email, role, is_active, created_at, updated_at")
@@ -30,18 +30,19 @@ async function fetchStaffRow(client: SupabaseClient, userId: string) {
   return data as AdminRow | null;
 }
 
-async function loadStaff(user: User, sessionClient: SupabaseClient) {
+async function loadStaff(user: SpojexUser, sessionClient: SpojexClient) {
   let staff = await fetchStaffRow(sessionClient, user.id);
 
   if (!staff && adminUsesServiceRole()) {
-    staff = await fetchStaffRow(createAdminClient(), user.id);
+    const adminClient = await createAdminClientFromRequest();
+    staff = await fetchStaffRow(adminClient, user.id);
   }
 
   if (!staff || !staff.is_active) return null;
 
   let roleClient = sessionClient;
   if (adminUsesServiceRole()) {
-    roleClient = createAdminClient();
+    roleClient = await createAdminClientFromRequest();
   }
 
   const { data: roleRow } = await roleClient
@@ -55,34 +56,35 @@ async function loadStaff(user: User, sessionClient: SupabaseClient) {
     (roleRow as { permissions?: string[] } | null)?.permissions,
   );
 
-  const client = adminUsesServiceRole() ? createAdminClient() : sessionClient;
+  const client = adminUsesServiceRole()
+    ? await createAdminClientFromRequest()
+    : sessionClient;
 
   return { staff, permissions, client };
 }
 
-async function resolveAuthUser(supabase: SupabaseClient): Promise<User | null> {
+async function resolveAuthUser(client: SpojexClient): Promise<SpojexUser | null> {
   const bearer = await requestAccessToken();
   if (bearer) {
-    const { data } = await supabase.auth.getUser(bearer);
-    if (data.user) return data.user;
+    const { data } = await client.auth.getUser(bearer);
+    if (data.user?.id) return data.user;
   }
 
-  const { data: userData } = await supabase.auth.getUser();
-  if (userData.user) return userData.user;
+  const { data: userData } = await client.auth.getUser();
+  if (userData.user?.id) return userData.user;
 
-  const { data: claimsData } = await supabase.auth.getClaims(bearer || undefined);
+  const { data: claimsData } = await client.auth.getClaims(bearer || undefined);
   const sub = claimsData?.claims?.sub;
   if (typeof sub !== "string" || !sub) return null;
 
   return {
     id: sub,
     aud: "authenticated",
-    role: "authenticated",
-    email: typeof claimsData.claims?.email === "string" ? claimsData.claims.email : undefined,
-    app_metadata: {},
+    email: typeof claimsData.claims?.email === "string" ? String(claimsData.claims.email) : undefined,
+    role: typeof claimsData.claims?.role === "string" ? String(claimsData.claims.role) : undefined,
     user_metadata: {},
-    created_at: "",
-  } as User;
+    app_metadata: {},
+  };
 }
 
 export async function requireAdminSession(): Promise<AdminAuthResult> {
@@ -154,6 +156,5 @@ export async function requireAnyAdminPermission(permissions: string[]): Promise<
 }
 
 export function missingServiceRoleMessage() {
-  if (adminUsesServiceRole()) return null;
-  return "Add SUPABASE_SERVICE_ROLE_KEY to .env.local to update rows owned by other users.";
+  return null;
 }

@@ -8,13 +8,17 @@ import {
   AdminErrorAlert,
   AdminFilterPanel,
   AdminLoadingRow,
+  AdminModal,
+  AdminModalFooter,
   AdminSearchInput,
   AdminSelect,
   AdminTableActions,
   AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
-import { newsCategories, newsStatusLabel, newsStatuses, slugifyNews } from "@/lib/news";
+import { NewsMediaFields, NewsMediaPreview, uploadNewsFile } from "@/components/news-media-fields";
+import { newsCategories, newsRecency, newsStatusLabel, newsStatuses } from "@/lib/news";
+import { resolveNewsStoryMedia, type NewsStoryMedia, type NewsUploadKind } from "@/lib/news-media";
 import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
 import { getSupabase } from "@/lib/supabase/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
@@ -28,8 +32,9 @@ type NewsDraft = {
 };
 
 export default function NewsPage() {
-  const { can } = useAdminPermissions();
+  const { can, staff } = useAdminPermissions();
   const canWrite = can("news:write");
+  const authorName = staff?.full_name?.trim() || staff?.email?.trim() || "";
   const [rows, setRows] = useState<SportNewsRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +43,17 @@ export default function NewsPage() {
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("General");
   const [creating, setCreating] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [summary, setSummary] = useState("");
+  const [body, setBody] = useState("");
+  const [source, setSource] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
+  const [audioUrl, setAudioUrl] = useState("");
+  const [pickedKind, setPickedKind] = useState<NewsStoryMedia | null>("none");
+  const [uploading, setUploading] = useState<NewsUploadKind | null>(null);
+  const [statusValue, setStatusValue] = useState("draft");
+  const [featured, setFeatured] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<NewsDraft | null>(null);
   const [saving, setSaving] = useState(false);
@@ -46,8 +62,7 @@ export default function NewsPage() {
     const { data, error: loadError } = await getSupabase()
       .from("sport_news")
       .select("*")
-      .order("published_at", { ascending: false, nullsFirst: false })
-      .order("sort_order")
+      .order("created_at", { ascending: false })
       .limit(500);
     if (loadError) throw loadError;
     setRows((data ?? []) as SportNewsRow[]);
@@ -61,28 +76,81 @@ export default function NewsPage() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return rows.filter((row) => {
-      if (status !== "all" && row.status !== status) return false;
-      if (!q) return true;
-      return [row.title, row.slug, row.summary, row.category, row.source]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q));
-    });
+    return rows
+      .filter((row) => {
+        if (status !== "all" && row.status !== status) return false;
+        if (!q) return true;
+        return [row.title, row.slug, row.summary, row.category, row.source]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q));
+      })
+      .sort((a, b) => newsRecency(b) - newsRecency(a));
   }, [query, rows, status]);
 
-  const create = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!canWrite) return;
+  const resetCreate = () => {
+    setTitle("");
+    setSummary("");
+    setBody("");
+    setSource("");
+    setImageUrl("");
+    setVideoUrl("");
+    setAudioUrl("");
+    setPickedKind("none");
+    setCategory("General");
+    setStatusValue("draft");
+    setFeatured(false);
+  };
+
+  const uploadMedia = async (file: File, kind: NewsUploadKind) => {
+    if (kind === "video" && audioUrl.trim()) {
+      setError("Remove the audio file before uploading video.");
+      return;
+    }
+    if (kind === "audio" && videoUrl.trim()) {
+      setError("Remove the video file before uploading audio.");
+      return;
+    }
+    setUploading(kind);
+    setError(null);
+    try {
+      const publicUrl = await uploadNewsFile(null, file, kind);
+      if (kind === "image") setImageUrl(publicUrl);
+      if (kind === "video") {
+        setVideoUrl(publicUrl);
+        setPickedKind("video");
+      }
+      if (kind === "audio") {
+        setAudioUrl(publicUrl);
+        setPickedKind("audio");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  const create = async () => {
+    if (!canWrite || !title.trim() || uploading) return;
     setCreating(true);
     setError(null);
     try {
+      const image = imageUrl.trim();
       await postAdmin("/api/admin/news", {
         title: title.trim(),
-        slug: slugifyNews(title),
         category,
-        status: "draft",
+        status: statusValue,
+        summary: summary.trim(),
+        body: body.trim(),
+        source: source.trim() || undefined,
+        image_url: image,
+        cover_url: image,
+        video_url: videoUrl.trim(),
+        audio_url: audioUrl.trim(),
+        is_featured: featured,
       });
-      setTitle("");
+      resetCreate();
+      setCreateOpen(false);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
@@ -135,40 +203,22 @@ export default function NewsPage() {
 
   return (
     <>
-      <AdminPageHeader title="Sport news" description="Articles for the home feed" />
+      <AdminPageHeader
+        title="Sport news"
+        description="Articles for the home feed"
+        actions={
+          canWrite ? (
+            <button
+              type="button"
+              onClick={() => setCreateOpen(true)}
+              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+            >
+              Add news
+            </button>
+          ) : null
+        }
+      />
       {error ? <AdminErrorAlert message={error} /> : null}
-      {canWrite ? (
-        <form
-          onSubmit={create}
-          className="mb-6 grid gap-3 rounded-xl border border-border bg-card p-4 shadow-sm md:grid-cols-[1fr_160px_auto]"
-        >
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Headline"
-            required
-            className="h-10 rounded-lg border border-border px-3 text-sm"
-          />
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="h-10 rounded-lg border border-border px-3 text-sm"
-          >
-            {newsCategories.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            disabled={creating || !title.trim()}
-            className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
-          >
-            New article
-          </button>
-        </form>
-      ) : null}
       <AdminFilterPanel>
         <div className="grid gap-3 md:grid-cols-[1fr_180px]">
           <AdminSearchInput value={query} onChange={setQuery} placeholder="Search headline, category, source" />
@@ -293,6 +343,139 @@ export default function NewsPage() {
           </div>
         )}
       </AdminTableShell>
+
+      <AdminModal
+        open={createOpen}
+        title="Add news"
+        onClose={() => {
+          if (creating || uploading) return;
+          setCreateOpen(false);
+        }}
+        className="max-w-2xl"
+        sheet
+        footer={
+          <AdminModalFooter
+            onCancel={() => {
+              if (creating || uploading) return;
+              setCreateOpen(false);
+            }}
+            onSave={() => void create()}
+            saving={creating || Boolean(uploading)}
+            saveLabel="Create article"
+          />
+        }
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void create();
+          }}
+          className="grid gap-3"
+        >
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Headline"
+            required
+            className="h-10 rounded-lg border border-border px-3 text-sm"
+          />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="h-10 rounded-lg border border-border px-3 text-sm"
+            >
+              {newsCategories.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+            <select
+              value={statusValue}
+              onChange={(e) => setStatusValue(e.target.value)}
+              className="h-10 rounded-lg border border-border px-3 text-sm"
+            >
+              {newsStatuses.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <input
+            value={summary}
+            onChange={(e) => setSummary(e.target.value)}
+            placeholder="Summary (shown in feed)"
+            className="h-10 rounded-lg border border-border px-3 text-sm"
+          />
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            placeholder="Full article body"
+            rows={5}
+            className="rounded-lg border border-border px-3 py-2 text-sm"
+          />
+          <input
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            placeholder="Source (default: SpoJex Desk)"
+            className="h-10 rounded-lg border border-border px-3 text-sm"
+          />
+          <p className="text-sm text-text-secondary">
+            Author{" "}
+            <span className="font-medium text-text-primary">{authorName || "Signed-in admin"}</span>
+          </p>
+          <NewsMediaPreview
+            imageUrl={imageUrl}
+            videoUrl={videoUrl}
+            audioUrl={audioUrl}
+            mediaKind={resolveNewsStoryMedia(videoUrl, audioUrl, pickedKind)}
+          />
+          <NewsMediaFields
+            imageUrl={imageUrl}
+            videoUrl={videoUrl}
+            audioUrl={audioUrl}
+            pickedKind={pickedKind}
+            uploading={uploading}
+            onKind={setPickedKind}
+            onUpload={(file, kind) => void uploadMedia(file, kind)}
+            onImageUrl={setImageUrl}
+            onVideoUrl={(url) => {
+              if (audioUrl.trim()) {
+                setError("Remove the audio file before adding video.");
+                return;
+              }
+              setVideoUrl(url);
+              if (url) setPickedKind("video");
+            }}
+            onAudioUrl={(url) => {
+              if (videoUrl.trim()) {
+                setError("Remove the video file before adding audio.");
+                return;
+              }
+              setAudioUrl(url);
+              if (url) setPickedKind("audio");
+            }}
+            onRemoveVideo={() => {
+              setVideoUrl("");
+              setPickedKind("none");
+            }}
+            onRemoveAudio={() => {
+              setAudioUrl("");
+              setPickedKind("none");
+            }}
+          />
+          <label className="flex items-center gap-2 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              checked={featured}
+              onChange={(e) => setFeatured(e.target.checked)}
+            />
+            Feature on home
+          </label>
+        </form>
+      </AdminModal>
     </>
   );
 }

@@ -42,31 +42,31 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const weekly = emptyStadiumWeekHours();
   for (const day of weekly) {
     const rows = (data ?? []).filter(
-      (row) => !row.specific_date && row.day_of_week === day.day,
+      (row: any) => !row.specific_date && row.day_of_week === day.day_of_week,
     );
     if (!rows.length) continue;
-    const open = rows.filter((row) => row.is_blocked !== true);
+    const open = rows.filter((row: any) => row.is_blocked !== true);
     if (open.length === 0) {
       day.closed = true;
       day.slots = [];
       continue;
     }
     day.closed = false;
-    day.slots = open.map((row) => slotFrom(row.start_time, row.end_time));
+    day.slots = open.map((row: any) => slotFrom(row.start_time, row.end_time));
   }
 
   const today = new Date().toISOString().slice(0, 10);
   const blocks = (data ?? [])
-    .filter((row) => row.is_blocked && row.specific_date)
-    .map((row) => ({
+    .filter((row: any) => row.is_blocked && row.specific_date)
+    .map((row: any) => ({
       id: row.id as string,
       specific_date: dateOnly(row.specific_date),
       start_time: timeInputValue(row.start_time),
       end_time: timeInputValue(row.end_time),
       notes: `${row.notes ?? ""}`.trim(),
     }))
-    .filter((row) => row.specific_date >= today)
-    .sort((a, b) => `${a.specific_date}${a.start_time}`.localeCompare(`${b.specific_date}${b.start_time}`));
+    .filter((row: any) => row.specific_date >= today)
+    .sort((a: any, b: any) => `${a.specific_date}${a.start_time}`.localeCompare(`${b.specific_date}${b.start_time}`));
 
   return NextResponse.json({ weekly, blocks, days: stadiumWeekDays });
 }

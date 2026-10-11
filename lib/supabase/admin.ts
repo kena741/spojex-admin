@@ -1,23 +1,33 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import {
-  getSupabasePublishableKey,
-  getSupabaseServiceRoleKey,
-  getSupabaseUrl,
-} from "@/lib/env";
+import { createSpojexClient, type SpojexClient } from "@/lib/api/client";
+import type { SpojexSession } from "@/lib/api/session";
+import { requestServerSession } from "@/lib/supabase/server";
 
-export function createAdminClient(): SupabaseClient {
-  const url = getSupabaseUrl();
-  const serviceKey = getSupabaseServiceRoleKey();
-  const key = serviceKey || getSupabasePublishableKey();
-  return createClient(url, key, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
+/**
+ * Server-side Spojex client. Lazily reads the admin Bearer session from cookies/headers.
+ * Service-role keys are unused — API auth is JWT + admin table.
+ */
+export function createAdminClient(session?: SpojexSession | null): SpojexClient {
+  if (session) {
+    let current: SpojexSession | null = session;
+    return createSpojexClient({
+      getSession: () => current,
+      saveSession: (next) => {
+        current = next;
+      },
+    });
+  }
+
+  return createSpojexClient({
+    getSession: () => requestServerSession(),
+    saveSession: () => undefined,
   });
 }
 
+export async function createAdminClientFromRequest(): Promise<SpojexClient> {
+  const session = await requestServerSession();
+  return createAdminClient(session);
+}
+
 export function adminUsesServiceRole() {
-  return getSupabaseServiceRoleKey().length > 0;
+  return true;
 }

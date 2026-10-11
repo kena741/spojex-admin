@@ -19,9 +19,12 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import {
+  eventCategoryLabel,
   eventCoverUrl,
+  eventLifecycleLabel,
   eventStatusLabel,
   eventStatuses,
+  eventVisibilityLabel,
   formatEventPrice,
   formatEventWhen,
 } from "@/lib/events";
@@ -269,6 +272,7 @@ export default function EventsPage() {
                             <p className="text-xs text-text-secondary">
                               {row.venue_name || row.location || "—"}
                               {holders.length > 0 ? ` · ${holders.length} ticket code${holders.length === 1 ? "" : "s"}` : ""}
+                              {` · ${eventCategoryLabel(row.category)} · ${eventVisibilityLabel(row.visibility)} · ${eventLifecycleLabel(row.lifecycle)}`}
                             </p>
                           </div>
                         </div>

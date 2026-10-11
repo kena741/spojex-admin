@@ -41,6 +41,7 @@ import {
   ScrollText,
   Dumbbell,
   Menu,
+  Search,
   X,
 } from "lucide-react";
 import { getSupabase } from "@/lib/supabase/client";
@@ -274,12 +275,28 @@ export default function Sidebar() {
   });
   const [hydrated, setHydrated] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [navQuery, setNavQuery] = useState("");
   const { can, staff } = useAdminPermissions();
 
   const visibleSections = NAV_SECTIONS.map((section) => ({
     ...section,
     items: section.items.filter((item) => item.visible(can)),
   })).filter((section) => section.items.length > 0);
+
+  const normalizedQuery = navQuery.trim().toLowerCase();
+  const searching = normalizedQuery.length > 0;
+  const showDashboard = !searching || "dashboard".includes(normalizedQuery);
+  const filteredSections = visibleSections
+    .map((section) => {
+      if (!searching) return section;
+      if (section.label.toLowerCase().includes(normalizedQuery)) return section;
+      return {
+        ...section,
+        items: section.items.filter((item) => item.label.toLowerCase().includes(normalizedQuery)),
+      };
+    })
+    .filter((section) => section.items.length > 0);
+  const hasNavMatches = showDashboard || filteredSections.length > 0;
 
   useEffect(() => {
     const saved = localStorage.getItem("theme");
@@ -371,30 +388,63 @@ export default function Sidebar() {
         <span className="font-heading text-[15px] font-semibold tracking-normal">SpoJex Admin</span>
       </div>
 
+      <div className="shrink-0 px-3 pt-3">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-hint" />
+          <input
+            value={navQuery}
+            onChange={(event) => setNavQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setNavQuery("");
+                event.currentTarget.blur();
+              }
+            }}
+            placeholder="Search"
+            aria-label="Search sidebar items"
+            className="h-9 w-full rounded-lg border border-sidebar-border bg-sidebar-accent/60 py-2 pl-9 pr-8 text-sm text-sidebar-foreground placeholder:text-text-hint focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+          />
+          {navQuery ? (
+            <button
+              type="button"
+              onClick={() => setNavQuery("")}
+              aria-label="Clear search"
+              className="absolute right-1.5 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-md text-text-hint hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+        </div>
+      </div>
+
       <div className="flex-1 overflow-y-auto px-3 py-4">
         <nav>
           <ul className="space-y-0.5">
-            <li>
-              <Link
-                href="/admin/dashboard"
-                className={cn(
-                  "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] transition-colors",
-                  navClass(pathname === "/admin/dashboard"),
-                )}
-              >
-                <LayoutDashboard className={cn("h-4 w-4", iconClass(pathname === "/admin/dashboard"))} />
-                <span>Dashboard</span>
-              </Link>
-            </li>
+            {showDashboard ? (
+              <li>
+                <Link
+                  href="/admin/dashboard"
+                  className={cn(
+                    "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] transition-colors",
+                    navClass(pathname === "/admin/dashboard"),
+                  )}
+                >
+                  <LayoutDashboard className={cn("h-4 w-4", iconClass(pathname === "/admin/dashboard"))} />
+                  <span>Dashboard</span>
+                </Link>
+              </li>
+            ) : null}
 
-            {visibleSections.map((section) => {
-              const open = openSections[section.id] ?? false;
+            {filteredSections.map((section) => {
+              const open = searching || (openSections[section.id] ?? false);
               const activeInSection = sectionHasActive(pathname, section.items);
               return (
                 <li key={section.id} className="pt-4">
                   <button
                     type="button"
-                    onClick={() => toggleSection(section.id)}
+                    onClick={() => {
+                      if (!searching) toggleSection(section.id);
+                    }}
                     aria-expanded={open}
                     className={cn(
                       "mb-1 flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left transition-colors hover:bg-sidebar-accent",
@@ -426,6 +476,9 @@ export default function Sidebar() {
               );
             })}
           </ul>
+          {searching && !hasNavMatches ? (
+            <p className="px-3 py-6 text-center text-sm text-text-hint">No matching pages</p>
+          ) : null}
         </nav>
       </div>
 

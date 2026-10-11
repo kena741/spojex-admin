@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { SpojexClient as SupabaseClient } from "@/lib/api/client";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { gymStaffRoles, type GymStaffRole } from "@/lib/gyms";

@@ -50,12 +50,12 @@ export async function GET(
   const pays = paysRes.data ?? [];
   const waitlist = waitRes.data ?? [];
 
-  const totalApplicants = apps.filter((a) => a.status !== "withdrawn").length;
-  const paidApplicants = apps.filter((a) => a.payment_status === "completed").length;
-  const successfulPayments = pays.filter((p) => paidStatuses.has(`${p.status}`)).length;
+  const totalApplicants = apps.filter((a: any) => a.status !== "withdrawn").length;
+  const paidApplicants = apps.filter((a: any) => a.payment_status === "completed").length;
+  const successfulPayments = pays.filter((p: any) => paidStatuses.has(`${p.status}`)).length;
   const totalCollected = pays
-    .filter((p) => paidStatuses.has(`${p.status}`))
-    .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+    .filter((p: any) => paidStatuses.has(`${p.status}`))
+    .reduce((sum: any, p: any) => sum + Number(p.amount || 0), 0);
 
   return NextResponse.json({
     data: oppRes.data,

@@ -58,6 +58,9 @@ export async function POST(request: Request) {
     image_url?: string;
     status?: string;
     is_upcoming?: boolean;
+    category?: string;
+    visibility?: string;
+    lifecycle?: string;
   };
   const name = body.name?.trim();
   if (!name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -82,6 +85,9 @@ export async function POST(request: Request) {
       image_url: body.image_url ?? "",
       status: body.status ?? "active",
       is_upcoming: body.is_upcoming === true,
+      category: body.category?.trim() || "other",
+      visibility: body.visibility?.trim() || "public",
+      lifecycle: body.lifecycle?.trim() || "sales_open",
     })
     .select()
     .single();

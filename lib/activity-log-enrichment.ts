@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { SpojexClient as SupabaseClient } from "@/lib/api/client";
 import type { AdminActivityLog } from "@/lib/activity-log";
 
 function formatPersonName(...parts: (string | null | undefined)[]): string {

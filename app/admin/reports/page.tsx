@@ -127,7 +127,7 @@ export default function ReportsPage() {
             title={rows.length === 0 ? "No reports visible" : "No matching reports"}
             description={
               rows.length === 0
-                ? "Reports are private to the reporter unless SUPABASE_SERVICE_ROLE_KEY is set."
+                ? "Reports require an authenticated admin session against the Spojex API."
                 : "Try a different search."
             }
           />

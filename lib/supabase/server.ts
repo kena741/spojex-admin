@@ -1,6 +1,13 @@
-import { createServerClient } from "@supabase/ssr";
 import { cookies, headers } from "next/headers";
-import { getSupabasePublishableKey, getSupabaseUrl } from "@/lib/env";
+import {
+  createSpojexServerClient,
+  type SpojexClient,
+} from "@/lib/api/client";
+import {
+  SESSION_COOKIE,
+  parseSessionJson,
+  type SpojexSession,
+} from "@/lib/api/session";
 
 function userBearer(value: string | null) {
   if (!value) return "";
@@ -9,37 +16,68 @@ function userBearer(value: string | null) {
   return token;
 }
 
-export async function createServerSupabase() {
+function sessionFromCookies(cookieStore: Awaited<ReturnType<typeof cookies>>): SpojexSession | null {
+  const raw = cookieStore.get(SESSION_COOKIE)?.value;
+  if (!raw) return null;
+  try {
+    return parseSessionJson(decodeURIComponent(raw));
+  } catch {
+    return parseSessionJson(raw);
+  }
+}
+
+function sessionFromBearer(token: string): SpojexSession | null {
+  if (!token) return null;
+  return {
+    access_token: token,
+    refresh_token: "",
+    token_type: "bearer",
+    user: {
+      id: "",
+      aud: "authenticated",
+      user_metadata: {},
+      app_metadata: {},
+    },
+  };
+}
+
+export async function createServerSupabase(): Promise<SpojexClient> {
   const cookieStore = await cookies();
   const headerStore = await headers();
   const bearer = userBearer(headerStore.get("authorization"));
 
-  return createServerClient(getSupabaseUrl(), getSupabasePublishableKey(), {
-    cookies: {
-      getAll() {
-        return cookieStore.getAll();
-      },
-      setAll(cookiesToSet) {
-        try {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
-          });
-        } catch {
-          // Server Components cannot set cookies; proxy handles refresh.
-        }
-      },
-    },
-    global: bearer
-      ? {
-          headers: {
-            Authorization: `Bearer ${bearer}`,
-          },
-        }
-      : {},
-  });
+  let session = sessionFromCookies(cookieStore);
+  if (bearer) {
+    if (session?.access_token === bearer) {
+      // keep full cookie session (has user + refresh)
+    } else if (session?.access_token) {
+      session = { ...session, access_token: bearer };
+    } else {
+      session = sessionFromBearer(bearer);
+    }
+  }
+
+  return createSpojexServerClient(session);
 }
 
 export async function requestAccessToken() {
   const headerStore = await headers();
-  return userBearer(headerStore.get("authorization"));
+  const bearer = userBearer(headerStore.get("authorization"));
+  if (bearer) return bearer;
+  const cookieStore = await cookies();
+  return sessionFromCookies(cookieStore)?.access_token ?? "";
+}
+
+export async function requestServerSession(): Promise<SpojexSession | null> {
+  const cookieStore = await cookies();
+  const headerStore = await headers();
+  const bearer = userBearer(headerStore.get("authorization"));
+  const fromCookie = sessionFromCookies(cookieStore);
+  if (fromCookie) {
+    if (bearer && fromCookie.access_token !== bearer) {
+      return { ...fromCookie, access_token: bearer };
+    }
+    return fromCookie;
+  }
+  return bearer ? sessionFromBearer(bearer) : null;
 }

@@ -26,3 +26,10 @@ export function slugifyNews(title: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
+
+/** Newest published stories first. Drafts fall back to when they were created. */
+export function newsRecency(row: { published_at?: string | null; created_at?: string | null }) {
+  const value = row.published_at || row.created_at || "";
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? 0 : time;
+}

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { SpojexClient as SupabaseClient } from "@/lib/api/client";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { adminUsesServiceRole, createAdminClient } from "@/lib/supabase/admin";
@@ -112,7 +112,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       {
         error:
           missingServiceRoleMessage() ||
-          "Add SUPABASE_SERVICE_ROLE_KEY to create event manager logins.",
+          "Admin API session is required to create event manager logins.",
       },
       { status: 400 },
     );
@@ -209,7 +209,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json(
       {
         error: /unauthorized|not.?admin|forbidden/i.test(message)
-          ? `${message}. Check SUPABASE_SERVICE_ROLE_KEY in .env.local and restart npm run dev.`
+          ? `${message}. Confirm SPOJEX_API_BASE_URL in .env.local and restart npm run dev.`
           : message,
       },
       { status: 400 },

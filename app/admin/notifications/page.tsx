@@ -177,7 +177,7 @@ export default function NotificationsPage() {
         {rows.length === 0 && !loading ? (
           <AdminEmpty
             title="No notifications visible"
-            description="In-app notifications from the superapp. Set SUPABASE_SERVICE_ROLE_KEY if this stays empty."
+            description="In-app notifications from the superapp via the Spojex API."
           />
         ) : (
           <div className="overflow-x-auto">

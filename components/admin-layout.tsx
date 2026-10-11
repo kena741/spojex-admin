@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { Search } from "lucide-react";
 import Sidebar from "@/components/sidebar";
 import { cn } from "@/lib/utils";
@@ -123,6 +123,7 @@ export function AdminModal({
   footer,
   className,
   sheet = false,
+  stacked = false,
 }: {
   open: boolean;
   title: string;
@@ -132,13 +133,17 @@ export function AdminModal({
   className?: string;
   /** Full-width bottom sheet on small screens. */
   sheet?: boolean;
+  /** Draw above another open dialog. */
+  stacked?: boolean;
 }) {
+  const titleId = useId();
   if (!open) return null;
 
   return (
     <div
       className={cn(
-        "fixed inset-0 z-50 flex justify-center",
+        "fixed inset-0 flex justify-center",
+        stacked ? "z-[80]" : "z-50",
         sheet ? "items-end p-0 sm:items-center sm:p-4" : "items-center p-4",
       )}
     >
@@ -151,7 +156,7 @@ export function AdminModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-labelledby="admin-modal-title"
+        aria-labelledby={titleId}
         className={cn(
           "relative flex w-full flex-col border border-border bg-card shadow-xl",
           sheet
@@ -161,7 +166,7 @@ export function AdminModal({
         )}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-4">
-          <h2 id="admin-modal-title" className="font-heading text-base font-semibold text-text-primary">
+          <h2 id={titleId} className="font-heading text-base font-semibold text-text-primary">
             {title}
           </h2>
           <button

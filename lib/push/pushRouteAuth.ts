@@ -1,15 +1,15 @@
-import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import {
-  getSupabasePublishableKey,
-  getSupabaseServiceRoleKey,
-  getSupabaseUrl,
-} from "@/lib/env";
+  createSpojexClient,
+  type SpojexClient,
+  type SpojexUser,
+} from "@/lib/api/client";
+import { getSpojexApiBaseUrl } from "@/lib/env";
 
 export function pushEnvError() {
-  if (!getSupabaseUrl() || !getSupabaseServiceRoleKey()) {
+  if (!getSpojexApiBaseUrl()) {
     return NextResponse.json(
-      { error: "Supabase service role is not configured on the server." },
+      { error: "Spojex API base URL is not configured on the server." },
       { status: 500 },
     );
   }
@@ -31,50 +31,56 @@ export async function authenticatePushRequest(request: Request) {
     } as const;
   }
 
-  const url = getSupabaseUrl();
-  const authClient = createClient(url, getSupabasePublishableKey(), {
-    auth: { persistSession: false, autoRefreshToken: false },
+  const authClient = createSpojexClient({
+    getSession: () => ({
+      access_token: token,
+      refresh_token: "",
+      token_type: "bearer",
+      user: { id: "", aud: "authenticated", user_metadata: {}, app_metadata: {} },
+    }),
+    saveSession: () => undefined,
   });
 
   const { data: userData, error: userError } = await authClient.auth.getUser(token);
-  if (userError || !userData.user) {
+  if (userError || !userData.user?.id) {
     return {
       error: NextResponse.json({ error: "Invalid or expired session." }, { status: 401 }),
     } as const;
   }
 
-  const serviceClient = createClient(url, getSupabaseServiceRoleKey(), {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  const publicId = await resolvePublicUserId(serviceClient, userData.user.id);
+  const publicId = await resolvePublicUserId(authClient, userData.user.id);
   if (!publicId) {
     return {
       error: NextResponse.json({ error: "No SpoJex profile for this account." }, { status: 403 }),
     } as const;
   }
 
-  return { user: userData.user, publicUserId: publicId, serviceClient } as const;
+  return { user: userData.user, publicUserId: publicId, serviceClient: authClient } as const;
 }
 
-export async function resolvePublicUserId(serviceClient: SupabaseClient, authUserId: string) {
+export async function resolvePublicUserId(serviceClient: SpojexClient, authUserId: string) {
   const { data: byLogin } = await serviceClient
     .from("users")
     .select("id")
     .eq("user_id", authUserId)
     .maybeSingle();
-  if (byLogin?.id) return `${byLogin.id}`;
+  if (byLogin && typeof byLogin === "object" && "id" in byLogin && byLogin.id) {
+    return `${byLogin.id}`;
+  }
 
   const { data: byPk } = await serviceClient
     .from("users")
     .select("id")
     .eq("id", authUserId)
     .maybeSingle();
-  return byPk?.id ? `${byPk.id}` : null;
+  if (byPk && typeof byPk === "object" && "id" in byPk && byPk.id) {
+    return `${byPk.id}`;
+  }
+  return null;
 }
 
 export type AuthenticatedPush = {
-  user: User;
+  user: SpojexUser;
   publicUserId: string;
-  serviceClient: SupabaseClient;
+  serviceClient: SpojexClient;
 };

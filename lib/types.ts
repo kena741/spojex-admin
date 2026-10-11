@@ -649,8 +649,54 @@ export type EventRow = {
   status: string;
   /** Shown in the app Upcoming Events rail when true. */
   is_upcoming?: boolean;
+  category?: string;
+  visibility?: string;
+  lifecycle?: string;
+  service_fee_percent?: number;
+  important_info?: string;
+  entry_rules?: string;
+  organizer_name?: string;
+  organizer_info?: string;
+  schedule?: unknown[];
+  sponsors?: unknown[];
+  sales_starts_at?: string | null;
+  sales_ends_at?: string | null;
+  invite_token?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   created_at: string;
   updated_at: string;
+};
+
+export type EventTicketTierRow = {
+  id: string;
+  event_id: string;
+  name: string;
+  description: string;
+  price: number;
+  currency: string;
+  capacity: number;
+  max_per_user: number;
+  benefits: string;
+  entry_rules: string;
+  sale_starts_at: string | null;
+  sale_ends_at: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  sold?: number;
+  remaining?: number | null;
+};
+
+export type EventRsvpRow = {
+  id: string;
+  event_id: string;
+  user_id: string;
+  status: string;
+  invited_at: string;
+  responded_at: string | null;
+  users?: Pick<UserRow, "id" | "display_name" | "email" | "phone"> | null;
 };
 
 export type EventTicketRow = {
@@ -667,6 +713,9 @@ export type EventTicketRow = {
   guest_phone: string;
   checked_in_at: string | null;
   checked_out_at: string | null;
+  tier_id?: string | null;
+  tier_name?: string;
+  order_id?: string | null;
   created_at: string;
   users?: Pick<UserRow, "id" | "display_name" | "email" | "phone"> | null;
 };

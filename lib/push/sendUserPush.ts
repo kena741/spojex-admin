@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { SpojexClient as SupabaseClient } from "@/lib/api/client";
 import { fcmErrorMessage, isStaleFcmTokenError, sendFcmMessage } from "@/lib/firebase/fcm";
 import { buildFcmData, type PushDeliveryInput } from "@/lib/push/pushDelivery";
 

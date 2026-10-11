@@ -282,7 +282,7 @@ export function normalizeStadiumWeekHours(
   if (!input?.length) return weekly;
 
   for (const day of weekly) {
-    const matches = input.filter((item) => item.day_of_week === day.day);
+    const matches = input.filter((item) => item.day_of_week === day.day_of_week);
     if (!matches.length) continue;
     const slots: StadiumTimeSlot[] = [];
     let closed = false;

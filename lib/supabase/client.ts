@@ -1,13 +1,8 @@
 "use client";
 
-import { createBrowserClient } from "@supabase/ssr";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { getSupabasePublishableKey, getSupabaseUrl } from "@/lib/env";
+import { getSpojexBrowserClient, type SpojexClient } from "@/lib/api/client";
 
-let browserClient: SupabaseClient | null = null;
-
-export function getSupabase(): SupabaseClient {
-  if (browserClient) return browserClient;
-  browserClient = createBrowserClient(getSupabaseUrl(), getSupabasePublishableKey());
-  return browserClient;
+/** Browser Spojex API client (drop-in replacement for former Supabase browser client). */
+export function getSupabase(): SpojexClient {
+  return getSpojexBrowserClient();
 }

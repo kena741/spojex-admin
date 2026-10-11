@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "No SpoJex user exists with that email. Create the account in the superapp first, or add SUPABASE_SERVICE_ROLE_KEY and a password to create one here.",
+          "No SpoJex user exists with that email. Create the account in the superapp first, or provide a password to create one via the API.",
       },
       { status: 400 },
     );

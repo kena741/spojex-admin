@@ -18,6 +18,21 @@ const allowed = [
   "description",
   "status",
   "is_upcoming",
+  "category",
+  "visibility",
+  "lifecycle",
+  "service_fee_percent",
+  "important_info",
+  "entry_rules",
+  "organizer_name",
+  "organizer_info",
+  "schedule",
+  "sponsors",
+  "sales_starts_at",
+  "sales_ends_at",
+  "invite_token",
+  "latitude",
+  "longitude",
 ] as const;
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {

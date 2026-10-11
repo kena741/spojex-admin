@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { SpojexClient as SupabaseClient } from "@/lib/api/client";
 import { pushReadiness, sendUserPush } from "@/lib/push/sendUserPush";
 
 export async function notifyOpportunityWaitlist(
@@ -26,7 +26,7 @@ export async function notifyOpportunityWaitlist(
   if (waitError) return { ok: false as const, error: waitError.message };
 
   const userIds = [
-    ...new Set((waitlist ?? []).map((row) => `${row.user_id}`).filter(Boolean)),
+    ...new Set((waitlist ?? []).map((row: any) => `${row.user_id}`).filter(Boolean)),
   ];
 
   const deadline = opportunity.application_deadline
@@ -72,8 +72,8 @@ export async function notifyOpportunityWaitlist(
 
     const result = await sendUserPush({
       serviceClient,
-      userId,
-      token: profile.fcm_token,
+      userId: String(userId),
+      token: String(profile.fcm_token),
       writeInbox: true,
       input: { title, body, route, type: "admin" },
     });

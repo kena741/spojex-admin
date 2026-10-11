@@ -15,12 +15,21 @@ import { AdminCode } from "@/components/admin-code";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { VisiblePassword } from "@/components/visible-password";
 import {
+  eventCategories,
+  eventCategoryLabel,
   eventCoverUrl,
   eventDateInput,
+  eventLifecycleLabel,
+  eventLifecycles,
   eventPhotoUrls,
+  eventRsvpStatusLabel,
+  eventRsvpStatuses,
+  eventSalesByTier,
   eventStatusLabel,
   eventStatuses,
   eventTicketSales,
+  eventVisibilityLabel,
+  eventVisibilities,
   formatEventPrice,
   formatEventWhen,
   normalizeTicketCode,
@@ -30,12 +39,20 @@ import { generateStadiumManagerPassword } from "@/lib/stadiums";
 import { adminFetch, deleteAdmin, patchAdmin, postAdminResponse } from "@/lib/hooks";
 import { getSupabase } from "@/lib/supabase/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
-import type { EventManagerRow, EventRow, EventTicketRow } from "@/lib/types";
+import type {
+  EventManagerRow,
+  EventRow,
+  EventRsvpRow,
+  EventTicketRow,
+  EventTicketTierRow,
+} from "@/lib/types";
 import { formatDateTime } from "@/lib/utils";
 
 const tabs = [
   { id: "overview", label: "Overview" },
+  { id: "tiers", label: "Ticket tiers" },
   { id: "tickets", label: "Tickets" },
+  { id: "rsvps", label: "RSVPs" },
   { id: "managers", label: "Managers" },
 ] as const;
 
@@ -53,6 +70,8 @@ export default function EventDetailPage() {
   const [tab, setTab] = useState<TabId>("overview");
   const [event, setEvent] = useState<EventRow | null>(null);
   const [tickets, setTickets] = useState<EventTicketRow[]>([]);
+  const [tiers, setTiers] = useState<EventTicketTierRow[]>([]);
+  const [rsvps, setRsvps] = useState<EventRsvpRow[]>([]);
   const [managers, setManagers] = useState<EventManagerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +79,21 @@ export default function EventDetailPage() {
   const [code, setCode] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState<"cover" | "gallery" | null>(null);
+  const [tierOpen, setTierOpen] = useState(false);
+  const [savingTier, setSavingTier] = useState(false);
+  const [editingTierId, setEditingTierId] = useState<string | null>(null);
+  const [tierForm, setTierForm] = useState({
+    name: "General Admission",
+    description: "",
+    price: "500",
+    capacity: "0",
+    max_per_user: "10",
+    benefits: "",
+    sort_order: "0",
+    is_active: true,
+  });
+  const [rsvpEmail, setRsvpEmail] = useState("");
+  const [savingRsvp, setSavingRsvp] = useState(false);
   const [managerOpen, setManagerOpen] = useState(false);
   const [savingManager, setSavingManager] = useState(false);
   const [managerForm, setManagerForm] = useState({
@@ -73,10 +107,12 @@ export default function EventDetailPage() {
 
   const load = async () => {
     const supabase = getSupabase();
-    const [eventRes, ticketRes, managerRes] = await Promise.all([
+    const [eventRes, ticketRes, managerRes, tiersRes, rsvpsRes] = await Promise.all([
       supabase.from("events").select("*").eq("id", id).maybeSingle(),
       adminFetch(`/api/admin/events/${id}/tickets`),
       adminFetch(`/api/admin/events/${id}/managers`),
+      adminFetch(`/api/admin/events/${id}/tiers`),
+      adminFetch(`/api/admin/events/${id}/rsvps`),
     ]);
     if (eventRes.error) throw eventRes.error;
     setEvent(eventRes.data as EventRow | null);
@@ -86,6 +122,10 @@ export default function EventDetailPage() {
     const managerPayload = (await managerRes.json()) as { data?: EventManagerRow[]; error?: string };
     if (!managerRes.ok) throw new Error(managerPayload.error || "Failed to load managers");
     setManagers(managerPayload.data ?? []);
+    const tiersPayload = (await tiersRes.json()) as { data?: EventTicketTierRow[]; error?: string };
+    setTiers(tiersRes.ok ? tiersPayload.data ?? [] : []);
+    const rsvpsPayload = (await rsvpsRes.json()) as { data?: EventRsvpRow[]; error?: string };
+    setRsvps(rsvpsRes.ok ? rsvpsPayload.data ?? [] : []);
   };
 
   useEffect(() => {
@@ -99,15 +139,139 @@ export default function EventDetailPage() {
     () => eventTicketSales(tickets, event?.currency || "ETB"),
     [event?.currency, tickets],
   );
+  const tierSales = useMemo(
+    () => eventSalesByTier(tickets, tiers, event?.currency || "ETB"),
+    [event?.currency, tickets, tiers],
+  );
   const remaining = event && event.capacity > 0 ? Math.max(0, event.capacity - sales.sold) : null;
   const cover = event ? eventCoverUrl(event) : "";
   const gallery = event ? eventPhotoUrls(event.photos).filter((url) => url !== cover) : [];
+  const checkInPct =
+    sales.sold > 0 ? Math.round((sales.inside / sales.sold) * 100) : 0;
 
   const filteredTickets = useMemo(() => {
     const q = normalizeTicketCode(code);
     if (!q) return tickets;
     return tickets.filter((row) => row.ticket_code.toUpperCase().includes(q));
   }, [code, tickets]);
+
+  const openNewTier = () => {
+    setEditingTierId(null);
+    setTierForm({
+      name: "General Admission",
+      description: "",
+      price: `${event?.ticket_price ?? 500}`,
+      capacity: "0",
+      max_per_user: "10",
+      benefits: "",
+      sort_order: `${tiers.length}`,
+      is_active: true,
+    });
+    setTierOpen(true);
+  };
+
+  const openEditTier = (tier: EventTicketTierRow) => {
+    setEditingTierId(tier.id);
+    setTierForm({
+      name: tier.name,
+      description: tier.description ?? "",
+      price: `${tier.price}`,
+      capacity: `${tier.capacity}`,
+      max_per_user: `${tier.max_per_user}`,
+      benefits: tier.benefits ?? "",
+      sort_order: `${tier.sort_order}`,
+      is_active: tier.is_active !== false,
+    });
+    setTierOpen(true);
+  };
+
+  const saveTier = async (formEvent?: React.FormEvent) => {
+    formEvent?.preventDefault();
+    if (!canWrite) return;
+    setSavingTier(true);
+    setError(null);
+    try {
+      const payload = {
+        name: tierForm.name.trim(),
+        description: tierForm.description.trim(),
+        price: Number(tierForm.price) || 0,
+        currency: event?.currency || "ETB",
+        capacity: Number(tierForm.capacity) || 0,
+        max_per_user: Math.max(1, Number(tierForm.max_per_user) || 10),
+        benefits: tierForm.benefits.trim(),
+        sort_order: Number(tierForm.sort_order) || 0,
+        is_active: tierForm.is_active,
+      };
+      if (editingTierId) {
+        await patchAdmin(`/api/admin/events/${id}/tiers/${editingTierId}`, payload);
+      } else {
+        await postAdminResponse(`/api/admin/events/${id}/tiers`, payload);
+      }
+      setTierOpen(false);
+      await load();
+      setNotice(editingTierId ? "Tier updated." : "Tier created.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save tier");
+    } finally {
+      setSavingTier(false);
+    }
+  };
+
+  const removeTier = async (tier: EventTicketTierRow) => {
+    if (!canWrite || !window.confirm(`Delete tier "${tier.name}"?`)) return;
+    try {
+      await deleteAdmin(`/api/admin/events/${id}/tiers/${tier.id}`);
+      await load();
+      setNotice("Tier deleted.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+    }
+  };
+
+  const inviteRsvp = async (formEvent?: React.FormEvent) => {
+    formEvent?.preventDefault();
+    if (!canWrite || !rsvpEmail.trim()) return;
+    setSavingRsvp(true);
+    setError(null);
+    try {
+      await postAdminResponse(`/api/admin/events/${id}/rsvps`, {
+        email: rsvpEmail.trim(),
+        status: "invited",
+      });
+      setRsvpEmail("");
+      await load();
+      setNotice("Invitation added.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not invite");
+    } finally {
+      setSavingRsvp(false);
+    }
+  };
+
+  const updateRsvp = async (rsvpId: string, status: string) => {
+    if (!canWrite) return;
+    try {
+      await patchAdmin(`/api/admin/events/${id}/rsvps`, { rsvp_id: rsvpId, status });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Update failed");
+    }
+  };
+
+  const removeRsvp = async (rsvpId: string) => {
+    if (!canWrite || !window.confirm("Remove this RSVP?")) return;
+    try {
+      const response = await adminFetch(`/api/admin/events/${id}/rsvps?rsvp_id=${rsvpId}`, {
+        method: "DELETE",
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(payload.error || "Remove failed");
+      await load();
+      setNotice("RSVP removed.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Remove failed");
+    }
+  };
 
   const save = async (patch: Record<string, unknown>) => {
     setError(null);
@@ -325,7 +489,9 @@ export default function EventDetailPage() {
             }`}
           >
             {item.label}
+            {item.id === "tiers" ? ` (${tiers.length})` : null}
             {item.id === "tickets" ? ` (${tickets.length})` : null}
+            {item.id === "rsvps" ? ` (${rsvps.length})` : null}
             {item.id === "managers" ? ` (${managers.length})` : null}
           </button>
         ))}
@@ -338,20 +504,40 @@ export default function EventDetailPage() {
               <h2 className="font-heading text-sm font-semibold">Ticket sales</h2>
               <p className="text-xs text-text-hint">Confirmed and used tickets</p>
             </div>
-            <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+            <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-5 sm:divide-x sm:divide-y-0">
               {[
                 { label: "Sold", hint: event.capacity > 0 ? `of ${event.capacity} capacity` : "Paid tickets", value: `${sales.sold}` },
                 { label: "Total sales", hint: sales.currency, value: formatEventPrice(sales.sales, sales.currency) },
                 { label: "Inside", hint: "Checked in now", value: `${sales.inside}` },
+                { label: "Check-in %", hint: "Of sold tickets", value: `${checkInPct}%` },
                 { label: "Remaining", hint: remaining == null ? "No cap" : "Seats left", value: remaining == null ? "—" : `${remaining}` },
               ].map((item) => (
-                <div key={item.label} className="py-4 first:pt-0 last:pb-0 sm:px-6 sm:py-1 sm:first:pl-0 sm:last:pr-0">
+                <div key={item.label} className="py-4 first:pt-0 last:pb-0 sm:px-5 sm:py-1 sm:first:pl-0 sm:last:pr-0">
                   <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-text-hint">{item.label}</p>
                   <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums text-text-primary">{item.value}</p>
                   <p className="mt-1 text-xs text-text-secondary">{item.hint}</p>
                 </div>
               ))}
             </div>
+            {tierSales.length > 0 ? (
+              <div className="mt-5 border-t border-border pt-5">
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-text-hint">
+                  Sales by ticket tier
+                </h3>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {tierSales.map((row) => (
+                    <div key={row.tierId} className="rounded-lg border border-border bg-muted/20 px-3 py-2.5">
+                      <p className="text-sm font-semibold">{row.name}</p>
+                      <p className="mt-1 text-xs text-text-secondary">
+                        Sold {row.sold}
+                        {row.capacity > 0 ? ` / ${row.capacity}` : ""} · {formatEventPrice(row.revenue, row.currency)}
+                      </p>
+                      <p className="text-xs text-text-hint">Checked in {row.checkedIn}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </section>
 
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
@@ -461,6 +647,16 @@ export default function EventDetailPage() {
                     description: data.get("description"),
                     status: data.get("status"),
                     is_upcoming: data.get("is_upcoming") === "on",
+                    category: data.get("category"),
+                    visibility: data.get("visibility"),
+                    lifecycle: data.get("lifecycle"),
+                    service_fee_percent: Number(data.get("service_fee_percent") || 0),
+                    important_info: data.get("important_info"),
+                    entry_rules: data.get("entry_rules"),
+                    organizer_name: data.get("organizer_name"),
+                    organizer_info: data.get("organizer_info"),
+                    sales_starts_at: data.get("sales_starts_at") || null,
+                    sales_ends_at: data.get("sales_ends_at") || null,
                   });
                 }}
               >
@@ -494,12 +690,76 @@ export default function EventDetailPage() {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <label className="grid gap-1 text-sm">
-                    <span className="text-text-secondary">Ticket price</span>
+                    <span className="text-text-secondary">Category</span>
+                    <select name="category" defaultValue={event.category || "other"} className={fieldClass}>
+                      {eventCategories.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-text-secondary">Visibility</span>
+                    <select name="visibility" defaultValue={event.visibility || "public"} className={fieldClass}>
+                      {eventVisibilities.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-text-secondary">Lifecycle</span>
+                    <select name="lifecycle" defaultValue={event.lifecycle || "sales_open"} className={fieldClass}>
+                      {eventLifecycles.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-text-secondary">Sales start</span>
+                    <input
+                      name="sales_starts_at"
+                      type="datetime-local"
+                      defaultValue={eventDateInput(event.sales_starts_at)}
+                      className={fieldClass}
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-text-secondary">Sales end</span>
+                    <input
+                      name="sales_ends_at"
+                      type="datetime-local"
+                      defaultValue={eventDateInput(event.sales_ends_at)}
+                      className={fieldClass}
+                    />
+                  </label>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-4">
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-text-secondary">Legacy price</span>
                     <input name="ticket_price" type="number" min={0} defaultValue={event.ticket_price} className={fieldClass} />
                   </label>
                   <label className="grid gap-1 text-sm">
                     <span className="text-text-secondary">Capacity</span>
                     <input name="capacity" type="number" min={0} defaultValue={event.capacity} className={fieldClass} />
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-text-secondary">Service fee %</span>
+                    <input
+                      name="service_fee_percent"
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="0.01"
+                      defaultValue={event.service_fee_percent ?? 0}
+                      className={fieldClass}
+                    />
                   </label>
                   <label className="grid gap-1 text-sm">
                     <span className="text-text-secondary">Status</span>
@@ -512,6 +772,9 @@ export default function EventDetailPage() {
                     </select>
                   </label>
                 </div>
+                <p className="text-xs text-text-hint">
+                  Prefer ticket tiers for pricing. Legacy price is used only when no tiers exist.
+                </p>
                 <label className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 px-3 py-3 text-sm">
                   <input
                     name="is_upcoming"
@@ -528,8 +791,55 @@ export default function EventDetailPage() {
                 </label>
                 <label className="grid gap-1 text-sm">
                   <span className="text-text-secondary">Description</span>
-                  <textarea name="description" defaultValue={event.description} rows={4} className="rounded-lg border border-border px-3 py-2 text-sm" />
+                  <textarea name="description" defaultValue={event.description} rows={3} className="rounded-lg border border-border px-3 py-2 text-sm" />
                 </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-text-secondary">Important info</span>
+                  <textarea
+                    name="important_info"
+                    defaultValue={event.important_info ?? ""}
+                    rows={2}
+                    className="rounded-lg border border-border px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-text-secondary">Entry rules</span>
+                  <textarea
+                    name="entry_rules"
+                    defaultValue={event.entry_rules ?? ""}
+                    rows={2}
+                    className="rounded-lg border border-border px-3 py-2 text-sm"
+                  />
+                </label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-text-secondary">Organizer name</span>
+                    <input
+                      name="organizer_name"
+                      defaultValue={event.organizer_name ?? ""}
+                      className={fieldClass}
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-text-secondary">Organizer info</span>
+                    <input
+                      name="organizer_info"
+                      defaultValue={event.organizer_info ?? ""}
+                      className={fieldClass}
+                    />
+                  </label>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs text-text-secondary">
+                  <span className="rounded-full border border-border px-2.5 py-1">
+                    {eventCategoryLabel(event.category)}
+                  </span>
+                  <span className="rounded-full border border-border px-2.5 py-1">
+                    {eventVisibilityLabel(event.visibility)}
+                  </span>
+                  <span className="rounded-full border border-border px-2.5 py-1">
+                    {eventLifecycleLabel(event.lifecycle)}
+                  </span>
+                </div>
                 {canWrite ? (
                   <button type="submit" disabled={saving} className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50">
                     {saving ? "Saving…" : "Save event"}
@@ -538,6 +848,94 @@ export default function EventDetailPage() {
               </form>
             </section>
           </div>
+        </div>
+      ) : null}
+
+      {tab === "tiers" ? (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-heading text-sm font-semibold">Ticket tiers</h2>
+              <p className="text-xs text-text-secondary">
+                Configure GA, VIP, VVIP, Student, or any custom tiers. The app renders whatever you add here.
+              </p>
+            </div>
+            {canWrite ? (
+              <button
+                type="button"
+                onClick={openNewTier}
+                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+              >
+                Add tier
+              </button>
+            ) : null}
+          </div>
+          {tiers.length === 0 ? (
+            <AdminEmpty
+              title="No ticket tiers yet"
+              description="Add tiers for multi-price events, or leave empty to use the legacy single ticket price."
+            />
+          ) : (
+            <AdminTableShell>
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-text-hint">
+                    <th className="px-3 py-2">Tier</th>
+                    <th className="px-3 py-2">Price</th>
+                    <th className="px-3 py-2">Sold / Cap</th>
+                    <th className="px-3 py-2">Max / user</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {tiers.map((tier) => (
+                    <tr key={tier.id} className="border-b border-border/70">
+                      <td className="px-3 py-3">
+                        <p className="font-medium">{tier.name}</p>
+                        {tier.description ? (
+                          <p className="text-xs text-text-secondary">{tier.description}</p>
+                        ) : null}
+                      </td>
+                      <td className="px-3 py-3 tabular-nums">
+                        {formatEventPrice(tier.price, tier.currency)}
+                      </td>
+                      <td className="px-3 py-3 tabular-nums">
+                        {tier.sold ?? 0}
+                        {tier.capacity > 0 ? ` / ${tier.capacity}` : " / ∞"}
+                      </td>
+                      <td className="px-3 py-3 tabular-nums">{tier.max_per_user}</td>
+                      <td className="px-3 py-3">
+                        <StatusBadge tone={tier.is_active ? "success" : "neutral"}>
+                          {tier.is_active ? "Active" : "Inactive"}
+                        </StatusBadge>
+                      </td>
+                      <td className="px-3 py-3 text-right">
+                        {canWrite ? (
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openEditTier(tier)}
+                              className="text-sm font-medium text-primary"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeTier(tier)}
+                              className="text-sm font-medium text-red-600"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </AdminTableShell>
+          )}
         </div>
       ) : null}
 
@@ -607,6 +1005,9 @@ export default function EventDetailPage() {
                             <td className="px-4 py-3 tabular-nums">{row.ticket_number || "—"}</td>
                             <td className="px-4 py-3">
                               <AdminCode value={row.ticket_code} />
+                              {row.tier_name ? (
+                                <p className="mt-1 text-xs text-text-secondary">{row.tier_name}</p>
+                              ) : null}
                             </td>
                             <td className="px-4 py-3">
                               {row.users ? (
@@ -652,6 +1053,106 @@ export default function EventDetailPage() {
               </AdminTableShell>
             )}
           </section>
+        </div>
+      ) : null}
+
+      {tab === "rsvps" ? (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="font-heading text-sm font-semibold">Private event RSVPs</h2>
+              <p className="text-xs text-text-secondary">
+                Invite Spojex users by email. Private events stay out of public discovery.
+              </p>
+            </div>
+            {canWrite ? (
+              <form onSubmit={inviteRsvp} className="flex flex-wrap items-end gap-2">
+                <label className="grid gap-1 text-sm">
+                  <span className="text-text-secondary">User email</span>
+                  <input
+                    value={rsvpEmail}
+                    onChange={(e) => setRsvpEmail(e.target.value)}
+                    type="email"
+                    required
+                    placeholder="fan@example.com"
+                    className={`${fieldClass} min-w-[220px]`}
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={savingRsvp}
+                  className="h-10 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                >
+                  {savingRsvp ? "Inviting…" : "Invite"}
+                </button>
+              </form>
+            ) : null}
+          </div>
+          {rsvps.length === 0 ? (
+            <AdminEmpty title="No RSVPs" description="Invite guests for private events here." />
+          ) : (
+            <AdminTableShell>
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-text-hint">
+                    <th className="px-3 py-2">Guest</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Invited</th>
+                    <th className="px-3 py-2">Responded</th>
+                    <th className="px-3 py-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {rsvps.map((row) => (
+                    <tr key={row.id} className="border-b border-border/70">
+                      <td className="px-3 py-3">
+                        {row.users ? (
+                          <Link href={`/admin/users/${row.users.id}`} className="font-medium hover:text-primary">
+                            {row.users.display_name}
+                          </Link>
+                        ) : (
+                          <span>User</span>
+                        )}
+                        <p className="text-xs text-text-secondary">{row.users?.email || "—"}</p>
+                      </td>
+                      <td className="px-3 py-3">
+                        {canWrite ? (
+                          <select
+                            value={row.status}
+                            onChange={(e) => updateRsvp(row.id, e.target.value)}
+                            className="h-9 rounded-md border border-border bg-card px-2 text-sm"
+                          >
+                            {eventRsvpStatuses.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          eventRsvpStatusLabel(row.status)
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-text-secondary">{formatDateTime(row.invited_at)}</td>
+                      <td className="px-3 py-3 text-text-secondary">
+                        {row.responded_at ? formatDateTime(row.responded_at) : "—"}
+                      </td>
+                      <td className="px-3 py-3 text-right">
+                        {canWrite ? (
+                          <button
+                            type="button"
+                            onClick={() => removeRsvp(row.id)}
+                            className="text-sm font-medium text-red-600"
+                          >
+                            Remove
+                          </button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </AdminTableShell>
+          )}
         </div>
       ) : null}
 
@@ -865,6 +1366,111 @@ export default function EventDetailPage() {
             </label>
           </form>
         )}
+      </AdminModal>
+
+      <AdminModal
+        open={tierOpen}
+        onClose={() => setTierOpen(false)}
+        title={editingTierId ? "Edit ticket tier" : "Add ticket tier"}
+        footer={
+          canWrite ? (
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setTierOpen(false)}
+                className="rounded-md border border-border px-3 py-2 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="event-tier-form"
+                disabled={savingTier}
+                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+              >
+                {savingTier ? "Saving…" : editingTierId ? "Save tier" : "Create tier"}
+              </button>
+            </div>
+          ) : null
+        }
+      >
+        <form id="event-tier-form" onSubmit={(e) => void saveTier(e)} className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            <span className="text-text-secondary">Name</span>
+            <input
+              value={tierForm.name}
+              onChange={(e) => setTierForm({ ...tierForm, name: e.target.value })}
+              required
+              className={fieldClass}
+              placeholder="VIP"
+            />
+          </label>
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            <span className="text-text-secondary">Description</span>
+            <input
+              value={tierForm.description}
+              onChange={(e) => setTierForm({ ...tierForm, description: e.target.value })}
+              className={fieldClass}
+              placeholder="Priority entry + VIP section"
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-text-secondary">Price ({event.currency})</span>
+            <input
+              type="number"
+              min={0}
+              value={tierForm.price}
+              onChange={(e) => setTierForm({ ...tierForm, price: e.target.value })}
+              className={fieldClass}
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-text-secondary">Capacity (0 = unlimited)</span>
+            <input
+              type="number"
+              min={0}
+              value={tierForm.capacity}
+              onChange={(e) => setTierForm({ ...tierForm, capacity: e.target.value })}
+              className={fieldClass}
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-text-secondary">Max per user</span>
+            <input
+              type="number"
+              min={1}
+              value={tierForm.max_per_user}
+              onChange={(e) => setTierForm({ ...tierForm, max_per_user: e.target.value })}
+              className={fieldClass}
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-text-secondary">Sort order</span>
+            <input
+              type="number"
+              value={tierForm.sort_order}
+              onChange={(e) => setTierForm({ ...tierForm, sort_order: e.target.value })}
+              className={fieldClass}
+            />
+          </label>
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            <span className="text-text-secondary">Benefits</span>
+            <textarea
+              value={tierForm.benefits}
+              onChange={(e) => setTierForm({ ...tierForm, benefits: e.target.value })}
+              rows={2}
+              className="rounded-lg border border-border px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={tierForm.is_active}
+              onChange={(e) => setTierForm({ ...tierForm, is_active: e.target.checked })}
+            />
+            Active (shown in app checkout)
+          </label>
+        </form>
       </AdminModal>
     </>
   );

@@ -82,8 +82,8 @@ export async function POST(request: Request) {
   const recipientIds = [
     ...new Set(
       (members ?? [])
-        .filter((row) => !row.hidden && !row.muted && row.user_id)
-        .map((row) => `${row.user_id}`),
+        .filter((row: any) => !row.hidden && !row.muted && row.user_id)
+        .map((row: any) => `${row.user_id}`),
     ),
   ].slice(0, 80);
 
@@ -125,8 +125,8 @@ export async function POST(request: Request) {
 
     const result = await sendUserPush({
       serviceClient,
-      userId,
-      token: profile.fcm_token,
+      userId: String(userId),
+      token: String(profile.fcm_token),
       writeInbox: false,
       input: {
         title,

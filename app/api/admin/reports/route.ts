@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import type { ReportRow } from "@/lib/types";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { SpojexClient as SupabaseClient } from "@/lib/api/client";
 
 const REPORT_COLUMNS =
   "id, reporter_id, target_user_id, target_service_id, reason, details, created_at";

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { SpojexClient as SupabaseClient } from "@/lib/api/client";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { draftToPayload, type OpportunityDraft } from "@/lib/opportunities";
@@ -167,7 +167,7 @@ export async function POST(request: Request) {
     const message = hint ? `${error.message}. ${hint}` : error.message;
     const rlsHint =
       /row-level security/i.test(error.message) && !hint
-        ? " Opportunities writes require SUPABASE_SERVICE_ROLE_KEY or migration 110_opportunities_admin_write.sql."
+        ? " Opportunities writes require an authenticated admin session on the Spojex API."
         : "";
     return NextResponse.json({ error: `${message}${rlsHint}` }, { status: 400 });
   }

@@ -63,8 +63,8 @@ function LoginContent() {
       router.replace(params.get("next") || "/admin/dashboard");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to sign in.";
-      if (/could not find the table|schema cache|relation .*admin/i.test(message)) {
-        setError("Run supabase/migrations/016_admins.sql in the SpoJex Supabase SQL editor, then sign in again.");
+      if (/could not find the table|schema cache|relation .*admin|Not authenticated|401/i.test(message)) {
+        setError("Admin sign-in failed. Confirm SPOJEX_API_BASE_URL points at the API and this account has an active admin row.");
       } else {
         setError(message);
       }

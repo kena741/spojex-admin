@@ -1,7 +1,7 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SpojexClient as SupabaseClient } from "@/lib/api/client";
+import { createSpojexClient } from "@/lib/api/client";
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
-import { getSupabasePublishableKey, getSupabaseUrl } from "@/lib/env";
 import {
   gymFeatureStatuses,
   gymStatuses,
@@ -97,13 +97,14 @@ function featuredPatch(opts: {
 async function featuredWriter(service: SupabaseClient) {
   const token = await requestAccessToken();
   if (!token) return service;
-  return createClient(getSupabaseUrl(), getSupabasePublishableKey(), {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
+  return createSpojexClient({
+    getSession: () => ({
+      access_token: token,
+      refresh_token: "",
+      token_type: "bearer",
+      user: { id: "", aud: "authenticated", user_metadata: {}, app_metadata: {} },
+    }),
+    saveSession: () => undefined,
   });
 }
 
