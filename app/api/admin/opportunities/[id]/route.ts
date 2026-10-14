@@ -15,12 +15,16 @@ export async function GET(
   if (!auth.ok) return auth.error;
   const { id } = await params;
 
+  const appCols =
+    "id, opportunity_id, user_id, message, profile_completion_percent, status, payment_status, amount_paid, currency, provider_ref, extra_answers, admin_note, submitted_at, created_at";
+  const waitCols = "id, user_id, notified_at, created_at";
+
   const [oppRes, appsRes, paysRes, waitRes] = await Promise.all([
     auth.context.client.from("opportunities").select(select).eq("id", id).maybeSingle(),
     auth.context.client
       .from("opportunity_applications")
       .select(
-        "id, opportunity_id, user_id, message, profile_completion_percent, status, payment_status, amount_paid, currency, provider_ref, extra_answers, admin_note, submitted_at, created_at, users:user_id(id, display_name, avatar_url, role, username)",
+        `${appCols}, users:user_id(id, display_name, avatar_url, role, username)`,
       )
       .eq("opportunity_id", id)
       .order("created_at", { ascending: false })
@@ -33,7 +37,7 @@ export async function GET(
       .limit(2000),
     auth.context.client
       .from("opportunity_waitlist")
-      .select("id, user_id, notified_at, created_at, users:user_id(id, display_name, avatar_url)")
+      .select(`${waitCols}, users:user_id(id, display_name, avatar_url)`)
       .eq("opportunity_id", id)
       .order("created_at", { ascending: false })
       .limit(5000),
@@ -46,10 +50,56 @@ export async function GET(
     return NextResponse.json({ error: "Opportunity not found" }, { status: 404 });
   }
 
+  // Embeds can fail on the Spojex REST shim — fall back to plain rows + user lookup.
+  let apps = (appsRes.data ?? []) as Array<Record<string, any>>;
+  if (appsRes.error) {
+    const plain = await auth.context.client
+      .from("opportunity_applications")
+      .select(appCols)
+      .eq("opportunity_id", id)
+      .order("created_at", { ascending: false })
+      .limit(2000);
+    if (!plain.error) apps = (plain.data ?? []) as Array<Record<string, any>>;
+  }
+
+  let waitlist = (waitRes.data ?? []) as Array<Record<string, any>>;
+  if (waitRes.error) {
+    const plain = await auth.context.client
+      .from("opportunity_waitlist")
+      .select(waitCols)
+      .eq("opportunity_id", id)
+      .order("created_at", { ascending: false })
+      .limit(5000);
+    if (!plain.error) waitlist = (plain.data ?? []) as Array<Record<string, any>>;
+  }
+
+  const userIds = [
+    ...new Set(
+      [...apps, ...waitlist]
+        .map((row) => String(row.user_id ?? "").trim())
+        .filter(Boolean),
+    ),
+  ];
+  if (userIds.length > 0) {
+    const { data: users } = await auth.context.client
+      .from("users")
+      .select("id, display_name, avatar_url, role, username")
+      .in("id", userIds);
+    const byId = new Map(
+      (users ?? []).map((u: any) => [String(u.id), u] as const),
+    );
+    apps = apps.map((row) => ({
+      ...row,
+      users: row.users ?? byId.get(String(row.user_id)) ?? null,
+    }));
+    waitlist = waitlist.map((row) => ({
+      ...row,
+      users: row.users ?? byId.get(String(row.user_id)) ?? null,
+    }));
+  }
+
   const paidStatuses = new Set(["completed"]);
-  const apps = appsRes.data ?? [];
   const pays = paysRes.data ?? [];
-  const waitlist = waitRes.data ?? [];
 
   const totalApplicants = apps.filter((a: any) => a.status !== "withdrawn").length;
   const paidApplicants = apps.filter((a: any) => a.payment_status === "completed").length;
