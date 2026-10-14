@@ -17,7 +17,7 @@ import {
 } from "@/components/admin-layout";
 import { StadiumEditModal } from "@/components/stadium-edit-modal";
 import { StatusBadge, requestTone } from "@/components/status-badge";
-import { deleteAdmin } from "@/lib/hooks";
+import { deleteAdmin, postAdminResponse } from "@/lib/hooks";
 import { sizeTypeLabel, stadiumCoverUrl, stadiumStatuses, stadiumStatusLabel, stadiumSizeTypes, planTypeLabel } from "@/lib/stadiums";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
@@ -37,6 +37,7 @@ export default function StadiumsPage() {
   const [sizeType, setSizeType] = useState("all");
   const [editing, setEditing] = useState<StadiumRow | null>(null);
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const load = async () => {
     const spojex = getSpojexClient();
@@ -105,6 +106,39 @@ export default function StadiumsPage() {
     }
   };
 
+  const importAddisFields = async () => {
+    if (!canWrite || importing) return;
+    if (
+      !window.confirm(
+        "Import all Addis Ababa football fields from addis-football-fields.json? Existing slugs will be updated.",
+      )
+    ) {
+      return;
+    }
+    setImporting(true);
+    setError(null);
+    try {
+      const result = await postAdminResponse<{
+        created?: number;
+        updated?: number;
+        skipped?: number;
+        errors?: { name: string; error: string }[];
+      }>("/api/admin/stadiums/import-addis", {});
+      await load();
+      const errCount = result.errors?.length ?? 0;
+      window.alert(
+        `Import done.\nCreated: ${result.created ?? 0}\nUpdated: ${result.updated ?? 0}\nSkipped: ${result.skipped ?? 0}\nErrors: ${errCount}`,
+      );
+      if (errCount > 0) {
+        setError(result.errors!.map((e) => `${e.name}: ${e.error}`).slice(0, 5).join(" · "));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <>
       <AdminPageHeader
@@ -112,16 +146,26 @@ export default function StadiumsPage() {
         description="Venues, subscribers, and pass codes"
         actions={
           canWrite ? (
-            <button
-              type="button"
-              onClick={() => {
-                setEditing(null);
-                setCreating(true);
-              }}
-              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
-            >
-              Add stadium
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={importing}
+                onClick={() => void importAddisFields()}
+                className="rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-text-primary disabled:opacity-60"
+              >
+                {importing ? "Importing…" : "Import Addis fields"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(null);
+                  setCreating(true);
+                }}
+                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+              >
+                Add stadium
+              </button>
+            </div>
           ) : null
         }
       />
