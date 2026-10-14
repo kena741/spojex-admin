@@ -44,7 +44,6 @@ export default function NewsPage() {
   const [category, setCategory] = useState("General");
   const [creating, setCreating] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [summary, setSummary] = useState("");
   const [body, setBody] = useState("");
   const [source, setSource] = useState("");
   const [imageUrl, setImageUrl] = useState("");
@@ -80,7 +79,7 @@ export default function NewsPage() {
       .filter((row) => {
         if (status !== "all" && row.status !== status) return false;
         if (!q) return true;
-        return [row.title, row.slug, row.summary, row.category, row.source]
+        return [row.title, row.slug, row.body, row.category, row.source]
           .filter(Boolean)
           .some((v) => String(v).toLowerCase().includes(q));
       })
@@ -89,7 +88,6 @@ export default function NewsPage() {
 
   const resetCreate = () => {
     setTitle("");
-    setSummary("");
     setBody("");
     setSource("");
     setImageUrl("");
@@ -140,7 +138,7 @@ export default function NewsPage() {
         title: title.trim(),
         category,
         status: statusValue,
-        summary: summary.trim(),
+        summary: "",
         body: body.trim(),
         source: source.trim() || undefined,
         image_url: image,
@@ -403,16 +401,10 @@ export default function NewsPage() {
               ))}
             </select>
           </div>
-          <input
-            value={summary}
-            onChange={(e) => setSummary(e.target.value)}
-            placeholder="Summary (shown in feed)"
-            className="h-10 rounded-lg border border-border px-3 text-sm"
-          />
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="Full article body"
+            placeholder="Description"
             rows={5}
             className="rounded-lg border border-border px-3 py-2 text-sm"
           />

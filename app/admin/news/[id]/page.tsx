@@ -267,9 +267,8 @@ export default function NewsDetailPage() {
               {newsStatusLabel(article.status)}
             </StatusBadge>
           </div>
-          <p className="mb-2 text-sm font-medium text-text-secondary">{article.summary}</p>
           <p className="text-sm text-text-secondary whitespace-pre-wrap">
-            {article.body || "No body yet."}
+            {article.body || "No description yet."}
           </p>
           <p className="mt-4 text-xs text-text-hint">
             Published {article.published_at ? formatDate(article.published_at) : "not yet"}
@@ -293,17 +292,7 @@ export default function NewsDetailPage() {
                 />
               </label>
               <label className="text-sm">
-                <span className="mb-1 block text-text-secondary">Summary</span>
-                <input
-                  defaultValue={article.summary}
-                  onBlur={(e) => {
-                    if (e.target.value !== article.summary) save({ summary: e.target.value });
-                  }}
-                  className="h-10 w-full rounded-lg border border-border px-3"
-                />
-              </label>
-              <label className="text-sm">
-                <span className="mb-1 block text-text-secondary">Body</span>
+                <span className="mb-1 block text-text-secondary">Description</span>
                 <textarea
                   defaultValue={article.body}
                   onBlur={(e) => {
