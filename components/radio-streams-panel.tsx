@@ -15,7 +15,7 @@ import {
   AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
-import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
+import { deleteAdmin, patchAdmin, postAdmin, postAdminResponse } from "@/lib/hooks";
 import { getSpojexClient } from "@/lib/spojex/client";
 import {
   slugifyStream,
@@ -68,6 +68,7 @@ export default function RadioStreamsPanel() {
   const [name, setName] = useState("");
   const [streamUrl, setStreamUrl] = useState("");
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<StreamDraft | null>(null);
@@ -133,6 +134,39 @@ export default function RadioStreamsPanel() {
     }
   };
 
+  const importEthiopianStations = async () => {
+    if (!canWrite || importing) return;
+    if (
+      !window.confirm(
+        "Import Ethiopian radio stations from the admin catalog? Matching is by station name only (no SQL ids). Existing names will be updated.",
+      )
+    ) {
+      return;
+    }
+    setImporting(true);
+    setError(null);
+    try {
+      const result = await postAdminResponse<{
+        created?: number;
+        updated?: number;
+        skipped?: number;
+        errors?: { name: string; error: string }[];
+      }>("/api/admin/streams/import-ethiopian", {});
+      await load();
+      const errCount = result.errors?.length ?? 0;
+      window.alert(
+        `Import done.\nCreated: ${result.created ?? 0}\nUpdated: ${result.updated ?? 0}\nSkipped: ${result.skipped ?? 0}\nErrors: ${errCount}`,
+      );
+      if (errCount > 0) {
+        setError(result.errors!.map((e) => `${e.name}: ${e.error}`).slice(0, 5).join(" · "));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const openEdit = (row: RadioStreamRow) => {
     setEditingId(row.id);
     setDraft(draftFromRow(row));
@@ -189,11 +223,21 @@ export default function RadioStreamsPanel() {
     <>
       {error ? <AdminErrorAlert message={error} /> : null}
       {canWrite ? (
-        <form
-          onSubmit={create}
-          className="mb-6 space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm"
-        >
-          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+        <div className="mb-6 space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-text-secondary">
+              Add a station manually, or import the Ethiopian catalog by name.
+            </p>
+            <button
+              type="button"
+              disabled={importing}
+              onClick={() => void importEthiopianStations()}
+              className="h-10 rounded-md border border-border bg-background px-4 text-sm font-medium text-text-primary disabled:opacity-50"
+            >
+              {importing ? "Importing…" : "Import Ethiopian stations"}
+            </button>
+          </div>
+          <form onSubmit={create} className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -215,8 +259,8 @@ export default function RadioStreamsPanel() {
             >
               Add station
             </button>
-          </div>
-        </form>
+          </form>
+        </div>
       ) : null}
       <AdminFilterPanel>
         <div className="grid gap-3 md:grid-cols-[1fr_180px]">

@@ -1,0 +1,121 @@
+{
+  "stations": [
+    {
+      "name": "Sheger FM 102.1",
+      "slug": "sheger-fm-102-1",
+      "tagline": "The voice of Addis Ababa news, talk & entertainment",
+      "stream_url": "https://stream.zeno.fm/4nn422vagt5tv",
+      "website_url": "",
+      "image_url": "https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=800",
+      "genre": "News & talk",
+      "city": "Addis Ababa",
+      "status": "active",
+      "is_featured": false,
+      "sort_order": 2
+    },
+    {
+      "name": "Bisrat FM 101",
+      "slug": "bisrat-fm-101",
+      "tagline": "Sports, music & Bisrat Sport with Mensur Abdulkeni",
+      "stream_url": "https://bisratfm-atunwadigital.streamguys1.com/bisratfm",
+      "website_url": "https://www.bisrat.fm/",
+      "image_url": "https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800",
+      "genre": "Sports",
+      "city": "Addis Ababa",
+      "status": "active",
+      "is_featured": true,
+      "sort_order": 3
+    },
+    {
+      "name": "Ethio FM 107.8",
+      "slug": "ethio-fm-107-8",
+      "tagline": "National news and Amharic programming",
+      "stream_url": "https://stream.zeno.fm/b8skbyqeqeruv",
+      "website_url": "",
+      "image_url": "",
+      "genre": "News",
+      "city": "Addis Ababa",
+      "status": "active",
+      "is_featured": false,
+      "sort_order": 4
+    },
+    {
+      "name": "FM Addis 97.1",
+      "slug": "fm-addis-97-1",
+      "tagline": "Contemporary hits and Addis culture",
+      "stream_url": "https://stream.zeno.fm/rb6wbrap7yzuv",
+      "website_url": "",
+      "image_url": "",
+      "genre": "Music",
+      "city": "Addis Ababa",
+      "status": "active",
+      "is_featured": false,
+      "sort_order": 5
+    },
+    {
+      "name": "Awash FM 90.7",
+      "slug": "awash-fm-90-7",
+      "tagline": "Regional news and community voices",
+      "stream_url": "https://stream.zeno.fm/655zm6w4vc9uv",
+      "website_url": "",
+      "image_url": "",
+      "genre": "Regional",
+      "city": "Addis Ababa",
+      "status": "inactive",
+      "is_featured": false,
+      "sort_order": 6
+    },
+    {
+      "name": "Tirita FM 97.6",
+      "slug": "tirita-fm-97-6",
+      "tagline": "Ethiopian music and lifestyle",
+      "stream_url": "https://stream.zeno.fm/x751reg18zhvv",
+      "website_url": "",
+      "image_url": "",
+      "genre": "Music",
+      "city": "Addis Ababa",
+      "status": "active",
+      "is_featured": false,
+      "sort_order": 7
+    },
+    {
+      "name": "Ahadu Radio",
+      "slug": "ahadu-radio",
+      "tagline": "Talk, faith and current affairs",
+      "stream_url": "https://stream.zeno.fm/txxpndf1wwzuv",
+      "website_url": "",
+      "image_url": "",
+      "genre": "Talk",
+      "city": "Addis Ababa",
+      "status": "active",
+      "is_featured": false,
+      "sort_order": 8
+    },
+    {
+      "name": "Taem Radio",
+      "slug": "taem-radio",
+      "tagline": "Culture and storytelling from Addis",
+      "stream_url": "https://stream-158.zeno.fm/ffg8htkh1k0uv",
+      "website_url": "",
+      "image_url": "",
+      "genre": "Culture",
+      "city": "Addis Ababa",
+      "status": "active",
+      "is_featured": false,
+      "sort_order": 9
+    },
+    {
+      "name": "Mirt Radio",
+      "slug": "mirt-radio",
+      "tagline": "Independent music and youth voices",
+      "stream_url": "https://stream.zeno.fm/akmuznguawzuv",
+      "website_url": "",
+      "image_url": "",
+      "genre": "Music",
+      "city": "Addis Ababa",
+      "status": "active",
+      "is_featured": false,
+      "sort_order": 10
+    }
+  ]
+}
