@@ -1,4 +1,4 @@
-/** Matches mobile create_service_screen.dart — ids come from Supabase gen_random_uuid(). */
+/** Matches mobile create_service_screen.dart — ids are UUIDs. */
 
 export type ServiceCategorySeed = {
   slug: string;

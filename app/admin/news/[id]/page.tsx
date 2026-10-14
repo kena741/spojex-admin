@@ -10,7 +10,7 @@ import { NewsMediaFields, NewsMediaPreview, uploadNewsFile } from "@/components/
 import { newsCategories, newsStatusLabel, newsStatuses } from "@/lib/news";
 import { resolveNewsStoryMedia, type NewsStoryMedia, type NewsUploadKind } from "@/lib/news-media";
 import { deleteAdmin, patchAdmin } from "@/lib/hooks";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { OrganizationRow, SportNewsRow } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
@@ -31,7 +31,7 @@ function NewsOrgPicker({
   const appliedDefault = useRef(false);
 
   useEffect(() => {
-    getSupabase()
+    getSpojexClient()
       .from("organizations")
       .select("id, name, public_id, logo_url, user_id, is_platform, verified")
       .order("is_platform", { ascending: false })
@@ -101,7 +101,7 @@ export default function NewsDetailPage() {
   const [pickedKind, setPickedKind] = useState<NewsStoryMedia | null>(null);
 
   const load = async () => {
-    const { data, error: loadError } = await getSupabase()
+    const { data, error: loadError } = await getSpojexClient()
       .from("sport_news")
       .select(
         "*, organizations(id, name, logo_url, user_id, public_id, is_platform, verified)",
@@ -109,7 +109,7 @@ export default function NewsDetailPage() {
       .eq("id", id)
       .maybeSingle();
     if (loadError) {
-      const plain = await getSupabase()
+      const plain = await getSpojexClient()
         .from("sport_news")
         .select("*")
         .eq("id", id)

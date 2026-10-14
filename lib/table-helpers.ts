@@ -1,4 +1,4 @@
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 
 function isMissingTableError(message: string) {
   return (
@@ -13,7 +13,7 @@ export async function safeCount(
   filters?: Record<string, string | boolean>,
 ): Promise<number> {
   try {
-    let query = getSupabase().from(table).select("*", { count: "exact", head: true });
+    let query = getSpojexClient().from(table).select("*", { count: "exact", head: true });
     if (filters) {
       for (const [key, value] of Object.entries(filters)) {
         query = query.eq(key, value);

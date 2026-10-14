@@ -17,7 +17,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { allRoles, roleLabel } from "@/lib/catalog";
 import { loadCoinWalletsByUserIds } from "@/lib/coin-wallets";
 import { useIdentityCatalog } from "@/lib/hooks";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import type { CoinWalletRow, UserRow } from "@/lib/types";
 import { formatCoins, formatDate, locationLabel } from "@/lib/utils";
 
@@ -34,7 +34,7 @@ export default function UsersPage() {
   useEffect(() => {
     let mounted = true;
     const load = async () => {
-      const { data, error: loadError } = await getSupabase()
+      const { data, error: loadError } = await getSpojexClient()
         .from("users")
         .select("*")
         .order("created_at", { ascending: false })

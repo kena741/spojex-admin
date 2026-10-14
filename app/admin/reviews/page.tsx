@@ -11,7 +11,7 @@ import {
   AdminSelect,
   AdminTableShell,
 } from "@/components/admin-layout";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import type { ServiceReviewRow } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 
@@ -29,7 +29,7 @@ export default function ReviewsPage() {
 
   useEffect(() => {
     const load = async () => {
-      const client = getSupabase();
+      const client = getSpojexClient();
       const withProvider = await client
         .from("service_reviews")
         .select(

@@ -9,7 +9,7 @@ import {
   AdminTableShell,
 } from "@/components/admin-layout";
 import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 
 type CoinPackageRow = {
@@ -60,11 +60,11 @@ export default function CoinCatalogPage() {
   const [giftCoins, setGiftCoins] = useState("10");
 
   const load = async () => {
-    const supabase = getSupabase();
+    const spojex = getSpojexClient();
     const [packRes, giftRes, settingsRes] = await Promise.all([
-      supabase.from("coin_packages").select("*").order("sort_order"),
-      supabase.from("coin_gifts").select("*").order("sort_order"),
-      supabase.from("coin_settings").select("etb_per_coin").eq("id", 1).maybeSingle(),
+      spojex.from("coin_packages").select("*").order("sort_order"),
+      spojex.from("coin_gifts").select("*").order("sort_order"),
+      spojex.from("coin_settings").select("etb_per_coin").eq("id", 1).maybeSingle(),
     ]);
     if (packRes.error) throw packRes.error;
     if (giftRes.error) throw giftRes.error;
@@ -139,11 +139,54 @@ export default function CoinCatalogPage() {
     }
   };
 
+  const seedStarterCatalog = async () => {
+    if (!canWrite) return;
+    setError(null);
+    setNotice(null);
+    try {
+      if (packages.length === 0) {
+        const starters = [
+          { name: "Starter", coins: 50, bonus_coins: 0, price_etb: 50, sort_order: 10 },
+          { name: "Popular", coins: 120, bonus_coins: 20, price_etb: 100, sort_order: 20 },
+          { name: "Fan Pack", coins: 300, bonus_coins: 50, price_etb: 250, sort_order: 30 },
+        ];
+        for (const pack of starters) {
+          await postAdmin("/api/admin/coin-packages", pack);
+        }
+      }
+      if (gifts.length === 0) {
+        const starters = [
+          { name: "Clap", slug: "clap", emoji: "👏", coin_value: 5, sort_order: 10 },
+          { name: "Fire", slug: "fire", emoji: "🔥", coin_value: 15, sort_order: 20 },
+          { name: "Trophy", slug: "trophy", emoji: "🏆", coin_value: 50, sort_order: 30 },
+        ];
+        for (const gift of starters) {
+          await postAdmin("/api/admin/coin-gifts", gift);
+        }
+      }
+      setNotice("Starter coin packs and gifts are ready for mobile donations.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not seed catalog");
+    }
+  };
+
   return (
     <>
       <AdminPageHeader
         title="Coin catalog"
         description="Buy packs, gift stickers, and redemption ETB rate"
+        actions={
+          canWrite && (packages.length === 0 || gifts.length === 0) ? (
+            <button
+              type="button"
+              onClick={() => void seedStarterCatalog()}
+              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+            >
+              Seed starter catalog
+            </button>
+          ) : null
+        }
       />
       {error ? <AdminErrorAlert message={error} /> : null}
       {notice ? (

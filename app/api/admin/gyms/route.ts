@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
+import { ensureGymOrganizationViaTables } from "@/lib/ensure-gym-organization";
+import { isRpcUnavailable } from "@/lib/rpc-unavailable";
 import {
   gymCategories,
   gymStatuses,
@@ -131,6 +133,8 @@ export async function POST(request: Request) {
   const slugBase = slugifyGym(name) || "gym";
   const slug = `${slugBase}-${Date.now().toString(36).slice(-4)}`;
 
+  // Spojex gyms rows have many NOT NULL columns without Postgres DEFAULTs when
+  // the schema came from SQLAlchemy create_all — always send safe empties.
   const { data, error } = await auth.context.client
     .from("gyms")
     .insert({
@@ -147,6 +151,19 @@ export async function POST(request: Request) {
       website: body.website?.trim() || "",
       logo_url: body.logo_url?.trim() || "",
       cover_url: body.cover_url?.trim() || "",
+      photos: [],
+      facilities: [],
+      opening_hours: {},
+      bank_info: {},
+      business_license_url: "",
+      rating_avg: 0,
+      rating_count: 0,
+      follower_count: 0,
+      commission_pct: 10,
+      search_text: "",
+      join_code: "",
+      is_featured: false,
+      feature_status: "none",
       monthly_payment: monthlyPayment,
       status,
       verification_status: verificationStatus,
@@ -174,10 +191,13 @@ export async function POST(request: Request) {
       },
       { onConflict: "gym_id,user_id" },
     );
-    // Ensure org chat link (also covered by DB trigger when migration is applied).
-    await auth.context.client.rpc("ensure_gym_organization", {
+    // Ensure org chat link (RPC when installed; otherwise table fallback).
+    const ens = await auth.context.client.rpc("ensure_gym_organization", {
       p_gym_id: data.id,
     });
+    if (ens.error && isRpcUnavailable(ens.error)) {
+      await ensureGymOrganizationViaTables(auth.context.client, data.id);
+    }
     const refreshed = await auth.context.client
       .from("gyms")
       .select("*")

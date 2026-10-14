@@ -3,27 +3,47 @@ export interface GoogleMapsLatLng {
   lng: () => number;
 }
 
-export interface GoogleMapsPlaceGeometry {
-  location?: GoogleMapsLatLng;
+export interface GoogleMapsLatLngLiteral {
+  lat: number;
+  lng: number;
 }
 
-export interface GoogleMapsPlaceResult {
-  formatted_address?: string;
-  geometry?: GoogleMapsPlaceGeometry;
+export interface GoogleMapsLatLngBoundsLiteral {
+  south: number;
+  west: number;
+  north: number;
+  east: number;
 }
 
-export interface GoogleMapsAutocomplete {
-  addListener: (event: string, handler: () => void) => void;
-  getPlace: () => GoogleMapsPlaceResult;
+export interface GoogleMapsPlace {
+  formattedAddress?: string | null;
+  location?: GoogleMapsLatLng | null;
+  fetchFields: (opts: { fields: string[] }) => Promise<void>;
+}
+
+export interface GoogleMapsPlacePrediction {
+  toPlace: () => GoogleMapsPlace;
+}
+
+export interface GoogleMapsPlacePredictionSelectEvent extends Event {
+  placePrediction: GoogleMapsPlacePrediction;
+}
+
+export interface GoogleMapsPlaceAutocompleteElement extends HTMLElement {
+  placeholder: string;
+  disabled: boolean;
+  value: string;
+  includedRegionCodes: string[];
+  locationRestriction: GoogleMapsLatLngBoundsLiteral | null;
 }
 
 export interface GoogleMapsMap {
-  setCenter: (center: { lat: number; lng: number }) => void;
+  setCenter: (center: GoogleMapsLatLngLiteral) => void;
   addListener: (event: string, handler: (e: { latLng?: GoogleMapsLatLng }) => void) => void;
 }
 
 export interface GoogleMapsMarker {
-  setPosition: (pos: { lat: number; lng: number }) => void;
+  setPosition: (pos: GoogleMapsLatLngLiteral) => void;
   getPosition: () => GoogleMapsLatLng | null;
   addListener: (event: string, handler: () => void) => void;
 }
@@ -34,51 +54,54 @@ export interface GoogleMapsGeocoderResult {
 
 export interface GoogleMapsGeocoder {
   geocode: (
-    request: { location: { lat: number; lng: number } },
-    callback: (results: GoogleMapsGeocoderResult[] | null, status: string) => void
+    request: { location: GoogleMapsLatLngLiteral },
+    callback: (results: GoogleMapsGeocoderResult[] | null, status: string) => void,
   ) => void;
 }
 
-export interface GoogleMapsPlaces {
-  Autocomplete: new (
-    input: HTMLInputElement,
-    opts?: {
-      fields?: string[];
-      componentRestrictions?: { country: string | string[] };
-      bounds?: { south: number; west: number; north: number; east: number };
-      strictBounds?: boolean;
-    }
-  ) => GoogleMapsAutocomplete;
+export interface GoogleMapsPlacesLibrary {
+  PlaceAutocompleteElement: new (opts?: {
+    placeholder?: string;
+    includedRegionCodes?: string[];
+    locationRestriction?: GoogleMapsLatLngBoundsLiteral;
+  }) => GoogleMapsPlaceAutocompleteElement;
 }
 
 export interface GoogleMapsApi {
+  importLibrary: (name: "places" | "maps" | "marker" | string) => Promise<GoogleMapsPlacesLibrary | unknown>;
   Map: new (
     el: HTMLElement,
     opts: {
-      center: { lat: number; lng: number };
+      center: GoogleMapsLatLngLiteral;
       zoom: number;
       mapTypeControl?: boolean;
       restriction?: {
-        latLngBounds: { south: number; west: number; north: number; east: number };
+        latLngBounds: GoogleMapsLatLngBoundsLiteral;
         strictBounds?: boolean;
       };
-    }
+    },
   ) => GoogleMapsMap;
   Marker: new (opts: {
     map: GoogleMapsMap;
-    position: { lat: number; lng: number };
+    position: GoogleMapsLatLngLiteral;
     draggable?: boolean;
   }) => GoogleMapsMarker;
   Geocoder: new () => GoogleMapsGeocoder;
-  places: GoogleMapsPlaces;
+  places?: {
+    PlaceAutocompleteElement: GoogleMapsPlacesLibrary["PlaceAutocompleteElement"];
+  };
   event: {
-    clearInstanceListeners: (instance: GoogleMapsAutocomplete | GoogleMapsMap | GoogleMapsMarker) => void;
+    clearInstanceListeners: (instance: GoogleMapsMap | GoogleMapsMarker) => void;
   };
 }
 
 declare global {
   interface Window {
     google?: { maps: GoogleMapsApi };
+  }
+
+  interface HTMLElementTagNameMap {
+    "gmp-place-autocomplete": GoogleMapsPlaceAutocompleteElement;
   }
 }
 

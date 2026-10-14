@@ -33,7 +33,7 @@ import {
   type StadiumTimeSlot,
   type StadiumWeekHour,
 } from "@/lib/stadiums";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type {
   StadiumBookingRow,
@@ -103,32 +103,32 @@ export default function StadiumDetailPage() {
   });
 
   const load = async () => {
-    const supabase = getSupabase();
+    const spojex = getSpojexClient();
     const [stadiumRes, bookingsRes, subsRes, paymentsRes, revenueRes, managersRes, hoursRes] = await Promise.all([
-      supabase
+      spojex
         .from("stadiums")
         .select("*, users:owner_user_id(id, display_name, email)")
         .eq("id", id)
         .maybeSingle(),
-      supabase
+      spojex
         .from("stadium_bookings")
         .select("*, users:user_id(id, display_name)")
         .eq("stadium_id", id)
         .order("booking_date", { ascending: false })
         .limit(50),
-      supabase
+      spojex
         .from("stadium_subscriptions")
         .select("*, users:user_id(id, display_name)")
         .eq("stadium_id", id)
         .order("created_at", { ascending: false })
         .limit(200),
-      supabase
+      spojex
         .from("stadium_payments")
         .select("*, users:user_id(id, display_name)")
         .eq("stadium_id", id)
         .order("created_at", { ascending: false })
         .limit(50),
-      supabase
+      spojex
         .from("stadium_payments")
         .select("amount, currency, status, paid_at, created_at")
         .eq("stadium_id", id)
@@ -157,7 +157,7 @@ export default function StadiumDetailPage() {
       if (managersPayload.error) {
         setError(
           managersPayload.error.includes("login_password")
-            ? "Run supabase/migrations/033_stadium_manager_login_password.sql so manager passwords can be stored and shown."
+            ? "Run migrations/033_stadium_manager_login_password.sql so manager passwords can be stored and shown."
             : managersPayload.error,
         );
       }
@@ -175,9 +175,9 @@ export default function StadiumDetailPage() {
       setBlocks([]);
       setError(
         hoursPayload.error.includes("weekly_uniq")
-          ? `${hoursPayload.error} Run supabase/migrations/040_stadium_multi_slots.sql so a day can have more than one slot.`
+          ? `${hoursPayload.error} Run migrations/040_stadium_multi_slots.sql so a day can have more than one slot.`
           : hoursPayload.error.includes("permission") || hoursPayload.error.includes("policy")
-            ? `${hoursPayload.error} Run supabase/migrations/037_stadium_admin_hours.sql.`
+            ? `${hoursPayload.error} Run migrations/037_stadium_admin_hours.sql.`
             : hoursPayload.error,
       );
     }

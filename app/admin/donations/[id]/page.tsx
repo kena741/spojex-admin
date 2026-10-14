@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import AdminPageHeader from "@/components/admin-header";
@@ -14,28 +14,151 @@ import {
   donationStatuses,
   formatDonationAmount,
 } from "@/lib/donations";
-import { deleteAdmin, patchAdmin } from "@/lib/hooks";
-import { getSupabase } from "@/lib/supabase/client";
+import { adminFetch, deleteAdmin, patchAdmin } from "@/lib/hooks";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { DonationCampaignRow, DonationContributionRow } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
+
+type ImageKind = "cover" | "image";
+
+const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp,image/gif";
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+async function uploadDonationImage(campaignId: string, file: File, kind: ImageKind) {
+  const body = new FormData();
+  body.append("file", file);
+  body.append("kind", kind);
+  const response = await adminFetch(`/api/admin/donations/${campaignId}/image`, {
+    method: "POST",
+    body,
+  });
+  const payload = (await response.json()) as {
+    error?: string;
+    cover_url?: string;
+    image_url?: string;
+  };
+  if (!response.ok) throw new Error(payload.error || "Upload failed");
+  return payload;
+}
+
+async function removeDonationImage(campaignId: string, kind: ImageKind) {
+  const response = await adminFetch(
+    `/api/admin/donations/${campaignId}/image?kind=${kind}`,
+    { method: "DELETE" },
+  );
+  const payload = (await response.json()) as {
+    error?: string;
+    cover_url?: string;
+    image_url?: string;
+  };
+  if (!response.ok) throw new Error(payload.error || "Remove failed");
+  return payload;
+}
+
+function validateImageFile(file: File) {
+  const allowed = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+  if (file.type && !allowed.has(file.type)) {
+    throw new Error("Use a JPG, PNG, WebP, or GIF image.");
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    throw new Error("Image must be 5 MB or smaller.");
+  }
+}
+
+function DonationImagePicker({
+  label,
+  previewUrl,
+  inputRef,
+  disabled,
+  uploading,
+  onPick,
+  onRemoveRemote,
+}: {
+  label: string;
+  previewUrl: string;
+  inputRef: RefObject<HTMLInputElement | null>;
+  disabled?: boolean;
+  uploading?: boolean;
+  onPick: (file: File) => void;
+  onRemoveRemote?: () => void;
+}) {
+  return (
+    <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+      <div className="flex items-start gap-3">
+        <div className="h-20 w-28 shrink-0 overflow-hidden rounded-xl border border-border bg-muted">
+          {previewUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={previewUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-[10px] text-text-secondary">
+              No {label.toLowerCase()}
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 flex-1 space-y-2">
+          <p className="text-sm font-medium text-text-primary">{label}</p>
+          <p className="text-xs text-text-secondary">JPG, PNG, WebP, or GIF · up to 5 MB</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={inputRef}
+              type="file"
+              accept={IMAGE_ACCEPT}
+              className="hidden"
+              disabled={disabled || uploading}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) onPick(file);
+              }}
+            />
+            <button
+              type="button"
+              disabled={disabled || uploading}
+              onClick={() => inputRef.current?.click()}
+              className="rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted disabled:opacity-60"
+            >
+              {uploading
+                ? "Uploading…"
+                : previewUrl
+                  ? `Replace ${label.toLowerCase()}`
+                  : `Upload ${label.toLowerCase()}`}
+            </button>
+            {previewUrl && onRemoveRemote ? (
+              <button
+                type="button"
+                disabled={disabled || uploading}
+                onClick={() => void onRemoveRemote()}
+                className="text-xs text-text-secondary underline disabled:opacity-60"
+              >
+                Remove
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function DonationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { can } = useAdminPermissions();
   const canWrite = can("donations:write");
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const thumbInputRef = useRef<HTMLInputElement>(null);
   const [campaign, setCampaign] = useState<DonationCampaignRow | null>(null);
   const [contributions, setContributions] = useState<DonationContributionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [uploadingKind, setUploadingKind] = useState<ImageKind | null>(null);
 
   const load = async () => {
-    const supabase = getSupabase();
+    const spojex = getSpojexClient();
     const [campaignRes, contribRes] = await Promise.all([
-      supabase.from("donation_campaigns").select("*").eq("id", id).maybeSingle(),
-      supabase
+      spojex.from("donation_campaigns").select("*").eq("id", id).maybeSingle(),
+      spojex
         .from("donation_contributions")
         .select("*, users:user_id(id, display_name)")
         .eq("campaign_id", id)
@@ -74,6 +197,56 @@ export default function DonationDetailPage() {
       router.replace("/admin/donations");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
+    }
+  };
+
+  const uploadImage = async (kind: ImageKind, file: File) => {
+    setError(null);
+    setNotice(null);
+    try {
+      validateImageFile(file);
+      setUploadingKind(kind);
+      const payload = await uploadDonationImage(id, file, kind);
+      setCampaign((prev) =>
+        prev
+          ? {
+              ...prev,
+              cover_url: payload.cover_url ?? prev.cover_url,
+              image_url: payload.image_url ?? prev.image_url,
+            }
+          : prev,
+      );
+      setNotice(kind === "cover" ? "Cover image uploaded." : "Thumbnail uploaded.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploadingKind(null);
+      if (kind === "cover" && coverInputRef.current) coverInputRef.current.value = "";
+      if (kind === "image" && thumbInputRef.current) thumbInputRef.current.value = "";
+    }
+  };
+
+  const clearImage = async (kind: ImageKind) => {
+    setError(null);
+    setNotice(null);
+    try {
+      setUploadingKind(kind);
+      const payload = await removeDonationImage(id, kind);
+      setCampaign((prev) =>
+        prev
+          ? {
+              ...prev,
+              cover_url: payload.cover_url ?? "",
+              image_url: payload.image_url ?? "",
+            }
+          : prev,
+      );
+      setNotice(kind === "cover" ? "Cover image removed." : "Thumbnail removed.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Remove failed");
+    } finally {
+      setUploadingKind(null);
     }
   };
 
@@ -203,26 +376,32 @@ export default function DonationDetailPage() {
                   className="w-full rounded-lg border border-border px-3 py-2"
                 />
               </label>
-              <label className="text-sm">
-                <span className="mb-1 block text-text-secondary">Cover image URL</span>
-                <input
-                  defaultValue={campaign.cover_url}
-                  onBlur={(e) => {
-                    if (e.target.value !== campaign.cover_url) save({ cover_url: e.target.value });
-                  }}
-                  className="h-10 w-full rounded-lg border border-border px-3"
-                />
-              </label>
-              <label className="text-sm">
-                <span className="mb-1 block text-text-secondary">Thumbnail image URL</span>
-                <input
-                  defaultValue={campaign.image_url}
-                  onBlur={(e) => {
-                    if (e.target.value !== campaign.image_url) save({ image_url: e.target.value });
-                  }}
-                  className="h-10 w-full rounded-lg border border-border px-3"
-                />
-              </label>
+              <DonationImagePicker
+                label="Cover image"
+                previewUrl={(campaign.cover_url || "").trim()}
+                inputRef={coverInputRef}
+                disabled={!canWrite}
+                uploading={uploadingKind === "cover"}
+                onPick={(file) => void uploadImage("cover", file)}
+                onRemoveRemote={
+                  canWrite && (campaign.cover_url || "").trim()
+                    ? () => clearImage("cover")
+                    : undefined
+                }
+              />
+              <DonationImagePicker
+                label="Thumbnail"
+                previewUrl={(campaign.image_url || "").trim()}
+                inputRef={thumbInputRef}
+                disabled={!canWrite}
+                uploading={uploadingKind === "image"}
+                onPick={(file) => void uploadImage("image", file)}
+                onRemoveRemote={
+                  canWrite && (campaign.image_url || "").trim()
+                    ? () => clearImage("image")
+                    : undefined
+                }
+              />
               <label className="text-sm">
                 <span className="mb-1 block text-text-secondary">Currency</span>
                 <select

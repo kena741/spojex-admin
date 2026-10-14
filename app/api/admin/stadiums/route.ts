@@ -41,7 +41,14 @@ export async function POST(request: Request) {
     ? body.status
     : "pending";
 
-  const insert = {
+  // photos is JSONB array; pricing is JSONB object.
+  // Omit empty `photos: []` so create still works if an older API build still
+  // types JSONB as dict ("Input should be a valid dictionary"). Backend insert
+  // defaults / DB default fill photos after deploy.
+  const pricing = body.pricing
+    ? stadiumPricingPayload(body.pricing)
+    : ({ currency: "ETB" } satisfies Record<string, unknown>);
+  const insert: Record<string, unknown> = {
     name,
     slug,
     status,
@@ -57,11 +64,10 @@ export async function POST(request: Request) {
     latitude: numberOrNull(body.latitude),
     longitude: numberOrNull(body.longitude),
     facilities: Array.isArray(body.facilities)
-      ? body.facilities.map((item) => item.trim()).filter(Boolean)
+      ? body.facilities.map((item) => `${item}`.trim()).filter(Boolean)
       : [],
-    photos: [],
     image_url: "",
-    pricing: body.pricing ? stadiumPricingPayload(body.pricing) : { currency: "ETB" },
+    pricing,
   };
 
   const { data, error } = await auth.context.client.from("stadiums").insert(insert).select().single();
@@ -73,14 +79,28 @@ export async function POST(request: Request) {
     );
   }
 
+  // notes is NOT NULL on stadium_availability — omit → Internal Server Error.
   const hours = [1, 2, 3, 4, 5, 6, 0].map((day) => ({
     stadium_id: data.id,
     day_of_week: day,
     start_time: "06:00",
     end_time: "22:00",
     is_blocked: false,
+    notes: "",
   }));
-  await auth.context.client.from("stadium_availability").insert(hours);
+  const { error: hoursError } = await auth.context.client
+    .from("stadium_availability")
+    .insert(hours);
+  if (hoursError) {
+    // Stadium row already created; surface hours failure so admin can retry Hours tab.
+    return NextResponse.json(
+      {
+        data,
+        warning: `Stadium created but default hours failed: ${hoursError.message}`,
+      },
+      { status: 200 },
+    );
+  }
 
   return NextResponse.json({ data });
 }

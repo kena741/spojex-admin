@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { logAdminActivity } from "@/lib/admin-activity-log";
-import { adminUsesServiceRole } from "@/lib/supabase/admin";
+import { canUseAdminClient } from "@/lib/spojex/admin";
 
 export async function GET() {
   const auth = await requireAdminPermission("admins:read");
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     userId = existing.user_id as string;
   }
 
-  if (!userId && adminUsesServiceRole() && password.length >= 6) {
+  if (!userId && canUseAdminClient() && password.length >= 6) {
     const { data: created, error: createError } = await client.auth.admin.createUser({
       email,
       password,

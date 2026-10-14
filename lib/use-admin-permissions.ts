@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import {
   canAccessAdminRoute,
   hasPermission,
@@ -10,13 +10,13 @@ import {
 } from "@/lib/admin-permissions";
 
 export async function resolveAdminStaff(userId: string) {
-  const { data, error } = await getSupabase()
+  const { data, error } = await getSpojexClient()
     .from("admin")
     .select("id, user_id, full_name, email, role, is_active, created_at, updated_at")
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) throw new Error(error.message);
   return data as AdminRow | null;
 }
 
@@ -30,7 +30,7 @@ export async function bootstrapFirstAdmin(user: {
     user.email?.split("@")[0] ||
     "SpoJex admin";
 
-  const { error } = await getSupabase().from("admin").insert({
+  const { error } = await getSpojexClient().from("admin").insert({
     user_id: user.id,
     full_name: display,
     email: user.email ?? null,
@@ -39,9 +39,11 @@ export async function bootstrapFirstAdmin(user: {
   });
 
   if (error && !error.message.toLowerCase().includes("duplicate")) {
-    throw error;
+    throw new Error(error.message);
   }
 }
+
+const bootstrapTried = new Set<string>();
 
 export function useAdminPermissions() {
   const [loading, setLoading] = useState(true);
@@ -53,28 +55,40 @@ export function useAdminPermissions() {
 
     const load = async () => {
       try {
-        const { data } = await getSupabase().auth.getUser();
+        const { data } = await getSpojexClient().auth.getUser();
         const user = data.user;
         if (!user) {
-          if (mounted) {
-            setStaff(null);
-            setPermissions([]);
-            setLoading(false);
-          }
+          if (!mounted) return;
+          setStaff((current) => (current === null ? current : null));
+          setPermissions((current) => (current.length === 0 ? current : []));
+          setLoading(false);
           return;
         }
 
-        const row = await resolveAdminStaff(user.id);
+        let row: AdminRow | null = null;
+        try {
+          row = await resolveAdminStaff(user.id);
+        } catch {
+          row = null;
+        }
+        if (!row && !bootstrapTried.has(user.id)) {
+          bootstrapTried.add(user.id);
+          try {
+            await bootstrapFirstAdmin(user);
+            row = await resolveAdminStaff(user.id);
+          } catch {
+            row = null;
+          }
+        }
         if (!row || !row.is_active) {
-          if (mounted) {
-            setStaff(null);
-            setPermissions([]);
-            setLoading(false);
-          }
+          if (!mounted) return;
+          setStaff((current) => (current === null ? current : null));
+          setPermissions((current) => (current.length === 0 ? current : []));
+          setLoading(false);
           return;
         }
 
-        const { data: roleRow } = await getSupabase()
+        const { data: roleRow } = await getSpojexClient()
           .from("admin_role")
           .select("permissions")
           .eq("slug", row.role)
@@ -87,16 +101,15 @@ export function useAdminPermissions() {
         );
         setLoading(false);
       } catch {
-        if (mounted) {
-          setStaff(null);
-          setPermissions([]);
-          setLoading(false);
-        }
+        if (!mounted) return;
+        setStaff((current) => (current === null ? current : null));
+        setPermissions((current) => (current.length === 0 ? current : []));
+        setLoading(false);
       }
     };
 
     void load();
-    const { data: sub } = getSupabase().auth.onAuthStateChange(() => {
+    const { data: sub } = getSpojexClient().auth.onAuthStateChange(() => {
       void load();
     });
     return () => {

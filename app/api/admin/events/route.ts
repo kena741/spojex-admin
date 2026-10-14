@@ -68,6 +68,7 @@ export async function POST(request: Request) {
   if (!startsAt) return NextResponse.json({ error: "Start time is required" }, { status: 400 });
 
   const slugBase = slugifyEvent(name) || "event";
+  // Backend events columns are NOT NULL without DB defaults — send full row.
   const { data, error } = await auth.context.client
     .from("events")
     .insert({
@@ -81,6 +82,7 @@ export async function POST(request: Request) {
       ticket_price: body.ticket_price ?? 0,
       currency: body.currency?.trim() || "ETB",
       capacity: body.capacity ?? 0,
+      photos: [],
       description: body.description ?? "",
       image_url: body.image_url ?? "",
       status: body.status ?? "active",
@@ -88,6 +90,13 @@ export async function POST(request: Request) {
       category: body.category?.trim() || "other",
       visibility: body.visibility?.trim() || "public",
       lifecycle: body.lifecycle?.trim() || "sales_open",
+      service_fee_percent: 0,
+      schedule: [],
+      important_info: "",
+      entry_rules: "",
+      organizer_name: "",
+      organizer_info: "",
+      sponsors: [],
     })
     .select()
     .single();

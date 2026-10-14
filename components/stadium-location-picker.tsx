@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MapPin } from "lucide-react";
 import {
   ADDIS_ABABA_BOUNDS,
@@ -8,10 +8,11 @@ import {
   loadGoogleMapsPlaces,
 } from "@/lib/google-maps-loader";
 import type {
-  GoogleMapsAutocomplete,
   GoogleMapsGeocoder,
   GoogleMapsMap,
   GoogleMapsMarker,
+  GoogleMapsPlaceAutocompleteElement,
+  GoogleMapsPlacePredictionSelectEvent,
 } from "@/types/google-maps";
 
 export type StadiumPin = {
@@ -20,10 +21,9 @@ export type StadiumPin = {
   longitude: number | null;
 };
 
-function latLngFromPlace(place: ReturnType<GoogleMapsAutocomplete["getPlace"]>) {
-  const loc = place.geometry?.location;
-  if (!loc) return { lat: null as number | null, lng: null as number | null };
-  return { lat: loc.lat(), lng: loc.lng() };
+function latLngFromPlaceLocation(location: { lat: () => number; lng: () => number } | null | undefined) {
+  if (!location) return { lat: null as number | null, lng: null as number | null };
+  return { lat: location.lat(), lng: location.lng() };
 }
 
 export function StadiumLocationPicker({
@@ -39,14 +39,17 @@ export function StadiumLocationPicker({
   disabled?: boolean;
   onChange: (value: StadiumPin) => void;
 }) {
-  const inputId = useId();
-  const inputRef = useRef<HTMLInputElement>(null);
+  const autocompleteHostRef = useRef<HTMLDivElement>(null);
+  const autocompleteRef = useRef<GoogleMapsPlaceAutocompleteElement | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<GoogleMapsMap | null>(null);
   const markerRef = useRef<GoogleMapsMarker | null>(null);
-  const autocompleteRef = useRef<GoogleMapsAutocomplete | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const addressRef = useRef(address);
+  addressRef.current = address;
+  const pinRef = useRef({ latitude, longitude });
+  pinRef.current = { latitude, longitude };
 
   const value: StadiumPin = { address, latitude, longitude };
   const [mapsReady, setMapsReady] = useState(false);
@@ -75,32 +78,78 @@ export function StadiumLocationPicker({
   }, []);
 
   useEffect(() => {
-    if (!mapsReady || disabled || !inputRef.current || !window.google?.maps?.places) return;
+    if (!mapsReady || !autocompleteHostRef.current || !window.google?.maps) return;
 
-    const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
-      fields: ["formatted_address", "geometry"],
-      componentRestrictions: { country: "et" },
-      bounds: ADDIS_ABABA_BOUNDS,
-      strictBounds: true,
-    });
-    autocompleteRef.current = autocomplete;
-    autocomplete.addListener("place_changed", () => {
-      const place = autocomplete.getPlace();
-      const { lat, lng } = latLngFromPlace(place);
-      onChangeRef.current({
-        address: place.formatted_address ?? inputRef.current?.value ?? "",
-        latitude: lat,
-        longitude: lng,
+    let cancelled = false;
+    let element: GoogleMapsPlaceAutocompleteElement | null = null;
+    let onSelect: ((event: Event) => void) | null = null;
+    let onInput: ((event: Event) => void) | null = null;
+
+    void (async () => {
+      const places = (await window.google!.maps.importLibrary("places")) as {
+        PlaceAutocompleteElement: new (opts?: {
+          placeholder?: string;
+          includedRegionCodes?: string[];
+          locationRestriction?: typeof ADDIS_ABABA_BOUNDS;
+        }) => GoogleMapsPlaceAutocompleteElement;
+      };
+      if (cancelled || !autocompleteHostRef.current) return;
+
+      element = new places.PlaceAutocompleteElement({
+        placeholder: "Search a place or pick it on the map",
+        includedRegionCodes: ["et"],
+        locationRestriction: ADDIS_ABABA_BOUNDS,
       });
-    });
+      element.style.width = "100%";
+      element.style.display = "block";
+      element.value = addressRef.current;
+      element.disabled = disabled;
+
+      onSelect = (event: Event) => {
+        void (async () => {
+          const { placePrediction } = event as GoogleMapsPlacePredictionSelectEvent;
+          const place = placePrediction.toPlace();
+          await place.fetchFields({ fields: ["formattedAddress", "location"] });
+          const { lat, lng } = latLngFromPlaceLocation(place.location);
+          onChangeRef.current({
+            address: place.formattedAddress ?? element?.value ?? "",
+            latitude: lat,
+            longitude: lng,
+          });
+        })();
+      };
+      onInput = () => {
+        if (!element) return;
+        onChangeRef.current({
+          address: element.value,
+          latitude: pinRef.current.latitude,
+          longitude: pinRef.current.longitude,
+        });
+      };
+
+      element.addEventListener("gmp-select", onSelect);
+      element.addEventListener("input", onInput);
+      autocompleteHostRef.current.replaceChildren(element);
+      autocompleteRef.current = element;
+    })();
 
     return () => {
-      if (window.google?.maps?.event && autocompleteRef.current) {
-        window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
-      }
+      cancelled = true;
+      if (element && onSelect) element.removeEventListener("gmp-select", onSelect);
+      if (element && onInput) element.removeEventListener("input", onInput);
       autocompleteRef.current = null;
+      autocompleteHostRef.current?.replaceChildren();
     };
   }, [mapsReady, disabled]);
+
+  useEffect(() => {
+    const el = autocompleteRef.current;
+    if (!el) return;
+    el.disabled = disabled;
+    if (el.value !== address) {
+      el.value = address;
+    }
+  }, [address, disabled]);
 
   const reverseGeocode = useCallback((lat: number, lng: number) => {
     return new Promise<string>((resolve) => {
@@ -190,21 +239,9 @@ export function StadiumLocationPicker({
   return (
     <div className="grid gap-2">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-        <input
-          ref={inputRef}
-          id={inputId}
-          value={address}
-          onChange={(event) =>
-            onChange({
-              address: event.target.value,
-              latitude,
-              longitude,
-            })
-          }
-          placeholder="Search a place or pick it on the map"
-          disabled={disabled || !mapsReady}
-          autoComplete="off"
-          className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+        <div
+          ref={autocompleteHostRef}
+          className="min-h-10 w-full [&_gmp-place-autocomplete]:h-10 [&_gmp-place-autocomplete]:w-full"
         />
         <button
           type="button"

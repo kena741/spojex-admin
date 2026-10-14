@@ -1,21 +1,19 @@
 # SpoJex Admin
 
-Internal console for the SpoJex football identity and services marketplace. Layout and workflow follow the Zemen admin (`Desktop/zulu/lolelink-admin`). Data and env come from `spojext_superapp`.
+Internal console for the SpoJex football identity and services marketplace.
 
 ## Setup
 
-1. Env is copied from `spojext_superapp/apps/host/.env`:
+1. Copy env from `.env.example`:
 
 ```
-NEXT_PUBLIC_SUPABASE_URL=https://xfwgeoqlsutzelhccwyx.supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
+SPOJEX_API_BASE_URL=https://spojex-backend-prod-576757759417.europe-west3.run.app
+NEXT_PUBLIC_SPOJEX_API_BASE_URL=https://spojex-backend-prod-576757759417.europe-west3.run.app
+FIREBASE_SERVICE_ACCOUNT_PATH=./firebase-service-account.json
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
 ```
 
-2. Run `supabase/migrations/016_admins.sql` in the SpoJex Supabase SQL editor. This creates `admin` and `admin_role` (Super Admin, Operations, Identity, Marketplace, Support, Viewer).
-
-3. Optional: add `SUPABASE_SERVICE_ROLE_KEY` so admins can read/update rows that RLS otherwise limits to the owner (requests, reports, messages, unpublished services, verifying other users).
-
-4. Install and run:
+2. Install and run:
 
 ```
 npm install
@@ -26,8 +24,6 @@ Open [http://localhost:3000](http://localhost:3000). The **first** successful si
 
 ## Tables
 
-The admin maps the current superapp schema:
-
 | Area | Tables |
 | --- | --- |
 | Staff login | `admin`, `admin_role` |
@@ -35,4 +31,3 @@ The admin maps the current superapp schema:
 | Organizations | `organizations` |
 | Marketplace | `service_categories`, `services`, `service_requests`, `service_reviews` |
 | Network | `connections`, `follows`, `reports`, `messages`, `notifications` |
-# spojex-admin

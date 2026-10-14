@@ -52,12 +52,40 @@ export function newsMediaExtension(kind: NewsUploadKind, type: string, filename:
   if (kind === "video") {
     if (type === "video/webm") return "webm";
     if (type === "video/quicktime") return "mov";
+    if (type === "video/x-m4v") return "m4v";
     return "mp4";
   }
   if (type === "image/png") return "png";
   if (type === "image/webp") return "webp";
   if (type === "image/gif") return "gif";
   return "jpg";
+}
+
+/**
+ * Browsers (esp. Safari) often send an empty Content-Type for video/audio.
+ * Resolve a MIME the Spojex media API will accept from declared type + extension.
+ */
+export function resolveNewsMime(kind: NewsUploadKind, type: string, filename: string): string {
+  const declared = (type || "").trim().toLowerCase();
+  if (kind === "video") {
+    if (VIDEO_TYPES.has(declared)) return declared;
+    if (/\.webm$/i.test(filename)) return "video/webm";
+    if (/\.mov$/i.test(filename)) return "video/quicktime";
+    if (/\.m4v$/i.test(filename)) return "video/x-m4v";
+    return "video/mp4";
+  }
+  if (kind === "audio") {
+    if (AUDIO_TYPES.has(declared)) return declared === "audio/mp3" ? "audio/mpeg" : declared;
+    if (/\.wav$/i.test(filename)) return "audio/wav";
+    if (/\.ogg$/i.test(filename)) return "audio/ogg";
+    if (/\.(m4a|aac)$/i.test(filename)) return "audio/mp4";
+    return "audio/mpeg";
+  }
+  if (IMAGE_TYPES.has(declared)) return declared;
+  if (/\.png$/i.test(filename)) return "image/png";
+  if (/\.webp$/i.test(filename)) return "image/webp";
+  if (/\.gif$/i.test(filename)) return "image/gif";
+  return "image/jpeg";
 }
 
 export function validateNewsMedia(kind: NewsUploadKind, type: string, filename: string, size: number) {

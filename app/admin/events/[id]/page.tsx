@@ -37,7 +37,7 @@ import {
 } from "@/lib/events";
 import { generateStadiumManagerPassword } from "@/lib/stadiums";
 import { adminFetch, deleteAdmin, patchAdmin, postAdminResponse } from "@/lib/hooks";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type {
   EventManagerRow,
@@ -106,9 +106,9 @@ export default function EventDetailPage() {
   const [createdLogin, setCreatedLogin] = useState<{ email: string; password: string } | null>(null);
 
   const load = async () => {
-    const supabase = getSupabase();
+    const spojex = getSpojexClient();
     const [eventRes, ticketRes, managerRes, tiersRes, rsvpsRes] = await Promise.all([
-      supabase.from("events").select("*").eq("id", id).maybeSingle(),
+      spojex.from("events").select("*").eq("id", id).maybeSingle(),
       adminFetch(`/api/admin/events/${id}/tickets`),
       adminFetch(`/api/admin/events/${id}/managers`),
       adminFetch(`/api/admin/events/${id}/tiers`),

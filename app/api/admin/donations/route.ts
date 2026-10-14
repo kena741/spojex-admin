@@ -27,7 +27,37 @@ export async function POST(request: Request) {
   }
   const slug = (body.slug?.trim() || slugifyDonation(title)).toLowerCase();
   const currency = (body.currency ?? "COIN").toUpperCase();
-  const goalAmount = body.goal_amount ?? body.goal_coins ?? 0;
+  const isCoin = currency === "COIN" || currency === "COINS";
+  const goalAmount = Number(body.goal_amount ?? body.goal_coins ?? 0) || 0;
+  const goalCoins = Number(
+    body.goal_coins ?? (isCoin ? goalAmount : 0),
+  ) || 0;
+  if (isCoin && goalCoins <= 0) {
+    return NextResponse.json(
+      { error: "Goal (coins) must be greater than 0" },
+      { status: 400 },
+    );
+  }
+  if (!isCoin && goalAmount <= 0) {
+    return NextResponse.json(
+      { error: "Goal amount must be greater than 0" },
+      { status: 400 },
+    );
+  }
+  const beneficiary =
+    typeof body.beneficiary_user_id === "string" && body.beneficiary_user_id.trim()
+      ? body.beneficiary_user_id.trim()
+      : null;
+  if (isCoin && !beneficiary) {
+    return NextResponse.json(
+      {
+        error:
+          "Beneficiary user ID is required for COIN campaigns so gifts can credit a wallet.",
+      },
+      { status: 400 },
+    );
+  }
+  const status = (body.status ?? "active").trim() || "active";
   const { data, error: insertError } = await auth.context.client
     .from("donation_campaigns")
     .insert({
@@ -37,11 +67,13 @@ export async function POST(request: Request) {
       description: body.description ?? "",
       image_url: body.image_url ?? "",
       cover_url: body.cover_url ?? "",
-      goal_amount: goalAmount,
-      goal_coins: body.goal_coins ?? (currency === "COIN" || currency === "COINS" ? goalAmount : 0),
-      beneficiary_user_id: body.beneficiary_user_id ?? null,
-      currency,
-      status: body.status ?? "draft",
+      goal_amount: isCoin ? goalCoins : goalAmount,
+      raised_amount: 0,
+      goal_coins: isCoin ? goalCoins : 0,
+      raised_coins: 0,
+      beneficiary_user_id: beneficiary,
+      currency: isCoin ? "COIN" : currency,
+      status,
       is_featured: body.is_featured ?? false,
       sort_order: body.sort_order ?? 0,
     })
@@ -49,8 +81,16 @@ export async function POST(request: Request) {
     .single();
   if (insertError) {
     const hint = missingServiceRoleMessage();
+    const message = insertError.message || "Could not create campaign";
+    // Common Spojex cutover miss: NOT NULL columns without defaults.
+    const friendly =
+      /summary|description|image_url|cover_url|raised_|created_at|updated_at/i.test(
+        message,
+      )
+        ? `${message}. Check required campaign fields.`
+        : message;
     return NextResponse.json(
-      { error: hint ? `${insertError.message}. ${hint}` : insertError.message },
+      { error: hint ? `${friendly}. ${hint}` : friendly },
       { status: 400 },
     );
   }

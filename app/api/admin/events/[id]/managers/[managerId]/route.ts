@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
-import { adminUsesServiceRole, createAdminClient } from "@/lib/supabase/admin";
+import { canUseAdminClient, createAdminClient } from "@/lib/spojex/admin";
 import { generateStadiumManagerPassword } from "@/lib/stadiums";
 
 export async function PATCH(
@@ -37,7 +37,7 @@ export async function PATCH(
 
   let nextPassword = current.login_password as string;
   if (body.reset_password || (body.password && body.password.trim())) {
-    if (!adminUsesServiceRole()) {
+    if (!canUseAdminClient()) {
       return NextResponse.json(
         { error: missingServiceRoleMessage() || "Service role key required to set passwords." },
         { status: 400 },
@@ -62,7 +62,7 @@ export async function PATCH(
         { status: 400 },
       );
     }
-    const adminClient = adminUsesServiceRole() ? createAdminClient() : client;
+    const adminClient = canUseAdminClient() ? createAdminClient() : client;
     const { error: updateError } = await adminClient.auth.admin.updateUserById(authUserId, {
       password: nextPassword,
     });

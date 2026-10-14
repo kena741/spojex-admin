@@ -10,7 +10,7 @@ import {
 } from "@/components/admin-layout";
 import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
 import { slugifyCategory } from "@/lib/service-categories";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { ServiceCategory, ServiceSubcategory } from "@/lib/types";
 
@@ -45,14 +45,14 @@ export default function ServiceCategoriesPage() {
     .sort((a, b) => a.sort_order - b.sort_order);
 
   const load = async () => {
-    const supabase = getSupabase();
-    const { data, error: loadError } = await supabase
+    const spojex = getSpojexClient();
+    const { data, error: loadError } = await spojex
       .from("service_categories")
       .select("*")
       .order("sort_order");
     if (loadError) throw loadError;
     setRows((data ?? []) as ServiceCategory[]);
-    const { data: subRows, error: subError } = await supabase
+    const { data: subRows, error: subError } = await spojex
       .from("service_subcategories")
       .select("*")
       .order("sort_order");

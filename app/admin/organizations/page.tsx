@@ -17,9 +17,9 @@ import {
 import { StatusBadge, verifiedTone } from "@/components/status-badge";
 import { organizationTypeLabel, organizationTypes } from "@/lib/catalog";
 import { loadCoinWalletsByUserIds, loadOrgLiveGiftTotals } from "@/lib/coin-wallets";
-import { postAdminResponse, useIdentityCatalog } from "@/lib/hooks";
+import { adminFetch, postAdminResponse, useIdentityCatalog } from "@/lib/hooks";
 import { generateStadiumManagerPassword } from "@/lib/stadiums";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { CoinWalletRow, OrganizationRow, UserRow } from "@/lib/types";
 import { formatCoins, formatDate, locationLabel } from "@/lib/utils";
@@ -81,7 +81,7 @@ export default function OrganizationsPage() {
   });
 
   const load = async () => {
-    const { data, error: loadError } = await getSupabase()
+    const { data, error: loadError } = await getSpojexClient()
       .from("organizations")
       .select("*, users:user_id(id, display_name, email, role)")
       .order("created_at", { ascending: false })
@@ -113,21 +113,27 @@ export default function OrganizationsPage() {
     let cancelled = false;
     const timer = window.setTimeout(() => {
       setOwnerLoading(true);
-      getSupabase()
-        .from("users")
-        .select("id, display_name, email, role, city")
-        .or(`display_name.ilike.%${q}%,email.ilike.%${q}%,full_name.ilike.%${q}%`)
-        .order("display_name")
-        .limit(12)
-        .then(({ data, error: searchError }) => {
+      void adminFetch(`/api/admin/users?q=${encodeURIComponent(q)}&limit=12`)
+        .then(async (res) => {
+          const json = (await res.json().catch(() => ({}))) as {
+            data?: OwnerOption[];
+            error?: string;
+          };
           if (cancelled) return;
-          if (searchError) {
-            setError(searchError.message);
+          if (!res.ok) {
+            setError(json.error || "Failed to search users");
             setOwnerOptions([]);
           } else {
-            setOwnerOptions((data ?? []) as OwnerOption[]);
+            setOwnerOptions(json.data ?? []);
           }
-          setOwnerLoading(false);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setError(err instanceof Error ? err.message : "Failed to search users");
+          setOwnerOptions([]);
+        })
+        .finally(() => {
+          if (!cancelled) setOwnerLoading(false);
         });
     }, 250);
     return () => {

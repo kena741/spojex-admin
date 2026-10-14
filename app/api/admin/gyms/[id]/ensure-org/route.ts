@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
-import { adminUsesServiceRole, createAdminClient } from "@/lib/supabase/admin";
+import { ensureGymOrganizationViaTables } from "@/lib/ensure-gym-organization";
+import { isRpcUnavailable } from "@/lib/rpc-unavailable";
+import { canUseAdminClient, createAdminClient } from "@/lib/spojex/admin";
 
 export async function POST(
   _request: Request,
@@ -9,7 +11,7 @@ export async function POST(
   const auth = await requireAdminPermission("gyms:write");
   if (!auth.ok) return auth.error;
   const { id: gymId } = await params;
-  const client = adminUsesServiceRole() ? createAdminClient() : auth.context.client;
+  const client = canUseAdminClient() ? createAdminClient() : auth.context.client;
 
   const { data: gym, error: gymError } = await client
     .from("gyms")
@@ -33,7 +35,16 @@ export async function POST(
     p_gym_id: gymId,
   });
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    if (!isRpcUnavailable(error)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    const fallback = await ensureGymOrganizationViaTables(client, gymId);
+    if (fallback.error && !fallback.organizationId) {
+      return NextResponse.json({ error: fallback.error }, { status: 400 });
+    }
+    return NextResponse.json({
+      data: { organization_id: fallback.organizationId },
+    });
   }
 
   const { data: refreshed } = await client

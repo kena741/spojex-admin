@@ -41,7 +41,7 @@ import {
   type GymRow,
 } from "@/lib/gyms";
 import { adminFetch, patchAdmin, postAdminResponse } from "@/lib/hooks";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { UserRow } from "@/lib/types";
 import { formatDate, formatMoney, locationLabel } from "@/lib/utils";
@@ -297,7 +297,7 @@ function GymCard({
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-hint">
             <span className="flex items-center gap-1">
               <Star className="h-3 w-3" />
-              {(row.rating_avg ?? 0).toFixed(1)}
+              {Number(row.rating_avg ?? 0).toFixed(1)}
             </span>
             <span className="flex items-center gap-1">
               <Users className="h-3 w-3" />
@@ -456,16 +456,16 @@ export default function GymsAdminPage() {
   const [uploadingKind, setUploadingKind] = useState<ImageKind | null>(null);
 
   const load = async () => {
-    const supabase = getSupabase();
+    const spojex = getSpojexClient();
     const [gymsRes, categoriesRes] = await Promise.all([
-      supabase
+      spojex
         .from("gyms")
         .select(
           "id, name, slug, logo_url, cover_url, description, location, address, city, country, category, status, verification_status, is_featured, feature_status, feature_requested_at, feature_reviewed_at, rating_avg, follower_count, monthly_payment, contact_phone, contact_email, website, owner_user_id, owner_name, created_at",
         )
         .order("created_at", { ascending: false })
         .limit(500),
-      supabase.from("gym_categories").select("*").order("sort_order"),
+      spojex.from("gym_categories").select("*").order("sort_order"),
     ]);
     if (gymsRes.error) throw gymsRes.error;
     setRows((gymsRes.data ?? []) as GymRow[]);
@@ -500,21 +500,27 @@ export default function GymsAdminPage() {
     let cancelled = false;
     const timer = window.setTimeout(() => {
       setOwnerLoading(true);
-      getSupabase()
-        .from("users")
-        .select("id, display_name, email, role, city")
-        .or(`display_name.ilike.%${q}%,email.ilike.%${q}%,full_name.ilike.%${q}%`)
-        .order("display_name")
-        .limit(12)
-        .then(({ data, error: searchError }) => {
+      void adminFetch(`/api/admin/users?q=${encodeURIComponent(q)}&limit=12`)
+        .then(async (res) => {
+          const json = (await res.json().catch(() => ({}))) as {
+            data?: OwnerOption[];
+            error?: string;
+          };
           if (cancelled) return;
-          if (searchError) {
-            setError(searchError.message);
+          if (!res.ok) {
+            setError(json.error || "Failed to search users");
             setOwnerOptions([]);
           } else {
-            setOwnerOptions((data ?? []) as OwnerOption[]);
+            setOwnerOptions(json.data ?? []);
           }
-          setOwnerLoading(false);
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setError(err instanceof Error ? err.message : "Failed to search users");
+          setOwnerOptions([]);
+        })
+        .finally(() => {
+          if (!cancelled) setOwnerLoading(false);
         });
     }, 250);
     return () => {
@@ -992,7 +998,7 @@ export default function GymsAdminPage() {
                                 : locationLabel(row.city, row.country)}
                             </p>
                             <p className="text-xs text-text-hint">
-                              ⭐ {(row.rating_avg ?? 0).toFixed(1)} · {row.follower_count ?? 0}{" "}
+                              ⭐ {Number(row.rating_avg ?? 0).toFixed(1)} · {row.follower_count ?? 0}{" "}
                               followers
                               {row.owner_name ? ` · ${row.owner_name}` : ""}
                             </p>

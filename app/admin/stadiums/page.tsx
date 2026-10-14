@@ -19,7 +19,7 @@ import { StadiumEditModal } from "@/components/stadium-edit-modal";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { deleteAdmin } from "@/lib/hooks";
 import { sizeTypeLabel, stadiumCoverUrl, stadiumStatuses, stadiumStatusLabel, stadiumSizeTypes, planTypeLabel } from "@/lib/stadiums";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { StadiumRow, StadiumSubscriptionRow } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
@@ -39,14 +39,14 @@ export default function StadiumsPage() {
   const [creating, setCreating] = useState(false);
 
   const load = async () => {
-    const supabase = getSupabase();
+    const spojex = getSpojexClient();
     const [stadiumsRes, subsRes] = await Promise.all([
-      supabase
+      spojex
         .from("stadiums")
         .select("*, users:owner_user_id(id, display_name, email)")
         .order("created_at", { ascending: false })
         .limit(500),
-      supabase
+      spojex
         .from("stadium_subscriptions")
         .select("id, stadium_id, plan_type, status, pass_code, pass_number, created_at, users:user_id(id, display_name)")
         .neq("status", "cancelled")

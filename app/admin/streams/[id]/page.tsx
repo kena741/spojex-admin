@@ -7,7 +7,7 @@ import AdminPageHeader from "@/components/admin-header";
 import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { deleteAdmin, patchAdmin } from "@/lib/hooks";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { streamGenres, streamPlaybackUrl, streamStatusLabel, streamStatuses } from "@/lib/streams";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { OrganizationRow, RadioStreamRow } from "@/lib/types";
@@ -24,7 +24,7 @@ export default function StreamDetailPage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = async () => {
-    const streamRes = await getSupabase()
+    const streamRes = await getSpojexClient()
       .from("radio_streams")
       .select("*")
       .eq("id", id)
@@ -33,7 +33,7 @@ export default function StreamDetailPage() {
     const row = streamRes.data as RadioStreamRow | null;
     setStation(row);
 
-    const orgRes = await getSupabase()
+    const orgRes = await getSpojexClient()
       .from("organizations")
       .select("id, name, public_id")
       .order("name")
@@ -44,7 +44,7 @@ export default function StreamDetailPage() {
 
     const hostUserId = row?.host_user_id?.trim();
     if (hostUserId) {
-      const userRes = await getSupabase()
+      const userRes = await getSpojexClient()
         .from("users")
         .select("id, display_name, email, role")
         .eq("id", hostUserId)

@@ -1,4 +1,4 @@
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import {
   identityRoleGroupSeeds,
   identityRoleSeeds,
@@ -55,7 +55,7 @@ function fallbackCatalog(): IdentityCatalog {
 }
 
 export async function fetchIdentityCatalog(): Promise<IdentityCatalog> {
-  const client = getSupabase();
+  const client = getSpojexClient();
   const [{ data: groups, error: groupError }, { data: roles, error: roleError }] = await Promise.all([
     client.from("identity_role_groups").select("*").order("sort_order"),
     client

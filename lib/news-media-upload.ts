@@ -1,0 +1,117 @@
+import { NextResponse } from "next/server";
+import {
+  newsMediaExtension,
+  parseNewsUploadKind,
+  resolveNewsMime,
+  validateNewsMedia,
+  type NewsUploadKind,
+} from "@/lib/news-media";
+import { signUploadComplete, uploadViaSpojexMediaApi } from "@/lib/spojex-media";
+import { requestAccessToken } from "@/lib/spojex/server";
+
+/** Cloud Run request body limit is ~32MB; stay under that for multipart proxy. */
+const MULTIPART_SAFE_BYTES = 28 * 1024 * 1024;
+
+/**
+ * Shared news media upload: Blob-safe parse, MIME from extension.
+ * Images always use server multipart. Video/audio use multipart when small enough;
+ * larger files use signed GCS PUT (requires IAM signBlob on the API runtime SA).
+ */
+export async function uploadNewsMediaFromForm(
+  form: FormData,
+  folder: string,
+): Promise<NextResponse> {
+  const raw = form.get("file");
+  const kind = parseNewsUploadKind(`${form.get("kind") ?? ""}`);
+  // instanceof File fails across Node/undici realms — accept Blob-like.
+  if (!(raw instanceof Blob) || typeof (raw as Blob).arrayBuffer !== "function") {
+    return NextResponse.json({ error: "file is required" }, { status: 400 });
+  }
+  if (!kind) {
+    return NextResponse.json({ error: "kind must be image, video, or audio." }, { status: 400 });
+  }
+
+  const file = raw as Blob & { name?: string };
+  const filenameHint =
+    (typeof file.name === "string" && file.name.trim()) || `${kind}.bin`;
+
+  const invalid = validateNewsMedia(kind, file.type, filenameHint, file.size);
+  if (invalid) {
+    return NextResponse.json({ error: invalid }, { status: 400 });
+  }
+  if (file.size <= 0) {
+    return NextResponse.json({ error: "Empty file" }, { status: 400 });
+  }
+
+  const token = await requestAccessToken();
+  if (!token) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const mime = resolveNewsMime(kind, file.type, filenameHint);
+  const ext = newsMediaExtension(kind, mime, filenameHint);
+  const filename = `${kind}-${Date.now()}.${ext}`;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (bytes.byteLength <= 0) {
+    return NextResponse.json({ error: "Empty file" }, { status: 400 });
+  }
+  const uploadBlob = new Blob([bytes], { type: mime });
+  const preferMultipart = kind === "image" || uploadBlob.size <= MULTIPART_SAFE_BYTES;
+
+  try {
+    let uploaded;
+    if (preferMultipart) {
+      uploaded = await uploadViaSpojexMediaApi({
+        accessToken: token,
+        file: uploadBlob,
+        filename,
+        module: "news",
+        folder,
+        kind,
+      });
+    } else {
+      try {
+        uploaded = await signUploadComplete({
+          accessToken: token,
+          file: uploadBlob,
+          filename,
+          module: "news",
+          mimeType: mime,
+          folder,
+        });
+      } catch (signErr) {
+        const signMsg = signErr instanceof Error ? signErr.message : "Sign failed";
+        // If signing is misconfigured, try multipart as a last resort (may hit 32MB CR limit).
+        if (uploadBlob.size <= MULTIPART_SAFE_BYTES) {
+          uploaded = await uploadViaSpojexMediaApi({
+            accessToken: token,
+            file: uploadBlob,
+            filename,
+            module: "news",
+            folder,
+            kind,
+          });
+        } else {
+          throw new Error(
+            `${signMsg} Large video uploads need signed URLs. Ask an admin to grant ` +
+              `roles/iam.serviceAccountTokenCreator on the API runtime service account.`,
+          );
+        }
+      }
+    }
+    if (!uploaded.publicUrl) {
+      return NextResponse.json({ error: "Upload failed. No URL returned." }, { status: 400 });
+    }
+    return NextResponse.json({
+      kind,
+      path: uploaded.path,
+      publicUrl: uploaded.publicUrl,
+      objectId: uploaded.objectId,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Upload failed";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}
+
+export type { NewsUploadKind };

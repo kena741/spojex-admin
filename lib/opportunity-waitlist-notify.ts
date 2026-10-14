@@ -1,8 +1,8 @@
-import type { SpojexClient as SupabaseClient } from "@/lib/api/client";
+import type { SpojexClient } from "@/lib/api/client";
 import { pushReadiness, sendUserPush } from "@/lib/push/sendUserPush";
 
 export async function notifyOpportunityWaitlist(
-  serviceClient: SupabaseClient,
+  serviceClient: SpojexClient,
   opportunityId: string,
 ) {
   const { data: opportunity, error: oppError } = await serviceClient

@@ -20,7 +20,7 @@ import { NewsMediaFields, NewsMediaPreview, uploadNewsFile } from "@/components/
 import { newsCategories, newsRecency, newsStatusLabel, newsStatuses } from "@/lib/news";
 import { resolveNewsStoryMedia, type NewsStoryMedia, type NewsUploadKind } from "@/lib/news-media";
 import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { SportNewsRow } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
@@ -59,7 +59,7 @@ export default function NewsPage() {
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
-    const { data, error: loadError } = await getSupabase()
+    const { data, error: loadError } = await getSpojexClient()
       .from("sport_news")
       .select("*")
       .order("created_at", { ascending: false })

@@ -1,4 +1,4 @@
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import type { CoinWalletRow } from "@/lib/types";
 
 /** Batch-load coin wallets keyed by football user id. */
@@ -8,7 +8,7 @@ export async function loadCoinWalletsByUserIds(
   const ids = [...new Set(userIds.map((id) => id.trim()).filter(Boolean))];
   if (ids.length === 0) return {};
 
-  const { data, error } = await getSupabase()
+  const { data, error } = await getSpojexClient()
     .from("coin_wallets")
     .select(
       "user_id, purchased_balance, received_balance, redeemable_balance, lifetime_purchased, lifetime_received, lifetime_gifted, updated_at",
@@ -38,7 +38,7 @@ export async function loadOrgLiveGiftTotals(
   const ids = [...new Set(orgIds.map((id) => id.trim()).filter(Boolean))];
   if (ids.length === 0) return {};
 
-  const { data: events, error: eventsError } = await getSupabase()
+  const { data: events, error: eventsError } = await getSpojexClient()
     .from("live_events")
     .select("id, host_org_id")
     .in("host_org_id", ids);
@@ -55,7 +55,7 @@ export async function loadOrgLiveGiftTotals(
   const eventIds = [...eventToOrg.keys()];
   if (eventIds.length === 0) return {};
 
-  const { data: gifts, error: giftsError } = await getSupabase()
+  const { data: gifts, error: giftsError } = await getSpojexClient()
     .from("live_event_gifts")
     .select("event_id, coins")
     .in("event_id", eventIds);

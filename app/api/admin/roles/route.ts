@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { DEFAULT_ADMIN_ROLES } from "@/lib/admin-permissions";
 import { requireAdminPermission } from "@/lib/admin-auth";
-import type { createAdminClient } from "@/lib/supabase/admin";
+import type { createAdminClient } from "@/lib/spojex/admin";
 
 async function ensureDefaultRoles(client: ReturnType<typeof createAdminClient>) {
   const { count } = await client.from("admin_role").select("id", { count: "exact", head: true });

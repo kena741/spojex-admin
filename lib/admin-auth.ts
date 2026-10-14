@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { SpojexClient, SpojexUser } from "@/lib/api/client";
-import { createServerSupabase, requestAccessToken } from "@/lib/supabase/server";
-import { adminUsesServiceRole, createAdminClientFromRequest } from "@/lib/supabase/admin";
+import { createServerSpojex, requestAccessToken } from "@/lib/spojex/server";
+import { canUseAdminClient, createAdminClientFromRequest } from "@/lib/spojex/admin";
 import {
   hasPermission,
   permissionsForRole,
@@ -33,7 +33,7 @@ async function fetchStaffRow(client: SpojexClient, userId: string) {
 async function loadStaff(user: SpojexUser, sessionClient: SpojexClient) {
   let staff = await fetchStaffRow(sessionClient, user.id);
 
-  if (!staff && adminUsesServiceRole()) {
+  if (!staff && canUseAdminClient()) {
     const adminClient = await createAdminClientFromRequest();
     staff = await fetchStaffRow(adminClient, user.id);
   }
@@ -41,7 +41,7 @@ async function loadStaff(user: SpojexUser, sessionClient: SpojexClient) {
   if (!staff || !staff.is_active) return null;
 
   let roleClient = sessionClient;
-  if (adminUsesServiceRole()) {
+  if (canUseAdminClient()) {
     roleClient = await createAdminClientFromRequest();
   }
 
@@ -56,7 +56,7 @@ async function loadStaff(user: SpojexUser, sessionClient: SpojexClient) {
     (roleRow as { permissions?: string[] } | null)?.permissions,
   );
 
-  const client = adminUsesServiceRole()
+  const client = canUseAdminClient()
     ? await createAdminClientFromRequest()
     : sessionClient;
 
@@ -88,8 +88,8 @@ async function resolveAuthUser(client: SpojexClient): Promise<SpojexUser | null>
 }
 
 export async function requireAdminSession(): Promise<AdminAuthResult> {
-  const supabase = await createServerSupabase();
-  const user = await resolveAuthUser(supabase);
+  const spojex = await createServerSpojex();
+  const user = await resolveAuthUser(spojex);
 
   if (!user) {
     return {
@@ -100,7 +100,7 @@ export async function requireAdminSession(): Promise<AdminAuthResult> {
   }
 
   try {
-    const loaded = await loadStaff(user, supabase);
+    const loaded = await loadStaff(user, spojex);
     if (!loaded) {
       return {
         ok: false,

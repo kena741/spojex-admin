@@ -208,17 +208,45 @@ export class SpojexQueryBuilder implements PromiseLike<QueryResult> {
   }
 
   or(filters: string) {
-    const parts = filters.split(",");
+    // Split on top-level commas only (PostgREST-style: col.op.value,...).
+    const parts: string[] = [];
+    let depth = 0;
+    let buf = "";
+    for (const ch of filters) {
+      if (ch === "(") depth += 1;
+      if (ch === ")") depth = Math.max(0, depth - 1);
+      if (ch === "," && depth === 0) {
+        const part = buf.trim();
+        if (part) parts.push(part);
+        buf = "";
+        continue;
+      }
+      buf += ch;
+    }
+    const last = buf.trim();
+    if (last) parts.push(last);
+
     this.filters.push((row) => {
       for (const part of parts) {
-        const m = part.trim().match(/^(\w+)\.(eq|neq|is)\.(.+)$/);
+        const m = part.trim().match(/^(\w+)\.(eq|neq|is|ilike|like)\.(.*)$/i);
         if (!m) continue;
-        const [, col, op, raw] = m;
+        const col = m[1];
+        const op = m[2].toLowerCase();
+        const raw = m[3];
         const value = raw === "null" ? null : raw.replace(/"/g, "");
+        const cell = String(row[col] ?? "");
         let ok = false;
-        if (op === "eq") ok = equals(row[col], value);
-        else if (op === "neq") ok = !equals(row[col], value);
+        if (op === "eq") {
+          ok =
+            value == null
+              ? row[col] == null
+              : value === ""
+                ? row[col] == null || cell.trim() === ""
+                : equals(row[col], value);
+        } else if (op === "neq") ok = !equals(row[col], value);
         else if (op === "is") ok = value === null ? row[col] == null : equals(row[col], value);
+        else if (op === "ilike") ok = likeToRegex(value ?? "", false).test(cell);
+        else if (op === "like") ok = likeToRegex(value ?? "", true).test(cell);
         if (ok) return true;
       }
       return false;
@@ -319,7 +347,7 @@ export class SpojexQueryBuilder implements PromiseLike<QueryResult> {
 
   private ok(data: unknown, count?: number | null): QueryResult {
     return {
-      // Match former untyped Supabase client (`data: any`)
+      // Match untyped Spojex client (`data: any`)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       data: data as any,
       error: null,
@@ -362,7 +390,13 @@ export class SpojexQueryBuilder implements PromiseLike<QueryResult> {
   }
 
   private async list(query?: Record<string, string>) {
-    const pageSize = this.limitN == null ? 200 : Math.min(Math.max(this.limitN + this.offsetN, 1), 500);
+    // Client-side filters (or/ilike/in/…) thin results after fetch — pull a wider
+    // page so `.limit(12).or(…ilike…)` still searches beyond the first 12 rows.
+    const hasClientFilters = this.filters.length > 0;
+    const base = this.limitN == null ? 200 : this.limitN + this.offsetN;
+    const pageSize = hasClientFilters
+      ? Math.min(Math.max(base, Object.keys(this.inHints).length ? base + 200 : 200), 500)
+      : Math.min(Math.max(base, 1), 500);
     const raw = await this.http.get(tablePath(this.table), {
       limit: pageSize,
       offset: 0,

@@ -11,8 +11,8 @@ import {
 } from "@/components/admin-layout";
 import { DocCountBadge } from "@/components/profile-details";
 import { StatusBadge } from "@/components/status-badge";
-import { athleteWithUserSelect } from "@/lib/supabase-embeds";
-import { getSupabase } from "@/lib/supabase/client";
+import { athleteWithUserSelect } from "@/lib/query-embeds";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { parseAchievements, parseCareerHistory } from "@/lib/profile-docs";
 import type { AthleteProfile, UserRow } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
@@ -25,7 +25,7 @@ export default function AthletesPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getSupabase()
+    getSpojexClient()
       .from("athlete_profiles")
       .select(athleteWithUserSelect)
       .order("updated_at", { ascending: false })

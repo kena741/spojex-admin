@@ -16,7 +16,7 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import {
   slugifyStream,
   streamGenres,
@@ -74,7 +74,7 @@ export default function RadioStreamsPanel() {
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
-    const streamRes = await getSupabase()
+    const streamRes = await getSpojexClient()
       .from("radio_streams")
       .select("*")
       .order("sort_order")
@@ -83,7 +83,7 @@ export default function RadioStreamsPanel() {
     if (streamRes.error) throw streamRes.error;
     setRows((streamRes.data ?? []) as RadioStreamRow[]);
 
-    const orgRes = await getSupabase()
+    const orgRes = await getSpojexClient()
       .from("organizations")
       .select("id, name, public_id")
       .order("name")

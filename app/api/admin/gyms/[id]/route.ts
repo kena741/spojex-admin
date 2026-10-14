@@ -1,7 +1,9 @@
-import type { SpojexClient as SupabaseClient } from "@/lib/api/client";
+import type { SpojexClient } from "@/lib/api/client";
 import { createSpojexClient } from "@/lib/api/client";
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
+import { ensureGymOrganizationViaTables } from "@/lib/ensure-gym-organization";
+import { isRpcUnavailable } from "@/lib/rpc-unavailable";
 import {
   gymFeatureStatuses,
   gymStatuses,
@@ -10,7 +12,7 @@ import {
   type GymStatus,
   type GymVerificationStatus,
 } from "@/lib/gyms";
-import { requestAccessToken } from "@/lib/supabase/server";
+import { requestAccessToken } from "@/lib/spojex/server";
 
 const allowed = [
   "status",
@@ -94,7 +96,7 @@ function featuredPatch(opts: {
 // The featured guard allows the signed-in admin (auth.uid()), and ignores
 // service-role writes where auth.uid() is null. Featured updates must use
 // the caller's session.
-async function featuredWriter(service: SupabaseClient) {
+async function featuredWriter(service: SpojexClient) {
   const token = await requestAccessToken();
   if (!token) return service;
   return createSpojexClient({
@@ -124,7 +126,7 @@ function featuredIgnored(
   return false;
 }
 
-async function writeGym(service: SupabaseClient, id: string, patch: Record<string, unknown>) {
+async function writeGym(service: SpojexClient, id: string, patch: Record<string, unknown>) {
   const touchesFeatured = "is_featured" in patch || "feature_status" in patch;
   const writer = touchesFeatured ? await featuredWriter(service) : service;
   const { data, error } = await writer
@@ -311,9 +313,12 @@ export async function PATCH(
       },
       { onConflict: "gym_id,user_id" },
     );
-    await auth.context.client.rpc("ensure_gym_organization", {
+    const ens = await auth.context.client.rpc("ensure_gym_organization", {
       p_gym_id: id,
     });
+    if (ens.error && isRpcUnavailable(ens.error)) {
+      await ensureGymOrganizationViaTables(auth.context.client, id);
+    }
     const refreshed = await auth.context.client
       .from("gyms")
       .select(gymSelect)

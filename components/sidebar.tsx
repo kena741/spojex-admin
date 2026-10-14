@@ -44,7 +44,7 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { canReadRadioChat } from "@/lib/admin-permissions";
 import { canManageLiveEvents } from "@/lib/live-events";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
@@ -377,7 +377,7 @@ export default function Sidebar() {
   };
 
   const signOut = async () => {
-    await getSupabase().auth.signOut();
+    await getSpojexClient().auth.signOut();
     router.replace("/login");
   };
 

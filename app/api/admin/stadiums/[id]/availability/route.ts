@@ -147,7 +147,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   const { error: insertError } = await auth.context.client.from("stadium_availability").insert(rows);
   if (insertError) {
     const hint = insertError.message.includes("stadium_availability_weekly_uniq")
-      ? " Run supabase/migrations/040_stadium_multi_slots.sql so a day can have more than one slot."
+      ? " Run migrations/040_stadium_multi_slots.sql so a day can have more than one slot."
       : "";
     return NextResponse.json({ error: `${insertError.message}${hint}` }, { status: 400 });
   }

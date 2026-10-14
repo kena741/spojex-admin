@@ -1,4 +1,4 @@
-import type { SpojexClient as SupabaseClient } from "@/lib/api/client";
+import type { SpojexClient } from "@/lib/api/client";
 import { fcmErrorMessage, isStaleFcmTokenError, sendFcmMessage } from "@/lib/firebase/fcm";
 import { buildFcmData, type PushDeliveryInput } from "@/lib/push/pushDelivery";
 
@@ -30,7 +30,7 @@ export function pushReadiness(profile: UserPushProfile) {
 }
 
 export async function fetchUserPushProfile(
-  serviceClient: SupabaseClient,
+  serviceClient: SpojexClient,
   userId: string,
 ): Promise<{ profile: UserPushProfile | null; error: string | null }> {
   const { data, error } = await serviceClient
@@ -45,12 +45,12 @@ export async function fetchUserPushProfile(
   return { profile: data as UserPushProfile, error: null };
 }
 
-async function clearStaleFcmToken(serviceClient: SupabaseClient, userId: string) {
+async function clearStaleFcmToken(serviceClient: SpojexClient, userId: string) {
   await serviceClient.from("users").update({ fcm_token: null }).eq("id", userId);
 }
 
 async function writeInbox(
-  serviceClient: SupabaseClient,
+  serviceClient: SpojexClient,
   userId: string,
   input: PushDeliveryInput,
 ) {
@@ -73,7 +73,7 @@ export async function sendUserPush({
   input,
   writeInbox: shouldWriteInbox = true,
 }: {
-  serviceClient: SupabaseClient;
+  serviceClient: SpojexClient;
   userId: string;
   token: string;
   input: PushDeliveryInput;

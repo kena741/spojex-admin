@@ -19,9 +19,9 @@ import SendPushForm from "@/components/send-push-form";
 import { allRoles, extraProfileTable, roleLabel } from "@/lib/catalog";
 import { professionalProfileCopy } from "@/lib/identity-catalog";
 import { patchAdmin, postAdmin, deleteAdmin, useIdentityCatalog } from "@/lib/hooks";
-import { userProfileSelect } from "@/lib/supabase-embeds";
-import { getSupabase } from "@/lib/supabase/client";
-import { safeSelect } from "@/lib/supabase-tables";
+import { userProfileSelect } from "@/lib/query-embeds";
+import { getSpojexClient } from "@/lib/spojex/client";
+import { safeSelect } from "@/lib/table-helpers";
 import { loadCoinWalletsByUserIds } from "@/lib/coin-wallets";
 import { firstPayment } from "@/lib/marketplace";
 import {
@@ -68,22 +68,22 @@ export default function UserDetailPage() {
     setError(null);
     const [{ data, error: userError }, orgRes, serviceRes, verificationRes, mediaRes, marketRes, coinMap] =
       await Promise.all([
-      getSupabase().from("users").select(userProfileSelect).eq("id", id).maybeSingle(),
-      getSupabase().from("organizations").select("*").eq("user_id", id),
+      getSpojexClient().from("users").select(userProfileSelect).eq("id", id).maybeSingle(),
+      getSpojexClient().from("organizations").select("*").eq("user_id", id),
       safeSelect(() =>
-        getSupabase()
+        getSpojexClient()
           .from("services")
           .select("id, title, published, category_id, created_at, cover_url, city, price_amount, currency, pricing_type")
           .eq("provider_id", id),
       ),
-      getSupabase()
+      getSpojexClient()
         .from("identity_verification_requests")
         .select("id, status")
         .eq("user_id", id)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
-      getSupabase()
+      getSpojexClient()
         .from("profile_media")
         .select("*")
         .eq("user_id", id)

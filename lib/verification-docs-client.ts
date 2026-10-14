@@ -1,4 +1,4 @@
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import {
   fallbackRequirementsForRole,
   type IdentityDocumentType,
@@ -20,7 +20,7 @@ export async function fetchIdentityDocumentTypes(): Promise<{
   types: IdentityDocumentType[];
   fromDatabase: boolean;
 }> {
-  const client = getSupabase();
+  const client = getSpojexClient();
   const { data, error } = await client
     .from("identity_document_types")
     .select("*")
@@ -51,7 +51,7 @@ export async function fetchRoleDocumentRequirements(
   requirements: IdentityRoleDocumentRequirement[];
   fromDatabase: boolean;
 }> {
-  const client = getSupabase();
+  const client = getSpojexClient();
   let query = client
     .from("identity_role_document_requirements")
     .select("*, identity_document_types(*)")
@@ -77,7 +77,7 @@ export async function fetchVerificationRequirementsForRole(
 ): Promise<{ requirements: VerificationRequirement[]; fromDatabase: boolean }> {
   if (!roleSlug) return { requirements: [], fromDatabase: true };
 
-  const client = getSupabase();
+  const client = getSpojexClient();
   const { data, error } = await client.rpc("identity_verification_requirements", {
     p_role_slug: roleSlug,
   });

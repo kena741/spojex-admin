@@ -9,7 +9,7 @@ import { StatusBadge, verifiedTone } from "@/components/status-badge";
 import { organizationTypeLabel, organizationTypes } from "@/lib/catalog";
 import { loadCoinWalletsByUserIds, loadOrgLiveGiftTotals } from "@/lib/coin-wallets";
 import { adminFetch, patchAdmin } from "@/lib/hooks";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import type { CoinWalletRow, OrganizationRow } from "@/lib/types";
 import { formatCoins, formatDate, locationLabel } from "@/lib/utils";
 
@@ -27,7 +27,7 @@ export default function OrganizationDetailPage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = async () => {
-    const { data, error: loadError } = await getSupabase()
+    const { data, error: loadError } = await getSpojexClient()
       .from("organizations")
       .select("*, users:user_id(id, display_name, email, role)")
       .eq("id", id)

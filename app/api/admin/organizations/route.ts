@@ -72,6 +72,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Owner user not found" }, { status: 400 });
   }
 
+  const now = new Date().toISOString();
+  const publicIdBase =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 24) || "org";
+  const publicId = `${publicIdBase}-${crypto.randomUUID().slice(0, 8)}`;
+
   const { data, error } = await auth.context.client
     .from("organizations")
     .insert({
@@ -84,6 +93,11 @@ export async function POST(request: Request) {
       description: body.description?.trim() || "",
       website: body.website?.trim() || null,
       verified: Boolean(body.verified),
+      is_platform: false,
+      public_id: publicId,
+      images: [],
+      created_at: now,
+      updated_at: now,
     })
     .select("*, users:user_id(id, display_name, email, role)")
     .single();

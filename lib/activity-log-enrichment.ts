@@ -1,4 +1,4 @@
-import type { SpojexClient as SupabaseClient } from "@/lib/api/client";
+import type { SpojexClient } from "@/lib/api/client";
 import type { AdminActivityLog } from "@/lib/activity-log";
 
 function formatPersonName(...parts: (string | null | undefined)[]): string {
@@ -20,7 +20,7 @@ function readNameFromRow(row: Record<string, unknown>): string {
 }
 
 async function fetchNameMap(
-  admin: SupabaseClient,
+  admin: SpojexClient,
   table: string,
   ids: string[],
   select: string,
@@ -42,7 +42,7 @@ async function fetchNameMap(
 }
 
 async function fetchRoleNameMap(
-  admin: SupabaseClient,
+  admin: SpojexClient,
   ids: string[],
 ): Promise<Map<string, string>> {
   const map = new Map<string, string>();
@@ -75,7 +75,7 @@ async function fetchRoleNameMap(
 }
 
 async function fetchWithdrawalLabelMap(
-  admin: SupabaseClient,
+  admin: SpojexClient,
   ids: string[],
 ): Promise<Map<string, string>> {
   const map = new Map<string, string>();
@@ -133,7 +133,7 @@ function buildDisplaySummary(
 }
 
 export async function enrichActivityLogs(
-  admin: SupabaseClient,
+  admin: SpojexClient,
   logs: AdminActivityLog[],
 ): Promise<AdminActivityLog[]> {
   if (logs.length === 0) return logs;

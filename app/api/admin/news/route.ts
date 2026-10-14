@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { SpojexClient as SupabaseClient } from "@/lib/api/client";
+import type { SpojexClient } from "@/lib/api/client";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { slugifyNews } from "@/lib/news";
@@ -19,7 +19,13 @@ type NewsInsert = {
   status: string;
   is_featured: boolean;
   sort_order: number;
-  published_at: string | null;
+  published_at?: string;
+  created_at: string;
+  updated_at: string;
+  like_count: number;
+  comment_count: number;
+  save_count: number;
+  share_count: number;
   organization_id?: string;
 };
 
@@ -31,7 +37,7 @@ function isMissingOrgColumn(error: { message?: string }) {
   return /organization_id|column .* does not exist/i.test(error.message ?? "");
 }
 
-async function uniqueNewsSlug(client: SupabaseClient, base: string) {
+async function uniqueNewsSlug(client: SpojexClient, base: string) {
   const root = base.replace(/^-+|-+$/g, "") || "article";
   for (let n = 0; n < 30; n += 1) {
     const slug = n === 0 ? root : `${root}-${n + 1}`;
@@ -86,6 +92,11 @@ export async function POST(request: Request) {
       : null;
   const base = (payload.slug?.trim() || slugifyNews(title) || "article").toLowerCase();
   const slug = await uniqueNewsSlug(auth.context.client, base);
+  const now = new Date().toISOString();
+  const status = payload.status ?? "draft";
+  const publishedAt =
+    (typeof payload.published_at === "string" && payload.published_at.trim()) ||
+    (status === "active" ? now : "");
 
   const row: NewsInsert = {
     title,
@@ -99,12 +110,16 @@ export async function POST(request: Request) {
     category: payload.category ?? "General",
     source: payload.source ?? "SpoJex Desk",
     author,
-    status: payload.status ?? "draft",
+    status,
     is_featured: payload.is_featured ?? false,
     sort_order: payload.sort_order ?? 0,
-    published_at:
-      payload.published_at ??
-      ((payload.status ?? "draft") === "active" ? new Date().toISOString() : null),
+    created_at: now,
+    updated_at: now,
+    like_count: 0,
+    comment_count: 0,
+    save_count: 0,
+    share_count: 0,
+    ...(publishedAt ? { published_at: publishedAt } : {}),
     ...(organizationId ? { organization_id: organizationId } : {}),
   };
 

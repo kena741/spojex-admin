@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { canAccessAdminRoute } from "@/lib/admin-permissions";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 
@@ -10,12 +10,15 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { loading, staff, can } = useAdminPermissions();
+  const redirected = useRef(false);
 
   useEffect(() => {
     if (loading) return;
 
     const reject = async (reason: "auth" | "forbidden") => {
-      if (reason === "forbidden") await getSupabase().auth.signOut();
+      if (redirected.current) return;
+      redirected.current = true;
+      if (reason === "forbidden") await getSpojexClient().auth.signOut();
       router.replace(
         `/login?error=${reason}&next=` + encodeURIComponent(pathname || "/admin/dashboard"),
       );
@@ -25,8 +28,9 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       void reject("forbidden");
       return;
     }
+    redirected.current = false;
 
-    if (!canAccessAdminRoute(pathname || "/admin/dashboard", can)) {
+    if (pathname !== "/admin/dashboard" && !canAccessAdminRoute(pathname || "/admin/dashboard", can)) {
       router.replace("/admin/dashboard");
     }
   }, [can, loading, pathname, router, staff]);

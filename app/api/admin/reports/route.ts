@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import type { ReportRow } from "@/lib/types";
-import type { SpojexClient as SupabaseClient } from "@/lib/api/client";
+import type { SpojexClient } from "@/lib/api/client";
 
 const REPORT_COLUMNS =
   "id, reporter_id, target_user_id, target_service_id, reason, details, created_at";
 
 const REPORT_SELECT = `${REPORT_COLUMNS}, reporter:reporter_id(id, display_name, username, avatar_url), target:target_user_id(id, display_name, username, avatar_url)`;
 
-async function attachServices(client: SupabaseClient, rows: ReportRow[]): Promise<ReportRow[]> {
+async function attachServices(client: SpojexClient, rows: ReportRow[]): Promise<ReportRow[]> {
   const serviceIds = [
     ...new Set(rows.map((row) => row.target_service_id).filter((id): id is string => Boolean(id))),
   ];

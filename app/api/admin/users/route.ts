@@ -1,13 +1,70 @@
 import { NextResponse } from "next/server";
-import type { SpojexClient as SupabaseClient } from "@/lib/api/client";
+import type { SpojexClient } from "@/lib/api/client";
 import { requireAnyAdminPermission } from "@/lib/admin-auth";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
-import { adminUsesServiceRole, createAdminClient } from "@/lib/supabase/admin";
+import { canUseAdminClient, createAdminClient } from "@/lib/spojex/admin";
 import { generateStadiumManagerPassword } from "@/lib/stadiums";
 
 const userSelect = "id, display_name, email, role, phone, city";
 
-async function findAuthUserIdByEmail(client: SupabaseClient, email: string) {
+/** Search public users by name or email for owner pickers (gyms / orgs). */
+export async function GET(request: Request) {
+  const auth = await requireAnyAdminPermission([
+    "users:read",
+    "users:write",
+    "organizations:write",
+    "gyms:write",
+    "gyms:read",
+  ]);
+  if (!auth.ok) return auth.error;
+
+  const url = new URL(request.url);
+  const q = (url.searchParams.get("q") ?? "").trim().replace(/[%(),]/g, " ");
+  const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 12) || 12, 1), 50);
+
+  if (q.length < 2) {
+    return NextResponse.json({ data: [] });
+  }
+
+  const client = createAdminClient();
+  const merged = new Map<string, Record<string, unknown>>();
+
+  const pushRows = (rows: unknown) => {
+    for (const row of Array.isArray(rows) ? rows : []) {
+      if (!row || typeof row !== "object") continue;
+      const id = String((row as { id?: unknown }).id ?? "").trim();
+      if (!id) continue;
+      merged.set(id, row as Record<string, unknown>);
+    }
+  };
+
+  // Exact email (server-side eq) — reliable even when the user is past the first page.
+  if (q.includes("@")) {
+    const email = q.toLowerCase();
+    const exact = await client.from("users").select(userSelect).eq("email", email).limit(5);
+    if (exact.error) {
+      return NextResponse.json({ error: exact.error.message }, { status: 400 });
+    }
+    pushRows(exact.data);
+  }
+
+  // Name / partial email / full_name via client-side or(ilike) over a wider page.
+  const fuzzy = await client
+    .from("users")
+    .select(userSelect)
+    .or(`display_name.ilike.%${q}%,email.ilike.%${q}%,full_name.ilike.%${q}%`)
+    .order("display_name")
+    .limit(Math.max(limit, 24));
+  if (fuzzy.error) {
+    return NextResponse.json({ error: fuzzy.error.message }, { status: 400 });
+  }
+  pushRows(fuzzy.data);
+
+  const data = [...merged.values()].slice(0, limit);
+  return NextResponse.json({ data });
+}
+
+async function findAuthUserIdByEmail(client: SpojexClient, email: string) {
   const target = email.toLowerCase();
   for (let page = 1; page <= 10; page += 1) {
     const { data, error } = await client.auth.admin.listUsers({ page, perPage: 200 });
@@ -20,7 +77,7 @@ async function findAuthUserIdByEmail(client: SupabaseClient, email: string) {
 }
 
 async function savePublicUser(
-  client: SupabaseClient,
+  client: SpojexClient,
   authUserId: string,
   fields: {
     email: string;
@@ -109,7 +166,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!adminUsesServiceRole()) {
+  if (!canUseAdminClient()) {
     return NextResponse.json(
       {
         error:

@@ -10,8 +10,8 @@ import {
   AdminTableShell,
 } from "@/components/admin-layout";
 import { DocCountBadge } from "@/components/profile-details";
-import { mediaWithUserSelect } from "@/lib/supabase-embeds";
-import { getSupabase } from "@/lib/supabase/client";
+import { mediaWithUserSelect } from "@/lib/query-embeds";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { parseAchievements, parseCareerHistory } from "@/lib/profile-docs";
 import type { MediaProfile, UserRow } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
@@ -24,7 +24,7 @@ export default function MediaPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getSupabase()
+    getSpojexClient()
       .from("media_profiles")
       .select(mediaWithUserSelect)
       .order("updated_at", { ascending: false })

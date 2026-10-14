@@ -17,7 +17,7 @@ import {
 import { StatusBadge } from "@/components/status-badge";
 import { adminFetch, deleteAdmin, patchAdmin, postAdmin, uploadAdmin } from "@/lib/hooks";
 import { miniAppCategories, slugifyMiniApp } from "@/lib/miniapps";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { MiniAppRow } from "@/lib/types";
 
@@ -71,7 +71,7 @@ export default function MiniAppsPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
   const load = async () => {
-    const { data, error: loadError } = await getSupabase()
+    const { data, error: loadError } = await getSpojexClient()
       .from("mini_apps")
       .select("*")
       .order("sort_order")

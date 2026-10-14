@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
-import type { SpojexClient as SupabaseClient } from "@/lib/api/client";
+import type { SpojexClient } from "@/lib/api/client";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { gymStaffRoles, type GymStaffRole } from "@/lib/gyms";
-import { adminUsesServiceRole, createAdminClient } from "@/lib/supabase/admin";
+import { canUseAdminClient, createAdminClient } from "@/lib/spojex/admin";
 import { generateStadiumManagerPassword } from "@/lib/stadiums";
 
 const allowedRoles = new Set(gymStaffRoles.map((item) => item.id));
 
-async function findAuthUserIdByEmail(client: SupabaseClient, email: string) {
+async function findAuthUserIdByEmail(client: SpojexClient, email: string) {
   const target = email.toLowerCase();
   for (let page = 1; page <= 10; page += 1) {
     const { data, error } = await client.auth.admin.listUsers({ page, perPage: 200 });
@@ -21,7 +21,7 @@ async function findAuthUserIdByEmail(client: SupabaseClient, email: string) {
 }
 
 async function ensureFanUser(
-  client: SupabaseClient,
+  client: SpojexClient,
   email: string,
   fullName: string,
   password: string,
@@ -188,7 +188,7 @@ export async function POST(
     if (user?.id) {
       userId = user.id;
     } else if (createIfMissing) {
-      if (!adminUsesServiceRole()) {
+      if (!canUseAdminClient()) {
         return NextResponse.json(
           {
             error:
@@ -228,7 +228,7 @@ export async function POST(
     return NextResponse.json({ error: "user_id or user_email is required" }, { status: 400 });
   }
 
-  const client = adminUsesServiceRole() ? createAdminClient() : auth.context.client;
+  const client = canUseAdminClient() ? createAdminClient() : auth.context.client;
 
   const { data: gym, error: gymError } = await client
     .from("gyms")

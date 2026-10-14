@@ -26,7 +26,7 @@ import {
   slugifyDonation,
 } from "@/lib/donations";
 import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { DonationCampaignRow } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
@@ -47,6 +47,8 @@ export default function DonationsPage() {
   const [status, setStatus] = useState("all");
   const [title, setTitle] = useState("");
   const [goal, setGoal] = useState("");
+  const [beneficiaryId, setBeneficiaryId] = useState("");
+  const [createStatus, setCreateStatus] = useState("active");
   const [creating, setCreating] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -54,7 +56,7 @@ export default function DonationsPage() {
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
-    const { data, error: loadError } = await getSupabase()
+    const { data, error: loadError } = await getSpojexClient()
       .from("donation_campaigns")
       .select("*")
       .order("sort_order")
@@ -81,19 +83,34 @@ export default function DonationsPage() {
 
   const create = async () => {
     if (!canWrite || !title.trim()) return;
+    const goalCoins = Number(goal) || 0;
+    if (goalCoins <= 0) {
+      setError("Goal (coins) must be greater than 0");
+      return;
+    }
+    const beneficiary = beneficiaryId.trim();
+    if (!beneficiary) {
+      setError("Beneficiary user ID is required for coin campaigns");
+      return;
+    }
     setCreating(true);
     setError(null);
     try {
       await postAdmin("/api/admin/donations", {
         title: title.trim(),
         slug: slugifyDonation(title),
-        goal_amount: Number(goal) || 0,
-        goal_coins: Number(goal) || 0,
+        summary: "",
+        description: "",
+        goal_amount: goalCoins,
+        goal_coins: goalCoins,
         currency: "COIN",
-        status: "draft",
+        status: createStatus || "active",
+        beneficiary_user_id: beneficiary,
       });
       setTitle("");
       setGoal("");
+      setBeneficiaryId("");
+      setCreateStatus("active");
       setCreateOpen(false);
       await load();
     } catch (err) {
@@ -122,6 +139,8 @@ export default function DonationsPage() {
       await patchAdmin(`/api/admin/donations/${editingId}`, {
         title: draft.title.trim(),
         goal_amount: draft.goal_amount,
+        goal_coins: draft.goal_amount,
+        currency: "COIN",
         status: draft.status,
       });
       cancelEdit();
@@ -321,9 +340,27 @@ export default function DonationsPage() {
             onChange={(e) => setGoal(e.target.value)}
             placeholder="Goal (coins)"
             type="number"
-            min={0}
+            min={1}
+            required
             className="h-10 rounded-lg border border-border px-3 text-sm"
           />
+          <input
+            value={beneficiaryId}
+            onChange={(e) => setBeneficiaryId(e.target.value)}
+            placeholder="Beneficiary user ID (uuid)"
+            required
+            className="h-10 rounded-lg border border-border px-3 font-mono text-xs"
+          />
+          <p className="text-xs text-text-secondary">
+            Coin gifts credit this user&apos;s redeemable wallet. Copy a user id from Users.
+          </p>
+          <AdminSelect value={createStatus} onChange={setCreateStatus}>
+            {donationStatuses.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </AdminSelect>
         </form>
       </AdminModal>
     </>

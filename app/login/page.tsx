@@ -1,8 +1,18 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
+
+function errorText(err: unknown) {
+  if (err instanceof Error && err.message.trim()) return err.message.trim();
+  if (err && typeof err === "object" && "message" in err) {
+    const message = (err as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message.trim();
+  }
+  return "Failed to sign in.";
+}
 
 function LoginContent() {
   const router = useRouter();
@@ -37,8 +47,8 @@ function LoginContent() {
     }
     setLoading(true);
     try {
-      await getSupabase().auth.signOut();
-      const { data, error: signInError } = await getSupabase().auth.signInWithPassword({
+      await getSpojexClient().auth.signOut();
+      const { data, error: signInError } = await getSpojexClient().auth.signInWithPassword({
         email: trimmed,
         password,
       });
@@ -46,24 +56,32 @@ function LoginContent() {
       if (!data.session?.user) throw new Error("Login failed. No session returned.");
 
       const { bootstrapFirstAdmin, resolveAdminStaff } = await import("@/lib/use-admin-permissions");
-      let staff = await resolveAdminStaff(data.session.user.id);
+      let staff = null;
+      try {
+        staff = await resolveAdminStaff(data.session.user.id);
+      } catch {
+        staff = null;
+      }
       if (!staff) {
         try {
           await bootstrapFirstAdmin(data.session.user);
           staff = await resolveAdminStaff(data.session.user.id);
-        } catch {
-          // SQL only allows bootstrap when the admin table is empty.
+        } catch (bootstrapError) {
+          await getSpojexClient().auth.signOut();
+          throw new Error(errorText(bootstrapError));
         }
       }
       if (!staff?.is_active) {
-        await getSupabase().auth.signOut();
+        await getSpojexClient().auth.signOut();
         throw new Error("This account is not an admin. Ask a Super Admin to grant access.");
       }
 
       router.replace(params.get("next") || "/admin/dashboard");
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to sign in.";
-      if (/could not find the table|schema cache|relation .*admin|Not authenticated|401/i.test(message)) {
+      const message = errorText(err);
+      if (/forbidden|writes for this resource require admin/i.test(message)) {
+        setError("Signed in, but this account could not be saved as Super Admin. The API refused to create the admin row.");
+      } else if (/could not find the table|schema cache|relation .*admin|Not authenticated|401/i.test(message)) {
         setError("Admin sign-in failed. Confirm SPOJEX_API_BASE_URL points at the API and this account has an active admin row.");
       } else {
         setError(message);
@@ -128,6 +146,12 @@ function LoginContent() {
           >
             {loading ? "Signing in…" : "Sign in"}
           </button>
+          <p className="text-center text-sm text-text-secondary">
+            No admin account yet?{" "}
+            <Link href="/signup" className="font-medium text-primary hover:underline">
+              Create one
+            </Link>
+          </p>
         </form>
       </div>
     </div>

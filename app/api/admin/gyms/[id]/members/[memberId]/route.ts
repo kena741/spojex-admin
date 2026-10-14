@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
+import { isRpcUnavailable } from "@/lib/rpc-unavailable";
 
 export async function PATCH(
   request: Request,
@@ -57,8 +58,7 @@ export async function DELETE(
     return NextResponse.json({ ok: true });
   }
 
-  const missingFn = /remove_gym_member|schema cache|PGRST202/i.test(rpc.error.message);
-  if (!missingFn) {
+  if (!isRpcUnavailable(rpc.error)) {
     return NextResponse.json({ error: rpc.error.message }, { status: 400 });
   }
 

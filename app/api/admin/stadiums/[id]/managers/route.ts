@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import type { SpojexClient as SupabaseClient } from "@/lib/api/client";
+import type { SpojexClient } from "@/lib/api/client";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
-import { adminUsesServiceRole, createAdminClient } from "@/lib/supabase/admin";
+import { canUseAdminClient, createAdminClient } from "@/lib/spojex/admin";
 import { generateStadiumManagerPassword } from "@/lib/stadiums";
 
-async function findAuthUserIdByEmail(client: SupabaseClient, email: string) {
+async function findAuthUserIdByEmail(client: SpojexClient, email: string) {
   const target = email.toLowerCase();
   for (let page = 1; page <= 10; page += 1) {
     const { data, error } = await client.auth.admin.listUsers({ page, perPage: 200 });
@@ -18,7 +18,7 @@ async function findAuthUserIdByEmail(client: SupabaseClient, email: string) {
 }
 
 async function ensurePublicUser(
-  client: SupabaseClient,
+  client: SpojexClient,
   authUserId: string,
   fields: { email: string; fullName: string; phone: string },
 ) {
@@ -92,7 +92,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const auth = await requireAdminPermission("stadiums:read");
   if (!auth.ok) return auth.error;
   const { id } = await params;
-  const client = adminUsesServiceRole() ? createAdminClient() : auth.context.client;
+  const client = canUseAdminClient() ? createAdminClient() : auth.context.client;
   const { data, error } = await client
     .from("stadium_managers")
     .select("*, users:user_id(id, display_name, email, phone, role)")
@@ -107,7 +107,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdminPermission("stadiums:write");
   if (!auth.ok) return auth.error;
-  if (!adminUsesServiceRole()) {
+  if (!canUseAdminClient()) {
     return NextResponse.json(
       {
         error:

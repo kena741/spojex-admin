@@ -23,7 +23,7 @@ import {
   mockLiveStreams,
   parseRoundClock,
 } from "@/lib/live-events";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { LiveEventRow, OrganizationRow } from "@/lib/types";
 
@@ -45,7 +45,7 @@ export default function LiveEventDetailPage() {
   const [clock, setClock] = useState("03:00");
 
   const load = async () => {
-    const { data, error: loadError } = await getSupabase()
+    const { data, error: loadError } = await getSpojexClient()
       .from("live_events")
       .select("*")
       .eq("id", id)
@@ -853,7 +853,7 @@ function HostOrgPicker({
   const appliedDefault = useRef(false);
 
   useEffect(() => {
-    getSupabase()
+    getSpojexClient()
       .from("organizations")
       .select("id, name, public_id, logo_url, user_id, is_platform, verified")
       .order("is_platform", { ascending: false })

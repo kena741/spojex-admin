@@ -41,7 +41,7 @@ function sessionFromBearer(token: string): SpojexSession | null {
   };
 }
 
-export async function createServerSupabase(): Promise<SpojexClient> {
+export async function createServerSpojex(): Promise<SpojexClient> {
   const cookieStore = await cookies();
   const headerStore = await headers();
   const bearer = userBearer(headerStore.get("authorization"));

@@ -1,0 +1,14 @@
+---
+description: Always commit and push Spojex deployable changes to GitHub
+alwaysApply: true
+---
+
+# Spojex: push every change
+
+After finishing a fix or feature in any Spojex repo (`spojex_admin`, `spojex_backend`, `spojext_superapp`), **commit and push to GitHub without waiting for the user to ask**. These repos deploy automatically from `main`.
+
+- Do not ask “should I push?” — push as part of finishing the work.
+- Use a concise commit message focused on why.
+- Never commit secrets (`.env`, credentials, private keys).
+- Prefer `required_permissions: ["all"]` for git write/push outside the workspace sandbox.
+- If push fails, fix auth/permissions and retry; report the PR/commit URL or `git log -1` hash when done.

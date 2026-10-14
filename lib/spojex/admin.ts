@@ -1,10 +1,9 @@
 import { createSpojexClient, type SpojexClient } from "@/lib/api/client";
 import type { SpojexSession } from "@/lib/api/session";
-import { requestServerSession } from "@/lib/supabase/server";
+import { requestServerSession } from "@/lib/spojex/server";
 
 /**
  * Server-side Spojex client. Lazily reads the admin Bearer session from cookies/headers.
- * Service-role keys are unused — API auth is JWT + admin table.
  */
 export function createAdminClient(session?: SpojexSession | null): SpojexClient {
   if (session) {
@@ -28,6 +27,7 @@ export async function createAdminClientFromRequest(): Promise<SpojexClient> {
   return createAdminClient(session);
 }
 
-export function adminUsesServiceRole() {
+/** Always true — Spojex API auth is JWT + admin table. */
+export function canUseAdminClient() {
   return true;
 }

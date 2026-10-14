@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { SpojexClient as SupabaseClient } from "@/lib/api/client";
+import type { SpojexClient } from "@/lib/api/client";
 import { authenticatePushRequest } from "@/lib/push/pushRouteAuth";
 import { pushReadiness, sendUserPush } from "@/lib/push/sendUserPush";
 
@@ -17,7 +17,7 @@ async function deliverConnectionPush({
   body,
   conversationId,
 }: {
-  serviceClient: SupabaseClient;
+  serviceClient: SpojexClient;
   fromUserId: string;
   toUserId: string;
   title: string;

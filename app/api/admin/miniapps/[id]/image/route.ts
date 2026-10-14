@@ -1,19 +1,11 @@
 import { NextResponse } from "next/server";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAdminPermission } from "@/lib/admin-auth";
-import { getSupabaseUrl } from "@/lib/env";
+import { imageExtension, uploadViaSpojexMediaApi } from "@/lib/spojex-media";
+import { requestAccessToken } from "@/lib/spojex/server";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
-
-function extensionFor(type: string, filename: string) {
-  if (type === "image/png") return "png";
-  if (type === "image/webp") return "webp";
-  if (type === "image/gif") return "gif";
-  if (type === "image/jpeg") return "jpg";
-  const match = filename.toLowerCase().match(/\.([a-z0-9]+)$/);
-  return match?.[1] || "jpg";
-}
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdminPermission("miniapps:write");
@@ -48,29 +40,31 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Image must be 5 MB or smaller." }, { status: 400 });
   }
 
-  const ext = extensionFor(file.type, file.name);
-  const path = `${id}/logo-${Date.now()}.${ext}`;
-  const bytes = Buffer.from(await file.arrayBuffer());
-
-  const { error: uploadError } = await auth.context.client.storage
-    .from("mini-apps")
-    .upload(path, bytes, {
-      contentType: file.type,
-      upsert: true,
-      cacheControl: "3600",
-    });
-
-  if (uploadError) {
-    const hint = missingServiceRoleMessage();
-    const message = uploadError.message.includes("Bucket not found")
-      ? `${uploadError.message}. Run supabase/migrations/089_mini_apps_logo.sql in Supabase.`
-      : uploadError.message;
-    return NextResponse.json({ error: hint ? `${message}. ${hint}` : message }, { status: 400 });
+  const token = await requestAccessToken();
+  if (!token) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const { data: publicData } = auth.context.client.storage.from("mini-apps").getPublicUrl(path);
-  const logoUrl =
-    publicData.publicUrl || `${getSupabaseUrl()}/storage/v1/object/public/mini-apps/${path}`;
+  const ext = imageExtension(file.type, file.name);
+  const filename = `logo-${Date.now()}.${ext}`;
+
+  let logoUrl: string;
+  try {
+    const uploaded = await uploadViaSpojexMediaApi({
+      accessToken: token,
+      file,
+      filename,
+      module: "miniapps",
+      folder: "mini-apps",
+    });
+    if (!uploaded.publicUrl) {
+      return NextResponse.json({ error: "Upload failed. No URL returned." }, { status: 400 });
+    }
+    logoUrl = uploaded.publicUrl;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Upload failed";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
 
   const { data, error: updateError } = await auth.context.client
     .from("mini_apps")

@@ -8,11 +8,11 @@ import {
   extraProfileTableForSlug,
   type IdentityCatalog,
 } from "@/lib/identity-catalog";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 
 async function adminHeaders(extra?: HeadersInit) {
   const headers = new Headers(extra);
-  const { data } = await getSupabase().auth.getSession();
+  const { data } = await getSpojexClient().auth.getSession();
   const token = data.session?.access_token;
   if (token) headers.set("Authorization", `Bearer ${token}`);
   return headers;

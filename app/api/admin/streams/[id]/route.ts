@@ -69,7 +69,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json(
         {
           error:
-            "Managing org requires migration 098_radio_host_org_gifts.sql. Apply it in Supabase, then retry.",
+            "Managing org requires migration 098_radio_host_org_gifts.sql. Apply the migration, then retry.",
         },
         { status: 400 },
       );

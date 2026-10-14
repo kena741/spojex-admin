@@ -13,7 +13,7 @@ import {
   AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import type { IdentityVerificationRequestRow } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 import { verificationStatusLabel, verificationStatuses } from "@/lib/verification";
@@ -26,7 +26,7 @@ export default function VerificationsPage() {
   const [status, setStatus] = useState("pending");
 
   const load = async () => {
-    const { data, error: loadError } = await getSupabase()
+    const { data, error: loadError } = await getSpojexClient()
       .from("identity_verification_requests")
       .select("*, users!identity_verification_requests_user_id_fkey(id, display_name, full_name, role, avatar_url, verified)")
       .order("created_at", { ascending: false })

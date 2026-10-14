@@ -11,8 +11,8 @@ import {
 } from "@/components/admin-layout";
 import { DocCountBadge } from "@/components/profile-details";
 import { StatusBadge } from "@/components/status-badge";
-import { professionalWithUserSelect } from "@/lib/supabase-embeds";
-import { getSupabase } from "@/lib/supabase/client";
+import { professionalWithUserSelect } from "@/lib/query-embeds";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { parseAchievements, parseCareerHistory } from "@/lib/profile-docs";
 import type { ProfessionalProfile, UserRow } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
@@ -25,7 +25,7 @@ export default function ProfessionalsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getSupabase()
+    getSpojexClient()
       .from("professional_profiles")
       .select(professionalWithUserSelect)
       .order("updated_at", { ascending: false })

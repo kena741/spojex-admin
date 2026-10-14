@@ -35,7 +35,7 @@ import {
   patchAdmin,
   postAdminResponse,
 } from "@/lib/hooks";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { formatDate, formatMoney, locationLabel } from "@/lib/utils";
 
@@ -205,7 +205,7 @@ export default function GymDetailPage() {
   const load = async () => {
     const [response, categoriesRes] = await Promise.all([
       fetch(`/api/admin/gyms/${id}`, { credentials: "same-origin" }),
-      getSupabase().from("gym_categories").select("*").order("sort_order"),
+      getSpojexClient().from("gym_categories").select("*").order("sort_order"),
     ]);
     const payload = (await response.json()) as {
       data?: GymRow;
@@ -874,7 +874,7 @@ export default function GymDetailPage() {
                   <div className="flex justify-between gap-3">
                     <dt className="text-text-secondary">Rating</dt>
                     <dd className="font-medium">
-                      ⭐ {(gym.rating_avg ?? 0).toFixed(1)}
+                      ⭐ {Number(gym.rating_avg ?? 0).toFixed(1)}
                       {gym.rating_count != null ? ` (${gym.rating_count})` : ""}
                     </dd>
                   </div>

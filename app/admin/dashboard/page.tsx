@@ -24,8 +24,8 @@ import {
 } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
 import { AdminErrorAlert } from "@/components/admin-layout";
-import { getSupabase } from "@/lib/supabase/client";
-import { safeCount } from "@/lib/supabase-tables";
+import { getSpojexClient } from "@/lib/spojex/client";
+import { safeCount } from "@/lib/table-helpers";
 import { roleLabel } from "@/lib/catalog";
 import { formatDate } from "@/lib/utils";
 import type { UserRow } from "@/lib/types";
@@ -120,27 +120,27 @@ async function fetchRevenue(range: RangeKey): Promise<RevenueBreakdown> {
 
   const [servicePayments, stadiumPayments, eventPayments, miniAppPayments, donations] =
     await Promise.all([
-      getSupabase()
+      getSpojexClient()
         .from("service_payments")
         .select("amount, status, paid_at, created_at")
         .eq("status", "completed")
         .gte("paid_at", start?.toISOString() ?? "1970-01-01"),
-      getSupabase()
+      getSpojexClient()
         .from("stadium_payments")
         .select("amount, status, paid_at, created_at")
         .eq("status", "completed")
         .gte("paid_at", start?.toISOString() ?? "1970-01-01"),
-      getSupabase()
+      getSpojexClient()
         .from("event_payments")
         .select("amount, status, paid_at, created_at")
         .eq("status", "completed")
         .gte("paid_at", start?.toISOString() ?? "1970-01-01"),
-      getSupabase()
+      getSpojexClient()
         .from("mini_app_payments")
         .select("amount, status, paid_at, created_at")
         .eq("status", "completed")
         .gte("paid_at", start?.toISOString() ?? "1970-01-01"),
-      getSupabase()
+      getSpojexClient()
         .from("donation_contributions")
         .select("amount, status, paid_at, created_at")
         .eq("status", "completed")
@@ -425,7 +425,7 @@ export default function DashboardPage() {
           count("wallets"),
           count("withdrawal_requests", { status: "pending" }),
           count("service_requests", { status: "awaiting_payment" }),
-          getSupabase()
+          getSpojexClient()
             .from("users")
             .select("id, display_name, role, city, country, verified, created_at")
             .order("created_at", { ascending: false })

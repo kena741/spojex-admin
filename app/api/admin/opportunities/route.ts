@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { SpojexClient as SupabaseClient } from "@/lib/api/client";
+import type { SpojexClient } from "@/lib/api/client";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { draftToPayload, type OpportunityDraft } from "@/lib/opportunities";
@@ -8,7 +8,7 @@ const select = "*";
 
 /** `opportunities.created_by` FKs `public.users` — admin-only auth accounts often aren't there. */
 async function resolveCreatedBy(
-  client: SupabaseClient,
+  client: SpojexClient,
   userId: string | null | undefined,
 ): Promise<string | null> {
   if (!userId) return null;

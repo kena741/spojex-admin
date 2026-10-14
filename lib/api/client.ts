@@ -73,6 +73,29 @@ export function createSpojexClient(options: SpojexClientOptions = {}) {
   });
 
   const auth = {
+    async signUp(creds: { email: string; password: string; full_name: string }) {
+      try {
+        const fullName = creds.full_name.trim();
+        const raw = await http.post(
+          "/api/v1/auth/signup",
+          {
+            email: creds.email.trim().toLowerCase(),
+            password: creds.password,
+            display_name: fullName,
+            full_name: fullName,
+            role: "fan",
+          },
+          false,
+        );
+        const session = sessionFromAuthPayload(raw, { emailHint: creds.email });
+        await saveSession(session, "SIGNED_IN");
+        return { data: { session, user: session.user }, error: null };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Sign up failed";
+        return { data: { session: null, user: null }, error: authError(message) };
+      }
+    },
+
     async signInWithPassword( creds: { email: string; password: string }) {
       try {
         const raw = await http.post(
@@ -295,7 +318,7 @@ export function createSpojexClient(options: SpojexClientOptions = {}) {
       const unsupported = (action: string) => ({
         data: null,
         error: storageError(
-          `${action} for "${bucket}" is not available on the Spojex API yet. Host media externally or wait for storage support.`,
+          `${action} for "${bucket}" is not available. Upload via admin media routes (Spojex /api/v1/media) or lib/spojex-media.`,
         ),
       });
       return {
@@ -309,7 +332,7 @@ export function createSpojexClient(options: SpojexClientOptions = {}) {
           return {
             data: null as { signedUrl?: string; token?: string; path?: string } | null,
             error: storageError(
-              `Signed upload URLs for "${bucket}" are not available on the Spojex API yet.`,
+              `Signed upload URLs for "${bucket}" are not available on the Spojex client. Use Spojex /api/v1/media/uploads/sign.`,
             ),
           };
         },
@@ -318,10 +341,10 @@ export function createSpojexClient(options: SpojexClientOptions = {}) {
             data: paths.map((path) => ({
               path,
               signedUrl: null as string | null,
-              error: "Storage signing is not available on the Spojex API yet.",
+              error: "Storage signing is not available on the Spojex client.",
             })),
             error: storageError(
-              `Signed URLs for "${bucket}" are not available on the Spojex API yet.`,
+              `Signed URLs for "${bucket}" are not available on the Spojex client. Use Spojex /api/v1/media/objects/{id}/download-url.`,
             ),
           };
         },
@@ -329,7 +352,7 @@ export function createSpojexClient(options: SpojexClientOptions = {}) {
           return {
             data: { signedUrl: null as string | null, path },
             error: storageError(
-              `Signed URLs for "${bucket}" are not available on the Spojex API yet.`,
+              `Signed URLs for "${bucket}" are not available on the Spojex client. Use Spojex /api/v1/media/objects/{id}/download-url.`,
             ),
           };
         },
@@ -351,7 +374,7 @@ export function createSpojexClient(options: SpojexClientOptions = {}) {
   async function rpc(fn: string, args?: Record<string, unknown>) {
     try {
       const data = await http.post(`/api/v1/rpc/${fn}`, args ?? {});
-      // Untyped RPC payloads (same as former Supabase `.rpc()`)
+      // Untyped RPC payloads (same as Spojex `.rpc()`)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return { data: data as any, error: null };
     } catch (err) {
@@ -379,8 +402,7 @@ export function createSpojexClient(options: SpojexClientOptions = {}) {
 
 export type SpojexClient = ReturnType<typeof createSpojexClient>;
 
-/** Alias kept so existing `SupabaseClient` imports can be redirected. */
-export type SupabaseClient = SpojexClient;
+
 export type User = SpojexUser;
 
 let browserSingleton: SpojexClient | null = null;

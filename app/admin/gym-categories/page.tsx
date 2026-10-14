@@ -10,7 +10,7 @@ import {
 } from "@/components/admin-layout";
 import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
 import { slugifyCategory } from "@/lib/service-categories";
-import { getSupabase } from "@/lib/supabase/client";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 
 export type GymCategoryRow = {
@@ -41,8 +41,8 @@ export default function GymCategoriesPage() {
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
-    const supabase = getSupabase();
-    const { data, error: loadError } = await supabase
+    const spojex = getSpojexClient();
+    const { data, error: loadError } = await spojex
       .from("gym_categories")
       .select("*")
       .order("sort_order");
