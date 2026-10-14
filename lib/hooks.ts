@@ -89,19 +89,24 @@ export async function putAdmin(path: string, body: Record<string, unknown>) {
   return payload.data;
 }
 
-export async function postAdminResponse(path: string, body: Record<string, unknown>) {
+type AdminPostPayload = {
+  error?: string;
+  data?: unknown;
+  password?: string;
+  message?: string;
+};
+
+export async function postAdminResponse<T extends object = AdminPostPayload>(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<T & AdminPostPayload> {
   const response = await fetch(path, {
     method: "POST",
     headers: await adminHeaders({ "Content-Type": "application/json" }),
     credentials: "same-origin",
     body: JSON.stringify(body),
   });
-  const payload = (await response.json()) as {
-    error?: string;
-    data?: unknown;
-    password?: string;
-    message?: string;
-  };
+  const payload = (await response.json()) as T & AdminPostPayload;
   if (!response.ok) throw new Error(payload.error || "Create failed");
   return payload;
 }

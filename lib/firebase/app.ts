@@ -62,7 +62,7 @@ export function readFirebaseServiceAccount(): ServiceAccountJson {
   if (filePath) {
     const resolved = path.isAbsolute(filePath)
       ? filePath
-      : path.resolve(process.cwd(), filePath);
+      : path.resolve(/* turbopackIgnore: true */ process.cwd(), filePath);
     if (fs.existsSync(resolved)) {
       const account = normalizeAccount(
         JSON.parse(fs.readFileSync(resolved, "utf8")) as Record<string, unknown>,
