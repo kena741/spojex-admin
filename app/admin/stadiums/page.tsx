@@ -110,7 +110,7 @@ export default function StadiumsPage() {
     if (!canWrite || importing) return;
     if (
       !window.confirm(
-        "Import all Addis Ababa football fields from addis-football-fields.json? Existing slugs will be updated.",
+        "Import all 65 AddisSport football fields from the website JSON? Existing names/slugs will be updated.",
       )
     ) {
       return;
@@ -153,7 +153,7 @@ export default function StadiumsPage() {
                 onClick={() => void importAddisFields()}
                 className="rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-text-primary disabled:opacity-60"
               >
-                {importing ? "Importing…" : "Import Addis fields"}
+                {importing ? "Importing…" : "Import AddisSport fields"}
               </button>
               <button
                 type="button"
