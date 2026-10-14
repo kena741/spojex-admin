@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
-import { imageExtension, uploadViaSpojexMediaApi } from "@/lib/spojex-media";
+import {
+  imageExtension,
+  toBackendMediaUrl,
+  uploadViaSpojexMediaApi,
+} from "@/lib/spojex-media";
 import { requestAccessToken } from "@/lib/spojex/server";
 
-const MAX_BYTES = 5 * 1024 * 1024;
+/** Match backend opportunities module policy (8 MB). */
+const MAX_BYTES = 8 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
 export async function POST(request: Request) {
@@ -22,7 +27,7 @@ export async function POST(request: Request) {
     );
   }
   if (file.size > MAX_BYTES) {
-    return NextResponse.json({ error: "Image must be 5 MB or smaller." }, { status: 400 });
+    return NextResponse.json({ error: "Image must be 8 MB or smaller." }, { status: 400 });
   }
 
   const token = await requestAccessToken();
@@ -41,10 +46,15 @@ export async function POST(request: Request) {
       module: "opportunities",
       folder: "opportunity-covers",
     });
-    if (!uploaded.publicUrl) {
+    const imageUrl = toBackendMediaUrl(uploaded.publicUrl);
+    if (!imageUrl) {
       return NextResponse.json({ error: "Upload failed. No URL returned." }, { status: 400 });
     }
-    return NextResponse.json({ image_url: uploaded.publicUrl, path: uploaded.path });
+    return NextResponse.json({
+      image_url: imageUrl,
+      path: uploaded.path,
+      objectId: uploaded.objectId,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Upload failed";
     return NextResponse.json({ error: message }, { status: 400 });

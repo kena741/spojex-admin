@@ -3,6 +3,7 @@ import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { notifyOpportunityWaitlist } from "@/lib/opportunity-waitlist-notify";
 import { draftToPayload, type OpportunityDraft } from "@/lib/opportunities";
+import { toBackendMediaUrl } from "@/lib/spojex-media";
 
 const select = "*";
 
@@ -121,9 +122,15 @@ export async function PATCH(
     if (!patch.title) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
     }
+    if (typeof patch.cover_image_url === "string") {
+      patch.cover_image_url = toBackendMediaUrl(patch.cover_image_url);
+    }
   } else {
     if (typeof body.status === "string") patch.status = body.status;
     if (typeof body.is_published === "boolean") patch.is_published = body.is_published;
+    if (typeof body.cover_image_url === "string") {
+      patch.cover_image_url = toBackendMediaUrl(body.cover_image_url);
+    }
   }
 
   if (Object.keys(patch).length === 0) {

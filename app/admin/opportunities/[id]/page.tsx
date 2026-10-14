@@ -12,6 +12,7 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone, type StatusTone } from "@/components/status-badge";
 import { adminFetch, patchAdmin, uploadAdmin } from "@/lib/hooks";
+import { toBackendMediaUrl } from "@/lib/spojex-media";
 import {
   ELIGIBLE_ROLE_OPTIONS,
   applicationStatusLabel,
@@ -166,7 +167,9 @@ export default function OpportunityDetailPage() {
     setError(null);
     try {
       const payload = await uploadAdmin("/api/admin/opportunities/upload", file);
-      const url = typeof payload.image_url === "string" ? payload.image_url : "";
+      const url = toBackendMediaUrl(
+        typeof payload.image_url === "string" ? payload.image_url : "",
+      );
       if (!url) throw new Error("Upload did not return an image URL");
       setDraft((d) => ({ ...d, cover_image_url: url }));
       setNotice("Cover uploaded — save changes to keep it.");
@@ -235,7 +238,7 @@ export default function OpportunityDetailPage() {
     );
   }
 
-  const cover = draft.cover_image_url?.trim() || "";
+  const cover = toBackendMediaUrl(draft.cover_image_url);
 
   return (
     <>

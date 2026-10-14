@@ -18,6 +18,7 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
 import { adminFetch, deleteAdmin, postAdmin, uploadAdmin } from "@/lib/hooks";
+import { toBackendMediaUrl } from "@/lib/spojex-media";
 import {
   ELIGIBLE_ROLE_OPTIONS,
   emptyOpportunityDraft,
@@ -111,7 +112,9 @@ export default function OpportunitiesPage() {
     setError(null);
     try {
       const payload = await uploadAdmin("/api/admin/opportunities/upload", file);
-      const url = typeof payload.image_url === "string" ? payload.image_url : "";
+      const url = toBackendMediaUrl(
+        typeof payload.image_url === "string" ? payload.image_url : "",
+      );
       if (!url) throw new Error("Upload did not return an image URL");
       setDraft((prev) => ({ ...prev, cover_image_url: url }));
     } catch (err) {
@@ -273,7 +276,7 @@ export default function OpportunitiesPage() {
               </thead>
               <tbody>
                 {filtered.map((row) => {
-                  const cover = row.cover_image_url?.trim() || "";
+                  const cover = toBackendMediaUrl(row.cover_image_url);
                   return (
                     <tr
                       key={row.id}
@@ -406,7 +409,7 @@ export default function OpportunitiesPage() {
               {draft.cover_image_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={draft.cover_image_url}
+                  src={toBackendMediaUrl(draft.cover_image_url)}
                   alt=""
                   className="mt-2 h-32 w-full rounded-xl object-cover"
                 />

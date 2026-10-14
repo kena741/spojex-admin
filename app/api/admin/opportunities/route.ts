@@ -3,6 +3,7 @@ import type { SpojexClient } from "@/lib/api/client";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { draftToPayload, type OpportunityDraft } from "@/lib/opportunities";
+import { toBackendMediaUrl } from "@/lib/spojex-media";
 
 const select = "*";
 
@@ -156,6 +157,7 @@ export async function POST(request: Request) {
     .from("opportunities")
     .insert({
       ...payload,
+      cover_image_url: toBackendMediaUrl(payload.cover_image_url),
       required_fields: [],
       created_by: createdBy,
     })
