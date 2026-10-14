@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -16,16 +16,21 @@ import {
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { patchAdmin } from "@/lib/hooks";
 import { canModerateRadioChat } from "@/lib/admin-permissions";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
-import type { RadioChatMessageRow, RadioChatReportRow } from "@/lib/types";
+import type { RadioChatMessageRow, RadioChatReportRow, RadioStreamRow } from "@/lib/types";
 import { formatDateTime, formatStatusLabel } from "@/lib/utils";
 
 function RadioChatPage() {
+  const router = useRouter();
   const search = useSearchParams();
   const streamFilter = search.get("stream") ?? "";
   const { can } = useAdminPermissions();
   const canModerate = canModerateRadioChat(can);
-  const [tab, setTab] = useState<"messages" | "reports">(streamFilter ? "messages" : "reports");
+  const [tab, setTab] = useState<"stations" | "messages" | "reports">(
+    streamFilter ? "messages" : "stations",
+  );
+  const [stations, setStations] = useState<RadioStreamRow[]>([]);
   const [messages, setMessages] = useState<RadioChatMessageRow[]>([]);
   const [reports, setReports] = useState<RadioChatReportRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +39,15 @@ function RadioChatPage() {
   const [status, setStatus] = useState("all");
 
   const load = async () => {
+    const stationRes = await getSpojexClient()
+      .from("radio_streams")
+      .select("*")
+      .order("sort_order")
+      .order("name")
+      .limit(500);
+    if (stationRes.error) throw stationRes.error;
+    setStations((stationRes.data ?? []) as RadioStreamRow[]);
+
     const path = streamFilter
       ? `/api/admin/radio-chat?stream=${encodeURIComponent(streamFilter)}`
       : "/api/admin/radio-chat";
@@ -56,6 +70,18 @@ function RadioChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streamFilter]);
 
+  const filteredStations = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return stations.filter((row) => {
+      if (status !== "all" && row.status !== status) return false;
+      if (!needle) return true;
+      return [row.name, row.slug, row.tagline, row.genre, row.city]
+        .join(" ")
+        .toLowerCase()
+        .includes(needle);
+    });
+  }, [stations, query, status]);
+
   const filteredMessages = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return messages.filter((row) => {
@@ -65,6 +91,11 @@ function RadioChatPage() {
       return hay.toLowerCase().includes(needle);
     });
   }, [messages, query, status]);
+
+  const selectedStation = useMemo(
+    () => stations.find((row) => row.id === streamFilter) ?? null,
+    [stations, streamFilter],
+  );
 
   const hide = async (id: string) => {
     setError(null);
@@ -76,49 +107,171 @@ function RadioChatPage() {
     }
   };
 
+  const setStreamFilter = (id: string) => {
+    const next = id ? `/admin/radio-chat?stream=${encodeURIComponent(id)}` : "/admin/radio-chat";
+    router.replace(next, { scroll: false });
+    if (id) setTab("messages");
+  };
+
   return (
     <>
       <AdminPageHeader
         title="Radio chat"
-        description="Live station chat, reports, and moderation"
+        description="Stations, live chat messages, and moderation reports"
       />
       {loading ? <AdminLoadingRow label="Loading radio chat…" /> : null}
       {error ? <AdminErrorAlert message={error} /> : null}
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setTab("reports")}
-          className={
-            tab === "reports"
-              ? "rounded-full bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
-              : "rounded-full border border-border bg-card px-3 py-1.5 text-sm"
-          }
-        >
-          Reports ({reports.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("messages")}
-          className={
-            tab === "messages"
-              ? "rounded-full bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
-              : "rounded-full border border-border bg-card px-3 py-1.5 text-sm"
-          }
-        >
-          Messages ({messages.length})
-        </button>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setTab("stations")}
+            className={
+              tab === "stations"
+                ? "rounded-full bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
+                : "rounded-full border border-border bg-card px-3 py-1.5 text-sm"
+            }
+          >
+            Stations ({stations.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("messages")}
+            className={
+              tab === "messages"
+                ? "rounded-full bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
+                : "rounded-full border border-border bg-card px-3 py-1.5 text-sm"
+            }
+          >
+            Messages ({messages.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("reports")}
+            className={
+              tab === "reports"
+                ? "rounded-full bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
+                : "rounded-full border border-border bg-card px-3 py-1.5 text-sm"
+            }
+          >
+            Reports ({reports.length})
+          </button>
+        </div>
+        <Link href="/admin/streams?tab=radio" className="text-sm text-primary hover:underline">
+          Manage stations
+        </Link>
       </div>
 
-      {tab === "messages" ? (
+      {selectedStation ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm">
+          <span className="text-text-secondary">Filtered to</span>
+          <strong>{selectedStation.name}</strong>
+          <button
+            type="button"
+            onClick={() => setStreamFilter("")}
+            className="text-primary hover:underline"
+          >
+            Clear
+          </button>
+        </div>
+      ) : null}
+
+      {tab === "stations" ? (
         <>
           <AdminFilterPanel>
             <div className="grid gap-3 md:grid-cols-[1fr_180px]">
               <AdminSearchInput
                 value={query}
                 onChange={setQuery}
+                placeholder="Search station name, genre, or city"
+              />
+              <AdminSelect value={status} onChange={setStatus}>
+                <option value="all">All statuses</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </AdminSelect>
+            </div>
+          </AdminFilterPanel>
+          <AdminTableShell>
+            {filteredStations.length === 0 && !loading ? (
+              <AdminEmpty
+                title="No radio stations"
+                description="Import Ethiopian stations from Streams → Radio, or add one manually."
+              />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Station</th>
+                      <th className="px-4 py-3 font-semibold">Genre</th>
+                      <th className="px-4 py-3 font-semibold">City</th>
+                      <th className="px-4 py-3 font-semibold">Status</th>
+                      <th className="px-4 py-3 font-semibold" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredStations.map((row) => (
+                      <tr key={row.id} className="border-b border-border last:border-0">
+                        <td className="px-4 py-3">
+                          <div className="font-medium">{row.name}</div>
+                          <div className="text-xs text-text-secondary">{row.tagline || row.slug}</div>
+                        </td>
+                        <td className="px-4 py-3 text-text-secondary">{row.genre || "—"}</td>
+                        <td className="px-4 py-3 text-text-secondary">{row.city || "—"}</td>
+                        <td className="px-4 py-3">
+                          <StatusBadge tone={requestTone(row.status)}>
+                            {formatStatusLabel(row.status)}
+                          </StatusBadge>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex justify-end gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setStreamFilter(row.id)}
+                              className="text-sm text-primary hover:underline"
+                            >
+                              Chat
+                            </button>
+                            <Link
+                              href={`/admin/streams/${row.id}`}
+                              className="text-sm text-primary hover:underline"
+                            >
+                              Edit
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </AdminTableShell>
+        </>
+      ) : null}
+
+      {tab === "messages" ? (
+        <>
+          <AdminFilterPanel>
+            <div className="grid gap-3 md:grid-cols-[1fr_220px_180px]">
+              <AdminSearchInput
+                value={query}
+                onChange={setQuery}
                 placeholder="Search message, user, or station"
               />
+              <AdminSelect
+                value={streamFilter}
+                onChange={(value) => setStreamFilter(value)}
+              >
+                <option value="">All stations</option>
+                {stations.map((row) => (
+                  <option key={row.id} value={row.id}>
+                    {row.name}
+                  </option>
+                ))}
+              </AdminSelect>
               <AdminSelect value={status} onChange={setStatus}>
                 <option value="all">All statuses</option>
                 <option value="active">Active</option>
@@ -130,7 +283,11 @@ function RadioChatPage() {
             {filteredMessages.length === 0 && !loading ? (
               <AdminEmpty
                 title="No chat messages"
-                description="Messages sent during a live radio session appear here."
+                description={
+                  stations.length > 0
+                    ? "Stations are live. Messages appear here after listeners chat in the app."
+                    : "Add radio stations under Streams → Radio first."
+                }
               />
             ) : (
               <div className="overflow-x-auto">
@@ -184,7 +341,9 @@ function RadioChatPage() {
             )}
           </AdminTableShell>
         </>
-      ) : (
+      ) : null}
+
+      {tab === "reports" ? (
         <AdminTableShell>
           {reports.length === 0 && !loading ? (
             <AdminEmpty
@@ -244,7 +403,7 @@ function RadioChatPage() {
             </div>
           )}
         </AdminTableShell>
-      )}
+      ) : null}
     </>
   );
 }

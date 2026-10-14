@@ -13,8 +13,8 @@ import { cn } from "@/lib/utils";
 export type StreamsTab = "radio" | "video";
 
 const TABS: { id: StreamsTab; label: string; icon: typeof Radio }[] = [
-  { id: "video", label: "Video", icon: Tv },
   { id: "radio", label: "Radio", icon: Radio },
+  { id: "video", label: "Video", icon: Tv },
 ];
 
 function StreamsHub() {
