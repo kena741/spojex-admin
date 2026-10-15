@@ -6,6 +6,7 @@ import { AdminModal, AdminModalFooter } from "@/components/admin-layout";
 import { StadiumLocationPicker } from "@/components/stadium-location-picker";
 import { patchAdmin, postAdminResponse } from "@/lib/hooks";
 import {
+  normalizeStadiumFacility,
   stadiumCoverUrl,
   stadiumFacilityOptions,
   stadiumPhotoUrls,
@@ -70,7 +71,15 @@ function draftFromRow(row: StadiumRow): StadiumDraft {
     description: row.description ?? "",
     latitude: row.latitude == null ? "" : String(row.latitude),
     longitude: row.longitude == null ? "" : String(row.longitude),
-    facilities: Array.isArray(row.facilities) ? row.facilities.filter(Boolean) : [],
+    facilities: Array.isArray(row.facilities)
+      ? [
+          ...new Set(
+            row.facilities
+              .map((item) => normalizeStadiumFacility(`${item ?? ""}`))
+              .filter(Boolean),
+          ),
+        ]
+      : [],
   };
 }
 
@@ -115,12 +124,14 @@ export function StadiumEditModal({
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState<"cover" | "gallery" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [customFacility, setCustomFacility] = useState("");
 
   const isCreate = creating || !stadium;
 
   useEffect(() => {
     if (!open) return;
     setDraft(stadium ? draftFromRow(stadium) : emptyDraft());
+    setCustomFacility("");
     setError(null);
     if (coverInputRef.current) coverInputRef.current.value = "";
     if (galleryInputRef.current) galleryInputRef.current.value = "";
@@ -128,10 +139,22 @@ export function StadiumEditModal({
 
   const toggleFacility = (label: string) => {
     if (!draft) return;
-    const next = draft.facilities.includes(label)
-      ? draft.facilities.filter((item) => item !== label)
-      : [...draft.facilities, label];
+    const key = normalizeStadiumFacility(label);
+    if (!key) return;
+    const next = draft.facilities.includes(key)
+      ? draft.facilities.filter((item) => item !== key)
+      : [...draft.facilities, key];
     setDraft({ ...draft, facilities: next });
+  };
+
+  const addCustomFacility = () => {
+    if (!draft) return;
+    const key = normalizeStadiumFacility(customFacility);
+    if (!key) return;
+    if (!draft.facilities.includes(key)) {
+      setDraft({ ...draft, facilities: [...draft.facilities, key] });
+    }
+    setCustomFacility("");
   };
 
   const uploadImage = async (file: File, kind: "cover" | "gallery") => {
@@ -193,7 +216,13 @@ export function StadiumEditModal({
     contact_email: current.contact_email.trim(),
     owner_name: current.owner_name.trim(),
     description: current.description.trim(),
-    facilities: current.facilities,
+    facilities: [
+      ...new Set(
+        current.facilities
+          .map((item) => normalizeStadiumFacility(item))
+          .filter(Boolean),
+      ),
+    ],
     latitude: current.latitude.trim() ? Number(current.latitude) : null,
     longitude: current.longitude.trim() ? Number(current.longitude) : null,
   });
@@ -326,8 +355,8 @@ export function StadiumEditModal({
             />
           </div>
 
-          <div>
-            <p className="mb-2 text-sm font-medium">Facilities</p>
+          <div className="grid gap-3">
+            <p className="text-sm font-medium">Facilities</p>
             <div className="flex flex-wrap gap-2">
               {stadiumFacilityOptions.map((item) => {
                 const selected = draft.facilities.includes(item);
@@ -346,6 +375,42 @@ export function StadiumEditModal({
                   </button>
                 );
               })}
+              {draft.facilities
+                .filter((item) => !stadiumFacilityOptions.includes(item))
+                .map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => toggleFacility(item)}
+                    className="rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground"
+                    title="Click to remove"
+                  >
+                    {item} ×
+                  </button>
+                ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                className={`${fieldClass} max-w-xs`}
+                value={customFacility}
+                onChange={(e) => setCustomFacility(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addCustomFacility();
+                  }
+                }}
+                placeholder="Add custom facility"
+                disabled={saving}
+              />
+              <button
+                type="button"
+                onClick={addCustomFacility}
+                disabled={saving || !normalizeStadiumFacility(customFacility)}
+                className="h-10 rounded-lg border border-border px-3 text-sm font-medium text-text-secondary hover:bg-muted disabled:opacity-50"
+              >
+                Add
+              </button>
             </div>
           </div>
 

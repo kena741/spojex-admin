@@ -155,6 +155,10 @@ export function generateStadiumManagerPassword() {
 }
 
 export const stadiumFacilityOptions = [
+  "SHOWER",
+  "TOILET",
+  "GRANDSTAND",
+  "SHADE",
   "Floodlights",
   "Changing rooms",
   "Parking",
@@ -164,6 +168,11 @@ export const stadiumFacilityOptions = [
   "Cafeteria",
   "Wi-Fi",
 ];
+
+/** Normalize facility labels for storage / comparison. */
+export function normalizeStadiumFacility(value: string) {
+  return value.trim().replace(/\s+/g, " ");
+}
 
 export function stadiumPhotoUrls(photos: unknown): string[] {
   if (!Array.isArray(photos)) return [];
