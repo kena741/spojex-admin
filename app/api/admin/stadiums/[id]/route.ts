@@ -10,6 +10,7 @@ const allowed = [
   "latitude",
   "longitude",
   "size_type",
+  "surface",
   "capacity",
   "photos",
   "image_url",

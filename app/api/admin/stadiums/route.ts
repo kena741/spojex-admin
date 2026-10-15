@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
-import { slugifyStadium, stadiumPricingPayload, type StadiumPricing } from "@/lib/stadiums";
+import {
+  normalizeStadiumSurface,
+  slugifyStadium,
+  stadiumPricingPayload,
+  type StadiumPricing,
+} from "@/lib/stadiums";
 
 function numberOrNull(value: unknown) {
   if (value == null || value === "") return null;
@@ -16,6 +21,7 @@ export async function POST(request: Request) {
     name?: string;
     status?: string;
     size_type?: string;
+    surface?: string;
     location?: string;
     address?: string;
     capacity?: number;
@@ -53,6 +59,7 @@ export async function POST(request: Request) {
     slug,
     status,
     size_type: body.size_type?.trim() || "medium",
+    surface: normalizeStadiumSurface(body.surface),
     location: body.location?.trim() ?? "",
     address: body.address?.trim() ?? "",
     capacity: Math.max(0, Math.floor(Number(body.capacity) || 0)),

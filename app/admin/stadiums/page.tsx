@@ -18,7 +18,15 @@ import {
 import { StadiumEditModal } from "@/components/stadium-edit-modal";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { deleteAdmin, postAdminResponse } from "@/lib/hooks";
-import { sizeTypeLabel, stadiumCoverUrl, stadiumStatuses, stadiumStatusLabel, stadiumSizeTypes, planTypeLabel } from "@/lib/stadiums";
+import {
+  sizeTypeLabel,
+  stadiumCoverUrl,
+  stadiumStatuses,
+  stadiumStatusLabel,
+  stadiumSizeTypes,
+  stadiumSurfaceLabel,
+  planTypeLabel,
+} from "@/lib/stadiums";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { StadiumRow, StadiumSubscriptionRow } from "@/lib/types";
@@ -201,7 +209,7 @@ export default function StadiumsPage() {
               <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Stadium</th>
-                  <th className="px-4 py-3 font-semibold">Size</th>
+                  <th className="px-4 py-3 font-semibold">Size / Surface</th>
                   <th className="px-4 py-3 font-semibold">Location</th>
                   <th className="px-4 py-3 font-semibold">Owner</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
@@ -254,6 +262,9 @@ export default function StadiumsPage() {
                     <td className="px-4 py-3 text-text-secondary">
                       {sizeTypeLabel(row.size_type)}
                       {row.capacity > 0 ? ` · ${row.capacity}` : ""}
+                      <span className="block text-xs">
+                        {stadiumSurfaceLabel(row.surface)}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-text-secondary">{row.location || row.address || "—"}</td>
                     <td className="px-4 py-3">

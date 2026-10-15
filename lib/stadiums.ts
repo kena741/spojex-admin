@@ -169,6 +169,26 @@ export const stadiumFacilityOptions = [
   "Wi-Fi",
 ];
 
+export type StadiumSurface = "Artificial" | "Grass" | "Red Ash" | "Other";
+
+export const stadiumSurfaceOptions: { id: string; label: string }[] = [
+  { id: "Artificial", label: "Artificial" },
+  { id: "Grass", label: "Grass" },
+  { id: "Red Ash", label: "Red Ash" },
+  { id: "Other", label: "Other" },
+];
+
+export function stadiumSurfaceLabel(surface?: string | null) {
+  const key = (surface ?? "").trim();
+  if (!key) return "Artificial";
+  return stadiumSurfaceOptions.find((item) => item.id === key)?.label ?? key;
+}
+
+export function normalizeStadiumSurface(value?: string | null) {
+  const key = (value ?? "").trim();
+  return key || "Artificial";
+}
+
 /** Normalize facility labels for storage / comparison. */
 export function normalizeStadiumFacility(value: string) {
   return value.trim().replace(/\s+/g, " ");

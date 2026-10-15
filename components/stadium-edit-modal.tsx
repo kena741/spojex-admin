@@ -7,11 +7,13 @@ import { StadiumLocationPicker } from "@/components/stadium-location-picker";
 import { patchAdmin, postAdminResponse } from "@/lib/hooks";
 import {
   normalizeStadiumFacility,
+  normalizeStadiumSurface,
   stadiumCoverUrl,
   stadiumFacilityOptions,
   stadiumPhotoUrls,
   stadiumSizeTypes,
   stadiumStatuses,
+  stadiumSurfaceOptions,
 } from "@/lib/stadiums";
 import type { StadiumRow } from "@/lib/types";
 
@@ -19,6 +21,7 @@ type StadiumDraft = {
   name: string;
   status: string;
   size_type: string;
+  surface: string;
   location: string;
   address: string;
   capacity: number;
@@ -38,6 +41,7 @@ function emptyDraft(): StadiumDraft {
     name: "",
     status: "pending",
     size_type: "medium",
+    surface: "Artificial",
     location: "",
     address: "",
     capacity: 0,
@@ -60,6 +64,7 @@ function draftFromRow(row: StadiumRow): StadiumDraft {
     name: row.name ?? "",
     status: row.status ?? "pending",
     size_type: row.size_type ?? "medium",
+    surface: normalizeStadiumSurface(row.surface),
     location: row.location ?? "",
     address: row.address ?? "",
     capacity: row.capacity ?? 0,
@@ -209,6 +214,7 @@ export function StadiumEditModal({
     name: current.name.trim(),
     status: current.status,
     size_type: current.size_type,
+    surface: normalizeStadiumSurface(current.surface),
     location: current.location.trim(),
     address: current.address.trim(),
     capacity: current.capacity,
@@ -310,6 +316,20 @@ export function StadiumEditModal({
                 className={fieldClass}
               >
                 {stadiumSizeTypes.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-text-secondary">Surface</span>
+              <select
+                value={draft.surface}
+                onChange={(e) => setDraft({ ...draft, surface: e.target.value })}
+                className={fieldClass}
+              >
+                {stadiumSurfaceOptions.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.label}
                   </option>

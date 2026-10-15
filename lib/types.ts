@@ -403,6 +403,7 @@ export type StadiumRow = {
   latitude: number | null;
   longitude: number | null;
   size_type: string;
+  surface: string;
   capacity: number;
   photos: unknown[];
   image_url: string;

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import {
+  normalizeStadiumSurface,
   slugifyStadium,
   stadiumPricingPayload,
   type StadiumPricing,
@@ -18,6 +19,7 @@ type FieldRow = {
   latitude?: number | null;
   longitude?: number | null;
   size_type?: string;
+  surface?: string;
   capacity?: number;
   description?: string;
   owner_name?: string;
@@ -131,6 +133,7 @@ function normalizeField(raw: unknown): FieldRow | null {
     latitude: numberOrNull(addis.latitude),
     longitude: numberOrNull(addis.longitude),
     size_type: sizeFromSurface(addis.surface),
+    surface: normalizeStadiumSurface(addis.surface),
     capacity: 50,
     description: (en?.description || "").trim(),
     owner_name: "Addis Sport / Field Operator",
@@ -195,6 +198,7 @@ export async function POST() {
       slug: slugBase,
       status,
       size_type: field.size_type?.trim() || "medium",
+      surface: normalizeStadiumSurface(field.surface),
       location: field.location?.trim() ?? "",
       address: field.address?.trim() ?? "",
       capacity: Math.max(0, Math.floor(Number(field.capacity) || 0)),
