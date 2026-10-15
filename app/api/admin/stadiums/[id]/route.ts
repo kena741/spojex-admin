@@ -25,11 +25,8 @@ const allowed = [
 ] as const;
 
 /**
- * Child cleanup before deleting the stadium row.
- * Most stadium_* FKs are ON DELETE CASCADE, but stadium_subscriptions.plan_id
- * is ON DELETE RESTRICT against stadium_plans — so plans cannot cascade-delete
- * while subscriptions still reference them. We clear dependents in the app.
- * Keep this to 2 round-trips (payments → rest in parallel), not 7 serial REST calls.
+ * Fallback child cleanup if DB cascade is not migrated yet.
+ * Prefer a single stadiums DELETE once plan_id is ON DELETE CASCADE.
  */
 const STADIUM_PAYMENTS = "stadium_payments" as const;
 const STADIUM_CHILD_TABLES = [
@@ -50,6 +47,16 @@ function isMissingTableError(message: string) {
     msg.includes("could not find") ||
     msg.includes("unknown table") ||
     msg.includes("could not find the table")
+  );
+}
+
+function isFkRestrictError(message: string) {
+  const msg = message.toLowerCase();
+  return (
+    msg.includes("foreign key") ||
+    msg.includes("violates") ||
+    msg.includes("still referenced") ||
+    msg.includes("restrict")
   );
 }
 
@@ -88,7 +95,21 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const client = auth.context.client;
   const hint = missingServiceRoleMessage();
 
-  // 1) Payments first (FK to bookings + subscriptions).
+  // Fast path: one DELETE — DB cascades child rows when FKs allow it.
+  {
+    const { error } = await client.from("stadiums").delete().eq("id", id);
+    if (!error) {
+      return NextResponse.json({ ok: true });
+    }
+    if (!isFkRestrictError(error.message || "")) {
+      return NextResponse.json(
+        { error: hint ? `${error.message}. ${hint}` : error.message },
+        { status: 400 },
+      );
+    }
+  }
+
+  // Slow path: clear dependents then retry (pre-cascade-migration DBs).
   {
     const { error } = await client.from(STADIUM_PAYMENTS).delete().eq("stadium_id", id);
     if (error && !isMissingTableError(error.message || "")) {
@@ -103,7 +124,6 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     }
   }
 
-  // 2) Remaining children in parallel (one RTT, not five serial).
   const childResults = await Promise.all(
     STADIUM_CHILD_TABLES.map(async (table) => {
       const { error } = await client.from(table).delete().eq("stadium_id", id);
@@ -122,7 +142,6 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     );
   }
 
-  // 3) Stadium row (plans cascade once subscriptions are gone).
   const { error: deleteError } = await client.from("stadiums").delete().eq("id", id);
   if (deleteError) {
     return NextResponse.json(
