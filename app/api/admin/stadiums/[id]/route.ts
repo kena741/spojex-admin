@@ -23,6 +23,19 @@ const allowed = [
   "pricing",
 ] as const;
 
+/** Child tables that reference stadiums.id (delete before the stadium row). */
+const STADIUM_CHILD_TABLES = [
+  // payments first — FKs to bookings + subscriptions
+  "stadium_payments",
+  "stadium_bookings",
+  "stadium_subscriptions",
+  "stadium_availability",
+  "stadium_managers",
+  "stadium_issues",
+  // legacy (may not exist on all envs)
+  "stadium_plans",
+] as const;
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdminPermission("stadiums:write");
   if (!auth.ok) return auth.error;
@@ -55,8 +68,34 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const auth = await requireAdminPermission("stadiums:write");
   if (!auth.ok) return auth.error;
   const { id } = await params;
+  const client = auth.context.client;
 
-  const { error: deleteError } = await auth.context.client.from("stadiums").delete().eq("id", id);
+  for (const table of STADIUM_CHILD_TABLES) {
+    const { error } = await client.from(table).delete().eq("stadium_id", id);
+    if (!error) continue;
+    const msg = (error.message || "").toLowerCase();
+    // Ignore missing legacy tables; surface real FK/permission failures.
+    if (
+      msg.includes("does not exist") ||
+      msg.includes("undefined_table") ||
+      msg.includes("not found") ||
+      msg.includes("unknown table") ||
+      msg.includes("could not find the table")
+    ) {
+      continue;
+    }
+    const hint = missingServiceRoleMessage();
+    return NextResponse.json(
+      {
+        error: hint
+          ? `Could not clear ${table}: ${error.message}. ${hint}`
+          : `Could not clear ${table}: ${error.message}`,
+      },
+      { status: 400 },
+    );
+  }
+
+  const { error: deleteError } = await client.from("stadiums").delete().eq("id", id);
   if (deleteError) {
     const hint = missingServiceRoleMessage();
     return NextResponse.json(
