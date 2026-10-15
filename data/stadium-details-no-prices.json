@@ -1,0 +1,2537 @@
+{
+  "source": "https://addissport.gov.et/en",
+  "retrievedAt": "2026-10-15T19:56:10.907958+00:00",
+  "count": 66,
+  "notes": "Only venue information exported. Missing values are null. Opening hours not supplied by detail endpoint.",
+  "stadiums": [
+    {
+      "id": "cmob8si1f004k815c71r2xocs",
+      "name": "22 Golagul",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "22 Golagul is a modern artificial turf football field located in Bole, Wereda 04. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade.",
+      "translations": {
+        "am": {
+          "name": "22 ጎላጉል",
+          "wereda": "04",
+          "subCity": "ቦሌ",
+          "description": "22 ጎላጉል በቦሌ ክፍለ ከተማ ወረዳ 04 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን እና ጥላ ፎቅ ያካትታል።"
+        },
+        "en": {
+          "name": "22 Golagul",
+          "wereda": "04",
+          "subCity": "Bole",
+          "description": "22 Golagul is a modern artificial turf football field located in Bole, Wereda 04. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 9.01291,
+      "longitude": 38.78911,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 04",
+        "subCity": "Bole"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/22_Golagul.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si1f004k815c71r2xocs",
+      "averageRating": 4.9,
+      "reviewCount": 10
+    },
+    {
+      "id": "cmob8si16004e815ctz99egsl",
+      "name": "Rwanda Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "Rwanda Meda is a modern artificial turf football field located in Bole, Wereda 2. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet.",
+      "translations": {
+        "am": {
+          "name": "ሩዋንዳ ሜዳ",
+          "wereda": "02",
+          "subCity": "ቦሌ",
+          "description": "ሩዋንዳ ሜዳ በቦሌ ክፍለ ከተማ ወረዳ 2 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር እና መጸዳጃ ቤትን ያካትታል።"
+        },
+        "en": {
+          "name": "Rwanda Meda",
+          "wereda": "02",
+          "subCity": "Bole",
+          "description": "Rwanda Meda is a modern artificial turf football field located in Bole, Wereda 2. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 8.986,
+      "longitude": 38.78065,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 02",
+        "subCity": "Bole"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Rwanda_Meda.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si16004e815ctz99egsl",
+      "averageRating": 5,
+      "reviewCount": 1
+    },
+    {
+      "id": "cmob8si3y0068815c0bciewj2",
+      "name": "Medemer Tiwulid",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "DISABILITY_ACCESS"
+      ],
+      "description": "Medemer Tiwulid is a modern artificial turf football field located in Yeka, Wereda 1. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, disability access.",
+      "translations": {
+        "am": {
+          "name": "መደመር ትውልድ",
+          "wereda": "01",
+          "subCity": "የካ",
+          "description": "መደመር ትውልድ በየካ ክፍለ ከተማ ወረዳ 1 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር እና የአካል ጉዳተኞች መገልገያ ያካትታል።"
+        },
+        "en": {
+          "name": "Medemer Tiwulid",
+          "wereda": "01",
+          "subCity": "Yeka",
+          "description": "Medemer Tiwulid is a modern artificial turf football field located in Yeka, Wereda 1. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, disability access."
+        }
+      },
+      "category": "SHOWER_RESTROOM",
+      "surface": "Artificial",
+      "latitude": 9.06652,
+      "longitude": 38.76943,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 01",
+        "subCity": "Yeka"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Yemedemer_Tiwulid.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si3y0068815c0bciewj2",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si48006e815cngwm7kg4",
+      "name": "11 Football Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "DISABILITY_ACCESS"
+      ],
+      "description": "11 Football Meda is a natural grass football field located in Yeka, Wereda 8. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, disability access.",
+      "translations": {
+        "am": {
+          "name": "11 እግር ኳስ ሜዳ",
+          "wereda": "08",
+          "subCity": "የካ",
+          "description": "11 እግር ኳስ ሜዳ በየካ ክፍለ ከተማ ወረዳ 8 የሚገኝ የተፈጥሮ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት እና አካል ጉዳተኞች መገልገያ ያካትታል።"
+        },
+        "en": {
+          "name": "11 Football Meda",
+          "wereda": "08",
+          "subCity": "Yeka",
+          "description": "11 Football Meda is a natural grass football field located in Yeka, Wereda 8. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, disability access."
+        }
+      },
+      "category": "SHOWER_RESTROOM",
+      "surface": "Grass",
+      "latitude": null,
+      "longitude": null,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 08",
+        "subCity": "Yeka"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/11_Football_Meda.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si48006e815cngwm7kg4",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si4a006g815c2rhzar7r",
+      "name": "Admasiye Football Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "DISABILITY_ACCESS"
+      ],
+      "description": "Admasiye Football Meda is a red ash community football field located in Yeka, Wereda 12. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, disability access.",
+      "translations": {
+        "am": {
+          "name": "አድማስዬ እግር ኳስ ሜዳ",
+          "wereda": "12",
+          "subCity": "የካ",
+          "description": "አድማስዬ እግር ኳስ ሜዳ በየካ ክፍለ ከተማ ወረዳ 12 የሚገኝ የቀይ አፈር ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት እና አካል ጉዳተኞች መገልገያ ያካትታል።"
+        },
+        "en": {
+          "name": "Admasiye Football Meda",
+          "wereda": "12",
+          "subCity": "Yeka",
+          "description": "Admasiye Football Meda is a red ash community football field located in Yeka, Wereda 12. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, disability access."
+        }
+      },
+      "category": "SHOWER_RESTROOM",
+      "surface": "Red Ash",
+      "latitude": 9.03348,
+      "longitude": 38.84757,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 12",
+        "subCity": "Yeka"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Admasiye.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si4a006g815c2rhzar7r",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si44006c815cm7zcsq8x",
+      "name": "Youth Center Futsal",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "DISABILITY_ACCESS"
+      ],
+      "description": "Youth Center Futsal is a modern artificial turf football field located in Yeka, Wereda 7. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, disability access.",
+      "translations": {
+        "am": {
+          "name": "የወጣቶች ማዕከል ፉትሳል",
+          "wereda": "07",
+          "subCity": "የካ",
+          "description": "የወጣቶች ማዕከል ፉትሳል በየካ ክፍለ ከተማ ወረዳ 7 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት እና አካል ጉዳተኞች መገልገያ ያካትታል።"
+        },
+        "en": {
+          "name": "Youth Center Futsal",
+          "wereda": "07",
+          "subCity": "Yeka",
+          "description": "Youth Center Futsal is a modern artificial turf football field located in Yeka, Wereda 7. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, disability access."
+        }
+      },
+      "category": "SHOWER_RESTROOM",
+      "surface": "Artificial",
+      "latitude": 9.02661,
+      "longitude": 38.7859,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 07",
+        "subCity": "Yeka"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Youth_Center_Futsal.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si44006c815cm7zcsq8x",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si3v0066815crs5eo36c",
+      "name": "Chefe Multipurpose Sports Center",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE",
+        "DISABILITY_ACCESS"
+      ],
+      "description": "Chefe Multipurpose Sports Center is a natural grass football field located in Yeka, Wereda 1. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access.",
+      "translations": {
+        "am": {
+          "name": "ጨፌ ሁለገብ ስፖርት ማዕከል",
+          "wereda": "01",
+          "subCity": "የካ",
+          "description": "ጨፌ ሁለገብ ስፖርት ማዕከል በየካ ክፍለ ከተማ ወረዳ 1 የሚገኝ የተፈጥሮ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን፣ ጥላ ፎቅ እና አካል ጉዳተኞች መገልገያ ያካትታል።"
+        },
+        "en": {
+          "name": "Chefe Multipurpose Sports Center",
+          "wereda": "01",
+          "subCity": "Yeka",
+          "description": "Chefe Multipurpose Sports Center is a natural grass football field located in Yeka, Wereda 1. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Grass",
+      "latitude": 9.06214,
+      "longitude": 38.77382,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 01",
+        "subCity": "Yeka"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Chefe_Multipurpose_Sports_Center.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si3v0066815crs5eo36c",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si41006a815c3ujkcqtv",
+      "name": "28 Football Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE",
+        "DISABILITY_ACCESS"
+      ],
+      "description": "28 Football Meda is a modern artificial turf football field located in Yeka, Wereda 6. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, disability access.",
+      "translations": {
+        "am": {
+          "name": "28 እግር ኳስ ሜዳ",
+          "wereda": "06",
+          "subCity": "የካ",
+          "description": "28 እግር ኳስ ሜዳ በየካ ክፍለ ከተማ ወረዳ 6 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት እና አካል ጉዳተኞች መገልግያ ያካትታል።"
+        },
+        "en": {
+          "name": "28 Football Meda",
+          "wereda": "06",
+          "subCity": "Yeka",
+          "description": "28 Football Meda is a modern artificial turf football field located in Yeka, Wereda 6. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, disability access."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 9.01884,
+      "longitude": 38.77518,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 06",
+        "subCity": "Yeka"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/28_Football_Meda.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si41006a815c3ujkcqtv",
+      "averageRating": 5,
+      "reviewCount": 1
+    },
+    {
+      "id": "cmob8si19004g815c1kxl7ar6",
+      "name": "24 Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "24 Meda is a modern artificial turf football field located in Bole, Wereda 5. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade.",
+      "translations": {
+        "am": {
+          "name": "24 ሜዳ",
+          "wereda": "05",
+          "subCity": "ቦሌ",
+          "description": "24 ሜዳ በቦሌ ክፍለ ከተማ ወረዳ 5 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን እና ጥላ ፎቅ ያካትታል።"
+        },
+        "en": {
+          "name": "24 Meda",
+          "wereda": "05",
+          "subCity": "Bole",
+          "description": "24 Meda is a modern artificial turf football field located in Bole, Wereda 5. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 9.00545,
+      "longitude": 38.7975,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 05",
+        "subCity": "Bole"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/24_Meda.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si19004g815c1kxl7ar6",
+      "averageRating": 4.8,
+      "reviewCount": 4
+    },
+    {
+      "id": "cmob8si1c004i815cj7n1tbkw",
+      "name": "Bulbula Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "Bulbula Meda is a modern artificial turf football field located in Bole, Wereda 12. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade.",
+      "translations": {
+        "am": {
+          "name": "ቡልቡላ ሜዳ",
+          "wereda": "12",
+          "subCity": "ቦሌ",
+          "description": "ቡልቡላ ሜዳ በቦሌ ክፍለ ከተማ ወረዳ 12 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን እና ጥላ ፎቅ ያካትታል።"
+        },
+        "en": {
+          "name": "Bulbula Meda",
+          "wereda": "12",
+          "subCity": "Bole",
+          "description": "Bulbula Meda is a modern artificial turf football field located in Bole, Wereda 12. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 8.95406,
+      "longitude": 38.78763,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 12",
+        "subCity": "Bole"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Bulbula_Meda.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si1c004i815cj7n1tbkw",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si0b003w815c5vp3x4de",
+      "name": "Lebu Sports Field",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "Lebu Sports Field is a modern artificial turf football field located in Nifas Silk, Wereda 1. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet.",
+      "translations": {
+        "am": {
+          "name": "ለቡ ስፖርት ሜዳ",
+          "wereda": "01",
+          "subCity": "ንፋስ ስልክ-ላፍቶ",
+          "description": "ለቡ ስፖርት ሜዳ በንፋስ ስልክ ክፍለ ከተማ ወረዳ 1 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር እና መጸዳጃ ቤትን ያካትታል።"
+        },
+        "en": {
+          "name": "Lebu Sports Field",
+          "wereda": "01",
+          "subCity": "Nifas Silk-Lafto",
+          "description": "Lebu Sports Field is a modern artificial turf football field located in Nifas Silk, Wereda 1. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 8.94537,
+      "longitude": 38.71493,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 01",
+        "subCity": "Nifas Silk-Lafto"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Lebu_Sports_Field.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si0b003w815c5vp3x4de",
+      "averageRating": 5,
+      "reviewCount": 3
+    },
+    {
+      "id": "cmob8si0p0044815cdxz04arm",
+      "name": "Kerpep",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "Kerpep is a natural grass football field located in Nifas Silk, Wereda 12. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade.",
+      "translations": {
+        "am": {
+          "name": "ከርፐፕ",
+          "wereda": "12",
+          "subCity": "ንፋስ ስልክ-ላፍቶ",
+          "description": "ከርፐፕ በንፋስ ስልክ ክፍለ ከተማ ወረዳ 12 የሚገኝ የተፈጥሮ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን እና ጥላ ፎቅ ያካትታል።"
+        },
+        "en": {
+          "name": "Kerpep",
+          "wereda": "12",
+          "subCity": "Nifas Silk-Lafto",
+          "description": "Kerpep is a natural grass football field located in Nifas Silk, Wereda 12. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Grass",
+      "latitude": 8.9519,
+      "longitude": 38.743,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 12",
+        "subCity": "Nifas Silk-Lafto"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Kerpep.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si0p0044815cdxz04arm",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si0v0048815cgky9q3yy",
+      "name": "Jamo",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "Jamo is a red ash community football field located in Nifas Silk, Wereda 13. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade.",
+      "translations": {
+        "am": {
+          "name": "ጃሞ",
+          "wereda": "13",
+          "subCity": "ንፋስ ስልክ-ላፍቶ",
+          "description": "ጃሞ በንፋስ ስልክ ክፍለ ከተማ ወረዳ 13 የሚገኝ የቀይ አፈር የህዝብ እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን እና ጥላ ፎቅ ያካትታል።"
+        },
+        "en": {
+          "name": "Jamo",
+          "wereda": "13",
+          "subCity": "Nifas Silk-Lafto",
+          "description": "Jamo is a red ash community football field located in Nifas Silk, Wereda 13. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Red Ash",
+      "latitude": 8.95786,
+      "longitude": 38.71716,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 13",
+        "subCity": "Nifas Silk-Lafto"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Jemo.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si0v0048815cgky9q3yy",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si0m0042815cbnp4g7ip",
+      "name": "Buna Board",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "Buna Board is a red ash community football field located in Nifas Silk, Wereda 7. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade.",
+      "translations": {
+        "am": {
+          "name": "ቡና ቦርድ",
+          "wereda": "07",
+          "subCity": "ንፋስ ስልክ-ላፍቶ",
+          "description": "ቡና ቦርድ በንፋስ ስልክ ክፍለ ከተማ ወረዳ 7 የሚገኝ የቀይ አፈር የህዝብ እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን እና ጥላ ፎቅ ያካትታል።"
+        },
+        "en": {
+          "name": "Buna Board",
+          "wereda": "07",
+          "subCity": "Nifas Silk-Lafto",
+          "description": "Buna Board is a red ash community football field located in Nifas Silk, Wereda 7. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Red Ash",
+      "latitude": 8.96421,
+      "longitude": 38.75558,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 07",
+        "subCity": "Nifas Silk-Lafto"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Buna_Board.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si0m0042815cbnp4g7ip",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si1o004q815c2nvmm78b",
+      "name": "Gelan Condominium Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "Gelan Condominium Meda is a red ash community football field located in Akaki, Wereda 12. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade.",
+      "translations": {
+        "am": {
+          "name": "ገላን ኮንዶሚኒየም ሜዳ",
+          "wereda": "12",
+          "subCity": "አቃቂ",
+          "description": "ገላን ኮንዶሚኒየም ሜዳ በአቃቂ ክፍለ ከተማ ወረዳ 12 የሚገኝ የቀይ አፈር የህዝብ እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን እና ጥላ ፎቅ ያካትታል።"
+        },
+        "en": {
+          "name": "Gelan Condominium Meda",
+          "wereda": "12",
+          "subCity": "Akaki",
+          "description": "Gelan Condominium Meda is a red ash community football field located in Akaki, Wereda 12. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade."
+        }
+      },
+      "category": "GRANDSTAND_SHADE",
+      "surface": "Red Ash",
+      "latitude": 8.8717,
+      "longitude": 38.76751,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 12",
+        "subCity": "Akaki Kality"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Gelan_Condominium.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si1o004q815c2nvmm78b",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si13004c815ca2xcy4lt",
+      "name": "Wereda 15",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE",
+        "DISABILITY_ACCESS"
+      ],
+      "description": "Wereda 15 is a modern artificial turf football field located in Nifas Silk, Wereda 15. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, disability access.",
+      "translations": {
+        "am": {
+          "name": "ወረዳ 15",
+          "wereda": "15",
+          "subCity": "ንፋስ ስልክ-ላፍቶ",
+          "description": "ወረዳ 15 በንፋስ ስልክ ክፍለ ከተማ ወረዳ 15 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት እና የአካል ጉዳተኞች መገልገያ ያካትታል።"
+        },
+        "en": {
+          "name": "Wereda 15",
+          "wereda": "15",
+          "subCity": "Nifas Silk-Lafto",
+          "description": "Wereda 15 is a modern artificial turf football field located in Nifas Silk, Wereda 15. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, disability access."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 8.9371,
+      "longitude": 38.72642,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 15",
+        "subCity": "Nifas Silk-Lafto"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Wereda_15.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si13004c815ca2xcy4lt",
+      "averageRating": 3.5,
+      "reviewCount": 2
+    },
+    {
+      "id": "cmob8si280054815c3is0de9n",
+      "name": "Chaka Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "Chaka Meda is a community dirt football field located in Addis Ketema, Wereda 6. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet.",
+      "translations": {
+        "am": {
+          "name": "ጫካ ሜዳ",
+          "wereda": "06",
+          "subCity": "አዲስ ከተማ",
+          "description": "ጫካ ሜዳ በአዲስ ከተማ ክፍለ ከተማ ወረዳ 6 የሚገኝ የህዝብ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር እና መጸዳጃ ቤትን ያካትታል።"
+        },
+        "en": {
+          "name": "Chaka Meda",
+          "wereda": "06",
+          "subCity": "Addis Ketema",
+          "description": "Chaka Meda is a community dirt football field located in Addis Ketema, Wereda 6. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 9.03412,
+      "longitude": 38.73575,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 06",
+        "subCity": "Addis Ketema"
+      },
+      "imageUrl": "https://addissport.gov.et/api/uploads/fields/6de14745-d54c-468e-b2cf-94f6fde88373-IMG_20260727_224048_394.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si280054815c3is0de9n",
+      "averageRating": 5,
+      "reviewCount": 2
+    },
+    {
+      "id": "cmob8si2b0056815c7qnjbuym",
+      "name": "Kwas Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "Kwas Meda is a natural grass football field located in Addis Ketema, Wereda 9. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade.",
+      "translations": {
+        "am": {
+          "name": "ኳስ ሜዳ",
+          "wereda": "09",
+          "subCity": "አዲስ ከተማ",
+          "description": "ኳስ ሜዳ በአዲስ ከተማ ክፍለ ከተማ ወረዳ 9 የሚገኝ የተፈጥሮ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን እና ጥላን ፎቅ ያካትታል።"
+        },
+        "en": {
+          "name": "Kwas Meda",
+          "wereda": "09",
+          "subCity": "Addis Ketema",
+          "description": "Kwas Meda is a natural grass football field located in Addis Ketema, Wereda 9. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Grass",
+      "latitude": 9.03336,
+      "longitude": 38.72636,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 09",
+        "subCity": "Addis Ketema"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Kwas_Meda.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si2b0056815c7qnjbuym",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si220050815c02d1htwr",
+      "name": "Arsema Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [],
+      "description": "Arsema Meda is a red ash community football field located in Akaki, Wereda 13. Suitable for training, friendly matches, and local competitions. It offers a simple, no-frills playing environment.",
+      "translations": {
+        "am": {
+          "name": "አርሴማ ሜዳ",
+          "wereda": "13",
+          "subCity": "አቃቂ",
+          "description": "አርሴማ ሜዳ በአቃቂ ክፍለ ከተማ ወረዳ 13 የሚገኝ የቀይ አፈር የህዝብ እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ የሆነ ቀላል የመጫወቻ አካባቢ ነው።"
+        },
+        "en": {
+          "name": "Arsema Meda",
+          "wereda": "13",
+          "subCity": "Akaki",
+          "description": "Arsema Meda is a red ash community football field located in Akaki, Wereda 13. Suitable for training, friendly matches, and local competitions. It offers a simple, no-frills playing environment."
+        }
+      },
+      "category": "NONE",
+      "surface": "Red Ash",
+      "latitude": 8.87474,
+      "longitude": 38.80617,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 13",
+        "subCity": "Akaki Kality"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Arsema_Meda.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si220050815c02d1htwr",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si2m005e815c8hnfcmrw",
+      "name": "Ye Medemer Tiwulid Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [],
+      "description": "Ye Medemer Tiwulid Meda is a modern artificial turf football field located in Addis Ketema, Wereda 14. Suitable for training, friendly matches, and local competitions. It offers a simple, no-frills playing environment.",
+      "translations": {
+        "am": {
+          "name": "የመደመር ትውልድ ሜዳ",
+          "wereda": "14",
+          "subCity": "አዲስ ከተማ",
+          "description": "የመደመር ትውልድ ሜዳ በአዲስ ከተማ ክፍለ ከተማ ወረዳ 14 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ሲሆን ቀላልና ምቹ የሆነ የጨዋታ አካባቢ አለው።"
+        },
+        "en": {
+          "name": "Ye Medemer Tiwulid Meda",
+          "wereda": "14",
+          "subCity": "Addis Ketema",
+          "description": "Ye Medemer Tiwulid Meda is a modern artificial turf football field located in Addis Ketema, Wereda 14. Suitable for training, friendly matches, and local competitions. It offers a simple, no-frills playing environment."
+        }
+      },
+      "category": "NONE",
+      "surface": "Artificial",
+      "latitude": 9.06652,
+      "longitude": 38.76943,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 14",
+        "subCity": "Addis Ketema"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Ye_Medemer_Tiwulid.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si2m005e815c8hnfcmrw",
+      "averageRating": 5,
+      "reviewCount": 1
+    },
+    {
+      "id": "cmob8si2k005c815c9y91wllr",
+      "name": "Asco Oromia Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "Asco Oromia Meda is a red ash community football field located in Addis Ketema, Wereda 14. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade.",
+      "translations": {
+        "am": {
+          "name": "አስኮ ኦሮሚያ ሜዳ",
+          "wereda": "14",
+          "subCity": "አዲስ ከተማ",
+          "description": "አስኮ ኦሮሚያ ሜዳ በአዲስ ከተማ ክፍለ ከተማ ወረዳ 14 የሚገኝ የቀይ አፈር ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን እና ጥላ ፎቅ ያካትታል።"
+        },
+        "en": {
+          "name": "Asco Oromia Meda",
+          "wereda": "14",
+          "subCity": "Addis Ketema",
+          "description": "Asco Oromia Meda is a red ash community football field located in Addis Ketema, Wereda 14. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Red Ash",
+      "latitude": 9.05844,
+      "longitude": 38.68704,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 14",
+        "subCity": "Addis Ketema"
+      },
+      "imageUrl": "https://addissport.gov.et/api/uploads/fields/b1a7bf93-247a-4d71-bf42-b2df2e009fcd-IMG-20260803-WA0001.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si2k005c815c9y91wllr",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si2p005g815csu5yxvc4",
+      "name": "Zenebe Werk Medemer Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE",
+        "DISABILITY_ACCESS"
+      ],
+      "description": "Zenebe Werk Medemer Meda is a modern artificial turf football field located in Kolfe, Wereda 5. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access.",
+      "translations": {
+        "am": {
+          "name": "ዘነበ ወርቅ መደመር ሜዳ",
+          "wereda": "05",
+          "subCity": "ኮልፌ",
+          "description": "ዘነበ ወርቅ መደመር ሜዳ በኮልፌ ክፍለ ከተማ ወረዳ 5 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን፣ ጥላ ፎቅ እና አካል ጉዳተኞች መገልገያ ያካትታል።"
+        },
+        "en": {
+          "name": "Zenebe Werk Medemer Meda",
+          "wereda": "05",
+          "subCity": "Kolfe",
+          "description": "Zenebe Werk Medemer Meda is a modern artificial turf football field located in Kolfe, Wereda 5. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 8.98797,
+      "longitude": 38.71638,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 05",
+        "subCity": "Kolfe"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Zenebe_Werk_Medemer_Meda.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si2p005g815csu5yxvc4",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si2s005i815c51xjbpjp",
+      "name": "Weredaw Gon Melata Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE",
+        "DISABILITY_ACCESS"
+      ],
+      "description": "Weredaw Gon Melata Meda is a modern artificial turf football field located in Kolfe, Wereda 10. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access.",
+      "translations": {
+        "am": {
+          "name": "ወረዳው ጎን መላጣ ሜዳ",
+          "wereda": "10",
+          "subCity": "ኮልፌ",
+          "description": "ወረዳው ጎን መላጣ ሜዳ በኮልፌ ክፍለ ከተማ ወረዳ 10 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን፣ ጥላ ፎቅ እና አካል ጉዳተኞች መገልገያ ያካትታል።"
+        },
+        "en": {
+          "name": "Weredaw Gon Melata Meda",
+          "wereda": "10",
+          "subCity": "Kolfe",
+          "description": "Weredaw Gon Melata Meda is a modern artificial turf football field located in Kolfe, Wereda 10. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 9.02722,
+      "longitude": 38.70737,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 10",
+        "subCity": "Kolfe"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Weredawgon_Melata_Meda.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si2s005i815c51xjbpjp",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si2h005a815ca5pu7iby",
+      "name": "George Nikola Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "George Nikola Meda is a modern artificial turf football field located in Addis Ketema, Wereda 13. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade.",
+      "translations": {
+        "am": {
+          "name": "ጆርጅ ኒኮላ ሜዳ",
+          "wereda": "13",
+          "subCity": "አዲስ ከተማ",
+          "description": "ጆርጅ ኒኮላ ሜዳ በአዲስ ከተማ ክፍለ ከተማ ወረዳ 13 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን እና ጥላ ፎቅ ያካትታል።"
+        },
+        "en": {
+          "name": "George Nikola Meda",
+          "wereda": "13",
+          "subCity": "Addis Ketema",
+          "description": "George Nikola Meda is a modern artificial turf football field located in Addis Ketema, Wereda 13. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 9.05418,
+      "longitude": 38.70444,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 13",
+        "subCity": "Addis Ketema"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/George_Nikola.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si2h005a815ca5pu7iby",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si2y005m815cbih9mubl",
+      "name": "Bambis Football Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE",
+        "DISABILITY_ACCESS"
+      ],
+      "description": "Bambis Football Meda is a modern artificial turf football field located in Kirkos, Wereda 1. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access.",
+      "translations": {
+        "am": {
+          "name": "ባምቢስ እግር ኳስ ሜዳ",
+          "wereda": "01",
+          "subCity": "ቂርቆስ",
+          "description": "ባምቢስ እግር ኳስ ሜዳ በቂርቆስ ክፍለ ከተማ ወረዳ 1 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን፣ ጥላ ፎቅ እና አካል ጉዳተኞች መገልገያ ያካትታል።"
+        },
+        "en": {
+          "name": "Bambis Football Meda",
+          "wereda": "01",
+          "subCity": "Kirkos",
+          "description": "Bambis Football Meda is a modern artificial turf football field located in Kirkos, Wereda 1. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 9.00618,
+      "longitude": 38.76995,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 01",
+        "subCity": "Kirkos"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Bambis_Footballfield.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si2y005m815cbih9mubl",
+      "averageRating": 4.7,
+      "reviewCount": 9
+    },
+    {
+      "id": "cmob8si34005q815ce1ef85n7",
+      "name": "50 Kebele Football Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE",
+        "DISABILITY_ACCESS"
+      ],
+      "description": "50 Kebele Football Meda is a modern artificial turf football field located in Kirkos, Wereda 3. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access.",
+      "translations": {
+        "am": {
+          "name": "50 ቀበሌ እግር ኳስ ሜዳ",
+          "wereda": "03",
+          "subCity": "ቂርቆስ",
+          "description": "50 ቀበሌ እግር ኳስ ሜዳ በቂርቆስ ክፍለ ከተማ ወረዳ 3 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን፣ ጥላ ፎቅ እና አካል ጉዳተኞች መገልገያ ያካትታል።"
+        },
+        "en": {
+          "name": "50 Kebele Football Meda",
+          "wereda": "03",
+          "subCity": "Kirkos",
+          "description": "50 Kebele Football Meda is a modern artificial turf football field located in Kirkos, Wereda 3. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 8.97984,
+      "longitude": 38.76089,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 03",
+        "subCity": "Kirkos"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/50_Kebele_Football_Meda.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si34005q815ce1ef85n7",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si37005s815co97m6wha",
+      "name": "Qera Football Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE",
+        "DISABILITY_ACCESS"
+      ],
+      "description": "Qera Football Meda is a modern artificial turf football field located in Kirkos, Wereda 5. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access.",
+      "translations": {
+        "am": {
+          "name": "ቄራ እግር ኳስ ሜዳ",
+          "wereda": "05",
+          "subCity": "ቂርቆስ",
+          "description": "ቄራ እግር ኳስ ሜዳ በቂርቆስ ክፍለ ከተማ ወረዳ 5 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን፣ ጥላ ፎቅ እና አካል ጉዳተኞች መገልገያ ያካትታል።"
+        },
+        "en": {
+          "name": "Qera Football Meda",
+          "wereda": "05",
+          "subCity": "Kirkos",
+          "description": "Qera Football Meda is a modern artificial turf football field located in Kirkos, Wereda 5. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 8.988942,
+      "longitude": 38.743982,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 05",
+        "subCity": "Kirkos"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Qera_Football_Field.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si37005s815co97m6wha",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si3a005u815crf9tm8pb",
+      "name": "Birimo",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "Birimo is a modern artificial turf football field located in Lideta, Wereda 10. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade.",
+      "translations": {
+        "am": {
+          "name": "ቢሪሞ",
+          "wereda": "10",
+          "subCity": "ልደታ",
+          "description": "ቢሪሞ በልደታ ክፍለ ከተማ ወረዳ 10 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን እና ጥላ ፎቅ ያካትታል።"
+        },
+        "en": {
+          "name": "Birimo",
+          "wereda": "10",
+          "subCity": "Lideta",
+          "description": "Birimo is a modern artificial turf football field located in Lideta, Wereda 10. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 9.007102,
+      "longitude": 38.733941,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 10",
+        "subCity": "Lideta"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Birimo.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si3a005u815crf9tm8pb",
+      "averageRating": 4,
+      "reviewCount": 1
+    },
+    {
+      "id": "cmob8si3d005w815cc89yb3yo",
+      "name": "Tesfa Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "Tesfa Meda is a modern artificial turf football field located in Lideta, Wereda 4. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade.",
+      "translations": {
+        "am": {
+          "name": "ተስፋ ሜዳ",
+          "wereda": "04",
+          "subCity": "ልደታ",
+          "description": "ተስፋ ሜዳ በልደታ ክፍለ ከተማ ወረዳ 4 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን እና ጥላ ፎቅ ያካትታል።"
+        },
+        "en": {
+          "name": "Tesfa Meda",
+          "wereda": "04",
+          "subCity": "Lideta",
+          "description": "Tesfa Meda is a modern artificial turf football field located in Lideta, Wereda 4. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 8.987515,
+      "longitude": 38.739812,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 04",
+        "subCity": "Lideta"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Tesfa_Meda.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si3d005w815cc89yb3yo",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si4d006i815ckgz6ueac",
+      "name": "03 Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE",
+        "DISABILITY_ACCESS"
+      ],
+      "description": "03 Meda is a modern artificial turf football field located in Gullele, Wereda 8. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access.",
+      "translations": {
+        "am": {
+          "name": "03 ሜዳ",
+          "wereda": "08",
+          "subCity": "ጉለሌ",
+          "description": "03 ሜዳ በጉለሌ ክፍለ ከተማ ወረዳ 8 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን፣ ጥላ ፎቅ እና አካል ጉዳተኞች መገልገያ ያካትታል።"
+        },
+        "en": {
+          "name": "03 Meda",
+          "wereda": "08",
+          "subCity": "Gulele",
+          "description": "03 Meda is a modern artificial turf football field located in Gullele, Wereda 8. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 9.05336,
+      "longitude": 38.73497,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 08",
+        "subCity": "Gulele"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/03_Meda.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si4d006i815ckgz6ueac",
+      "averageRating": 5,
+      "reviewCount": 8
+    },
+    {
+      "id": "cmob8si4l006m815c5yuk048h",
+      "name": "Addis Birhan Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "Addis Birhan Meda is a red ash community football field located in Gullele, Wereda 4. Suitable for training, friendly matches, and local competitions. It includes amenities such as grandstand, shade.",
+      "translations": {
+        "am": {
+          "name": "አዲስ ብርሃን ሜዳ",
+          "wereda": "04",
+          "subCity": "ጉለሌ",
+          "description": "አዲስ ብርሃን ሜዳ በጉለሌ ክፍለ ከተማ ወረዳ 4 የሚገኝ የቀይ አፈር ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ትሪቡን እና ጥላ ፎቅ ያካትታል።"
+        },
+        "en": {
+          "name": "Addis Birhan Meda",
+          "wereda": "04",
+          "subCity": "Gulele",
+          "description": "Addis Birhan Meda is a red ash community football field located in Gullele, Wereda 4. Suitable for training, friendly matches, and local competitions. It includes amenities such as grandstand, shade."
+        }
+      },
+      "category": "GRANDSTAND_SHADE",
+      "surface": "Red Ash",
+      "latitude": 9.05896,
+      "longitude": 38.75276,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 04",
+        "subCity": "Gulele"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Addis_Birhan.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si4l006m815c5yuk048h",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8shzo003k815ct7hsex9i",
+      "name": "Simens",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE",
+        "DISABILITY_ACCESS"
+      ],
+      "description": "Simen is a modern artificial turf football field located in Arada, Wereda 02. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access.",
+      "translations": {
+        "am": {
+          "name": "ሲመን",
+          "wereda": "02",
+          "subCity": "አራዳ",
+          "description": "ሲመን በአራዳ ክፍለ ከተማ ወረዳ 02 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን፣ ጥላ ፎቅ እና የአካል ጉዳተኞች መገልገያን ያካትታል።"
+        },
+        "en": {
+          "name": "Simen",
+          "wereda": "02",
+          "subCity": "Arada",
+          "description": "Simen is a modern artificial turf football field located in Arada, Wereda 02. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 9.03525,
+      "longitude": 38.73967,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 02",
+        "subCity": "Arada"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Simen.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8shzo003k815ct7hsex9i",
+      "averageRating": 3,
+      "reviewCount": 1
+    },
+    {
+      "id": "cmob8si1l004o815c3pcmskj9",
+      "name": "Berta Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "Berta Meda is a red ash community football field located in Akaki, Wereda 05. Suitable for training, friendly matches, and local competitions. It includes amenities such as grandstand, shade.",
+      "translations": {
+        "am": {
+          "name": "በርታ ሜዳ",
+          "wereda": "05",
+          "subCity": "አቃቂ",
+          "description": "በርታ ሜዳ በአቃቂ ክፍለ ከተማ ወረዳ 05 የሚገኝ የቀይ አፈር የህዝብ እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ትሪቡን እና ጥላ ፎቅ ያካትታል።"
+        },
+        "en": {
+          "name": "Berta Meda",
+          "wereda": "05",
+          "subCity": "Akaki",
+          "description": "Berta Meda is a red ash community football field located in Akaki, Wereda 05. Suitable for training, friendly matches, and local competitions. It includes amenities such as grandstand, shade."
+        }
+      },
+      "category": "GRANDSTAND_SHADE",
+      "surface": "Red Ash",
+      "latitude": 8.92029,
+      "longitude": 38.78025,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 05",
+        "subCity": "Akaki Kality"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Berta_Meda.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si1l004o815c3pcmskj9",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmrpyo5qw0001fvzf2313e14i",
+      "name": "Jemo Fana",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "",
+      "translations": null,
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": null,
+      "longitude": null,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 13",
+        "subCity": "Nifas Silk-Lafto"
+      },
+      "imageUrl": "https://addissport.gov.et/api/uploads/fields/317b532e-3ff2-4ea9-85ce-0cac7f2c66dd-1000177612.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmrpyo5qw0001fvzf2313e14i",
+      "averageRating": 4.4,
+      "reviewCount": 9
+    },
+    {
+      "id": "cmob8si250052815c1p3yl9he",
+      "name": "ቀጠና 6.4 ቁጥር 1 ሜዳ ወረዳ 1 ",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET"
+      ],
+      "description": "Zone 6.4 No.1 Meda is a red ash community football field located in Akaki, Wereda 1. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet.",
+      "translations": {
+        "am": {
+          "name": "ቀጠና 6.4 ቁጥር 1 ሜዳ",
+          "wereda": "01",
+          "subCity": "አቃቂ",
+          "description": "ቀጠና 6.4 ቁጥር 1 ሜዳ በአቃቂ ክፍለ ከተማ ወረዳ 1 የሚገኝ የቀይ አፈር የህዝብ እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር እና መጸዳጃ ቤትን ያካትታል።"
+        },
+        "en": {
+          "name": "Zone 6.4 No.1 Meda",
+          "wereda": "01",
+          "subCity": "Akaki",
+          "description": "Zone 6.4 No.1 Meda is a red ash community football field located in Akaki, Wereda 1. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet."
+        }
+      },
+      "category": "SHOWER_RESTROOM",
+      "surface": "Red Ash",
+      "latitude": 8.86395,
+      "longitude": 38.80575,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 01",
+        "subCity": "Akaki Kality"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Zone_6-4_No-1.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si250052815c1p3yl9he",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmsbma49900ajywsjibme9r6p",
+      "name": "ጎሮ ወረዳ 9  ፉት ሳል",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "እግር ኳስ",
+      "translations": null,
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": null,
+      "longitude": null,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 09",
+        "subCity": "Lemi Kura"
+      },
+      "imageUrl": "https://addissport.gov.et/api/uploads/fields/88a3a2bc-bcba-45b8-ba7e-8aa77213aa41-3065.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmsbma49900ajywsjibme9r6p",
+      "averageRating": 4.3,
+      "reviewCount": 10
+    },
+    {
+      "id": "cmob8si3k0060815cop43qk8a",
+      "name": "Bisrate Gabriel Area",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": " የማዘዉተሪያ ስፍራዉ አይነት፡- አርቴፊሻል እግር ኳስ ሜዳ \nየሜዳው ዓይነት፡- አርቴፍሻል ተርፍ ሜዳ \n ሻወር እና ሽንት ቤት ያለው \nየተመልካች መቀመጫ እና ጥላ በአንድ በኩል ያለው \n ስፋት 74X40 እግር ኳስ ሜዳ \n 2በ1 ፋትሳል ኮንክሪት ሜዳ ስፋት 15*28\nBisrate Gabriel Area is a   Artiteficial turf football field located in Lideta, Wereda 8. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade.",
+      "translations": {
+        "am": {
+          "name": "ብስራተ ገብርኤል አካባቢ",
+          "wereda": "08",
+          "subCity": "ልደታ",
+          "description": "ብስራተ ገብርኤል አካባቢ በልደታ ክፍለ ከተማ ወረዳ 8 የሚገኝ የተፈጥሮ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን እና ጥላ ፎቅ ያካትታል።"
+        },
+        "en": {
+          "name": "Bisrate Gabriel Area",
+          "wereda": "08",
+          "subCity": "Lideta",
+          "description": "Bisrate Gabriel Area is a natural grass football field located in Lideta, Wereda 8. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 8.98755,
+      "longitude": 38.73252,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 08",
+        "subCity": "Lideta"
+      },
+      "imageUrl": "https://addissport.gov.et/api/uploads/fields/733dedeb-09bd-46d4-8c5f-d40b6abd34e2-ብስራተ-ገብርኤል-አካባቢ-እግር-ኳስ-ሜዳ-(ወረዳ-8).jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si3k0060815cop43qk8a",
+      "averageRating": 3.5,
+      "reviewCount": 2
+    },
+    {
+      "id": "cmob8shzt003m815ck5wphe77",
+      "name": "Afencho Ber",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE",
+        "DISABILITY_ACCESS"
+      ],
+      "description": "Afencho Ber is a modern artificial turf football field located in Arada, Wereda 05. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access.",
+      "translations": {
+        "am": {
+          "name": "አፍንጮ በር",
+          "wereda": "05",
+          "subCity": "አራዳ",
+          "description": "አፍንጮ በር በአራዳ ክፍለ ከተማ ወረዳ 05 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን፣ ጥላ ፎቅ እና የአካል ጉዳተኞች መገልገያን ያካትታል።"
+        },
+        "en": {
+          "name": "Afencho Ber",
+          "wereda": "05",
+          "subCity": "Arada",
+          "description": "Afencho Ber is a modern artificial turf football field located in Arada, Wereda 05. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 9.04305,
+      "longitude": 38.75097,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 05",
+        "subCity": "Arada"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Afencho_ber.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8shzt003m815ck5wphe77",
+      "averageRating": 4.3,
+      "reviewCount": 3
+    },
+    {
+      "id": "cmob8shzw003o815c7whxbdo6",
+      "name": "Sanford",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE",
+        "DISABILITY_ACCESS"
+      ],
+      "description": "Sanford is a modern artificial turf football field located in Arada, Wereda 7. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access.",
+      "translations": {
+        "am": {
+          "name": "ሳንፎርድ",
+          "wereda": "07",
+          "subCity": "አራዳ",
+          "description": "ሳንፎርድ በአራዳ ክፍለ ከተማ ወረዳ 7 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን፣ ጥላ ፎቅ እና የአካል ጉዳተኞች መገልገያን ያካትታል።"
+        },
+        "en": {
+          "name": "Sanford",
+          "wereda": "07",
+          "subCity": "Arada",
+          "description": "Sanford is a modern artificial turf football field located in Arada, Wereda 7. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 9.03144,
+      "longitude": 38.77033,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 07",
+        "subCity": "Arada"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Sanford.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8shzw003o815c7whxbdo6",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si00003q815cv70rd6j3",
+      "name": "Beller Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE",
+        "DISABILITY_ACCESS"
+      ],
+      "description": "Beller Meda is a modern artificial turf football field located in Arada, Wereda 7. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access.",
+      "translations": {
+        "am": {
+          "name": "ቤለር ሜዳ",
+          "wereda": "07",
+          "subCity": "አራዳ",
+          "description": "ቤለር ሜዳ በአራዳ ክፍለ ከተማ ወረዳ 7 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን፣ ጥላ ፎቅ እና የአካል ጉዳተኞች መገልገያን ያካትታል።"
+        },
+        "en": {
+          "name": "Beller Meda",
+          "wereda": "07",
+          "subCity": "Arada",
+          "description": "Beller Meda is a modern artificial turf football field located in Arada, Wereda 7. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 9.02976,
+      "longitude": 38.77345,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 07",
+        "subCity": "Arada"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Beller_Meda.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si00003q815cv70rd6j3",
+      "averageRating": 1,
+      "reviewCount": 4
+    },
+    {
+      "id": "cmrte7p9q02gmq8bjkfn9j1zt",
+      "name": "ካዛንቺስ ስፓርት ለሁሉም",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE",
+        "DISABILITY_ACCESS"
+      ],
+      "description": "3.\tየቂ/ክ/ከ ወረዳ 08 ማዘውተሪያ ስፍራው የሚገኝበት ካዛንቺስ ስፓርት ለሁሉም\n\tየመታጠቢያ ክፍሎች\n\tሽንት ቤት\n\tየተመልካች መቀመጫ\n\tለአካል ጉዳተኞች ምቹ\n",
+      "translations": null,
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": null,
+      "longitude": null,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 08",
+        "subCity": "Kirkos"
+      },
+      "imageUrl": "https://addissport.gov.et/api/uploads/fields/5e49c061-2e8d-4dd3-b91c-a729c9a57b27-ካዛንቺስ-ስፓርት-ለሁሉም.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmrte7p9q02gmq8bjkfn9j1zt",
+      "averageRating": 4.4,
+      "reviewCount": 21
+    },
+    {
+      "id": "cmrlq3nii001qz8uw2drnsb2v",
+      "name": "40/60 መሪ ሎቄ",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "",
+      "translations": null,
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": null,
+      "longitude": null,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 10",
+        "subCity": "Lemi Kura"
+      },
+      "imageUrl": "https://addissport.gov.et/api/uploads/fields/19bd7ee4-55d5-4dba-828a-9c0b0c290686-IMG_20260715_094944_429.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmrlq3nii001qz8uw2drnsb2v",
+      "averageRating": 5,
+      "reviewCount": 2
+    },
+    {
+      "id": "cmob8si0z004a815cvqqpj28a",
+      "name": "Arsema",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "Arsema is a modern artificial turf football field located in Nifas Silk, Wereda 13. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet.",
+      "translations": {
+        "am": {
+          "name": "አርሴማ",
+          "wereda": "13",
+          "subCity": "ንፋስ ስልክ-ላፍቶ",
+          "description": "አርሴማ በንፋስ ስልክ ክፍለ ከተማ ወረዳ 13 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር እና መጸዳጃ ቤትን ያካትታል።"
+        },
+        "en": {
+          "name": "Arsema",
+          "wereda": "13",
+          "subCity": "Nifas Silk-Lafto",
+          "description": "Arsema is a modern artificial turf football field located in Nifas Silk, Wereda 13. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 8.95242,
+      "longitude": 38.73309,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 13",
+        "subCity": "Nifas Silk-Lafto"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Arsema.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si0z004a815cvqqpj28a",
+      "averageRating": 4.7,
+      "reviewCount": 3
+    },
+    {
+      "id": "cmruqqifh045oq8bjxuf2i3ko",
+      "name": "ጨርቆስ መሀል አካፋይ 01 እግር ኳስ ሜዳ",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "DISABILITY_ACCESS"
+      ],
+      "description": "የቂ/ክ/ከ ወረዳ 11 የማዘውተሪያ ስፍራ መረጃ\n\tሽንት ቤት\n\tሻወር\n\tለአካል ጉዳተኞች ምቹ\n",
+      "translations": null,
+      "category": "SHOWER_RESTROOM",
+      "surface": "Artificial",
+      "latitude": null,
+      "longitude": null,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 11",
+        "subCity": "Kirkos"
+      },
+      "imageUrl": "https://addissport.gov.et/api/uploads/fields/b4e988ea-b417-478d-8fd9-e8ad863bb999-ጨርቆስ-መሀል-አካፋይ-01-እግር-ኳስ-ሜዳ.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmruqqifh045oq8bjxuf2i3ko",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmruqsedk045sq8bj3jv0cmsw",
+      "name": "ጨርቆስ መሀል አካፋይ 02 እግር ኳስ ሜዳ",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "DISABILITY_ACCESS"
+      ],
+      "description": "2.\t የቂ/ክ/ከ ወረዳ 11 የማዘውተሪያ ስፍራ መረጃ\n\tሽንት ቤት\n\tሻወር\n\tለአካል ጉዳተኞች ምቹ\t\n",
+      "translations": null,
+      "category": "SHOWER_RESTROOM",
+      "surface": "Artificial",
+      "latitude": null,
+      "longitude": null,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 11",
+        "subCity": "Kirkos"
+      },
+      "imageUrl": "https://addissport.gov.et/api/uploads/fields/0f21e404-3da5-47f6-bf28-691bd64f7135-ጨርቆስ-መሀል-አካፋይ-02-እግር-ኳስ-ሜዳ.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmruqsedk045sq8bj3jv0cmsw",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmqgb1cg7004b561uf7odf1oj",
+      "name": "ወረዳ 9 ፅ/ቤ - ፊት ሳል",
+      "isActive": true,
+      "sportType": "FUTSAL",
+      "amenities": [
+        "SHADE"
+      ],
+      "description": null,
+      "translations": {
+        "am": {
+          "name": "ወረዳ 9 ፅ/ቤ - ፊት ሳል",
+          "wereda": "ወረዳ 9",
+          "subCity": "ለሚኩራ",
+          "amenities": "ጥላ ፎቅ",
+          "sportType": "ፊት ሳል",
+          "fieldLocation": "በመንግስት ተቌም",
+          "constructionStatus": "ነባር ግንባታ መቼ የተገነባ (2017), እድሳትና ጥገና የሚፈልግ (2010)"
+        },
+        "en": {
+          "name": "WEREDA 9 TS/BE - Futsal",
+          "wereda": "WEREDA 9",
+          "subCity": "LEMI KURA",
+          "amenities": "SHADE",
+          "sportType": "FUTSAL",
+          "fieldLocation": "GOVERNMENT_INSTITUTION",
+          "constructionStatus": "OLD_BUILT (2017), NEEDS_RENOVATION_AND_MAINTENANCE (2010)"
+        }
+      },
+      "category": "NONE",
+      "surface": "Artificial Turf",
+      "latitude": null,
+      "longitude": null,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 09",
+        "subCity": "Lemi Kura"
+      },
+      "imageUrl": null,
+      "pageUrl": "https://addissport.gov.et/en/fields/cmqgb1cg7004b561uf7odf1oj",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si0f003y815c3utbjc29",
+      "name": "Gara",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "Gara is a modern artificial turf football field located in Nifas Silk, Wereda 1. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet.",
+      "translations": {
+        "am": {
+          "name": "ጋራ",
+          "wereda": "01",
+          "subCity": "ንፋስ ስልክ-ላፍቶ",
+          "description": "ጋራ በንፋስ ስልክ ክፍለ ከተማ ወረዳ 1 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር እና መጸዳጃ ቤትን ያካትታል።"
+        },
+        "en": {
+          "name": "Gara",
+          "wereda": "01",
+          "subCity": "Nifas Silk-Lafto",
+          "description": "Gara is a modern artificial turf football field located in Nifas Silk, Wereda 1. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 8.94014,
+      "longitude": 38.73372,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 01",
+        "subCity": "Nifas Silk-Lafto"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Gara.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si0f003y815c3utbjc29",
+      "averageRating": 5,
+      "reviewCount": 2
+    },
+    {
+      "id": "cmqgb1eqe01wx561u0vhr09f9",
+      "name": "ማርያም ወንዝ",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "SHADE",
+        "GRANDSTAND"
+      ],
+      "description": "",
+      "translations": {
+        "am": {
+          "name": "ማርያም ወንዝ",
+          "wereda": "ወረዳ 6",
+          "subCity": "ጉለሌ",
+          "amenities": "ሻውር, ሽንት ቤት, ጥላ ፎቅ, መቀመጫ",
+          "sportType": "ፉትሳል",
+          "fieldLocation": "በመንግስት ተቌም",
+          "constructionStatus": "አዲስ ግንባታመቼ ተጀመረ"
+        },
+        "en": {
+          "name": "MARYAM WENZ",
+          "wereda": "WEREDA 6",
+          "subCity": "GULLELE",
+          "amenities": "SHOWER, TOILET, SHADE, SEATING",
+          "sportType": "FUTSAL",
+          "fieldLocation": "GOVERNMENT_INSTITUTION",
+          "constructionStatus": "NEW_BUILT"
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": null,
+      "longitude": null,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 06",
+        "subCity": "Gulele"
+      },
+      "imageUrl": "https://addissport.gov.et/api/uploads/fields/43b9b52b-dff7-4509-ba02-6aefb993654d-IMG-20260810-WA0002.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmqgb1eqe01wx561u0vhr09f9",
+      "averageRating": 3.5,
+      "reviewCount": 8
+    },
+    {
+      "id": "cmob8si0s0046815cmdmiooab",
+      "name": "Wereda 12 Area",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "Wereda 12 Area is a modern artificial turf football field located in Nifas Silk, Wereda 12. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet.",
+      "translations": {
+        "am": {
+          "name": "ወረዳ 12 አካባቢ",
+          "wereda": "12",
+          "subCity": "ንፋስ ስልክ-ላፍቶ",
+          "description": "ወረዳ 12 አካባቢ በንፋስ ስልክ ክፍለ ከተማ ወረዳ 12 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር እና መጸዳጃ ቤትን ያካትታል።"
+        },
+        "en": {
+          "name": "Wereda 12 Area",
+          "wereda": "12",
+          "subCity": "Nifas Silk-Lafto",
+          "description": "Wereda 12 Area is a modern artificial turf football field located in Nifas Silk, Wereda 12. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": null,
+      "longitude": null,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 12",
+        "subCity": "Nifas Silk-Lafto"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Wereda12_Area.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si0s0046815cmdmiooab",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si1w004w815crbmy4xn1",
+      "name": "Salo Addis Sefer Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [],
+      "description": "Salo Addis Sefer Meda is a red ash community football field located in Akaki, Wereda 12. Suitable for training, friendly matches, and local competitions. It offers a simple, no-frills playing environment.",
+      "translations": {
+        "am": {
+          "name": "ሳሎ አዲስ ሰፈር ሜዳ",
+          "wereda": "12",
+          "subCity": "አቃቂ",
+          "description": "ሳሎ አዲስ ሰፈር ሜዳ በአቃቂ ክፍለ ከተማ ወረዳ 12 የሚገኝ የቀይ አፈር የህዝብ እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ የሆነ ቀላል የመጫወቻ አካባቢ ነው።"
+        },
+        "en": {
+          "name": "Salo Addis Sefer Meda",
+          "wereda": "12",
+          "subCity": "Akaki",
+          "description": "Salo Addis Sefer Meda is a red ash community football field located in Akaki, Wereda 12. Suitable for training, friendly matches, and local competitions. It offers a simple, no-frills playing environment."
+        }
+      },
+      "category": "NONE",
+      "surface": "Red Ash",
+      "latitude": 8.88869,
+      "longitude": 38.75914,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 12",
+        "subCity": "Akaki Kality"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Salo_Addis_Sefer.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si1w004w815crbmy4xn1",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmqgb1fk602k9561uk4q6rvul",
+      "name": "ሩፋኤል አካባቢ",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET"
+      ],
+      "description": "",
+      "translations": {
+        "am": {
+          "name": "ሩፋኤል አካባቢ",
+          "wereda": "ወረዳ 13",
+          "subCity": "አቃቂ",
+          "amenities": "",
+          "sportType": "እግርኳስ ሜዳ",
+          "fieldLocation": "በሀይማኖትተቌም",
+          "constructionStatus": ""
+        },
+        "en": {
+          "name": "RUFAEL EKABABI",
+          "wereda": "WEREDA 13",
+          "subCity": "EQAQI",
+          "amenities": "",
+          "sportType": "FOOTBALL",
+          "fieldLocation": "RELIGIOUS_INSTITUTION",
+          "constructionStatus": ""
+        }
+      },
+      "category": "SHOWER_RESTROOM",
+      "surface": "Red Ash",
+      "latitude": null,
+      "longitude": null,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 13",
+        "subCity": "Akaki Kality"
+      },
+      "imageUrl": null,
+      "pageUrl": "https://addissport.gov.et/en/fields/cmqgb1fk602k9561uk4q6rvul",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si1i004m815cwenwlff0",
+      "name": "Artificial Meda no.1",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [],
+      "description": "Artificial Meda is a modern artificial turf football field located in Akaki Kality, Wereda 8. Suitable for training, friendly matches, and local competitions. It offers a simple, no-frills playing environment.",
+      "translations": {
+        "am": {
+          "name": "አርቲፊሻል ሜዳ ቁ. 1",
+          "wereda": "08",
+          "subCity": "አቃቂ ቃሊቲ",
+          "description": "አርቲፊሻል ሜዳ ቁ. 1 በአቃቂ ቃሊቲ ክፍለ ከተማ ወረዳ 8 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ የሆነ ቀላል የመጫወቻ አካባቢ ነው።"
+        },
+        "en": {
+          "name": "Artificial Meda No. 1",
+          "wereda": "08",
+          "subCity": "Akaki Kality",
+          "description": "Artificial Meda No. 1 is a modern artificial turf football field located in Akaki Kality, Wereda 8. Suitable for training, friendly matches, and local competitions. It offers a simple, no-frills playing environment."
+        }
+      },
+      "category": "NONE",
+      "surface": "Artificial",
+      "latitude": null,
+      "longitude": null,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 08",
+        "subCity": "Akaki Kality"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Artificial_Meda.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si1i004m815cwenwlff0",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si1t004u815cepxi1edf",
+      "name": "Zone 6.4 No.2 Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [],
+      "description": "Zone 6.4 No.2 Meda is a red ash community football field located in Akaki, Wereda 13. Suitable for training, friendly matches, and local competitions. It offers a simple, no-frills playing environment.",
+      "translations": {
+        "am": {
+          "name": "ቀጠና 6.4 ቁጥር 2 ሜዳ",
+          "wereda": "13",
+          "subCity": "አቃቂ",
+          "description": "ቀጠና 6.4 ቁጥር 2 ሜዳ በአቃቂ ክፍለ ከተማ ወረዳ 13 የሚገኝ የቀይ አፈር የህዝብ እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ የሆነ ቀላል የመጫወቻ አካባቢ ነው።"
+        },
+        "en": {
+          "name": "Zone 6.4 No.2 Meda",
+          "wereda": "13",
+          "subCity": "Akaki",
+          "description": "Zone 6.4 No.2 Meda is a red ash community football field located in Akaki, Wereda 13. Suitable for training, friendly matches, and local competitions. It offers a simple, no-frills playing environment."
+        }
+      },
+      "category": "NONE",
+      "surface": "Red Ash",
+      "latitude": 8.86387,
+      "longitude": 38.81039,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 13",
+        "subCity": "Akaki Kality"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Zone_6-4_No-2.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si1t004u815cepxi1edf",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmrw8uw94064tq8bj6019uom1",
+      "name": "መካኒሳ ( ዘብራ) ሜዳ",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "",
+      "translations": null,
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": null,
+      "longitude": null,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 08",
+        "subCity": "Lideta"
+      },
+      "imageUrl": "https://addissport.gov.et/api/uploads/fields/54fdeab3-16b2-42cd-8cfa-5635095a7ff5-መካኒሳ-(-ዘብራ)-ሜዳ.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmrw8uw94064tq8bj6019uom1",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si2e0058815cip7u4axt",
+      "name": "Asfaw Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "Asfaw Meda is a community dirt football field located in Addis Ketema, Wereda 10. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade.",
+      "translations": {
+        "am": {
+          "name": "አስፋው ሜዳ",
+          "wereda": "10",
+          "subCity": "አዲስ ከተማ",
+          "description": "አስፋው ሜዳ በአዲስ ከተማ ክፍለ ከተማ ወረዳ 10 የሚገኝ የህዝብ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን እና ጥላ ፎቅ ያካትታል።"
+        },
+        "en": {
+          "name": "Asfaw Meda",
+          "wereda": "10",
+          "subCity": "Addis Ketema",
+          "description": "Asfaw Meda is a community dirt football field located in Addis Ketema, Wereda 10. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Red Ash",
+      "latitude": 9.05026,
+      "longitude": 38.71448,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 10",
+        "subCity": "Addis Ketema"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Asfaw_Meda.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si2e0058815cip7u4axt",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si2v005k815cl1bz61sy",
+      "name": "Esat Adega Gon Bethel Rom Meda",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE",
+        "DISABILITY_ACCESS"
+      ],
+      "description": "Esat Adega Gon Bethel Rom Meda is a red ash community football field located in Kolfe, Wereda 7. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access.",
+      "translations": {
+        "am": {
+          "name": "እሳት አደጋ ጎን ቤቴል ሮም ሜዳ",
+          "wereda": "07",
+          "subCity": "ኮልፌ",
+          "description": "እሳት አደጋ ጎን ቤቴል ሮም ሜዳ በኮልፌ ክፍለ ከተማ ወረዳ 7 የሚገኝ የቀይ አፈር ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን፣ ጥላ ፎቅ እና አካል ጉዳተኞች መገልገያ ያካትታል።"
+        },
+        "en": {
+          "name": "Esat Adega Gon Bethel Rom Meda",
+          "wereda": "07",
+          "subCity": "Kolfe",
+          "description": "Esat Adega Gon Bethel Rom Meda is a red ash community football field located in Kolfe, Wereda 7. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade, disability access."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Red Ash",
+      "latitude": 9.00419,
+      "longitude": 38.68199,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 07",
+        "subCity": "Kolfe"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Esat_Adega_Gon_Bethel_Rom.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si2v005k815cl1bz61sy",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmrxoipv507ibq8bjz8i4ij63",
+      "name": "አርቲፊሻል ሜዳ ቁ.2",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [],
+      "description": "Artificial Meda is a modern artificial turf football field located in Akaki Kality, Wereda 8. Suitable for training, friendly matches, and local competitions. It offers a simple, no-frills playing environment.",
+      "translations": null,
+      "category": "NONE",
+      "surface": "Artificial",
+      "latitude": null,
+      "longitude": null,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 08",
+        "subCity": "Akaki Kality"
+      },
+      "imageUrl": "https://addissport.gov.et/api/uploads/fields/9d8293da-28fc-4771-a131-98903c2b7363-Screenshot_23-7-2026_1242_addissport.gov.et.jpeg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmrxoipv507ibq8bjz8i4ij63",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si1z004y815c7fpkh7ar",
+      "name": "በሰቃ ሜዳ ወረዳ 8",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [],
+      "description": "Salo Addis Sefer Meda is a natural grass football field located in Akaki, Wereda 8. Suitable for training, friendly matches, and local competitions. It offers a simple, no-frills playing environment.",
+      "translations": {
+        "am": {
+          "name": "በሰቃ ሜዳ ወረዳ 8",
+          "wereda": "08",
+          "subCity": "አቃቂ",
+          "description": "በሰቃ ሜዳ ወረዳ 8 በአቃቂ ክፍለ ከተማ ወረዳ 8 የሚገኝ የተፈጥሮ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ የሆነ ቀላል የመጫወቻ አካባቢ ነው።"
+        },
+        "en": {
+          "name": "Beseka Meda Wereda 8",
+          "wereda": "08",
+          "subCity": "Akaki",
+          "description": "Beseka Meda Wereda 8 is a natural grass football field located in Akaki, Wereda 8. Suitable for training, friendly matches, and local competitions. It offers a simple, no-frills playing environment."
+        }
+      },
+      "category": "NONE",
+      "surface": "Grass",
+      "latitude": 8.88869,
+      "longitude": 38.75914,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 08",
+        "subCity": "Akaki Kality"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Salo_Addis_Sefer_1.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si1z004y815c7fpkh7ar",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmob8si3h005y815c6gtpmoyf",
+      "name": "የመደመር ትዉልድ ሜዳ (Gordeme)",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "Gordeme is a modern artificial turf football field located in Lideta, Wereda 7. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade.",
+      "translations": {
+        "am": {
+          "name": "ጎርደሜ",
+          "wereda": "07",
+          "subCity": "ልደታ",
+          "description": "ጎርደሜ በልደታ ክፍለ ከተማ ወረዳ 7 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለሀገር ውስጥ ውድድሮች ተስማሚ ነው። ሻወር፣ መጸዳጃ ቤት፣ ትሪቡን እና ጥላን ፎቅ ያካትታል።"
+        },
+        "en": {
+          "name": "Gordeme",
+          "wereda": "07",
+          "subCity": "Lideta",
+          "description": "Gordeme is a modern artificial turf football field located in Lideta, Wereda 7. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 9.025471,
+      "longitude": 38.748729,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 07",
+        "subCity": "Lideta"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Gordeme.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmob8si3h005y815c6gtpmoyf",
+      "averageRating": 4.5,
+      "reviewCount": 2
+    },
+    {
+      "id": "cmocw2oyr006sd35zt5h9df8j",
+      "name": "Addis Sefer Football Field",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "Addis Sefer Football Field is a modern artificial turf football field located in Nifas Silk, Wereda 09. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade.",
+      "translations": {
+        "am": {
+          "name": "አዲስ ሰፈር እግር ኳስ ሜዳ",
+          "wereda": "09",
+          "subCity": "ንፋስ ስልክ ላፍቶ",
+          "description": "አዲስ ሰፈር እግር ኳስ ሜዳ በንፋስ ስልክ ላፍቶ ክፍለ ከተማ ወረዳ 09 የሚገኝ ዘመናዊ የሰው ሰራሽ ሳር እግር ኳስ ሜዳ ነው። ለልምምድ፣ ለወዳጅነት ጨዋታዎች እና ለውድድሮች ተስማሚ ሲሆን ሻወር፣ ሽንት ቤት፣ የተመልካች መቀመጫ እና ጥላ ያካትታል።"
+        },
+        "en": {
+          "name": "Addis Sefer Football Field",
+          "wereda": "09",
+          "subCity": "Nifas Silk-Lafto",
+          "description": "Addis Sefer Football Field is a modern artificial turf football field located in Nifas Silk, Wereda 09. Suitable for training, friendly matches, and local competitions. It includes amenities such as shower, toilet, grandstand, shade."
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 8.956314,
+      "longitude": 38.770356,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 09",
+        "subCity": "Nifas Silk-Lafto"
+      },
+      "imageUrl": "https://addissport.gov.et/uploads/fields/Addis_Sefer.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmocw2oyr006sd35zt5h9df8j",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmqgb1d2100lp561ueges5bl5",
+      "name": "እግዜአብሄር አብ",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "",
+      "translations": {
+        "am": {
+          "name": "እግዜአብሄር አብ",
+          "wereda": "ወረዳ 6",
+          "subCity": "ቦሌ",
+          "amenities": "ሻውር, ሽንት ቤት",
+          "sportType": "እግር ኳስ ሜዳ",
+          "fieldLocation": "በመንግስት ተቌም",
+          "constructionStatus": "ነባር ግንባታ መቼ የተገነባ (2018), በግንባታ ላይ ያለ"
+        },
+        "en": {
+          "name": "GZEEBHER EB",
+          "wereda": "WEREDA 6",
+          "subCity": "BOLE",
+          "amenities": "SHOWER, TOILET",
+          "sportType": "FOOTBALL",
+          "fieldLocation": "GOVERNMENT_INSTITUTION",
+          "constructionStatus": "OLD_BUILT (2018), UNDER_CONSTRUCTION"
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 9.011409,
+      "longitude": 38.816656,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 06",
+        "subCity": "Bole"
+      },
+      "imageUrl": "https://addissport.gov.et/api/uploads/fields/ff9ac759-189e-424f-a3d3-8acaca270f9b-ወረዳ-06-እግዛብሄር-አብ-ሜዳ.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmqgb1d2100lp561ueges5bl5",
+      "averageRating": 2,
+      "reviewCount": 1
+    },
+    {
+      "id": "cmqgb1dxm01b1561u75f1936s",
+      "name": "አማኑኤል ጸበል የስፖርት ማዘውተሪያ ስፍራ",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND"
+      ],
+      "description": "",
+      "translations": {
+        "am": {
+          "name": "አማኑኤል ጸበል የስፖርት ማዘውተሪያ ስፍራ",
+          "wereda": "ወረዳ 4",
+          "subCity": "አዲስ ከተማ",
+          "amenities": "ሻውር, ሽንት ቤት, መቀመጫ",
+          "sportType": "እግር ኳስ",
+          "fieldLocation": "በመንግስት ተቌም",
+          "constructionStatus": "በግንባታ ላይ ያለ (2018)"
+        },
+        "en": {
+          "name": "AMANUEL TSEBEL YESPORT MAZEWTERIYA SFRA",
+          "wereda": "WEREDA 4",
+          "subCity": "EDIS KETEMA",
+          "amenities": "SHOWER, TOILET, SEATING",
+          "sportType": "FOOTBALL",
+          "fieldLocation": "GOVERNMENT_INSTITUTION",
+          "constructionStatus": "UNDER_CONSTRUCTION (2018)"
+        }
+      },
+      "category": "SHOWER_RESTROOM",
+      "surface": "Artificial",
+      "latitude": null,
+      "longitude": null,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 04",
+        "subCity": "Addis Ketema"
+      },
+      "imageUrl": "https://addissport.gov.et/api/uploads/fields/e5186119-6447-441e-be18-8c547101613d-IMG_20260727_224652_219.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmqgb1dxm01b1561u75f1936s",
+      "averageRating": 1,
+      "reviewCount": 1
+    },
+    {
+      "id": "cmqgb1cr300cx561uk17s892k",
+      "name": "አፍሪካ ህብረት ፊት ለፊት",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "GRANDSTAND",
+        "SHADE",
+        "DISABILITY_ACCESS"
+      ],
+      "description": null,
+      "translations": {
+        "am": {
+          "name": "አፍሪካ ህብረት ፊት ለፊት",
+          "wereda": "ወረዳ 5",
+          "subCity": "ቂርቆስ",
+          "amenities": "መቀመጫ",
+          "sportType": "እግር ኳስ",
+          "fieldLocation": "በኮሪድር",
+          "constructionStatus": "አዲስ ግንባታመቼ ተጀመረ"
+        },
+        "en": {
+          "name": "AFRIKA HBRET FIT LEFIT",
+          "wereda": "WEREDA 5",
+          "subCity": "KIRKOS",
+          "amenities": "SEATING",
+          "sportType": "FOOTBALL",
+          "fieldLocation": "CORRIDOR",
+          "constructionStatus": "NEW_BUILT"
+        }
+      },
+      "category": "GRANDSTAND_SHADE",
+      "surface": "Artificial",
+      "latitude": null,
+      "longitude": null,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 05",
+        "subCity": "Kirkos"
+      },
+      "imageUrl": null,
+      "pageUrl": "https://addissport.gov.et/en/fields/cmqgb1cr300cx561uk17s892k",
+      "averageRating": 5,
+      "reviewCount": 3
+    },
+    {
+      "id": "cmrg2j3tc008dk9qzn4pqzcfz",
+      "name": "46 sport field",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "",
+      "translations": null,
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": null,
+      "longitude": null,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 06",
+        "subCity": "Nifas Silk-Lafto"
+      },
+      "imageUrl": "https://addissport.gov.et/api/uploads/fields/adb0c87d-f3f6-47be-9a08-0f7549ed1158-photo_2026-07-11_00-53-16.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmrg2j3tc008dk9qzn4pqzcfz",
+      "averageRating": 0,
+      "reviewCount": 0
+    },
+    {
+      "id": "cmqgb1cjc006p561u41fjekjg",
+      "name": "ዙርያሸ ሞል - ፊትሳል",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "",
+      "translations": {
+        "am": {
+          "name": "ዙርያሸ ሞል - ፊትሳል",
+          "wereda": "ወረዳ 10",
+          "subCity": "ለሚኩራ",
+          "amenities": "",
+          "sportType": "ፊትሳል",
+          "fieldLocation": "በኮሪድር",
+          "constructionStatus": ""
+        },
+        "en": {
+          "name": "ZURYASHE MALL - Futsal",
+          "wereda": "WEREDA 10",
+          "subCity": "LEMI KURA",
+          "amenities": "",
+          "sportType": "FUTSAL",
+          "fieldLocation": "CORRIDOR",
+          "constructionStatus": ""
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": null,
+      "longitude": null,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 10",
+        "subCity": "Lemi Kura"
+      },
+      "imageUrl": "https://addissport.gov.et/api/uploads/fields/7ddc590e-ead1-4b85-b656-66f21e8fbf7a-IMG-20260715-WA0000.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmqgb1cjc006p561u41fjekjg",
+      "averageRating": 3.6,
+      "reviewCount": 5
+    },
+    {
+      "id": "cmqgb1d5i00on561u4o2ujkrw",
+      "name": "ለሚ እግር ኳስ ሜዳ",
+      "isActive": true,
+      "sportType": "FOOTBALL",
+      "amenities": [
+        "SHOWER",
+        "TOILET",
+        "GRANDSTAND",
+        "SHADE"
+      ],
+      "description": "",
+      "translations": {
+        "am": {
+          "name": "ለሚ እግር ኳስ ሜዳ",
+          "wereda": "ወረዳ 14",
+          "subCity": "ቦሌ",
+          "amenities": "ሻውር, ሽንት ቤት",
+          "sportType": "ፉትሳል ቁ.1",
+          "fieldLocation": "በመንግስት ት/ቤ",
+          "constructionStatus": "ነባር ግንባታ መቼ የተገነባ (1992)"
+        },
+        "en": {
+          "name": "LEMI FOOTBALL FIELD",
+          "wereda": "WEREDA 14",
+          "subCity": "BOLE",
+          "amenities": "SHOWER, TOILET",
+          "sportType": "FUTSAL",
+          "fieldLocation": "GOVERNMENT_SCHOOL",
+          "constructionStatus": "OLD_BUILT (1992)"
+        }
+      },
+      "category": "ALL_AMENITIES",
+      "surface": "Artificial",
+      "latitude": 9.001151,
+      "longitude": 38.808785,
+      "extractionStatus": "complete",
+      "location": {
+        "wereda": "Wereda 14",
+        "subCity": "Bole"
+      },
+      "imageUrl": "https://addissport.gov.et/api/uploads/fields/81f0953a-dd04-4ffd-bfe3-edec50119224-ነ.jpg",
+      "pageUrl": "https://addissport.gov.et/en/fields/cmqgb1d5i00on561u4o2ujkrw",
+      "averageRating": 0,
+      "reviewCount": 0
+    }
+  ]
+}

@@ -12,6 +12,7 @@ export type SpojexMediaModule =
   | "opportunities"
   | "donations"
   | "miniapps"
+  | "banners"
   | "verification"
   | "payments";
 
