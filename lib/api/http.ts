@@ -204,7 +204,15 @@ export function createHttpClient(options: HttpClientOptions = {}) {
     if (response.ok) return decoded;
 
     const detail = errorMessage(decoded, text, response.status);
-    throw new SpojexApiError(detail, response.status, response.status === 401 || response.status === 403 ? "unauthorized" : undefined, text);
+    const apiCode =
+      decoded && typeof decoded === "object" && typeof (decoded as { code?: unknown }).code === "string"
+        ? String((decoded as { code: string }).code)
+        : undefined;
+    const code =
+      response.status === 401 || response.status === 403
+        ? apiCode || "unauthorized"
+        : apiCode;
+    throw new SpojexApiError(detail, response.status, code, text);
   }
 
   return {

@@ -25,11 +25,12 @@ const allowed = [
 ] as const;
 
 /**
- * Fallback child cleanup if DB cascade is not migrated yet.
- * Prefer a single stadiums DELETE once plan_id is ON DELETE CASCADE.
+ * Child cleanup order matters: payments reference bookings + subscriptions.
+ * Spojex API FK errors are friendly ("related item…") without "foreign key" text,
+ * so we always clear dependents before deleting the stadium.
  */
-const STADIUM_PAYMENTS = "stadium_payments" as const;
 const STADIUM_CHILD_TABLES = [
+  "stadium_payments",
   "stadium_bookings",
   "stadium_subscriptions",
   "stadium_availability",
@@ -50,13 +51,16 @@ function isMissingTableError(message: string) {
   );
 }
 
-function isFkRestrictError(message: string) {
+function isFkOrRelatedError(message: string, code?: string) {
   const msg = message.toLowerCase();
+  if (code === "invalid_reference" || code === "db_error") return true;
   return (
     msg.includes("foreign key") ||
     msg.includes("violates") ||
     msg.includes("still referenced") ||
-    msg.includes("restrict")
+    msg.includes("restrict") ||
+    msg.includes("related item") ||
+    msg.includes("invalid_reference")
   );
 }
 
@@ -95,60 +99,40 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const client = auth.context.client;
   const hint = missingServiceRoleMessage();
 
-  // Fast path: one DELETE — DB cascades child rows when FKs allow it.
-  {
-    const { error } = await client.from("stadiums").delete().eq("id", id);
-    if (!error) {
-      return NextResponse.json({ ok: true });
-    }
-    if (!isFkRestrictError(error.message || "")) {
-      return NextResponse.json(
-        { error: hint ? `${error.message}. ${hint}` : error.message },
-        { status: 400 },
-      );
-    }
-  }
-
-  // Slow path: clear dependents then retry (pre-cascade-migration DBs).
-  {
-    const { error } = await client.from(STADIUM_PAYMENTS).delete().eq("stadium_id", id);
+  // Clear dependents first (API returns friendly FK text, not "foreign key").
+  for (const table of STADIUM_CHILD_TABLES) {
+    const { error } = await client.from(table).delete().eq("stadium_id", id);
     if (error && !isMissingTableError(error.message || "")) {
       return NextResponse.json(
         {
           error: hint
-            ? `Could not clear ${STADIUM_PAYMENTS}: ${error.message}. ${hint}`
-            : `Could not clear ${STADIUM_PAYMENTS}: ${error.message}`,
+            ? `Could not clear ${table}: ${error.message}. ${hint}`
+            : `Could not clear ${table}: ${error.message}`,
         },
         { status: 400 },
       );
     }
   }
 
-  const childResults = await Promise.all(
-    STADIUM_CHILD_TABLES.map(async (table) => {
-      const { error } = await client.from(table).delete().eq("stadium_id", id);
-      return { table, error };
-    }),
-  );
-  for (const { table, error } of childResults) {
-    if (!error || isMissingTableError(error.message || "")) continue;
+  const { error: deleteError } = await client.from("stadiums").delete().eq("id", id);
+  if (!deleteError) {
+    return NextResponse.json({ ok: true });
+  }
+
+  // Rare: another FK we do not know about — report clearly.
+  const msg = deleteError.message || "Delete failed";
+  if (isFkOrRelatedError(msg, deleteError.code)) {
     return NextResponse.json(
       {
         error: hint
-          ? `Could not clear ${table}: ${error.message}. ${hint}`
-          : `Could not clear ${table}: ${error.message}`,
+          ? `Stadium still has related records. ${msg}. ${hint}`
+          : `Stadium still has related records. ${msg}`,
       },
       { status: 400 },
     );
   }
-
-  const { error: deleteError } = await client.from("stadiums").delete().eq("id", id);
-  if (deleteError) {
-    return NextResponse.json(
-      { error: hint ? `${deleteError.message}. ${hint}` : deleteError.message },
-      { status: 400 },
-    );
-  }
-
-  return NextResponse.json({ ok: true });
+  return NextResponse.json(
+    { error: hint ? `${msg}. ${hint}` : msg },
+    { status: 400 },
+  );
 }
