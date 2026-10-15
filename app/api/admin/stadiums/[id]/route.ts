@@ -32,8 +32,6 @@ const STADIUM_CHILD_TABLES = [
   "stadium_availability",
   "stadium_managers",
   "stadium_issues",
-  // legacy (may not exist on all envs)
-  "stadium_plans",
 ] as const;
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -74,11 +72,13 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     const { error } = await client.from(table).delete().eq("stadium_id", id);
     if (!error) continue;
     const msg = (error.message || "").toLowerCase();
-    // Ignore missing legacy tables; surface real FK/permission failures.
+    // Ignore missing/empty child tables; surface real FK/permission failures.
     if (
       msg.includes("does not exist") ||
       msg.includes("undefined_table") ||
       msg.includes("not found") ||
+      msg.includes("couldn't find") ||
+      msg.includes("could not find") ||
       msg.includes("unknown table") ||
       msg.includes("could not find the table")
     ) {
