@@ -286,6 +286,14 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
   }
   if (pathname.startsWith("/admin/donations")) return can("donations:read");
   if (pathname.startsWith("/admin/news")) return can("news:read");
+  if (pathname.startsWith("/admin/banners")) {
+    return (
+      can("banners:read") ||
+      can("banners:write") ||
+      can("services:read") ||
+      can("services:write")
+    );
+  }
   // Hub lists radio + video; station detail stays streams-only.
   if (pathname.match(/^\/admin\/streams\/[^/]+/)) return can("streams:read");
   if (pathname.startsWith("/admin/streams")) {
@@ -333,6 +341,7 @@ export function writePermissionForPatch(path: string) {
   if (path.includes("/live-events/")) return "events:write";
   if (path.includes("/donations/")) return "donations:write";
   if (path.includes("/news/")) return "news:write";
+  if (path.includes("/banners")) return "banners:write";
   if (path.includes("/streams/")) return "streams:write";
   if (path.includes("/radio-chat/")) return "streams:write";
   if (path.includes("/miniapps/")) return "miniapps:write";
