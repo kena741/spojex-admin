@@ -40,6 +40,7 @@ import {
   Settings,
   ScrollText,
   Dumbbell,
+  Images,
   Menu,
   Search,
   X,
@@ -163,6 +164,16 @@ const financeItems: NavItem[] = [
 
 const contentItems: NavItem[] = [
   { href: "/admin/news", label: "Sport news", icon: Newspaper, visible: (can) => can("news:read") },
+  {
+    href: "/admin/banners",
+    label: "Banners",
+    icon: Images,
+    visible: (can) =>
+      can("banners:read") ||
+      can("banners:write") ||
+      can("services:read") ||
+      can("services:write"),
+  },
   { href: "/admin/radio-chat", label: "Radio chat", icon: MessageCircle, visible: canReadRadioChat },
 ];
 
