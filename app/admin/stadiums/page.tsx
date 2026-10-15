@@ -46,6 +46,7 @@ export default function StadiumsPage() {
   const [editing, setEditing] = useState<StadiumRow | null>(null);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const load = async () => {
     const spojex = getSpojexClient();
@@ -105,12 +106,24 @@ export default function StadiumsPage() {
   const remove = async (row: StadiumRow) => {
     const label = row.name || "this stadium";
     if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) return;
+    if (deletingId) return;
     setError(null);
+    setDeletingId(row.id);
+    // Optimistic: drop from the list immediately so the UI doesn't wait on cascade deletes.
+    setRows((current) => current.filter((item) => item.id !== row.id));
+    setSubscriptions((current) => current.filter((item) => item.stadium_id !== row.id));
+    if (expandedId === row.id) setExpandedId(null);
+    if (editing?.id === row.id) setEditing(null);
     try {
       await deleteAdmin(`/api/admin/stadiums/${row.id}`);
-      await load();
     } catch (err) {
+      setRows((current) => {
+        if (current.some((item) => item.id === row.id)) return current;
+        return [row, ...current];
+      });
       setError(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -284,11 +297,12 @@ export default function StadiumsPage() {
                       <td className="px-4 py-3">
                         <AdminTableActions
                           canWrite
+                          deleting={deletingId === row.id}
                           onEdit={() => {
                             setCreating(false);
                             setEditing(row);
                           }}
-                          onDelete={() => remove(row)}
+                          onDelete={() => void remove(row)}
                         />
                       </td>
                     ) : null}

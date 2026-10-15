@@ -220,6 +220,7 @@ export function AdminTableActions({
   canWrite,
   editing,
   saving,
+  deleting,
   onEdit,
   onSave,
   onCancel,
@@ -228,6 +229,7 @@ export function AdminTableActions({
   canWrite: boolean;
   editing?: boolean;
   saving?: boolean;
+  deleting?: boolean;
   onEdit?: () => void;
   onSave?: () => void;
   onCancel?: () => void;
@@ -256,13 +258,23 @@ export function AdminTableActions({
   return (
     <div className="flex flex-wrap gap-3">
       {onEdit ? (
-        <button type="button" onClick={onEdit} className="text-sm text-primary hover:underline">
+        <button
+          type="button"
+          disabled={deleting}
+          onClick={onEdit}
+          className="text-sm text-primary hover:underline disabled:opacity-50"
+        >
           Edit
         </button>
       ) : null}
       {onDelete ? (
-        <button type="button" onClick={onDelete} className="text-sm text-red-600 hover:underline">
-          Delete
+        <button
+          type="button"
+          disabled={deleting}
+          onClick={onDelete}
+          className="text-sm text-red-600 hover:underline disabled:opacity-50"
+        >
+          {deleting ? "Deleting…" : "Delete"}
         </button>
       ) : null}
     </div>
