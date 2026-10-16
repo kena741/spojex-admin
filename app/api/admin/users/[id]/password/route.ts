@@ -4,7 +4,7 @@ import { getSpojexApiBaseUrl } from "@/lib/env";
 import { requestAccessToken } from "@/lib/spojex/server";
 
 /**
- * Reset a user's login password.
+ * Set a user's login password to a specific value.
  * Any signed-in admin may call this (no users:write permission required).
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -17,12 +17,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let password: string | undefined;
+  let password = "";
   try {
     const body = (await request.json()) as { password?: string };
-    password = typeof body.password === "string" ? body.password.trim() : undefined;
+    password = typeof body.password === "string" ? body.password.trim() : "";
   } catch {
-    password = undefined;
+    password = "";
+  }
+  if (password.length < 6) {
+    return NextResponse.json({ error: "Password must be at least 6 characters." }, { status: 400 });
   }
 
   const base = getSpojexApiBaseUrl();
@@ -32,7 +35,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(password ? { password } : {}),
+    body: JSON.stringify({ password }),
   });
   const payload = (await res.json().catch(() => ({}))) as {
     error?: string;
@@ -49,7 +52,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
   return NextResponse.json({
     ok: true,
-    password: payload.password,
     email: payload.email,
   });
 }

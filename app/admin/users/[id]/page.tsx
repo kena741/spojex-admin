@@ -18,10 +18,10 @@ import { UserAvatar } from "@/components/user-avatar";
 import SendPushForm from "@/components/send-push-form";
 import { allRoles, extraProfileTable, roleLabel } from "@/lib/catalog";
 import { professionalProfileCopy } from "@/lib/identity-catalog";
+import { UserDeleteModal, UserPasswordResetModal } from "@/components/user-account-modals";
 import { patchAdmin, postAdmin, postAdminResponse, deleteAdmin, useIdentityCatalog } from "@/lib/hooks";
 import { userProfileSelect } from "@/lib/query-embeds";
 import { getSpojexClient } from "@/lib/spojex/client";
-import { generateStadiumManagerPassword } from "@/lib/stadiums";
 import { safeSelect } from "@/lib/table-helpers";
 import { loadCoinWalletsByUserIds } from "@/lib/coin-wallets";
 import { firstPayment } from "@/lib/marketplace";
@@ -62,6 +62,9 @@ export default function UserDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [accountBusy, setAccountBusy] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const { catalog, roleOptions, roleLabel: catalogRoleLabel, extraProfileTable: catalogExtraProfileTable } =
@@ -195,41 +198,33 @@ export default function UserDetailPage() {
     }
   };
 
-  const resetPassword = async () => {
+  const submitPassword = async (password: string) => {
     if (!user) return;
-    const label = user.display_name || user.email || "this user";
-    if (!window.confirm(`Reset login password for “${label}”?`)) return;
     setAccountBusy(true);
+    setModalError(null);
     setError(null);
     setNotice(null);
     try {
-      const next = generateStadiumManagerPassword();
-      const payload = await postAdminResponse<{ password?: string; email?: string }>(
-        `/api/admin/users/${user.id}/password`,
-        { password: next },
-      );
-      const password = payload.password || next;
-      const email = payload.email || user.email || "—";
-      setNotice(`Password reset. Email: ${email} · Password: ${password}`);
-      window.alert(`Password reset.\n\nEmail: ${email}\nPassword: ${password}\n\nShare this once — it will not be shown again.`);
+      await postAdminResponse(`/api/admin/users/${user.id}/password`, { password });
+      setPasswordOpen(false);
+      setNotice("Password updated.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Password reset failed");
+      setModalError(err instanceof Error ? err.message : "Password reset failed");
     } finally {
       setAccountBusy(false);
     }
   };
 
-  const removeUser = async () => {
+  const confirmDelete = async () => {
     if (!user) return;
-    const label = user.display_name || user.email || "this user";
-    if (!window.confirm(`Delete “${label}”? They will no longer be able to sign in.`)) return;
     setAccountBusy(true);
+    setModalError(null);
     setError(null);
     try {
       await deleteAdmin(`/api/admin/users/${user.id}`);
       router.push("/admin/users");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Delete failed");
+      setModalError(err instanceof Error ? err.message : "Delete failed");
       setAccountBusy(false);
     }
   };
@@ -265,15 +260,21 @@ export default function UserDetailPage() {
             <button
               type="button"
               disabled={accountBusy}
-              onClick={() => void resetPassword()}
+              onClick={() => {
+                setModalError(null);
+                setPasswordOpen(true);
+              }}
               className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
             >
-              {accountBusy ? "Working…" : "Reset password"}
+              Reset password
             </button>
             <button
               type="button"
               disabled={accountBusy}
-              onClick={() => void removeUser()}
+              onClick={() => {
+                setModalError(null);
+                setDeleteOpen(true);
+              }}
               className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
             >
               Delete user
@@ -287,6 +288,31 @@ export default function UserDetailPage() {
           {notice}
         </div>
       ) : null}
+
+      <UserPasswordResetModal
+        user={user}
+        open={passwordOpen}
+        saving={accountBusy}
+        error={modalError}
+        onClose={() => {
+          if (accountBusy) return;
+          setPasswordOpen(false);
+          setModalError(null);
+        }}
+        onSubmit={submitPassword}
+      />
+      <UserDeleteModal
+        user={user}
+        open={deleteOpen}
+        saving={accountBusy}
+        error={modalError}
+        onClose={() => {
+          if (accountBusy) return;
+          setDeleteOpen(false);
+          setModalError(null);
+        }}
+        onConfirm={confirmDelete}
+      />
 
       <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
         <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
