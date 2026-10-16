@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import AdminPageHeader from "@/components/admin-header";
 import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
@@ -18,9 +18,10 @@ import { UserAvatar } from "@/components/user-avatar";
 import SendPushForm from "@/components/send-push-form";
 import { allRoles, extraProfileTable, roleLabel } from "@/lib/catalog";
 import { professionalProfileCopy } from "@/lib/identity-catalog";
-import { patchAdmin, postAdmin, deleteAdmin, useIdentityCatalog } from "@/lib/hooks";
+import { patchAdmin, postAdmin, postAdminResponse, deleteAdmin, useIdentityCatalog } from "@/lib/hooks";
 import { userProfileSelect } from "@/lib/query-embeds";
 import { getSpojexClient } from "@/lib/spojex/client";
+import { generateStadiumManagerPassword } from "@/lib/stadiums";
 import { safeSelect } from "@/lib/table-helpers";
 import { loadCoinWalletsByUserIds } from "@/lib/coin-wallets";
 import { firstPayment } from "@/lib/marketplace";
@@ -45,6 +46,7 @@ import { useAdminPermissions } from "@/lib/use-admin-permissions";
 export default function UserDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
+  const router = useRouter();
   const { can } = useAdminPermissions();
   const [user, setUser] = useState<UserRow | null>(null);
   const [orgs, setOrgs] = useState<OrganizationRow[]>([]);
@@ -59,6 +61,7 @@ export default function UserDetailPage() {
   const [verificationStatus, setVerificationStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [accountBusy, setAccountBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const { catalog, roleOptions, roleLabel: catalogRoleLabel, extraProfileTable: catalogExtraProfileTable } =
@@ -192,6 +195,45 @@ export default function UserDetailPage() {
     }
   };
 
+  const resetPassword = async () => {
+    if (!user) return;
+    const label = user.display_name || user.email || "this user";
+    if (!window.confirm(`Reset login password for “${label}”?`)) return;
+    setAccountBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const next = generateStadiumManagerPassword();
+      const payload = await postAdminResponse<{ password?: string; email?: string }>(
+        `/api/admin/users/${user.id}/password`,
+        { password: next },
+      );
+      const password = payload.password || next;
+      const email = payload.email || user.email || "—";
+      setNotice(`Password reset. Email: ${email} · Password: ${password}`);
+      window.alert(`Password reset.\n\nEmail: ${email}\nPassword: ${password}\n\nShare this once — it will not be shown again.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Password reset failed");
+    } finally {
+      setAccountBusy(false);
+    }
+  };
+
+  const removeUser = async () => {
+    if (!user) return;
+    const label = user.display_name || user.email || "this user";
+    if (!window.confirm(`Delete “${label}”? They will no longer be able to sign in.`)) return;
+    setAccountBusy(true);
+    setError(null);
+    try {
+      await deleteAdmin(`/api/admin/users/${user.id}`);
+      router.push("/admin/users");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+      setAccountBusy(false);
+    }
+  };
+
   if (loading) return <AdminLoadingRow label="Loading user…" />;
   if (!user) return <AdminErrorAlert message={error || "User not found"} />;
 
@@ -211,14 +253,32 @@ export default function UserDetailPage() {
           { label: user.display_name || "Detail" },
         ]}
         actions={
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => save({ verified: !user.verified })}
-            className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
-          >
-            {user.verified ? "Unverify" : "Verify"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={saving || accountBusy}
+              onClick={() => save({ verified: !user.verified })}
+              className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+            >
+              {user.verified ? "Unverify" : "Verify"}
+            </button>
+            <button
+              type="button"
+              disabled={accountBusy}
+              onClick={() => void resetPassword()}
+              className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+            >
+              {accountBusy ? "Working…" : "Reset password"}
+            </button>
+            <button
+              type="button"
+              disabled={accountBusy}
+              onClick={() => void removeUser()}
+              className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+            >
+              Delete user
+            </button>
+          </div>
         }
       />
       {error ? <AdminErrorAlert message={error} /> : null}

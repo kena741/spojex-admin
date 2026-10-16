@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
-import { requireAdminPermission } from "@/lib/admin-auth";
+import { requireAdminPermission, requireAdminSession } from "@/lib/admin-auth";
+import { getSpojexApiBaseUrl } from "@/lib/env";
+import { requestAccessToken } from "@/lib/spojex/server";
 
 const allowed = [
   "display_name",
@@ -42,4 +44,41 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     );
   }
   return NextResponse.json({ data });
+}
+
+/**
+ * Soft-delete a user.
+ * Any signed-in admin may call this (no users:write permission required).
+ */
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireAdminSession();
+  if (!auth.ok) return auth.error;
+
+  const { id } = await params;
+  if (auth.context.user.id === id) {
+    return NextResponse.json({ error: "You cannot delete your own account from admin." }, { status: 400 });
+  }
+
+  const token = await requestAccessToken();
+  if (!token) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const base = getSpojexApiBaseUrl();
+  const res = await fetch(`${base}/api/v1/admin/users/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const payload = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    message?: string;
+    detail?: string;
+  };
+  if (!res.ok) {
+    return NextResponse.json(
+      { error: payload.message || payload.detail || payload.error || "Delete failed" },
+      { status: res.status },
+    );
+  }
+  return NextResponse.json({ ok: true });
 }
