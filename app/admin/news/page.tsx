@@ -432,23 +432,7 @@ export default function NewsPage() {
             uploading={uploading}
             onKind={setPickedKind}
             onUpload={(file, kind) => void uploadMedia(file, kind)}
-            onImageUrl={setImageUrl}
-            onVideoUrl={(url) => {
-              if (audioUrl.trim()) {
-                setError("Remove the audio file before adding video.");
-                return;
-              }
-              setVideoUrl(url);
-              if (url) setPickedKind("video");
-            }}
-            onAudioUrl={(url) => {
-              if (videoUrl.trim()) {
-                setError("Remove the video file before adding audio.");
-                return;
-              }
-              setAudioUrl(url);
-              if (url) setPickedKind("audio");
-            }}
+            onRemoveImage={() => setImageUrl("")}
             onRemoveVideo={() => {
               setVideoUrl("");
               setPickedKind("none");

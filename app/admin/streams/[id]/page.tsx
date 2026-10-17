@@ -238,14 +238,7 @@ export default function StreamDetailPage() {
                   Direct audio link (MP3, AAC, Icecast, or HLS). Required before going on air.
                 </span>
               </label>
-              <label className="grid gap-1 text-sm">
-                <span className="text-text-secondary">Cover image URL</span>
-                <input
-                  name="image_url"
-                  defaultValue={station.image_url}
-                  className="h-10 rounded-lg border border-border px-3"
-                />
-              </label>
+              <input type="hidden" name="image_url" defaultValue={station.image_url} />
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="grid gap-1 text-sm">
                   <span className="text-text-secondary">Genre</span>

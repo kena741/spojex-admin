@@ -449,12 +449,6 @@ export default function LiveEventDetailPage() {
                   ) : null}
                 </div>
               ) : null}
-              <Field
-                label="Or paste thumbnail URL"
-                value={row.thumbnail_url}
-                disabled={!canWrite || uploading}
-                onSave={(value) => save({ thumbnail_url: value })}
-              />
             </div>
             <label className="grid gap-1 text-sm">
               <span className="text-text-secondary">Stream type</span>

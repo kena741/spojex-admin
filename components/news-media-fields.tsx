@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import {
   newsAudioAccept,
   newsImageAccept,
@@ -48,34 +47,6 @@ export async function uploadNewsFile(articleId: string | null, file: File, kind:
   return toBackendMediaUrl(payload.publicUrl);
 }
 
-function UrlField({
-  value,
-  placeholder,
-  onCommit,
-}: {
-  value: string;
-  placeholder: string;
-  onCommit: (value: string) => void;
-}) {
-  const [text, setText] = useState(value);
-
-  useEffect(() => {
-    setText(value);
-  }, [value]);
-
-  return (
-    <input
-      value={text}
-      onChange={(event) => setText(event.target.value)}
-      onBlur={() => {
-        if (text.trim() !== value.trim()) onCommit(text.trim());
-      }}
-      placeholder={placeholder}
-      className="h-10 w-full rounded-lg border border-border px-3"
-    />
-  );
-}
-
 export function NewsMediaPreview({
   imageUrl,
   videoUrl,
@@ -118,9 +89,7 @@ export function NewsMediaFields({
   disabled,
   onKind,
   onUpload,
-  onImageUrl,
-  onVideoUrl,
-  onAudioUrl,
+  onRemoveImage,
   onRemoveVideo,
   onRemoveAudio,
 }: {
@@ -132,16 +101,16 @@ export function NewsMediaFields({
   disabled?: boolean;
   onKind: (kind: NewsStoryMedia) => void;
   onUpload: (file: File, kind: NewsUploadKind) => void;
-  onImageUrl: (url: string) => void;
-  onVideoUrl: (url: string) => void;
-  onAudioUrl: (url: string) => void;
+  onRemoveImage: () => void;
   onRemoveVideo: () => void;
   onRemoveAudio: () => void;
 }) {
+  const hasImage = Boolean(imageUrl.trim());
   const hasVideo = Boolean(videoUrl.trim());
   const hasAudio = Boolean(audioUrl.trim());
   const mediaKind = resolveNewsStoryMedia(videoUrl, audioUrl, pickedKind);
   const busy = Boolean(uploading) || Boolean(disabled);
+  const imagePreview = toBackendMediaUrl(imageUrl);
 
   const chooseKind = (kind: NewsStoryMedia) => {
     if (hasVideo && kind !== "video") return;
@@ -153,8 +122,7 @@ export function NewsMediaFields({
     <div className="rounded-lg border border-border p-3">
       <p className="mb-2 text-sm font-medium">Media</p>
       <p className="mb-3 text-xs text-text-secondary">
-        Files upload through the Spojex API (stored in Cloud Storage). The returned URL is saved on the
-        story. Text only, video, or audio — not both video and audio.
+        Upload files only — text only, video, or audio (not both video and audio).
       </p>
       <div className="mb-3 flex flex-wrap gap-2">
         {(
@@ -183,28 +151,47 @@ export function NewsMediaFields({
         ))}
       </div>
 
-      <label className="mb-1 block text-xs font-medium text-text-secondary">Image</label>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <label className="text-xs font-medium text-text-secondary">Image</label>
+        {hasImage ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onRemoveImage}
+            className="text-xs font-medium text-red-600 hover:underline"
+          >
+            Delete image
+          </button>
+        ) : null}
+      </div>
+      {hasImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={imagePreview}
+          alt=""
+          className="mb-2 h-36 w-full rounded-lg object-cover"
+        />
+      ) : (
+        <div className="mb-2 flex h-28 items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 text-xs text-text-secondary">
+          No image uploaded
+        </div>
+      )}
       <input
         type="file"
         accept={newsImageAccept}
         disabled={busy}
-        className={`${fileInputClass} mb-2`}
+        className={fileInputClass}
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = "";
           if (file) onUpload(file, "image");
         }}
       />
-      <UrlField
-        value={imageUrl}
-        placeholder="Or paste image URL (https://…)"
-        onCommit={onImageUrl}
-      />
 
       {mediaKind === "video" ? (
         <div className="mt-3">
           <div className="mb-1 flex items-center justify-between gap-2">
-            <label className="text-xs font-medium text-text-secondary">Video URL</label>
+            <label className="text-xs font-medium text-text-secondary">Video</label>
             {hasVideo ? (
               <button
                 type="button"
@@ -212,25 +199,32 @@ export function NewsMediaFields({
                 onClick={onRemoveVideo}
                 className="text-xs font-medium text-red-600 hover:underline"
               >
-                Remove video
+                Delete video
               </button>
             ) : null}
           </div>
+          {hasVideo ? (
+            <video
+              src={toBackendMediaUrl(videoUrl)}
+              controls
+              poster={imagePreview || undefined}
+              className="mb-2 h-36 w-full rounded-lg bg-black object-contain"
+            />
+          ) : (
+            <div className="mb-2 flex h-28 items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 text-xs text-text-secondary">
+              No video uploaded
+            </div>
+          )}
           <input
             type="file"
             accept={newsVideoAccept}
             disabled={busy}
-            className={`${fileInputClass} mb-2`}
+            className={fileInputClass}
             onChange={(event) => {
               const file = event.target.files?.[0];
               event.target.value = "";
               if (file) onUpload(file, "video");
             }}
-          />
-          <UrlField
-            value={videoUrl}
-            placeholder="https://…/video.mp4"
-            onCommit={onVideoUrl}
           />
         </div>
       ) : null}
@@ -238,7 +232,7 @@ export function NewsMediaFields({
       {mediaKind === "audio" ? (
         <div className="mt-3">
           <div className="mb-1 flex items-center justify-between gap-2">
-            <label className="text-xs font-medium text-text-secondary">Audio URL</label>
+            <label className="text-xs font-medium text-text-secondary">Audio</label>
             {hasAudio ? (
               <button
                 type="button"
@@ -246,25 +240,31 @@ export function NewsMediaFields({
                 onClick={onRemoveAudio}
                 className="text-xs font-medium text-red-600 hover:underline"
               >
-                Remove audio
+                Delete audio
               </button>
             ) : null}
           </div>
+          {hasAudio ? (
+            <audio
+              src={toBackendMediaUrl(audioUrl)}
+              controls
+              className="mb-2 w-full"
+            />
+          ) : (
+            <div className="mb-2 flex h-16 items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 text-xs text-text-secondary">
+              No audio uploaded
+            </div>
+          )}
           <input
             type="file"
             accept={newsAudioAccept}
             disabled={busy}
-            className={`${fileInputClass} mb-2`}
+            className={fileInputClass}
             onChange={(event) => {
               const file = event.target.files?.[0];
               event.target.value = "";
               if (file) onUpload(file, "audio");
             }}
-          />
-          <UrlField
-            value={audioUrl}
-            placeholder="https://…/audio.mp3"
-            onCommit={onAudioUrl}
           />
         </div>
       ) : null}

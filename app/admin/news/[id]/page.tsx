@@ -178,6 +178,10 @@ export default function NewsDetailPage() {
     }
   };
 
+  const removeImage = async () => {
+    if (!(await save({ image_url: "", cover_url: "" }))) return;
+  };
+
   const removeVideo = async () => {
     if (!(await save({ video_url: "" }))) return;
     setPickedKind("none");
@@ -320,23 +324,7 @@ export default function NewsDetailPage() {
                 disabled={!canWrite}
                 onKind={setPickedKind}
                 onUpload={(file, kind) => void uploadMedia(file, kind)}
-                onImageUrl={(url) => {
-                  if (url !== image) void save({ image_url: url, cover_url: url });
-                }}
-                onVideoUrl={(url) => {
-                  if (article.audio_url?.trim()) {
-                    setError("Remove the audio file before adding video.");
-                    return;
-                  }
-                  if (url !== (article.video_url ?? "")) void save({ video_url: url });
-                }}
-                onAudioUrl={(url) => {
-                  if (article.video_url?.trim()) {
-                    setError("Remove the video file before adding audio.");
-                    return;
-                  }
-                  if (url !== (article.audio_url ?? "")) void save({ audio_url: url });
-                }}
+                onRemoveImage={() => void removeImage()}
                 onRemoveVideo={() => void removeVideo()}
                 onRemoveAudio={() => void removeAudio()}
               />

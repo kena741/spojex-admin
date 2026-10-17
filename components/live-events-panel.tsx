@@ -336,18 +336,9 @@ export default function LiveEventsPanel() {
               />
             </div>
           ) : null}
-          <label className="grid gap-1 text-sm">
-            <span className="text-text-secondary">Thumbnail URL (optional)</span>
-            <input
-              className={fieldClass}
-              value={form.thumbnail_url}
-              onChange={(event) => setForm((current) => ({ ...current, thumbnail_url: event.target.value }))}
-              placeholder="Paste a URL, or upload after create"
-            />
-            <span className="text-xs text-text-secondary">
-              You can upload an image on the event page after creating.
-            </span>
-          </label>
+          <p className="text-xs text-text-secondary">
+            Upload a thumbnail on the event page after creating.
+          </p>
           <label className="grid gap-1 text-sm">
             <span className="text-text-secondary">Live stream URL (optional)</span>
             <input

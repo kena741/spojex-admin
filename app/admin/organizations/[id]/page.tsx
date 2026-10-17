@@ -307,17 +307,6 @@ export default function OrganizationDetailPage() {
               />
             </label>
             <label className="text-sm sm:col-span-2">
-              <span className="mb-1 block text-text-secondary">Logo URL</span>
-              <input
-                className={fieldClass}
-                defaultValue={org.logo_url ?? ""}
-                onBlur={(event) => {
-                  const next = event.target.value.trim() || null;
-                  if (next !== (org.logo_url ?? null)) void save({ logo_url: next });
-                }}
-              />
-            </label>
-            <label className="text-sm sm:col-span-2">
               <span className="mb-1 block text-text-secondary">Description</span>
               <textarea
                 defaultValue={org.description}

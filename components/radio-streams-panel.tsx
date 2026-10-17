@@ -411,14 +411,6 @@ export default function RadioStreamsPanel() {
                 Direct audio link (MP3, AAC, Icecast, or HLS).
               </span>
             </label>
-            <label className="grid gap-1 text-sm">
-              <span className="text-text-secondary">Cover image URL</span>
-              <input
-                value={draft.image_url}
-                onChange={(e) => setDraft({ ...draft, image_url: e.target.value })}
-                className={fieldClass}
-              />
-            </label>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="grid gap-1 text-sm">
                 <span className="text-text-secondary">Genre</span>
