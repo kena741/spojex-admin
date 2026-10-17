@@ -22,6 +22,29 @@ const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif
 export const newsImageAccept = "image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif";
 export const newsVideoAccept = "video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov,.m4v";
 export const newsAudioAccept = "audio/mpeg,audio/mp4,audio/aac,audio/wav,audio/ogg,.mp3,.m4a,.aac,.wav,.ogg";
+/** Sound library: audio files, or video (API extracts audio only). */
+export const newsLibrarySoundAccept = `${newsAudioAccept},${newsVideoAccept}`;
+
+/** Multipart proxy to Cloud Run stays under ~32MB. */
+const LIBRARY_VIDEO_MAX = 28 * 1024 * 1024;
+
+export function isNewsVideoFile(type: string, filename: string) {
+  const declared = (type || "").trim().toLowerCase();
+  return VIDEO_TYPES.has(declared) || /\.(mp4|webm|mov|m4v)$/i.test(filename);
+}
+
+export function validateLibrarySound(type: string, filename: string, size: number) {
+  if (isNewsVideoFile(type, filename)) {
+    if (!VIDEO_TYPES.has(type) && !/\.(mp4|webm|mov|m4v)$/i.test(filename)) {
+      return "Use an MP4, WebM, or MOV video.";
+    }
+    if (size > LIBRARY_VIDEO_MAX) {
+      return "Video must be 28 MB or smaller so audio can be extracted.";
+    }
+    return null;
+  }
+  return validateNewsMedia("audio", type, filename, size);
+}
 
 export function parseNewsUploadKind(value: string): NewsUploadKind | null {
   const kind = value.trim().toLowerCase();

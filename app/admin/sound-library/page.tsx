@@ -9,7 +9,7 @@ import {
   AdminTableShell,
 } from "@/components/admin-layout";
 import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
-import { newsAudioAccept, validateNewsMedia } from "@/lib/news-media";
+import { newsLibrarySoundAccept, validateLibrarySound } from "@/lib/news-media";
 import {
   NEWS_SOUND_KINDS,
   newsSoundKindLabel,
@@ -19,10 +19,9 @@ import { toBackendMediaUrl } from "@/lib/spojex-media";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 
 async function uploadLibrarySound(file: File) {
-  const invalid = validateNewsMedia("audio", file.type, file.name, file.size);
+  const invalid = validateLibrarySound(file.type, file.name, file.size);
   if (invalid) throw new Error(invalid);
   const body = new FormData();
-  body.set("kind", "audio");
   body.set("file", file, file.name);
   const response = await fetch("/api/admin/news-sounds/media", {
     method: "POST",
@@ -30,10 +29,22 @@ async function uploadLibrarySound(file: File) {
     body,
   });
   const text = await response.text();
-  const payload = text.trim() ? (JSON.parse(text) as { error?: string; publicUrl?: string }) : {};
+  const payload = text.trim()
+    ? (JSON.parse(text) as {
+        error?: string;
+        publicUrl?: string;
+        durationSeconds?: number | null;
+        extractedFromVideo?: boolean;
+      })
+    : {};
   if (!response.ok) throw new Error(payload.error || "Upload failed");
   if (!payload.publicUrl) throw new Error("Upload failed. No public URL was returned.");
-  return toBackendMediaUrl(payload.publicUrl);
+  return {
+    publicUrl: toBackendMediaUrl(payload.publicUrl),
+    durationSeconds:
+      typeof payload.durationSeconds === "number" ? payload.durationSeconds : null,
+    extractedFromVideo: Boolean(payload.extractedFromVideo),
+  };
 }
 
 export default function SoundLibraryPage() {
@@ -47,6 +58,7 @@ export default function SoundLibraryPage() {
   const [name, setName] = useState("");
   const [kind, setKind] = useState("stadium");
   const [audioUrl, setAudioUrl] = useState("");
+  const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -72,6 +84,7 @@ export default function SoundLibraryPage() {
     setName("");
     setKind("stadium");
     setAudioUrl("");
+    setDurationSeconds(null);
   };
 
   const onUpload = async (file: File) => {
@@ -79,12 +92,17 @@ export default function SoundLibraryPage() {
     setUploading(true);
     setError(null);
     try {
-      const url = await uploadLibrarySound(file);
-      setAudioUrl(url);
+      const uploaded = await uploadLibrarySound(file);
+      setAudioUrl(uploaded.publicUrl);
+      setDurationSeconds(uploaded.durationSeconds);
       if (!name.trim()) {
         setName(file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim());
       }
-      setNotice("Sound uploaded. Save to add it to the library.");
+      setNotice(
+        uploaded.extractedFromVideo
+          ? "Audio extracted from video. Save to add it to the library."
+          : "Sound uploaded. Save to add it to the library.",
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -103,6 +121,7 @@ export default function SoundLibraryPage() {
         name: name.trim(),
         kind,
         audio_url: audioUrl.trim(),
+        duration_seconds: durationSeconds,
         is_active: true,
         sort_order: rows.length,
       });
@@ -184,10 +203,10 @@ export default function SoundLibraryPage() {
             </select>
           </label>
           <label className="grid gap-1 text-sm">
-            <span className="text-text-secondary">Audio file</span>
+            <span className="text-text-secondary">Audio or video file</span>
             <input
               type="file"
-              accept={newsAudioAccept}
+              accept={newsLibrarySoundAccept}
               disabled={uploading || saving}
               className="block w-full text-sm text-text-secondary file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-foreground"
               onChange={(event) => {
@@ -205,7 +224,8 @@ export default function SoundLibraryPage() {
             />
           ) : (
             <p className="text-xs text-text-secondary md:col-span-2">
-              Upload MP3 / M4A / WAV (max 20 MB). Different kinds keep the library easy to browse.
+              Upload MP3 / M4A / WAV (max 20 MB), or MP4 / MOV / WebM video (max 28 MB) — only the
+              audio track is kept. Different kinds keep the library easy to browse.
             </p>
           )}
           <div className="md:col-span-2">
