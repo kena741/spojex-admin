@@ -542,6 +542,10 @@ export type SportNewsRow = {
   sort_order: number;
   published_at: string | null;
   organization_id?: string | null;
+  like_count?: number;
+  comment_count?: number;
+  save_count?: number;
+  share_count?: number;
   created_at: string;
   updated_at: string;
   organizations?: Pick<

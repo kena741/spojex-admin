@@ -16,7 +16,8 @@ import {
   AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
-import { NewsMediaFields, NewsMediaPreview, uploadNewsFile } from "@/components/news-media-fields";
+import { NewsMediaFields, uploadNewsFile } from "@/components/news-media-fields";
+import { NewsTikTokPreview } from "@/components/news-tiktok-preview";
 import { newsCategories, newsRecency, newsStatusLabel, newsStatuses } from "@/lib/news";
 import { resolveNewsStoryMedia, type NewsStoryMedia, type NewsUploadKind } from "@/lib/news-media";
 import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
@@ -424,7 +425,10 @@ export default function NewsPage() {
             Author{" "}
             <span className="font-medium text-text-primary">{authorName || "Signed-in admin"}</span>
           </p>
-          <NewsMediaPreview
+          <NewsTikTokPreview
+            title={title}
+            body={body}
+            source={source.trim() || "SpoJex Desk"}
             imageUrl={imageUrl}
             videoUrl={videoUrl}
             audioUrl={audioUrl}
@@ -432,6 +436,7 @@ export default function NewsPage() {
               imageUrl,
               soundId,
             })}
+            className="mb-2"
           />
           <NewsMediaFields
             imageUrl={imageUrl}

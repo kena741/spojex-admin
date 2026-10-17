@@ -90,38 +90,7 @@ export async function uploadNewsFile(articleId: string | null, file: File, kind:
   return toBackendMediaUrl(payload.publicUrl);
 }
 
-export function NewsMediaPreview({
-  imageUrl,
-  videoUrl,
-  audioUrl,
-  mediaKind,
-}: {
-  imageUrl: string;
-  videoUrl: string;
-  audioUrl: string;
-  mediaKind: NewsStoryMedia;
-}) {
-  const image = toBackendMediaUrl(imageUrl);
-  const video = toBackendMediaUrl(videoUrl);
-  const audio = toBackendMediaUrl(audioUrl);
-
-  return (
-    <>
-      {mediaKind === "video" && video ? (
-        <video
-          src={video}
-          controls
-          poster={image || undefined}
-          className="mb-4 h-48 w-full rounded-lg bg-black object-contain"
-        />
-      ) : image ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={image} alt="" className="mb-4 h-48 w-full rounded-lg object-cover" />
-      ) : null}
-      {mediaKind === "audio" && audio ? <audio src={audio} controls className="mb-4 w-full" /> : null}
-    </>
-  );
-}
+export { NewsMediaPreview, NewsTikTokPreview } from "@/components/news-tiktok-preview";
 
 export function NewsMediaFields({
   imageUrl,

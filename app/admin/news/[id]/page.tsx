@@ -6,7 +6,8 @@ import { useParams, useRouter } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
-import { NewsMediaFields, NewsMediaPreview, uploadNewsFile } from "@/components/news-media-fields";
+import { NewsMediaFields, uploadNewsFile } from "@/components/news-media-fields";
+import { NewsTikTokPreview } from "@/components/news-tiktok-preview";
 import { newsCategories, newsStatusLabel, newsStatuses } from "@/lib/news";
 import { resolveNewsStoryMedia, type NewsStoryMedia, type NewsUploadKind } from "@/lib/news-media";
 import { deleteAdmin, patchAdmin } from "@/lib/hooks";
@@ -279,24 +280,28 @@ export default function NewsDetailPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
         <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <NewsMediaPreview
-            imageUrl={image}
-            videoUrl={article.video_url ?? ""}
-            audioUrl={article.audio_url ?? ""}
-            mediaKind={mediaKind}
-          />
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex items-center justify-between gap-2">
             <h2 className="font-heading text-sm font-semibold">Preview</h2>
             <StatusBadge tone={requestTone(article.status)}>
               {newsStatusLabel(article.status)}
             </StatusBadge>
           </div>
-          <p className="text-sm text-text-secondary whitespace-pre-wrap">
-            {article.body || "No description yet."}
-          </p>
-          <p className="mt-4 text-xs text-text-hint">
+          <NewsTikTokPreview
+            title={article.title}
+            body={article.body}
+            source={orgLabel}
+            imageUrl={image}
+            videoUrl={article.video_url ?? ""}
+            audioUrl={article.audio_url ?? ""}
+            mediaKind={mediaKind}
+            likeCount={Number(article.like_count ?? 0)}
+            commentCount={Number(article.comment_count ?? 0)}
+            saveCount={Number(article.save_count ?? 0)}
+            shareCount={Number(article.share_count ?? 0)}
+          />
+          <p className="mt-4 text-center text-xs text-text-hint">
             Published {article.published_at ? formatDate(article.published_at) : "not yet"}
           </p>
         </section>
