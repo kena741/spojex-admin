@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import AdminPageHeader from "@/components/admin-header";
 import {
@@ -32,6 +33,23 @@ type CoinGiftRow = {
   is_active: boolean;
 };
 
+type CoinPurchaseRow = {
+  id: string;
+  user_id: string;
+  coins: number;
+  price_etb: number;
+  status: string;
+  provider_ref: string;
+  paid_at: string | null;
+  created_at: string;
+};
+
+type ChapaStatus = {
+  enabled: boolean;
+  hasPublicKey: boolean;
+  hasSecretKey: boolean;
+};
+
 function slugify(value: string) {
   return value
     .trim()
@@ -45,6 +63,12 @@ export default function CoinCatalogPage() {
   const canWrite = can("donations:write");
   const [packages, setPackages] = useState<CoinPackageRow[]>([]);
   const [gifts, setGifts] = useState<CoinGiftRow[]>([]);
+  const [purchases, setPurchases] = useState<CoinPurchaseRow[]>([]);
+  const [chapa, setChapa] = useState<ChapaStatus>({
+    enabled: false,
+    hasPublicKey: false,
+    hasSecretKey: false,
+  });
   const [etbPerCoin, setEtbPerCoin] = useState("0.10");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,18 +85,43 @@ export default function CoinCatalogPage() {
 
   const load = async () => {
     const spojex = getSpojexClient();
-    const [packRes, giftRes, settingsRes] = await Promise.all([
-      spojex.from("coin_packages").select("*").order("sort_order"),
-      spojex.from("coin_gifts").select("*").order("sort_order"),
-      spojex.from("coin_settings").select("etb_per_coin").eq("id", 1).maybeSingle(),
-    ]);
+    const [packRes, giftRes, settingsRes, purchaseRes, appSettingsRes] =
+      await Promise.all([
+        spojex.from("coin_packages").select("*").order("sort_order"),
+        spojex.from("coin_gifts").select("*").order("sort_order"),
+        spojex.from("coin_settings").select("etb_per_coin").eq("id", 1).maybeSingle(),
+        spojex
+          .from("coin_purchases")
+          .select("id,user_id,coins,price_etb,status,provider_ref,paid_at,created_at")
+          .order("created_at", { ascending: false })
+          .limit(25),
+        spojex.from("app_settings").select("id,data").eq("id", "payment").maybeSingle(),
+      ]);
     if (packRes.error) throw packRes.error;
     if (giftRes.error) throw giftRes.error;
     setPackages((packRes.data ?? []) as CoinPackageRow[]);
     setGifts((giftRes.data ?? []) as CoinGiftRow[]);
+    if (!purchaseRes.error) {
+      setPurchases((purchaseRes.data ?? []) as CoinPurchaseRow[]);
+    }
     if (settingsRes.data?.etb_per_coin != null) {
       setEtbPerCoin(String(settingsRes.data.etb_per_coin));
     }
+    const paymentData =
+      appSettingsRes.data?.data &&
+      typeof appSettingsRes.data.data === "object" &&
+      !Array.isArray(appSettingsRes.data.data)
+        ? (appSettingsRes.data.data as Record<string, unknown>)
+        : {};
+    const chapaCfg =
+      paymentData.chapa && typeof paymentData.chapa === "object"
+        ? (paymentData.chapa as Record<string, unknown>)
+        : {};
+    setChapa({
+      enabled: Boolean(chapaCfg.enable || chapaCfg.isActive),
+      hasPublicKey: Boolean(String(chapaCfg.publicKey || "").trim()),
+      hasSecretKey: Boolean(String(chapaCfg.secretKey || "").trim()),
+    });
   };
 
   useEffect(() => {
@@ -175,17 +224,25 @@ export default function CoinCatalogPage() {
     <>
       <AdminPageHeader
         title="Coin catalog"
-        description="Buy packs, gift stickers, and redemption ETB rate"
+        description="Chapa buy packs for the app, gift stickers, and redemption ETB rate"
         actions={
-          canWrite && (packages.length === 0 || gifts.length === 0) ? (
-            <button
-              type="button"
-              onClick={() => void seedStarterCatalog()}
-              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/admin/finance/payment-settings"
+              className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
             >
-              Seed starter catalog
-            </button>
-          ) : null
+              Chapa payment settings
+            </Link>
+            {canWrite && (packages.length === 0 || gifts.length === 0) ? (
+              <button
+                type="button"
+                onClick={() => void seedStarterCatalog()}
+                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+              >
+                Seed starter catalog
+              </button>
+            ) : null}
+          </div>
         }
       />
       {error ? <AdminErrorAlert message={error} /> : null}
@@ -194,6 +251,33 @@ export default function CoinCatalogPage() {
           {notice}
         </div>
       ) : null}
+
+      <section className="mb-6 rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="mb-1 font-heading text-sm font-semibold">Chapa coin purchases</h2>
+            <p className="text-sm text-text-secondary">
+              Active packs are sold in the mobile wallet via Chapa. Configure keys under Payment
+              Settings, then users pay ETB and receive purchased coins.
+            </p>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs">
+            <div>
+              Status:{" "}
+              <span className={chapa.enabled ? "text-emerald-700" : "text-amber-700"}>
+                {chapa.enabled ? "Enabled" : "Disabled"}
+              </span>
+            </div>
+            <div>Public key: {chapa.hasPublicKey ? "set" : "missing"}</div>
+            <div>Secret key: {chapa.hasSecretKey ? "set" : "missing"}</div>
+          </div>
+        </div>
+        {!chapa.enabled || !chapa.hasPublicKey || !chapa.hasSecretKey ? (
+          <p className="mt-3 text-sm text-amber-800">
+            Turn on Chapa and save public + secret keys so in-app coin buy can verify payments.
+          </p>
+        ) : null}
+      </section>
 
       <section className="mb-6 rounded-xl border border-border bg-card p-4 shadow-sm">
         <h2 className="mb-3 font-heading text-sm font-semibold">Redemption rate</h2>
@@ -418,6 +502,47 @@ export default function CoinCatalogPage() {
           </AdminTableShell>
         </section>
       </div>
+
+      <section className="mt-6 rounded-xl border border-border bg-card p-4 shadow-sm">
+        <h2 className="mb-3 font-heading text-sm font-semibold">Recent Chapa purchases</h2>
+        <AdminTableShell>
+          {purchases.length === 0 ? (
+            <AdminEmpty
+              title="No purchases yet"
+              description="Completed and pending coin buys from the app appear here."
+            />
+          ) : (
+            <table className="min-w-full text-left text-sm">
+              <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+                <tr>
+                  <th className="px-3 py-2">When</th>
+                  <th className="px-3 py-2">Coins</th>
+                  <th className="px-3 py-2">ETB</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">Tx ref</th>
+                </tr>
+              </thead>
+              <tbody>
+                {purchases.map((row) => (
+                  <tr key={row.id} className="border-b border-border last:border-0">
+                    <td className="px-3 py-2 text-text-secondary">
+                      {row.paid_at || row.created_at
+                        ? new Date(row.paid_at || row.created_at).toLocaleString()
+                        : "—"}
+                    </td>
+                    <td className="px-3 py-2 font-medium">{row.coins}</td>
+                    <td className="px-3 py-2">{row.price_etb}</td>
+                    <td className="px-3 py-2">{row.status}</td>
+                    <td className="max-w-[12rem] truncate px-3 py-2 font-mono text-xs">
+                      {row.provider_ref || "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </AdminTableShell>
+      </section>
     </>
   );
 }
