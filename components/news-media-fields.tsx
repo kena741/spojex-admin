@@ -418,6 +418,7 @@ export function NewsMediaFields({
       {showSoundPicker ? (
         <NewsSoundPicker
           soundId={soundId}
+          audioUrl={audioUrl}
           disabled={busy}
           onSelect={(sound) => onSoundSelect?.(sound)}
         />

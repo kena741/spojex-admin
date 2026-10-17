@@ -60,8 +60,8 @@ export function resolveNewsStoryMedia(
   options?: { imageUrl?: string; soundId?: string | null },
 ): NewsStoryMedia {
   if (videoUrl.trim()) return "video";
-  // Library soundtrack on an image stays in text/image mode (not audio story).
-  if (options?.soundId?.trim()) {
+  // Library / image soundtrack stays in text/image mode (not dedicated audio story).
+  if (options?.soundId?.trim() || (picked === "none" && options?.imageUrl?.trim())) {
     return picked === "audio" ? "audio" : picked ?? "none";
   }
   if (picked === "audio") return "audio";
