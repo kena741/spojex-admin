@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect, useRef, useState } from "react";
 import { NewsSoundPicker } from "@/components/news-sound-picker";
 import {
   isNewsVideoFile,
@@ -17,6 +18,36 @@ import { toBackendMediaUrl } from "@/lib/spojex-media";
 
 const fileInputClass =
   "block w-full text-sm text-text-secondary file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-foreground";
+
+const IMAGE_MIME = /^image\/(jpeg|png|webp|gif)$/i;
+
+function clipboardImageFile(data: DataTransfer | null): File | null {
+  if (!data) return null;
+  const items = data.items ? Array.from(data.items) : [];
+  for (const item of items) {
+    if (item.kind === "file" && IMAGE_MIME.test(item.type)) {
+      const file = item.getAsFile();
+      if (file) {
+        const ext = item.type.includes("png")
+          ? "png"
+          : item.type.includes("webp")
+            ? "webp"
+            : item.type.includes("gif")
+              ? "gif"
+              : "jpg";
+        const name = file.name?.trim() || `pasted-image.${ext}`;
+        return name === file.name ? file : new File([file], name, { type: file.type || item.type });
+      }
+    }
+  }
+  const files = data.files ? Array.from(data.files) : [];
+  for (const file of files) {
+    if (IMAGE_MIME.test(file.type) || /\.(jpe?g|png|webp|gif)$/i.test(file.name)) {
+      return file;
+    }
+  }
+  return null;
+}
 
 async function readJson(response: Response) {
   const text = await response.text();
@@ -133,6 +164,58 @@ export function NewsMediaFields({
   const imagePreview = toBackendMediaUrl(imageUrl);
   const showSoundPicker =
     Boolean(onSoundSelect) && mediaKind === "none" && hasImage && !hasVideo;
+  const [dragOver, setDragOver] = useState(false);
+  const [pasteHint, setPasteHint] = useState<string | null>(null);
+  const imageZoneRef = useRef<HTMLDivElement>(null);
+
+  const acceptImageFile = useCallback(
+    (file: File | null) => {
+      if (!file || busy) return;
+      const invalid = validateNewsMedia("image", file.type, file.name, file.size);
+      if (invalid) {
+        setPasteHint(invalid);
+        return;
+      }
+      setPasteHint(null);
+      onUpload(file, "image");
+    },
+    [busy, onUpload],
+  );
+
+  const onImagePaste = useCallback(
+    (event: React.ClipboardEvent | ClipboardEvent) => {
+      if (busy) return;
+      const file = clipboardImageFile(event.clipboardData);
+      if (!file) return;
+      event.preventDefault();
+      acceptImageFile(file);
+    },
+    [acceptImageFile, busy],
+  );
+
+  // Paste works even when focus is in a nearby title/body field on the news form.
+  useEffect(() => {
+    if (busy) return;
+    const onWindowPaste = (event: ClipboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      // Don't steal paste from text inputs/textareas (except our image zone).
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable) &&
+        !imageZoneRef.current?.contains(target)
+      ) {
+        return;
+      }
+      const file = clipboardImageFile(event.clipboardData);
+      if (!file) return;
+      event.preventDefault();
+      acceptImageFile(file);
+    };
+    window.addEventListener("paste", onWindowPaste);
+    return () => window.removeEventListener("paste", onWindowPaste);
+  }, [acceptImageFile, busy]);
 
   const chooseKind = (kind: NewsStoryMedia) => {
     if (hasVideo && kind !== "video") return;
@@ -150,7 +233,7 @@ export function NewsMediaFields({
     <div className="rounded-lg border border-border p-3">
       <p className="mb-2 text-sm font-medium">Media</p>
       <p className="mb-3 text-xs text-text-secondary">
-        Upload files only — text/image, video, or audio story. Image posts can pick a library soundtrack.
+        Text/image, video, or audio story. Paste or drop an image, or choose a file. Image posts can pick a library soundtrack.
       </p>
       <div className="mb-3 flex flex-wrap gap-2">
         {(
@@ -197,18 +280,48 @@ export function NewsMediaFields({
           </button>
         ) : null}
       </div>
-      {hasImage ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={imagePreview}
-          alt=""
-          className="mb-2 h-36 w-full rounded-lg object-cover"
-        />
-      ) : (
-        <div className="mb-2 flex h-28 items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 text-xs text-text-secondary">
-          No image uploaded
-        </div>
-      )}
+      <div
+        ref={imageZoneRef}
+        tabIndex={0}
+        role="button"
+        aria-label="Paste or drop news image"
+        onPaste={onImagePaste}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          if (!busy) setDragOver(true);
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+          if (!busy) setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragOver(false);
+          const file = clipboardImageFile(event.dataTransfer);
+          acceptImageFile(file);
+        }}
+        className={`mb-2 overflow-hidden rounded-lg border border-dashed outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+          dragOver
+            ? "border-primary bg-primary/10"
+            : "border-border bg-muted/40"
+        }`}
+      >
+        {hasImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imagePreview}
+            alt=""
+            className="h-36 w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-28 flex-col items-center justify-center gap-1 px-3 text-center text-xs text-text-secondary">
+            <span>{dragOver ? "Drop image to upload" : "Paste (⌘V / Ctrl+V) or drop an image"}</span>
+            <span className="text-[11px] text-text-hint">JPG, PNG, WebP, or GIF · max 5 MB</span>
+          </div>
+        )}
+      </div>
+      {pasteHint ? <p className="mb-2 text-xs text-red-600">{pasteHint}</p> : null}
       <input
         type="file"
         accept={newsImageAccept}
@@ -217,7 +330,7 @@ export function NewsMediaFields({
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = "";
-          if (file) onUpload(file, "image");
+          if (file) acceptImageFile(file);
         }}
       />
 
