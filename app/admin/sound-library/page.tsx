@@ -12,7 +12,9 @@ import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
 import { newsLibrarySoundAccept, validateLibrarySound } from "@/lib/news-media";
 import {
   NEWS_SOUND_KINDS,
+  SOUNDTRACK_SOURCE_LABEL,
   newsSoundKindLabel,
+  type SoundtrackCatalogItem,
   type SportNewsSoundRow,
 } from "@/lib/news-sounds";
 import { toBackendMediaUrl } from "@/lib/spojex-media";
@@ -51,10 +53,16 @@ export default function SoundLibraryPage() {
   const { can } = useAdminPermissions();
   const canWrite = can("news:write");
   const [rows, setRows] = useState<SportNewsSoundRow[]>([]);
+  const [catalog, setCatalog] = useState<SoundtrackCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [filterKind, setFilterKind] = useState("all");
+  const [catalogSource, setCatalogSource] = useState<"all" | SoundtrackCatalogItem["source"]>(
+    "all",
+  );
+  const [catalogQuery, setCatalogQuery] = useState("");
+  const [promotingKey, setPromotingKey] = useState("");
   const [name, setName] = useState("");
   const [kind, setKind] = useState("stadium");
   const [audioUrl, setAudioUrl] = useState("");
@@ -63,10 +71,24 @@ export default function SoundLibraryPage() {
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
-    const response = await fetch("/api/admin/news-sounds", { credentials: "same-origin" });
-    const payload = (await response.json()) as { data?: SportNewsSoundRow[]; error?: string };
-    if (!response.ok) throw new Error(payload.error || "Failed to load sounds");
-    setRows(payload.data ?? []);
+    const [libRes, catRes] = await Promise.all([
+      fetch("/api/admin/news-sounds", { credentials: "same-origin" }),
+      fetch("/api/admin/news-sounds/catalog", { credentials: "same-origin" }),
+    ]);
+    const libPayload = (await libRes.json()) as {
+      data?: SportNewsSoundRow[];
+      error?: string;
+    };
+    if (!libRes.ok) throw new Error(libPayload.error || "Failed to load sounds");
+    setRows(libPayload.data ?? []);
+
+    const catPayload = (await catRes.json()) as {
+      data?: SoundtrackCatalogItem[];
+      error?: string;
+    };
+    if (catRes.ok) {
+      setCatalog(catPayload.data ?? []);
+    }
   };
 
   useEffect(() => {
@@ -79,6 +101,40 @@ export default function SoundLibraryPage() {
     if (filterKind === "all") return rows;
     return rows.filter((row) => row.kind === filterKind);
   }, [filterKind, rows]);
+
+  const catalogFiltered = useMemo(() => {
+    const q = catalogQuery.trim().toLowerCase();
+    return catalog.filter((row) => {
+      if (catalogSource !== "all" && row.source !== catalogSource) return false;
+      if (!q) return true;
+      return (
+        row.name.toLowerCase().includes(q) ||
+        row.kind.toLowerCase().includes(q) ||
+        SOUNDTRACK_SOURCE_LABEL[row.source].toLowerCase().includes(q)
+      );
+    });
+  }, [catalog, catalogQuery, catalogSource]);
+
+  const promoteToLibrary = async (item: SoundtrackCatalogItem) => {
+    if (!canWrite || item.sound_id) return;
+    setPromotingKey(item.key);
+    setError(null);
+    try {
+      await postAdmin("/api/admin/news-sounds", {
+        name: item.name,
+        kind: item.kind || "general",
+        audio_url: item.audio_url,
+        is_active: true,
+        sort_order: rows.length,
+      });
+      setNotice(`“${item.name}” added to the curated library.`);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not add to library");
+    } finally {
+      setPromotingKey("");
+    }
+  };
 
   const resetForm = () => {
     setName("");
@@ -164,7 +220,7 @@ export default function SoundLibraryPage() {
     <>
       <AdminPageHeader
         title="Sound library"
-        description="Sport sounds for image news posts. Upload tracks here, then select them when publishing an image story."
+        description="TikTok-style reusable Spojex audio: curated library plus every uploaded news/media soundtrack."
       />
       {error ? <AdminErrorAlert message={error} /> : null}
       {notice ? (
@@ -256,12 +312,13 @@ export default function SoundLibraryPage() {
         </select>
       </div>
 
+      <h2 className="mb-2 font-heading text-sm font-semibold">Curated library</h2>
       <AdminTableShell>
         {loading ? <AdminLoadingRow label="Loading sounds…" /> : null}
         {!loading && filtered.length === 0 ? (
           <AdminEmpty
-            title="No sounds yet"
-            description="Upload sport tracks above to build the library."
+            title="No curated sounds yet"
+            description="Upload above, or promote tracks from All Spojex audio below."
           />
         ) : null}
         {!loading && filtered.length > 0 ? (
@@ -325,6 +382,92 @@ export default function SoundLibraryPage() {
           </table>
         ) : null}
       </AdminTableShell>
+
+      <section className="mt-8">
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="font-heading text-sm font-semibold">All Spojex audio</h2>
+            <p className="text-xs text-text-secondary">
+              Every reusable upload — library, news tracks, and media objects ({catalog.length}).
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <input
+              value={catalogQuery}
+              onChange={(e) => setCatalogQuery(e.target.value)}
+              placeholder="Search Spojex audio…"
+              className="h-9 w-48 rounded-lg border border-border px-3 text-sm"
+            />
+            <select
+              value={catalogSource}
+              onChange={(e) =>
+                setCatalogSource(e.target.value as typeof catalogSource)
+              }
+              className="h-9 rounded-lg border border-border px-2 text-sm"
+            >
+              <option value="all">All sources</option>
+              <option value="library">Library</option>
+              <option value="news">News audio</option>
+              <option value="media">Uploads</option>
+            </select>
+          </div>
+        </div>
+        <AdminTableShell>
+          {loading ? <AdminLoadingRow label="Loading Spojex audio…" /> : null}
+          {!loading && catalogFiltered.length === 0 ? (
+            <AdminEmpty
+              title="No Spojex audio found"
+              description="Upload sounds above or publish news with audio — they appear here for reuse."
+            />
+          ) : null}
+          {!loading && catalogFiltered.length > 0 ? (
+            <table className="min-w-full text-left text-sm">
+              <thead className="border-b border-border text-text-secondary">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Name</th>
+                  <th className="px-3 py-2 font-medium">Source</th>
+                  <th className="px-3 py-2 font-medium">Preview</th>
+                  <th className="px-3 py-2 font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {catalogFiltered.map((row) => (
+                  <tr key={row.key} className="border-b border-border/70">
+                    <td className="px-3 py-3 font-medium">{row.name}</td>
+                    <td className="px-3 py-3 text-text-secondary">
+                      {SOUNDTRACK_SOURCE_LABEL[row.source]}
+                    </td>
+                    <td className="px-3 py-3">
+                      <audio
+                        src={toBackendMediaUrl(row.audio_url)}
+                        controls
+                        preload="none"
+                        className="h-8 max-w-[220px]"
+                      />
+                    </td>
+                    <td className="px-3 py-3">
+                      {row.sound_id ? (
+                        <span className="text-xs text-text-hint">In library</span>
+                      ) : canWrite ? (
+                        <button
+                          type="button"
+                          disabled={promotingKey === row.key}
+                          onClick={() => void promoteToLibrary(row)}
+                          className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
+                        >
+                          {promotingKey === row.key ? "Adding…" : "Add to library"}
+                        </button>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
+        </AdminTableShell>
+      </section>
     </>
   );
 }

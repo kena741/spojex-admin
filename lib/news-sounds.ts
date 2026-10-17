@@ -23,6 +23,28 @@ export type SportNewsSoundRow = {
   updated_at: string;
 };
 
+/** TikTok-style reusable soundtrack catalog entry (library + news + uploads). */
+export type SoundtrackCatalogItem = {
+  key: string;
+  name: string;
+  kind: string;
+  audio_url: string;
+  source: "library" | "news" | "media";
+  sound_id: string | null;
+  media_object_id?: string | null;
+  is_active?: boolean;
+  created_at?: string | null;
+};
+
+export const SOUNDTRACK_SOURCE_LABEL: Record<
+  SoundtrackCatalogItem["source"],
+  string
+> = {
+  library: "Library",
+  news: "News audio",
+  media: "Uploads",
+};
+
 export function newsSoundKindLabel(kind: string) {
   return NEWS_SOUND_KINDS.find((item) => item.id === kind)?.label ?? kind;
 }

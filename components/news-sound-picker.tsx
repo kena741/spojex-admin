@@ -3,26 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   NEWS_SOUND_KINDS,
+  SOUNDTRACK_SOURCE_LABEL,
   newsSoundKindLabel,
+  type SoundtrackCatalogItem,
   type SportNewsSoundRow,
 } from "@/lib/news-sounds";
 import { postAdmin } from "@/lib/hooks";
 import { toBackendMediaUrl } from "@/lib/spojex-media";
-
-type CatalogItem = {
-  key: string;
-  name: string;
-  kind: string;
-  audio_url: string;
-  source: "library" | "news" | "media";
-  sound_id: string | null;
-};
-
-const SOURCE_LABEL: Record<CatalogItem["source"], string> = {
-  library: "Library",
-  news: "News audio",
-  media: "Uploads",
-};
 
 export function NewsSoundPicker({
   soundId,
@@ -35,12 +22,12 @@ export function NewsSoundPicker({
   disabled?: boolean;
   onSelect: (sound: SportNewsSoundRow | null) => void;
 }) {
-  const [rows, setRows] = useState<CatalogItem[]>([]);
+  const [rows, setRows] = useState<SoundtrackCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [promoting, setPromoting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [kind, setKind] = useState("all");
-  const [source, setSource] = useState<"all" | CatalogItem["source"]>("all");
+  const [source, setSource] = useState<"all" | SoundtrackCatalogItem["source"]>("all");
   const [query, setQuery] = useState("");
 
   const load = async () => {
@@ -48,7 +35,7 @@ export function NewsSoundPicker({
       credentials: "same-origin",
     });
     const payload = (await response.json()) as {
-      data?: CatalogItem[];
+      data?: SoundtrackCatalogItem[];
       error?: string;
     };
     if (!response.ok) throw new Error(payload.error || "Failed to load sounds");
@@ -83,7 +70,7 @@ export function NewsSoundPicker({
       return (
         row.name.toLowerCase().includes(q) ||
         row.kind.toLowerCase().includes(q) ||
-        SOURCE_LABEL[row.source].toLowerCase().includes(q)
+        SOUNDTRACK_SOURCE_LABEL[row.source].toLowerCase().includes(q)
       );
     });
   }, [kind, query, rows, source]);
@@ -103,7 +90,7 @@ export function NewsSoundPicker({
 
   const selected = rows.find((row) => row.key === selectedKey) ?? null;
 
-  const pick = async (item: CatalogItem | null) => {
+  const pick = async (item: SoundtrackCatalogItem | null) => {
     if (disabled || promoting) return;
     if (!item) {
       onSelect(null);
@@ -223,7 +210,7 @@ export function NewsSoundPicker({
               >
                 <span className="min-w-0 truncate font-medium">{row.name}</span>
                 <span className="shrink-0 text-[11px] text-text-hint">
-                  {SOURCE_LABEL[row.source]} · {newsSoundKindLabel(row.kind)}
+                  {SOUNDTRACK_SOURCE_LABEL[row.source]} · {newsSoundKindLabel(row.kind)}
                 </span>
               </button>
             );
