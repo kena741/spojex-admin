@@ -2,10 +2,12 @@
 
 import { NewsSoundPicker } from "@/components/news-sound-picker";
 import {
-  newsAudioAccept,
+  isNewsVideoFile,
   newsImageAccept,
+  newsLibrarySoundAccept,
   newsVideoAccept,
   resolveNewsStoryMedia,
+  validateLibrarySound,
   validateNewsMedia,
   type NewsStoryMedia,
   type NewsUploadKind,
@@ -22,7 +24,12 @@ async function readJson(response: Response) {
     throw new Error("Upload failed. Try a smaller file or refresh the page.");
   }
   try {
-    return JSON.parse(text) as { error?: string; path?: string; publicUrl?: string };
+    return JSON.parse(text) as {
+      error?: string;
+      path?: string;
+      publicUrl?: string;
+      extractedFromVideo?: boolean;
+    };
   } catch {
     throw new Error("Upload failed. Unexpected server response.");
   }
@@ -30,7 +37,10 @@ async function readJson(response: Response) {
 
 /** Upload news media via Spojex API (GCS behind the API), return display URL. */
 export async function uploadNewsFile(articleId: string | null, file: File, kind: NewsUploadKind) {
-  const invalid = validateNewsMedia(kind, file.type, file.name, file.size);
+  const invalid =
+    kind === "audio" && isNewsVideoFile(file.type, file.name)
+      ? validateLibrarySound(file.type, file.name, file.size)
+      : validateNewsMedia(kind, file.type, file.name, file.size);
   if (invalid) throw new Error(invalid);
 
   const endpoint = articleId ? `/api/admin/news/${articleId}/media` : "/api/admin/news/media";
@@ -255,7 +265,7 @@ export function NewsMediaFields({
       {mediaKind === "audio" ? (
         <div className="mt-3">
           <div className="mb-1 flex items-center justify-between gap-2">
-            <label className="text-xs font-medium text-text-secondary">Audio</label>
+            <label className="text-xs font-medium text-text-secondary">Audio or video</label>
             {hasDedicatedAudio ? (
               <button
                 type="button"
@@ -275,12 +285,12 @@ export function NewsMediaFields({
             />
           ) : (
             <div className="mb-2 flex h-16 items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 text-xs text-text-secondary">
-              No audio uploaded
+              No audio uploaded — MP3/M4A or video (audio track only)
             </div>
           )}
           <input
             type="file"
-            accept={newsAudioAccept}
+            accept={newsLibrarySoundAccept}
             disabled={busy}
             className={fileInputClass}
             onChange={(event) => {

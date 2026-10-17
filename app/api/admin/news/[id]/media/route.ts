@@ -3,7 +3,7 @@ import { requireAdminPermission } from "@/lib/admin-auth";
 import { parseNewsUploadKind } from "@/lib/news-media";
 import { uploadNewsMediaFromForm } from "@/lib/news-media-upload";
 
-export const maxDuration = 120;
+export const maxDuration = 180;
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdminPermission("news:write");

@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import {
+  isNewsVideoFile,
   newsMediaExtension,
   parseNewsUploadKind,
   resolveNewsMime,
+  validateLibrarySound,
   validateNewsMedia,
   type NewsUploadKind,
 } from "@/lib/news-media";
-import { signUploadComplete, uploadViaSpojexMediaApi } from "@/lib/spojex-media";
+import {
+  extractAudioViaSpojexMediaApi,
+  signUploadComplete,
+  uploadViaSpojexMediaApi,
+} from "@/lib/spojex-media";
 import { requestAccessToken } from "@/lib/spojex/server";
 
 /** Cloud Run request body limit is ~32MB; stay under that for multipart proxy. */
@@ -16,6 +22,7 @@ const MULTIPART_SAFE_BYTES = 28 * 1024 * 1024;
  * Shared news media upload: Blob-safe parse, MIME from extension.
  * Images always use server multipart. Video/audio use multipart when small enough;
  * larger files use signed GCS PUT (requires IAM signBlob on the API runtime SA).
+ * When kind=audio and the file is video, extracts audio only via the API.
  */
 export async function uploadNewsMediaFromForm(
   form: FormData,
@@ -34,6 +41,49 @@ export async function uploadNewsMediaFromForm(
   const file = raw as Blob & { name?: string };
   const filenameHint =
     (typeof file.name === "string" && file.name.trim()) || `${kind}.bin`;
+
+  // Audio stories / sound library: allow video → extract audio only.
+  if (kind === "audio" && isNewsVideoFile(file.type, filenameHint)) {
+    const invalidVideo = validateLibrarySound(file.type, filenameHint, file.size);
+    if (invalidVideo) {
+      return NextResponse.json({ error: invalidVideo }, { status: 400 });
+    }
+    if (file.size <= 0) {
+      return NextResponse.json({ error: "Empty file" }, { status: 400 });
+    }
+    const token = await requestAccessToken();
+    if (!token) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+    const mime = resolveNewsMime("video", file.type, filenameHint);
+    const ext = newsMediaExtension("video", mime, filenameHint);
+    const filename = `video-${Date.now()}.${ext}`;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const uploadBlob = new Blob([bytes], { type: mime });
+    try {
+      const uploaded = await extractAudioViaSpojexMediaApi({
+        accessToken: token,
+        file: uploadBlob,
+        filename,
+        module: "news",
+        folder,
+      });
+      if (!uploaded.publicUrl) {
+        return NextResponse.json({ error: "Upload failed. No URL returned." }, { status: 400 });
+      }
+      return NextResponse.json({
+        kind: "audio",
+        path: uploaded.path,
+        publicUrl: uploaded.publicUrl,
+        objectId: uploaded.objectId,
+        durationSeconds: uploaded.durationSeconds ?? null,
+        extractedFromVideo: true,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Audio extraction failed";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+  }
 
   const invalid = validateNewsMedia(kind, file.type, filenameHint, file.size);
   if (invalid) {
