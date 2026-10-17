@@ -13,6 +13,7 @@ type NewsInsert = {
   cover_url: string;
   video_url: string;
   audio_url: string;
+  sound_id?: string | null;
   category: string;
   source: string;
   author: string;
@@ -59,6 +60,7 @@ export async function POST(request: Request) {
     cover_url?: string;
     video_url?: string;
     audio_url?: string;
+    sound_id?: string | null;
     category?: string;
     source?: string;
     status?: string;
@@ -74,9 +76,19 @@ export async function POST(request: Request) {
 
   const video = `${payload.video_url ?? ""}`.trim();
   const audio = `${payload.audio_url ?? ""}`.trim();
+  const soundId =
+    typeof payload.sound_id === "string" && payload.sound_id.trim()
+      ? payload.sound_id.trim()
+      : null;
   if (video && audio) {
     return NextResponse.json(
       { error: "A story can have video or audio, not both. Remove the current file first." },
+      { status: 400 },
+    );
+  }
+  if (video && soundId) {
+    return NextResponse.json(
+      { error: "Video posts cannot use a library soundtrack." },
       { status: 400 },
     );
   }
@@ -107,6 +119,7 @@ export async function POST(request: Request) {
     cover_url: image,
     video_url: video,
     audio_url: audio,
+    sound_id: soundId,
     category: payload.category ?? "General",
     source: payload.source ?? "SpoJex Desk",
     author,

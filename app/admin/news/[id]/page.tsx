@@ -154,18 +154,29 @@ export default function NewsDetailPage() {
     setError(null);
     setNotice(null);
     try {
-      if (kind === "video" && article?.audio_url?.trim()) {
-        throw new Error("Remove the audio file before uploading video.");
+      if (
+        kind === "video" &&
+        (article?.audio_url?.trim() || article?.sound_id?.trim())
+      ) {
+        throw new Error("Remove the audio or soundtrack before uploading video.");
       }
       if (kind === "audio" && article?.video_url?.trim()) {
         throw new Error("Remove the video file before uploading audio.");
       }
       const publicUrl = await uploadNewsFile(id, file, kind);
       if (kind === "video") {
-        if (!(await save({ video_url: publicUrl }))) return;
+        if (
+          !(await save({
+            video_url: publicUrl,
+            audio_url: "",
+            sound_id: null,
+          }))
+        ) {
+          return;
+        }
         setPickedKind("video");
       } else if (kind === "audio") {
-        if (!(await save({ audio_url: publicUrl }))) return;
+        if (!(await save({ audio_url: publicUrl, sound_id: null }))) return;
         setPickedKind("audio");
       } else if (!(await save({ image_url: publicUrl, cover_url: publicUrl }))) {
         return;
@@ -179,7 +190,12 @@ export default function NewsDetailPage() {
   };
 
   const removeImage = async () => {
-    if (!(await save({ image_url: "", cover_url: "" }))) return;
+    const patch: Record<string, unknown> = { image_url: "", cover_url: "" };
+    if (article?.sound_id) {
+      patch.sound_id = null;
+      patch.audio_url = "";
+    }
+    if (!(await save(patch))) return;
   };
 
   const removeVideo = async () => {
@@ -188,7 +204,7 @@ export default function NewsDetailPage() {
   };
 
   const removeAudio = async () => {
-    if (!(await save({ audio_url: "" }))) return;
+    if (!(await save({ audio_url: "", sound_id: null }))) return;
     setPickedKind("none");
   };
 
@@ -206,8 +222,14 @@ export default function NewsDetailPage() {
   if (loading) return <AdminLoadingRow label="Loading article…" />;
   if (!article) return <AdminErrorAlert message={error || "Article not found"} />;
 
-  const mediaKind = resolveNewsStoryMedia(article.video_url ?? "", article.audio_url ?? "", pickedKind);
   const image = article.image_url?.trim() || article.cover_url?.trim() || "";
+  const soundId = article.sound_id?.trim() || "";
+  const mediaKind = resolveNewsStoryMedia(
+    article.video_url ?? "",
+    article.audio_url ?? "",
+    pickedKind,
+    { imageUrl: image, soundId },
+  );
   const orgLabel = article.organizations?.name || article.source;
 
   return (
@@ -319,6 +341,7 @@ export default function NewsDetailPage() {
                 imageUrl={image}
                 videoUrl={article.video_url ?? ""}
                 audioUrl={article.audio_url ?? ""}
+                soundId={soundId}
                 pickedKind={pickedKind}
                 uploading={uploading}
                 disabled={!canWrite}
@@ -327,6 +350,14 @@ export default function NewsDetailPage() {
                 onRemoveImage={() => void removeImage()}
                 onRemoveVideo={() => void removeVideo()}
                 onRemoveAudio={() => void removeAudio()}
+                onSoundSelect={(sound) => {
+                  void save({
+                    sound_id: sound?.id ?? null,
+                    audio_url: sound?.audio_url?.trim() ?? "",
+                  }).then((ok) => {
+                    if (ok) setPickedKind("none");
+                  });
+                }}
               />
               <label className="text-sm">
                 <span className="mb-1 block text-text-secondary">Category</span>

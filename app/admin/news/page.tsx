@@ -49,6 +49,7 @@ export default function NewsPage() {
   const [imageUrl, setImageUrl] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [audioUrl, setAudioUrl] = useState("");
+  const [soundId, setSoundId] = useState("");
   const [pickedKind, setPickedKind] = useState<NewsStoryMedia | null>("none");
   const [uploading, setUploading] = useState<NewsUploadKind | null>(null);
   const [statusValue, setStatusValue] = useState("draft");
@@ -93,6 +94,7 @@ export default function NewsPage() {
     setImageUrl("");
     setVideoUrl("");
     setAudioUrl("");
+    setSoundId("");
     setPickedKind("none");
     setCategory("General");
     setStatusValue("draft");
@@ -100,8 +102,8 @@ export default function NewsPage() {
   };
 
   const uploadMedia = async (file: File, kind: NewsUploadKind) => {
-    if (kind === "video" && audioUrl.trim()) {
-      setError("Remove the audio file before uploading video.");
+    if (kind === "video" && (audioUrl.trim() || soundId.trim())) {
+      setError("Remove the audio or soundtrack before uploading video.");
       return;
     }
     if (kind === "audio" && videoUrl.trim()) {
@@ -115,10 +117,13 @@ export default function NewsPage() {
       if (kind === "image") setImageUrl(publicUrl);
       if (kind === "video") {
         setVideoUrl(publicUrl);
+        setSoundId("");
+        setAudioUrl("");
         setPickedKind("video");
       }
       if (kind === "audio") {
         setAudioUrl(publicUrl);
+        setSoundId("");
         setPickedKind("audio");
       }
     } catch (err) {
@@ -145,6 +150,7 @@ export default function NewsPage() {
         cover_url: image,
         video_url: videoUrl.trim(),
         audio_url: audioUrl.trim(),
+        sound_id: soundId.trim() || null,
         is_featured: featured,
       });
       resetCreate();
@@ -422,23 +428,39 @@ export default function NewsPage() {
             imageUrl={imageUrl}
             videoUrl={videoUrl}
             audioUrl={audioUrl}
-            mediaKind={resolveNewsStoryMedia(videoUrl, audioUrl, pickedKind)}
+            mediaKind={resolveNewsStoryMedia(videoUrl, audioUrl, pickedKind, {
+              imageUrl,
+              soundId,
+            })}
           />
           <NewsMediaFields
             imageUrl={imageUrl}
             videoUrl={videoUrl}
             audioUrl={audioUrl}
+            soundId={soundId}
             pickedKind={pickedKind}
             uploading={uploading}
             onKind={setPickedKind}
             onUpload={(file, kind) => void uploadMedia(file, kind)}
-            onRemoveImage={() => setImageUrl("")}
+            onRemoveImage={() => {
+              setImageUrl("");
+              if (soundId) {
+                setSoundId("");
+                setAudioUrl("");
+              }
+            }}
             onRemoveVideo={() => {
               setVideoUrl("");
               setPickedKind("none");
             }}
             onRemoveAudio={() => {
               setAudioUrl("");
+              setSoundId("");
+              setPickedKind("none");
+            }}
+            onSoundSelect={(sound) => {
+              setSoundId(sound?.id ?? "");
+              setAudioUrl(sound?.audio_url?.trim() ?? "");
               setPickedKind("none");
             }}
           />

@@ -14,6 +14,7 @@ import {
   MessageCircle,
   MessagesSquare,
   Moon,
+  Music,
   Newspaper,
   Share2,
   Shield,
@@ -164,6 +165,12 @@ const financeItems: NavItem[] = [
 
 const contentItems: NavItem[] = [
   { href: "/admin/news", label: "Sport news", icon: Newspaper, visible: (can) => can("news:read") },
+  {
+    href: "/admin/sound-library",
+    label: "Sound library",
+    icon: Music,
+    visible: (can) => can("news:read"),
+  },
   {
     href: "/admin/banners",
     label: "Banners",

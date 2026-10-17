@@ -34,8 +34,16 @@ export function resolveNewsStoryMedia(
   videoUrl: string,
   audioUrl: string,
   picked: NewsStoryMedia | null,
+  options?: { imageUrl?: string; soundId?: string | null },
 ): NewsStoryMedia {
   if (videoUrl.trim()) return "video";
+  // Library soundtrack on an image stays in text/image mode (not audio story).
+  if (options?.soundId?.trim()) {
+    return picked === "audio" ? "audio" : picked ?? "none";
+  }
+  if (picked === "audio") return "audio";
+  if (audioUrl.trim() && !options?.imageUrl?.trim()) return "audio";
+  if (audioUrl.trim() && picked == null) return "audio";
   if (audioUrl.trim()) return "audio";
   return picked ?? "none";
 }

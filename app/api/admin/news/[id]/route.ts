@@ -11,6 +11,7 @@ const allowed = [
   "cover_url",
   "video_url",
   "audio_url",
+  "sound_id",
   "category",
   "source",
   "author",
@@ -33,6 +34,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if ("organization_id" in patch) {
     const raw = patch.organization_id;
     patch.organization_id =
+      typeof raw === "string" && raw.trim() ? raw.trim() : null;
+  }
+  if ("sound_id" in patch) {
+    const raw = patch.sound_id;
+    patch.sound_id =
       typeof raw === "string" && raw.trim() ? raw.trim() : null;
   }
   if ("image_url" in patch || "cover_url" in patch) {

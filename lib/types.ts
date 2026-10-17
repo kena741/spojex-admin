@@ -533,6 +533,7 @@ export type SportNewsRow = {
   cover_url: string;
   video_url?: string;
   audio_url?: string;
+  sound_id?: string | null;
   category: string;
   source: string;
   author: string;

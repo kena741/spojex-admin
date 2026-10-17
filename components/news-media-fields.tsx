@@ -1,5 +1,6 @@
 "use client";
 
+import { NewsSoundPicker } from "@/components/news-sound-picker";
 import {
   newsAudioAccept,
   newsImageAccept,
@@ -9,6 +10,7 @@ import {
   type NewsStoryMedia,
   type NewsUploadKind,
 } from "@/lib/news-media";
+import type { SportNewsSoundRow } from "@/lib/news-sounds";
 import { toBackendMediaUrl } from "@/lib/spojex-media";
 
 const fileInputClass =
@@ -84,6 +86,7 @@ export function NewsMediaFields({
   imageUrl,
   videoUrl,
   audioUrl,
+  soundId = "",
   pickedKind,
   uploading,
   disabled,
@@ -92,10 +95,12 @@ export function NewsMediaFields({
   onRemoveImage,
   onRemoveVideo,
   onRemoveAudio,
+  onSoundSelect,
 }: {
   imageUrl: string;
   videoUrl: string;
   audioUrl: string;
+  soundId?: string;
   pickedKind: NewsStoryMedia | null;
   uploading: NewsUploadKind | null;
   disabled?: boolean;
@@ -104,17 +109,30 @@ export function NewsMediaFields({
   onRemoveImage: () => void;
   onRemoveVideo: () => void;
   onRemoveAudio: () => void;
+  onSoundSelect?: (sound: SportNewsSoundRow | null) => void;
 }) {
   const hasImage = Boolean(imageUrl.trim());
   const hasVideo = Boolean(videoUrl.trim());
-  const hasAudio = Boolean(audioUrl.trim());
-  const mediaKind = resolveNewsStoryMedia(videoUrl, audioUrl, pickedKind);
+  const hasLibrarySound = Boolean(soundId.trim());
+  const hasDedicatedAudio = Boolean(audioUrl.trim()) && !hasLibrarySound;
+  const mediaKind = resolveNewsStoryMedia(videoUrl, audioUrl, pickedKind, {
+    imageUrl,
+    soundId,
+  });
   const busy = Boolean(uploading) || Boolean(disabled);
   const imagePreview = toBackendMediaUrl(imageUrl);
+  const showSoundPicker =
+    Boolean(onSoundSelect) && mediaKind === "none" && hasImage && !hasVideo;
 
   const chooseKind = (kind: NewsStoryMedia) => {
     if (hasVideo && kind !== "video") return;
-    if (hasAudio && kind !== "audio") return;
+    if (hasDedicatedAudio && kind !== "audio") return;
+    if (hasLibrarySound && kind === "audio") {
+      onSoundSelect?.(null);
+    }
+    if (hasLibrarySound && kind === "video") {
+      onSoundSelect?.(null);
+    }
     onKind(kind);
   };
 
@@ -122,14 +140,19 @@ export function NewsMediaFields({
     <div className="rounded-lg border border-border p-3">
       <p className="mb-2 text-sm font-medium">Media</p>
       <p className="mb-3 text-xs text-text-secondary">
-        Upload files only — text only, video, or audio (not both video and audio).
+        Upload files only — text/image, video, or audio story. Image posts can pick a library soundtrack.
       </p>
       <div className="mb-3 flex flex-wrap gap-2">
         {(
           [
-            ["none", "Text only", hasVideo || hasAudio, hasVideo ? "Remove the video first" : hasAudio ? "Remove the audio first" : ""],
-            ["video", "Video", hasAudio, "Remove the audio first"],
-            ["audio", "Audio", hasVideo, "Remove the video first"],
+            [
+              "none",
+              "Text / image",
+              hasVideo || hasDedicatedAudio,
+              hasVideo ? "Remove the video first" : hasDedicatedAudio ? "Remove the audio first" : "",
+            ],
+            ["video", "Video", hasDedicatedAudio || hasLibrarySound, "Remove the audio/sound first"],
+            ["audio", "Audio", hasVideo || hasLibrarySound, hasLibrarySound ? "Clear the image soundtrack first" : "Remove the video first"],
           ] as const
         ).map(([id, label, locked, reason]) => (
           <button
@@ -233,7 +256,7 @@ export function NewsMediaFields({
         <div className="mt-3">
           <div className="mb-1 flex items-center justify-between gap-2">
             <label className="text-xs font-medium text-text-secondary">Audio</label>
-            {hasAudio ? (
+            {hasDedicatedAudio ? (
               <button
                 type="button"
                 disabled={busy}
@@ -244,7 +267,7 @@ export function NewsMediaFields({
               </button>
             ) : null}
           </div>
-          {hasAudio ? (
+          {hasDedicatedAudio ? (
             <audio
               src={toBackendMediaUrl(audioUrl)}
               controls
@@ -267,6 +290,14 @@ export function NewsMediaFields({
             }}
           />
         </div>
+      ) : null}
+
+      {showSoundPicker ? (
+        <NewsSoundPicker
+          soundId={soundId}
+          disabled={busy}
+          onSelect={(sound) => onSoundSelect?.(sound)}
+        />
       ) : null}
 
       {uploading ? (
