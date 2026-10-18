@@ -1,0 +1,63 @@
+import { NextResponse } from "next/server";
+import { requireAdminPermission } from "@/lib/admin-auth";
+import {
+  imageExtension,
+  toBackendMediaUrl,
+  uploadViaSpojexMediaApi,
+} from "@/lib/spojex-media";
+import { requestAccessToken } from "@/lib/spojex/server";
+
+/** Match app / marketplace module policy (8 MB). */
+const MAX_BYTES = 8 * 1024 * 1024;
+const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+
+export async function POST(request: Request) {
+  const auth = await requireAdminPermission("services:write");
+  if (!auth.ok) return auth.error;
+
+  const form = await request.formData();
+  const file = form.get("file");
+  if (!(file instanceof File)) {
+    return NextResponse.json({ error: "file is required" }, { status: 400 });
+  }
+  if (!ALLOWED_TYPES.has(file.type)) {
+    return NextResponse.json(
+      { error: "Use a JPG, PNG, WebP, or GIF image." },
+      { status: 400 },
+    );
+  }
+  if (file.size > MAX_BYTES) {
+    return NextResponse.json({ error: "Image must be 8 MB or smaller." }, { status: 400 });
+  }
+
+  const token = await requestAccessToken();
+  if (!token) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const ext = imageExtension(file.type, file.name);
+  const filename = `${crypto.randomUUID()}.${ext}`;
+
+  try {
+    const uploaded = await uploadViaSpojexMediaApi({
+      accessToken: token,
+      file,
+      filename,
+      module: "marketplace",
+      folder: "service-covers",
+    });
+    const imageUrl = toBackendMediaUrl(uploaded.publicUrl);
+    if (!imageUrl) {
+      return NextResponse.json({ error: "Upload failed. No URL returned." }, { status: 400 });
+    }
+    return NextResponse.json({
+      image_url: imageUrl,
+      publicUrl: imageUrl,
+      path: uploaded.path,
+      objectId: uploaded.objectId,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Upload failed";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}

@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import AdminPageHeader from "@/components/admin-header";
 import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
-import { deleteAdmin, patchAdmin } from "@/lib/hooks";
+import { adminFetch, deleteAdmin, patchAdmin } from "@/lib/hooks";
 import { firstPayment } from "@/lib/marketplace";
 import { serviceImageUrls } from "@/lib/services-media";
 import type { ServiceCategory, ServiceRequestRow, ServiceRow, ServiceSubcategory } from "@/lib/types";
@@ -18,16 +18,21 @@ const availabilityModes = [
   { id: "online", label: "Online" },
   { id: "both", label: "Online and in person" },
 ];
+/** Match superapp service listing cards (4:3) and max gallery size. */
+const MAX_PHOTOS = 5;
 
 export default function ServiceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const fileRef = useRef<HTMLInputElement>(null);
   const [service, setService] = useState<ServiceRow | null>(null);
   const [bookings, setBookings] = useState<ServiceRequestRow[]>([]);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [subcategories, setSubcategories] = useState<ServiceSubcategory[]>([]);
+  const [photos, setPhotos] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -40,6 +45,21 @@ export default function ServiceDetailPage() {
   const [serviceArea, setServiceArea] = useState("");
   const [availability, setAvailability] = useState("in_person");
 
+  const applyService = (next: ServiceRow) => {
+    setService(next);
+    setPhotos(serviceImageUrls(next));
+    setTitle(next.title);
+    setDescription(next.description ?? "");
+    setCategoryId(next.category_id);
+    setSubcategoryId(next.subcategory_id ?? "");
+    setCity(next.city ?? "");
+    setPricingType(next.pricing_type || "fixed");
+    setAmount(next.price_amount == null ? "" : String(next.price_amount));
+    setDuration(next.duration_minutes == null ? "" : String(next.duration_minutes));
+    setServiceArea(next.service_area ?? "");
+    setAvailability(next.availability_mode || "in_person");
+  };
+
   const load = async () => {
     const response = await fetch(`/api/admin/services/${id}`, { credentials: "same-origin" });
     const payload = (await response.json()) as {
@@ -51,22 +71,11 @@ export default function ServiceDetailPage() {
     };
     if (!response.ok) throw new Error(payload.error || "Failed to load service");
     const next = payload.data ?? null;
-    setService(next);
     setCategories(payload.categories ?? []);
     setSubcategories(payload.subcategories ?? []);
     setBookings(payload.bookings ?? []);
-    if (next) {
-      setTitle(next.title);
-      setDescription(next.description ?? "");
-      setCategoryId(next.category_id);
-      setSubcategoryId(next.subcategory_id ?? "");
-      setCity(next.city ?? "");
-      setPricingType(next.pricing_type || "fixed");
-      setAmount(next.price_amount == null ? "" : String(next.price_amount));
-      setDuration(next.duration_minutes == null ? "" : String(next.duration_minutes));
-      setServiceArea(next.service_area ?? "");
-      setAvailability(next.availability_mode || "in_person");
-    }
+    if (next) applyService(next);
+    else setService(null);
   };
 
   useEffect(() => {
@@ -80,6 +89,63 @@ export default function ServiceDetailPage() {
     () => subcategories.filter((item) => item.category_id === categoryId),
     [categoryId, subcategories],
   );
+
+  const persistPhotos = async (next: string[]) => {
+    if (!service) return;
+    const trimmed = next.map((url) => url.trim()).filter(Boolean).slice(0, MAX_PHOTOS);
+    const data = (await patchAdmin(`/api/admin/services/${service.id}`, {
+      cover_url: trimmed[0] ?? null,
+      images: trimmed,
+    })) as ServiceRow | undefined;
+    if (data) applyService(data);
+    else await load();
+  };
+
+  const addPhoto = async (file: File) => {
+    if (!service) return;
+    if (photos.length >= MAX_PHOTOS) {
+      setError(`Maximum ${MAX_PHOTOS} photos allowed.`);
+      return;
+    }
+    setUploading(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const response = await adminFetch("/api/admin/services/upload", {
+        method: "POST",
+        body: form,
+      });
+      const payload = (await response.json()) as {
+        image_url?: string;
+        publicUrl?: string;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(payload.error || "Upload failed");
+      const url = (payload.image_url || payload.publicUrl || "").trim();
+      if (!url) throw new Error("Upload returned no URL");
+      await persistPhotos([...photos, url]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const removePhoto = async (url: string) => {
+    if (!service) return;
+    if (!window.confirm("Remove this photo from the listing?")) return;
+    setUploading(true);
+    setError(null);
+    try {
+      await persistPhotos(photos.filter((item) => item !== url));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not remove photo");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const togglePublished = async () => {
     if (!service) return;
@@ -106,8 +172,9 @@ export default function ServiceDetailPage() {
   const save = async () => {
     if (!service) return;
     setSaving(true);
+    setError(null);
     try {
-      await patchAdmin(`/api/admin/services/${service.id}`, {
+      const data = (await patchAdmin(`/api/admin/services/${service.id}`, {
         title: title.trim(),
         description: description.trim(),
         category_id: categoryId,
@@ -118,8 +185,11 @@ export default function ServiceDetailPage() {
         duration_minutes: duration.trim() ? Number(duration) : null,
         service_area: serviceArea.trim(),
         availability_mode: availability,
-      });
-      await load();
+        cover_url: photos[0] ?? null,
+        images: photos,
+      })) as ServiceRow | undefined;
+      if (data) applyService(data);
+      else await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -141,7 +211,6 @@ export default function ServiceDetailPage() {
   if (loading) return <AdminLoadingRow label="Loading service…" />;
   if (!service) return <AdminErrorAlert message={error || "Service not found"} />;
 
-  const photos = serviceImageUrls(service);
   const categoryLabel = service.category
     ? `${service.category.emoji ?? ""} ${service.category.label}`.trim()
     : categories.find((item) => item.id === service.category_id)?.label || service.category_id;
@@ -198,14 +267,69 @@ export default function ServiceDetailPage() {
               {service.published ? "Approved" : "Pending approval"}
             </StatusBadge>
           </div>
-          {photos.length > 0 ? (
-            <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {photos.map((src) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img key={src} src={src} alt="" className="h-24 w-full rounded-lg object-cover" />
-              ))}
+
+          <div className="mb-4">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-sm text-text-secondary">
+                Photos · 4:3 (app card size) · {photos.length}/{MAX_PHOTOS}
+              </p>
+              <div>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void addPhoto(file);
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={uploading || photos.length >= MAX_PHOTOS}
+                  onClick={() => fileRef.current?.click()}
+                  className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
+                >
+                  {uploading ? "Uploading…" : "Add photo"}
+                </button>
+              </div>
             </div>
-          ) : null}
+            {photos.length > 0 ? (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {photos.map((src, index) => (
+                  <div
+                    key={`${src}-${index}`}
+                    className="group relative overflow-hidden rounded-lg border border-border bg-muted"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={src}
+                      alt=""
+                      className="aspect-[4/3] w-full object-contain"
+                    />
+                    {index === 0 ? (
+                      <span className="absolute left-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                        Cover
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={uploading}
+                      onClick={() => void removePhoto(src)}
+                      className="absolute right-2 top-2 rounded bg-black/65 px-2 py-1 text-[11px] font-medium text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 disabled:opacity-50"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex aspect-[4/3] max-w-sm items-center justify-center rounded-lg border border-dashed border-border bg-muted text-sm text-text-secondary">
+                No photos yet
+              </div>
+            )}
+          </div>
+
           <p className="text-sm text-text-secondary">{service.description || "No description."}</p>
           <dl className="mt-4 space-y-2 text-sm">
             <Item label="Category" value={categoryLabel} />
@@ -327,7 +451,7 @@ export default function ServiceDetailPage() {
             </Field>
             <button
               type="button"
-              disabled={saving}
+              disabled={saving || uploading}
               onClick={save}
               className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
             >

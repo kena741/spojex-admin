@@ -23,6 +23,8 @@ const allowed = [
   "duration_minutes",
   "service_area",
   "is_featured",
+  "cover_url",
+  "images",
 ] as const;
 
 const listingSelect =
@@ -121,7 +123,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     .from("services")
     .update(patch)
     .eq("id", id)
-    .select()
+    .select(listingSelect)
     .maybeSingle();
   if (updateError) {
     const hint = missingServiceRoleMessage();
@@ -130,7 +132,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       { status: 400 },
     );
   }
-  return NextResponse.json({ data });
+  return NextResponse.json({
+    data: data ? withServiceMediaUrls(data as Record<string, unknown>) : data,
+  });
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {

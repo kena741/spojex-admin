@@ -198,9 +198,13 @@ export default function ServicesPage() {
                         <div className="flex items-center gap-3">
                           {cover ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={cover} alt="" className="h-12 w-16 rounded-md object-cover" />
+                            <img
+                              src={cover}
+                              alt=""
+                              className="aspect-[4/3] w-20 rounded-md object-contain bg-muted"
+                            />
                           ) : (
-                            <div className="grid h-12 w-16 place-items-center rounded-md bg-muted text-[10px] text-text-hint">
+                            <div className="grid aspect-[4/3] w-20 place-items-center rounded-md bg-muted text-[10px] text-text-hint">
                               No photo
                             </div>
                           )}
