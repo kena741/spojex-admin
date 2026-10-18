@@ -69,7 +69,8 @@ export default function CoinCatalogPage() {
     hasPublicKey: false,
     hasSecretKey: false,
   });
-  const [etbPerCoin, setEtbPerCoin] = useState("0.10");
+  /** Primary admin knob: how many coins 1 Birr buys (default 10). */
+  const [coinsPerBirr, setCoinsPerBirr] = useState("10");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -105,7 +106,13 @@ export default function CoinCatalogPage() {
       setPurchases((purchaseRes.data ?? []) as CoinPurchaseRow[]);
     }
     if (settingsRes.data?.etb_per_coin != null) {
-      setEtbPerCoin(String(settingsRes.data.etb_per_coin));
+      const etb = Number(settingsRes.data.etb_per_coin);
+      if (Number.isFinite(etb) && etb > 0) {
+        const perBirr = 1 / etb;
+        setCoinsPerBirr(
+          Number.isInteger(perBirr) ? String(perBirr) : perBirr.toFixed(2),
+        );
+      }
     }
     const paymentData =
       appSettingsRes.data?.data &&
@@ -134,11 +141,16 @@ export default function CoinCatalogPage() {
     if (!canWrite) return;
     setError(null);
     setNotice(null);
+    const perBirr = Number(coinsPerBirr);
+    if (!Number.isFinite(perBirr) || perBirr <= 0) {
+      setError("Coins per Birr must be greater than 0.");
+      return;
+    }
     try {
       await postAdmin("/api/admin/coin-settings", {
-        etb_per_coin: Number(etbPerCoin),
+        coins_per_birr: perBirr,
       });
-      setNotice("Redemption rate saved.");
+      setNotice(`Saved: 1 Birr = ${perBirr} coins (used after every Chapa payment).`);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save rate");
@@ -280,17 +292,21 @@ export default function CoinCatalogPage() {
       </section>
 
       <section className="mb-6 rounded-xl border border-border bg-card p-4 shadow-sm">
-        <h2 className="mb-3 font-heading text-sm font-semibold">Redemption rate</h2>
+        <h2 className="mb-3 font-heading text-sm font-semibold">Coin ↔ Birr rate</h2>
+        <p className="mb-3 text-sm text-text-secondary">
+          After a successful Chapa payment, coins credited = paid Birr × this rate
+          (plus any pack bonus).
+        </p>
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm">
-            <span className="mb-1 block text-text-secondary">ETB per coin</span>
+            <span className="mb-1 block text-text-secondary">Coins per 1 Birr</span>
             <input
               type="number"
-              min={0}
-              step="0.01"
-              value={etbPerCoin}
+              min={0.01}
+              step="1"
+              value={coinsPerBirr}
               disabled={!canWrite}
-              onChange={(e) => setEtbPerCoin(e.target.value)}
+              onChange={(e) => setCoinsPerBirr(e.target.value)}
               className="h-10 w-40 rounded-lg border border-border px-3"
             />
           </label>
@@ -304,6 +320,12 @@ export default function CoinCatalogPage() {
             </button>
           ) : null}
         </div>
+        {Number(coinsPerBirr) > 0 ? (
+          <p className="mt-2 text-xs text-text-secondary">
+            Example: 2 Birr → {Math.floor(2 * Number(coinsPerBirr))} coins · 1 coin ={" "}
+            {(1 / Number(coinsPerBirr)).toFixed(2)} ETB
+          </p>
+        ) : null}
       </section>
 
       {loading ? <AdminLoadingRow label="Loading catalog…" /> : null}
