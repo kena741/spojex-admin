@@ -613,7 +613,11 @@ export default function EventDetailPage() {
                 {cover ? (
                   <>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={cover} alt="" className="h-56 w-full object-cover" />
+                    <img
+                      src={cover}
+                      alt=""
+                      className="h-56 w-full bg-black/80 object-contain"
+                    />
                     {canWrite ? (
                       <button
                         type="button"
@@ -694,7 +698,11 @@ export default function EventDetailPage() {
                   {gallery.map((url) => (
                     <li key={url} className="group relative overflow-hidden rounded-lg border border-border">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={url} alt="" className="h-28 w-full object-cover" />
+                      <img
+                        src={url}
+                        alt=""
+                        className="h-28 w-full bg-black/80 object-contain"
+                      />
                       {canWrite ? (
                         <button
                           type="button"

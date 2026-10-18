@@ -499,7 +499,11 @@ export default function EventsPage() {
             >
               {coverPreview ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={coverPreview} alt="" className="h-40 w-full object-cover" />
+                <img
+                  src={coverPreview}
+                  alt=""
+                  className="h-40 w-full bg-black/80 object-contain"
+                />
               ) : (
                 <div className="flex h-28 flex-col items-center justify-center gap-1 px-3 text-center text-xs text-text-secondary">
                   <span>
