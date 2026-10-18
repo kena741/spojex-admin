@@ -284,11 +284,6 @@ export default function CoinCatalogPage() {
             <div>Secret key: {chapa.hasSecretKey ? "set" : "missing"}</div>
           </div>
         </div>
-        {!chapa.enabled || !chapa.hasPublicKey || !chapa.hasSecretKey ? (
-          <p className="mt-3 text-sm text-amber-800">
-            Turn on Chapa and save public + secret keys so in-app coin buy can verify payments.
-          </p>
-        ) : null}
       </section>
 
       <section className="mb-6 rounded-xl border border-border bg-card p-4 shadow-sm">

@@ -143,6 +143,8 @@ export default function GlobalSettingsPage() {
   const [taxDeletedIds, setTaxDeletedIds] = useState<number[]>([]);
   const [showMapKey, setShowMapKey] = useState(false);
   const [showChapaSecret, setShowChapaSecret] = useState(false);
+  /** 1 Birr = N coins (drives Chapa credit after payment). */
+  const [coinsPerBirr, setCoinsPerBirr] = useState("10");
 
   const tiers = useMemo(() => {
     const raw = constants.service_posting_tiers;
@@ -169,8 +171,18 @@ export default function GlobalSettingsPage() {
         is_fix?: boolean;
         active: boolean;
       }>;
+      coinSettings?: { etb_per_coin?: number; coins_per_birr?: number };
     };
     if (!response.ok) throw new Error(payload.error || "Failed to load settings");
+
+    const perBirr = Number(payload.coinSettings?.coins_per_birr);
+    if (Number.isFinite(perBirr) && perBirr > 0) {
+      setCoinsPerBirr(
+        Number.isInteger(perBirr) ? String(perBirr) : perBirr.toFixed(2),
+      );
+    } else {
+      setCoinsPerBirr("10");
+    }
 
     const byId = new Map((payload.appRows ?? []).map((row) => [row.id, row.data]));
     const settings = asObject(byId.get("settings"));
@@ -277,6 +289,10 @@ export default function GlobalSettingsPage() {
     setError(null);
     setNotice(null);
     try {
+      const rate = Number(coinsPerBirr);
+      if (tab === "payment" && (!Number.isFinite(rate) || rate <= 0)) {
+        throw new Error("Coins per 1 Birr must be greater than 0.");
+      }
       await postAdminResponse("/api/admin/settings", {
         appSettings,
         generalSettings,
@@ -286,6 +302,7 @@ export default function GlobalSettingsPage() {
         statusOptions: statusOptions.filter((s) => s.flag.trim()),
         constants: { ...constants, service_posting_tiers: tiers },
         paymentSettings: payment,
+        ...(Number.isFinite(rate) && rate > 0 ? { coins_per_birr: rate } : {}),
         languageSettings: languages,
         languageDeletedIds,
       });
@@ -777,6 +794,51 @@ export default function GlobalSettingsPage() {
                       <CreditCard className="h-4 w-4" />
                       Open full Payment Settings
                     </Link>
+                  </div>
+
+                  {/* Coin ↔ Birr — used when crediting wallet after Chapa pay */}
+                  <div className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-sm">
+                    <div className="mb-1 flex items-center gap-2">
+                      <Coins className="h-5 w-5 text-primary" />
+                      <h3 className="text-lg font-bold text-foreground">
+                        Coin ↔ Birr rate
+                      </h3>
+                    </div>
+                    <p className="mb-4 text-sm text-muted-foreground">
+                      After a successful Chapa coin purchase, credited coins = paid
+                      Birr × this rate (plus any pack bonus).
+                    </p>
+                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-foreground">
+                          Coins per 1 Birr
+                        </label>
+                        <input
+                          type="number"
+                          min={0.01}
+                          step="1"
+                          value={coinsPerBirr}
+                          disabled={!canWrite}
+                          onChange={(e) => setCoinsPerBirr(e.target.value)}
+                          className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                        />
+                        {Number(coinsPerBirr) > 0 ? (
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            Example: 2 Birr →{" "}
+                            {Math.floor(2 * Number(coinsPerBirr))} coins · 1 coin ={" "}
+                            {(1 / Number(coinsPerBirr)).toFixed(2)} ETB
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="flex items-end">
+                        <Link
+                          href="/admin/coin-catalog"
+                          className="text-sm font-medium text-primary hover:underline"
+                        >
+                          Manage coin packs &amp; gifts →
+                        </Link>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Chapa — same layout as Lolelink */}

@@ -23,6 +23,8 @@ type SettingsPayload = {
   statusOptions?: StatusOption[];
   constants?: JsonObject;
   paymentSettings?: JsonObject;
+  /** 1 Birr = N coins (stored as coin_settings.etb_per_coin = 1/N). */
+  coins_per_birr?: number;
   languageSettings?: LanguageRow[];
   languageDeletedIds?: string[];
 };
@@ -78,10 +80,11 @@ export async function GET() {
   const auth = await requireAnyAdminPermission(["settings:read", "settings:write"]);
   if (!auth.ok) return auth.error;
   const client = auth.context.client;
-  const [settingsRes, languagesRes, taxRes] = await Promise.all([
+  const [settingsRes, languagesRes, taxRes, coinRes] = await Promise.all([
     client.from("app_settings").select("id, data"),
     client.from("languages").select("id, code, name, active").order("name"),
     client.from("country_tax").select("*").order("created_at", { ascending: true }),
+    client.from("coin_settings").select("etb_per_coin").eq("id", 1).maybeSingle(),
   ]);
   if (settingsRes.error) {
     return NextResponse.json(
@@ -89,12 +92,20 @@ export async function GET() {
       { status: 400 },
     );
   }
+  const etbPerCoin = Number(coinRes.data?.etb_per_coin);
+  const coinsPerBirr =
+    Number.isFinite(etbPerCoin) && etbPerCoin > 0 ? 1 / etbPerCoin : 10;
   return NextResponse.json({
     appRows: settingsRes.data ?? [],
     languageRows: languagesRes.data ?? [],
     taxRows: taxRes.data ?? [],
     languagesError: languagesRes.error?.message ?? null,
     taxError: taxRes.error?.message ?? null,
+    coinSettings: {
+      etb_per_coin: Number.isFinite(etbPerCoin) && etbPerCoin > 0 ? etbPerCoin : 0.1,
+      coins_per_birr: coinsPerBirr,
+    },
+    coinSettingsError: coinRes.error?.message ?? null,
   });
 }
 
@@ -144,6 +155,23 @@ export async function POST(request: Request) {
       }
     }
 
+    if (payload.coins_per_birr != null) {
+      const perBirr = Number(payload.coins_per_birr);
+      if (!Number.isFinite(perBirr) || perBirr <= 0) {
+        throw new Error("coins_per_birr must be greater than 0");
+      }
+      const etbPerCoin = 1 / perBirr;
+      const { error: coinError } = await client.from("coin_settings").upsert(
+        {
+          id: 1,
+          etb_per_coin: etbPerCoin,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" },
+      );
+      if (coinError) throw new Error(coinError.message);
+    }
+
     if (payload.languageDeletedIds?.length) {
       const { error } = await client
         .from("languages")
@@ -181,6 +209,7 @@ export async function POST(request: Request) {
     if (payload.statusOptions) sections.push("status");
     if (payload.constants) sections.push("constant");
     if (payload.paymentSettings) sections.push("payment");
+    if (payload.coins_per_birr != null) sections.push("coin_settings");
     if (payload.languageSettings || payload.languageDeletedIds?.length) {
       sections.push("languages");
     }
