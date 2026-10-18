@@ -75,6 +75,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   for (const key of allowed) {
     if (key in body) patch[key] = body[key];
   }
+  // Normalize location fields from the Addis Ababa sub-city / woreda pickers.
+  if ("subcity" in patch) {
+    patch.subcity = `${patch.subcity ?? ""}`.trim();
+  }
+  if ("wereda" in patch) {
+    const raw = patch.wereda;
+    if (raw == null || raw === "") {
+      patch.wereda = null;
+    } else {
+      const n = typeof raw === "number" ? raw : Number(String(raw).replace(/\D+/g, ""));
+      patch.wereda = Number.isFinite(n) && n >= 1 ? Math.floor(n) : null;
+    }
+  }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "No valid fields" }, { status: 400 });
   }
@@ -86,9 +99,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     .maybeSingle();
   if (updateError) {
     const hint = missingServiceRoleMessage();
+    const message = updateError.message || "Update failed";
+    const lower = message.toLowerCase();
+    const unauthorized =
+      lower.includes("sign in") ||
+      lower.includes("unauthorized") ||
+      lower.includes("not authenticated") ||
+      lower.includes("invalid token");
     return NextResponse.json(
-      { error: hint ? `${updateError.message}. ${hint}` : updateError.message },
-      { status: 400 },
+      {
+        error: unauthorized
+          ? "Your admin session expired. Sign in again, then retry saving the stadium."
+          : hint
+            ? `${message}. ${hint}`
+            : message,
+      },
+      { status: unauthorized ? 401 : 400 },
     );
   }
   return NextResponse.json({ data });

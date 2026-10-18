@@ -19,6 +19,18 @@ export type AdminAuthResult =
   | { ok: true; context: AdminContext; error: null }
   | { ok: false; error: NextResponse; context: null };
 
+function errorMessage(err: unknown, fallback: string) {
+  if (err instanceof Error && err.message.trim()) return err.message;
+  if (err && typeof err === "object") {
+    const map = err as { message?: unknown; error?: unknown; detail?: unknown };
+    for (const value of [map.message, map.error, map.detail]) {
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+  }
+  if (typeof err === "string" && err.trim()) return err.trim();
+  return fallback;
+}
+
 async function fetchStaffRow(client: SpojexClient, userId: string) {
   const { data, error } = await client
     .from("admin")
@@ -26,16 +38,28 @@ async function fetchStaffRow(client: SpojexClient, userId: string) {
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) {
+    throw new Error(errorMessage(error, "Could not load admin staff row"));
+  }
   return data as AdminRow | null;
 }
 
 async function loadStaff(user: SpojexUser, sessionClient: SpojexClient) {
-  let staff = await fetchStaffRow(sessionClient, user.id);
+  let staff: AdminRow | null = null;
+  let staffError: unknown = null;
+  try {
+    staff = await fetchStaffRow(sessionClient, user.id);
+  } catch (err) {
+    staffError = err;
+  }
 
   if (!staff && canUseAdminClient()) {
     const adminClient = await createAdminClientFromRequest();
     staff = await fetchStaffRow(adminClient, user.id);
+  } else if (!staff && staffError) {
+    throw staffError instanceof Error
+      ? staffError
+      : new Error(errorMessage(staffError, "Failed to resolve admin"));
   }
 
   if (!staff || !staff.is_active) return null;
@@ -45,11 +69,16 @@ async function loadStaff(user: SpojexUser, sessionClient: SpojexClient) {
     roleClient = await createAdminClientFromRequest();
   }
 
-  const { data: roleRow } = await roleClient
+  // Role permissions are optional — don't fail the whole admin session if this
+  // call races an expired token (defaults still grant role-based access).
+  const { data: roleRow, error: roleError } = await roleClient
     .from("admin_role")
     .select("permissions")
     .eq("slug", staff.role)
     .maybeSingle();
+  if (roleError) {
+    console.warn("admin_role lookup failed", roleError);
+  }
 
   const permissions = permissionsForRole(
     staff.role,
@@ -120,11 +149,25 @@ export async function requireAdminSession(): Promise<AdminAuthResult> {
       context: { user, ...loaded },
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to resolve admin";
+    const message = errorMessage(err, "Failed to resolve admin");
+    const lower = message.toLowerCase();
+    const unauthorized =
+      lower.includes("sign in") ||
+      lower.includes("unauthorized") ||
+      lower.includes("not authenticated") ||
+      lower.includes("invalid token") ||
+      lower.includes("jwt");
     return {
       ok: false,
       context: null,
-      error: NextResponse.json({ error: message }, { status: 500 }),
+      error: NextResponse.json(
+        {
+          error: unauthorized
+            ? "Your admin session expired. Sign in again, then retry saving the stadium."
+            : message,
+        },
+        { status: unauthorized ? 401 : 500 },
+      ),
     };
   }
 }
