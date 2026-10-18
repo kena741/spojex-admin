@@ -24,6 +24,8 @@ export async function POST(request: Request) {
     surface?: string;
     location?: string;
     address?: string;
+    subcity?: string;
+    wereda?: number | null;
     capacity?: number;
     description?: string;
     owner_name?: string;
@@ -62,6 +64,8 @@ export async function POST(request: Request) {
     surface: normalizeStadiumSurface(body.surface),
     location: body.location?.trim() ?? "",
     address: body.address?.trim() ?? "",
+    subcity: body.subcity?.trim() ?? "",
+    wereda: (() => { const n = Number(body.wereda); return Number.isFinite(n) && n >= 1 ? Math.floor(n) : null; })(),
     capacity: Math.max(0, Math.floor(Number(body.capacity) || 0)),
     description: body.description?.trim() ?? "",
     owner_name: body.owner_name?.trim() ?? "",

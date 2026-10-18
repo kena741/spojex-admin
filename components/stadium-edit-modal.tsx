@@ -3,7 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminModal, AdminModalFooter } from "@/components/admin-layout";
+import { SearchableSelect } from "@/components/searchable-select";
 import { StadiumLocationPicker } from "@/components/stadium-location-picker";
+import {
+  ADDIS_ABABA_SUBCITIES,
+  formatStadiumArea,
+  normalizeWereda,
+  weredaOptionsForSubcity,
+} from "@/lib/addis-ababa-locations";
 import { patchAdmin, postAdminResponse } from "@/lib/hooks";
 import {
   normalizeStadiumFacility,
@@ -24,6 +31,8 @@ type StadiumDraft = {
   surface: string;
   location: string;
   address: string;
+  subcity: string;
+  wereda: string;
   capacity: number;
   image_url: string;
   photos: string[];
@@ -44,6 +53,8 @@ function emptyDraft(): StadiumDraft {
     surface: "Artificial",
     location: "",
     address: "",
+    subcity: "",
+    wereda: "",
     capacity: 0,
     image_url: "",
     photos: [],
@@ -60,6 +71,7 @@ function emptyDraft(): StadiumDraft {
 function draftFromRow(row: StadiumRow): StadiumDraft {
   const photos = stadiumPhotoUrls(row.photos);
   const cover = stadiumCoverUrl(row);
+  const wereda = normalizeWereda(row.wereda);
   return {
     name: row.name ?? "",
     status: row.status ?? "pending",
@@ -67,6 +79,8 @@ function draftFromRow(row: StadiumRow): StadiumDraft {
     surface: normalizeStadiumSurface(row.surface),
     location: row.location ?? "",
     address: row.address ?? "",
+    subcity: row.subcity ?? "",
+    wereda: wereda == null ? "" : String(wereda),
     capacity: row.capacity ?? 0,
     image_url: cover,
     photos: cover && !photos.includes(cover) ? [cover, ...photos] : photos,
@@ -210,28 +224,43 @@ export function StadiumEditModal({
     }
   };
 
-  const payloadFromDraft = (current: StadiumDraft) => ({
-    name: current.name.trim(),
-    status: current.status,
-    size_type: current.size_type,
-    surface: normalizeStadiumSurface(current.surface),
-    location: current.location.trim(),
-    address: current.address.trim(),
-    capacity: current.capacity,
-    contact_phone: current.contact_phone.trim(),
-    contact_email: current.contact_email.trim(),
-    owner_name: current.owner_name.trim(),
-    description: current.description.trim(),
-    facilities: [
-      ...new Set(
-        current.facilities
-          .map((item) => normalizeStadiumFacility(item))
-          .filter(Boolean),
-      ),
-    ],
-    latitude: current.latitude.trim() ? Number(current.latitude) : null,
-    longitude: current.longitude.trim() ? Number(current.longitude) : null,
-  });
+  const payloadFromDraft = (current: StadiumDraft) => {
+    const subcity = current.subcity.trim();
+    const wereda = normalizeWereda(current.wereda);
+    const area = formatStadiumArea(subcity, wereda);
+    const location = current.location.trim() || area;
+    return {
+      name: current.name.trim(),
+      status: current.status,
+      size_type: current.size_type,
+      surface: normalizeStadiumSurface(current.surface),
+      location,
+      address: current.address.trim(),
+      subcity,
+      wereda,
+      capacity: current.capacity,
+      contact_phone: current.contact_phone.trim(),
+      contact_email: current.contact_email.trim(),
+      owner_name: current.owner_name.trim(),
+      description: current.description.trim(),
+      facilities: [
+        ...new Set(
+          current.facilities
+            .map((item) => normalizeStadiumFacility(item))
+            .filter(Boolean),
+        ),
+      ],
+      latitude: current.latitude.trim() ? Number(current.latitude) : null,
+      longitude: current.longitude.trim() ? Number(current.longitude) : null,
+    };
+  };
+
+  const subcityOptions = ADDIS_ABABA_SUBCITIES.map((s) => ({
+    value: s.name,
+    label: s.name,
+    searchText: `${s.id} ${s.aliases.join(" ")}`,
+  }));
+  const weredaOptions = weredaOptionsForSubcity(draft?.subcity);
 
   const save = async () => {
     if (!draft) return;
@@ -337,10 +366,54 @@ export function StadiumEditModal({
               </select>
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="text-text-secondary">Location</span>
+              <span className="text-text-secondary">Sub-city</span>
+              <SearchableSelect
+                value={draft.subcity}
+                disabled={saving}
+                placeholder="Search Addis Ababa sub-city…"
+                searchPlaceholder="Type sub-city name…"
+                options={subcityOptions}
+                onChange={(subcity) =>
+                  setDraft({
+                    ...draft,
+                    subcity,
+                    wereda: "",
+                    location:
+                      draft.location.trim() &&
+                      !ADDIS_ABABA_SUBCITIES.some((s) =>
+                        draft.location.toLowerCase().includes(s.name.toLowerCase()),
+                      )
+                        ? draft.location
+                        : formatStadiumArea(subcity, null),
+                  })
+                }
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-text-secondary">Woreda</span>
+              <SearchableSelect
+                value={draft.wereda}
+                disabled={saving || !draft.subcity}
+                placeholder={draft.subcity ? "Search woreda…" : "Pick a sub-city first"}
+                searchPlaceholder="Type woreda number…"
+                emptyLabel={draft.subcity ? "No matching woreda" : "Select a sub-city first"}
+                options={weredaOptions}
+                onChange={(wereda) => {
+                  const n = normalizeWereda(wereda);
+                  setDraft({
+                    ...draft,
+                    wereda,
+                    location: formatStadiumArea(draft.subcity, n) || draft.location,
+                  });
+                }}
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-text-secondary">Location label</span>
               <input
                 value={draft.location}
                 onChange={(e) => setDraft({ ...draft, location: e.target.value })}
+                placeholder="Shown on cards (auto-filled from sub-city)"
                 className={fieldClass}
               />
             </label>

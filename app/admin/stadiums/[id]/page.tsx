@@ -9,6 +9,7 @@ import { AdminEmpty, AdminErrorAlert, AdminLoadingRow, AdminModal, AdminTableShe
 import { StadiumEditModal } from "@/components/stadium-edit-modal";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { VisiblePassword } from "@/components/visible-password";
+import { formatStadiumArea } from "@/lib/addis-ababa-locations";
 import { deleteAdmin, patchAdmin, postAdmin, postAdminResponse } from "@/lib/hooks";
 import {
   formatPrice,
@@ -448,7 +449,13 @@ export default function StadiumDetailPage() {
     <>
       <AdminPageHeader
         title={stadium.name || "Stadium"}
-        description={stadium.location || stadium.address || stadium.slug || ""}
+        description={
+          formatStadiumArea(stadium.subcity, stadium.wereda) ||
+          stadium.location ||
+          stadium.address ||
+          stadium.slug ||
+          ""
+        }
         backHref="/admin/stadiums"
         stackOnSmall
         breadcrumbs={[
@@ -569,6 +576,16 @@ export default function StadiumDetailPage() {
                   <dd className="font-medium sm:text-right">
                     {sizeTypeLabel(stadium.size_type)}
                     {stadium.capacity > 0 ? ` · ${stadium.capacity} capacity` : ""}
+                  </dd>
+                </div>
+                <div className="flex flex-col gap-0.5 border-b border-border py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                  <dt className="shrink-0 text-text-secondary">Sub-city</dt>
+                  <dd className="font-medium sm:text-right">{stadium.subcity || "—"}</dd>
+                </div>
+                <div className="flex flex-col gap-0.5 border-b border-border py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                  <dt className="shrink-0 text-text-secondary">Woreda</dt>
+                  <dd className="font-medium sm:text-right">
+                    {stadium.wereda != null ? `Woreda ${stadium.wereda}` : "—"}
                   </dd>
                 </div>
                 <div className="flex flex-col gap-0.5 border-b border-border py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">

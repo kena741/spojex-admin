@@ -15,8 +15,14 @@ import {
   AdminTableActions,
   AdminTableShell,
 } from "@/components/admin-layout";
+import { SearchableSelect } from "@/components/searchable-select";
 import { StadiumEditModal } from "@/components/stadium-edit-modal";
 import { StatusBadge, requestTone } from "@/components/status-badge";
+import {
+  ADDIS_ABABA_SUBCITIES,
+  formatStadiumArea,
+  weredaOptionsForSubcity,
+} from "@/lib/addis-ababa-locations";
 import { deleteAdmin, postAdminResponse } from "@/lib/hooks";
 import {
   sizeTypeLabel,
@@ -43,6 +49,8 @@ export default function StadiumsPage() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [sizeType, setSizeType] = useState("all");
+  const [subcity, setSubcity] = useState("");
+  const [wereda, setWereda] = useState("");
   const [editing, setEditing] = useState<StadiumRow | null>(null);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -87,11 +95,25 @@ export default function StadiumsPage() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const codeQ = normalizeAdminCode(query);
+    const weredaNum = wereda ? Number(wereda) : null;
     return rows.filter((row) => {
       if (status !== "all" && row.status !== status) return false;
       if (sizeType !== "all" && row.size_type !== sizeType) return false;
+      if (subcity && (row.subcity || "").trim() !== subcity) return false;
+      if (weredaNum != null && Number.isFinite(weredaNum) && row.wereda !== weredaNum) {
+        return false;
+      }
       if (!q) return true;
-      const textMatch = [row.name, row.slug, row.location, row.address, row.owner_name, row.contact_email]
+      const textMatch = [
+        row.name,
+        row.slug,
+        row.location,
+        row.address,
+        row.subcity,
+        row.wereda != null ? `woreda ${row.wereda}` : "",
+        row.owner_name,
+        row.contact_email,
+      ]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q));
       if (textMatch) return true;
@@ -101,7 +123,14 @@ export default function StadiumsPage() {
         return (codeQ && code.includes(codeQ)) || name.includes(q);
       });
     });
-  }, [query, rows, sizeType, status, subscribersByStadium]);
+  }, [query, rows, sizeType, status, subcity, wereda, subscribersByStadium]);
+
+  const subcityFilterOptions = ADDIS_ABABA_SUBCITIES.map((s) => ({
+    value: s.name,
+    label: s.name,
+    searchText: `${s.id} ${s.aliases.join(" ")}`,
+  }));
+  const weredaFilterOptions = weredaOptionsForSubcity(subcity);
 
   const remove = async (row: StadiumRow) => {
     const label = row.name || "this stadium";
@@ -192,8 +221,12 @@ export default function StadiumsPage() {
       />
       {error ? <AdminErrorAlert message={error} /> : null}
       <AdminFilterPanel>
-        <div className="grid gap-3 md:grid-cols-[1fr_180px_180px]">
-          <AdminSearchInput value={query} onChange={setQuery} placeholder="Search name, location, owner, or pass code" />
+        <div className="grid gap-3 md:grid-cols-[1fr_160px_160px]">
+          <AdminSearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search name, sub-city, woreda, owner, or pass code"
+          />
           <AdminSelect value={status} onChange={setStatus}>
             <option value="all">All statuses</option>
             {stadiumStatuses.map((item) => (
@@ -210,6 +243,27 @@ export default function StadiumsPage() {
               </option>
             ))}
           </AdminSelect>
+        </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <SearchableSelect
+            value={subcity}
+            onChange={(next) => {
+              setSubcity(next);
+              setWereda("");
+            }}
+            options={subcityFilterOptions}
+            placeholder="All sub-cities"
+            searchPlaceholder="Search sub-city…"
+          />
+          <SearchableSelect
+            value={wereda}
+            onChange={setWereda}
+            options={weredaFilterOptions}
+            disabled={!subcity}
+            placeholder={subcity ? "All woredas" : "Pick a sub-city first"}
+            searchPlaceholder="Search woreda…"
+            emptyLabel={subcity ? "No matching woreda" : "Select a sub-city first"}
+          />
         </div>
       </AdminFilterPanel>
       {loading ? <AdminLoadingRow label="Loading stadiums…" /> : null}
@@ -279,7 +333,15 @@ export default function StadiumsPage() {
                         {stadiumSurfaceLabel(row.surface)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-text-secondary">{row.location || row.address || "—"}</td>
+                    <td className="px-4 py-3 text-text-secondary">
+                      {formatStadiumArea(row.subcity, row.wereda) ||
+                        row.location ||
+                        row.address ||
+                        "—"}
+                      {row.subcity && row.location && row.location !== formatStadiumArea(row.subcity, row.wereda) ? (
+                        <span className="mt-0.5 block text-xs text-text-hint">{row.location}</span>
+                      ) : null}
+                    </td>
                     <td className="px-4 py-3">
                       {row.users ? (
                         <Link href={`/admin/users/${row.users.id}`} className="text-primary hover:underline">

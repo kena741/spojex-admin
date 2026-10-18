@@ -400,6 +400,8 @@ export type StadiumRow = {
   slug: string | null;
   location: string;
   address: string;
+  subcity?: string;
+  wereda?: number | null;
   latitude: number | null;
   longitude: number | null;
   size_type: string;

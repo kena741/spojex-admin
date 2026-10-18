@@ -7,6 +7,8 @@ const allowed = [
   "slug",
   "location",
   "address",
+  "subcity",
+  "wereda",
   "latitude",
   "longitude",
   "size_type",
