@@ -58,3 +58,31 @@ export function campaignDisplayGoal(campaign: {
   const goalCoins = Number(campaign.goal_coins ?? 0);
   return goalCoins > 0 ? goalCoins : Number(campaign.goal_amount ?? 0);
 }
+
+/** 0–100. Non-zero raised amounts under 1% stay visible as a fraction. */
+export function campaignProgressPercent(campaign: {
+  currency?: string | null;
+  goal_coins?: number | null;
+  raised_coins?: number | null;
+  goal_amount?: number | null;
+  raised_amount?: number | null;
+}) {
+  const goal = campaignDisplayGoal(campaign);
+  const raised = campaignDisplayRaised(campaign);
+  if (!(goal > 0) || !(raised > 0)) return 0;
+  return Math.min(100, (raised / goal) * 100);
+}
+
+/** Label for raised/goal UI (`12%`, `<1%`, …). */
+export function campaignProgressLabel(campaign: {
+  currency?: string | null;
+  goal_coins?: number | null;
+  raised_coins?: number | null;
+  goal_amount?: number | null;
+  raised_amount?: number | null;
+}) {
+  const raised = campaignDisplayRaised(campaign);
+  const pct = campaignProgressPercent(campaign);
+  if (raised > 0 && pct < 1) return "<1%";
+  return `${Math.round(pct)}%`;
+}

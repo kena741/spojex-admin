@@ -11,6 +11,8 @@ import {
   campaignDisplayGoal,
   campaignDisplayRaised,
   campaignIsCoin,
+  campaignProgressLabel,
+  campaignProgressPercent,
   donationStatusLabel,
   donationStatuses,
   formatDonationAmount,
@@ -257,7 +259,11 @@ export default function DonationDetailPage() {
   const isCoin = campaignIsCoin(campaign);
   const raised = campaignDisplayRaised(campaign);
   const goal = campaignDisplayGoal(campaign);
-  const progress = goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0;
+  const progressPct = campaignProgressPercent(campaign);
+  const progressLabel = campaignProgressLabel(campaign);
+  // Visible sliver when anything is raised but the ratio would look empty.
+  const progressBarWidth =
+    raised > 0 ? Math.max(2, Math.min(100, progressPct)) : 0;
   const displayCurrency = isCoin ? "COIN" : campaign.currency;
 
   return (
@@ -325,12 +331,12 @@ export default function DonationDetailPage() {
           </div>
           <p className="mb-4 text-sm text-text-secondary">{campaign.description || "No description."}</p>
           <div className="mb-2 h-2 overflow-hidden rounded-full bg-muted">
-            <div className="h-full bg-primary" style={{ width: `${progress}%` }} />
+            <div className="h-full bg-primary" style={{ width: `${progressBarWidth}%` }} />
           </div>
           <p className="text-sm font-medium">
             {formatDonationAmount(raised, displayCurrency)} raised
             {goal > 0
-              ? ` of ${formatDonationAmount(goal, displayCurrency)} (${progress}%)`
+              ? ` of ${formatDonationAmount(goal, displayCurrency)} (${progressLabel})`
               : ""}
           </p>
         </section>

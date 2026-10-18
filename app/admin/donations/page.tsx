@@ -20,6 +20,7 @@ import {
   campaignDisplayGoal,
   campaignDisplayRaised,
   campaignIsCoin,
+  campaignProgressLabel,
   donationStatusLabel,
   donationStatuses,
   formatDonationAmount,
@@ -250,9 +251,10 @@ export default function DonationsPage() {
                           const currency = campaignIsCoin(row) ? "COIN" : row.currency;
                           const raised = campaignDisplayRaised(row);
                           const goal = campaignDisplayGoal(row);
+                          const pct = goal > 0 ? ` (${campaignProgressLabel(row)})` : "";
                           return `${formatDonationAmount(raised, currency)}${
                             goal > 0 ? ` / ${formatDonationAmount(goal, currency)}` : ""
-                          }`;
+                          }${pct}`;
                         })()}
                       </td>
                       <td className="px-4 py-3">
