@@ -1,98 +1,82 @@
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
-import {
-  fetchUserPushProfile,
-  pushReadiness,
-  sendUserPush,
-  type PushDeliveryInput,
-} from "@/lib/push/sendUserPush";
+import { getSpojexApiBaseUrl } from "@/lib/env";
+import { requestAccessToken } from "@/lib/spojex/server";
 
-function parseBody(body: unknown): PushDeliveryInput | string {
-  if (!body || typeof body !== "object") return "Invalid request body";
+/**
+ * Per-user push status / send — proxies to Spojex REST
+ * `GET|POST /api/v1/push/admin/users/{user_id}`.
+ */
 
-  const data = body as Record<string, unknown>;
-  const title = typeof data.title === "string" ? data.title.trim() : "";
-  const messageBody = typeof data.body === "string" ? data.body.trim() : "";
-  const route = typeof data.route === "string" ? data.route.trim() : undefined;
-
-  if (!title) return "Title is required";
-  if (!messageBody) return "Message body is required";
-
-  return { title, body: messageBody, route, type: "admin" };
-}
-
-export async function GET(
-  _request: Request,
-  context: { params: Promise<{ id: string }> },
-) {
+async function proxy(request: Request, userId: string, method: "GET" | "POST") {
   const auth = await requireAdminPermission("notifications:write");
   if (!auth.ok) return auth.error;
 
-  const { id: userId } = await context.params;
-  if (!userId) {
+  const token = await requestAccessToken();
+  if (!token) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const base = getSpojexApiBaseUrl();
+  const url = `${base}/api/v1/push/admin/users/${userId}`;
+  const init: RequestInit = {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(method === "POST" ? { "Content-Type": "application/json" } : {}),
+    },
+    cache: "no-store",
+  };
+  if (method === "POST") {
+    try {
+      init.body = JSON.stringify(await request.json());
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+  }
+
+  const res = await fetch(url, init);
+  const payload = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    const detail = payload.detail;
+    let message = "Could not complete push request";
+    let clearedToken = false;
+    if (typeof detail === "string") {
+      message = detail;
+    } else if (detail && typeof detail === "object") {
+      const d = detail as { error?: string; clearedToken?: boolean };
+      message = d.error || message;
+      clearedToken = Boolean(d.clearedToken);
+    } else if (typeof payload.error === "string") {
+      message = payload.error;
+      clearedToken = Boolean(payload.clearedToken);
+    }
+    return NextResponse.json(
+      { error: message, clearedToken },
+      { status: res.status },
+    );
+  }
+  return NextResponse.json(payload);
+}
+
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  const { id } = await context.params;
+  if (!id) {
     return NextResponse.json({ error: "User id is required" }, { status: 400 });
   }
-
-  const { profile, error } = await fetchUserPushProfile(auth.context.client, userId);
-  if (error) {
-    return NextResponse.json({ error }, { status: error === "User not found" ? 404 : 400 });
-  }
-
-  const readiness = pushReadiness(profile!);
-
-  return NextResponse.json({
-    fcmRegistered: Boolean(profile!.fcm_token),
-    notificationsEnabled: profile!.notifications_enabled !== false,
-    canSend: readiness.canSend,
-    reason: readiness.reason,
-    displayName: profile!.display_name,
-  });
+  return proxy(request, id, "GET");
 }
 
 export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireAdminPermission("notifications:write");
-  if (!auth.ok) return auth.error;
-
-  const { id: userId } = await context.params;
-  if (!userId) {
+  const { id } = await context.params;
+  if (!id) {
     return NextResponse.json({ error: "User id is required" }, { status: 400 });
   }
-
-  const parsed = parseBody(await request.json());
-  if (typeof parsed === "string") {
-    return NextResponse.json({ error: parsed }, { status: 400 });
-  }
-
-  const { profile, error } = await fetchUserPushProfile(auth.context.client, userId);
-  if (error) {
-    return NextResponse.json({ error }, { status: error === "User not found" ? 404 : 400 });
-  }
-
-  const readiness = pushReadiness(profile!);
-  if (!readiness.canSend) {
-    return NextResponse.json({ error: readiness.reason }, { status: 400 });
-  }
-
-  const result = await sendUserPush({
-    serviceClient: auth.context.client,
-    userId,
-    token: profile!.fcm_token!,
-    input: parsed,
-  });
-
-  if (!result.ok) {
-    return NextResponse.json(
-      { error: result.error, clearedToken: result.clearedToken },
-      { status: 502 },
-    );
-  }
-
-  return NextResponse.json({
-    ok: true,
-    messageId: result.messageId,
-    recipient: profile!.display_name ?? userId,
-  });
+  return proxy(request, id, "POST");
 }
