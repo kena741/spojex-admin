@@ -42,7 +42,7 @@ export default function ServicesPage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
-  const [published, setPublished] = useState("pending");
+  const [published, setPublished] = useState("all");
 
   const load = async () => {
     const response = await fetch("/api/admin/services", { credentials: "same-origin" });
@@ -156,9 +156,9 @@ export default function ServicesPage() {
             ))}
           </AdminSelect>
           <AdminSelect value={published} onChange={setPublished}>
+            <option value="all">All listings</option>
             <option value="pending">Pending approval</option>
             <option value="yes">Approved</option>
-            <option value="all">All listings</option>
           </AdminSelect>
         </div>
       </AdminFilterPanel>
