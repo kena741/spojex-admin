@@ -138,6 +138,31 @@ export type GymMembershipSummary = {
   gym_plans?: { title: string | null } | { title: string | null }[] | null;
 };
 
+/** Membership package sold in the app (duration drives subscription expiry). */
+export type GymPlanRow = {
+  id: string;
+  gym_id: string;
+  title: string;
+  description?: string | null;
+  plan_type: string;
+  price_amount: number;
+  currency: string;
+  duration_days: number;
+  duration_months?: number | null;
+  is_active: boolean;
+  sort_order: number;
+  benefits?: string[] | null;
+  created_at?: string | null;
+};
+
+export function gymPlanMonthsLabel(months?: number | null, days?: number | null) {
+  const m =
+    months != null && Number.isFinite(Number(months)) && Number(months) > 0
+      ? Math.floor(Number(months))
+      : Math.max(1, Math.round(Number(days || 30) / 30));
+  return m === 1 ? "1 month" : `${m} months`;
+}
+
 export type GymMemberRow = {
   id: string;
   gym_id: string;

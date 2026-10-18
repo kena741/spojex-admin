@@ -155,7 +155,7 @@ export async function GET(
   if (!auth.ok) return auth.error;
   const { id } = await params;
 
-  const [gymRes, staffRes, membersRes] = await Promise.all([
+  const [gymRes, staffRes, membersRes, plansRes] = await Promise.all([
     auth.context.client.from("gyms").select(gymSelect).eq("id", id).maybeSingle(),
     auth.context.client
       .from("gym_staff")
@@ -170,6 +170,12 @@ export async function GET(
       .eq("gym_id", id)
       .order("created_at", { ascending: false })
       .limit(300),
+    auth.context.client
+      .from("gym_plans")
+      .select("*")
+      .eq("gym_id", id)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true }),
   ]);
 
   if (gymRes.error) {
@@ -208,8 +214,10 @@ export async function GET(
     data: gymRes.data,
     staff,
     members,
+    plans: plansRes.error ? [] : (plansRes.data ?? []),
     staff_error: staffError,
     members_error: membersError,
+    plans_error: plansRes.error?.message ?? null,
   });
 }
 

@@ -17,6 +17,7 @@ import {
   gymCategories,
   gymCategoryLabel,
   gymFeatureLabel,
+  gymPlanMonthsLabel,
   gymStaffRoleLabel,
   gymStaffRoles,
   gymStatusLabel,
@@ -26,6 +27,7 @@ import {
   type GymCategoryRow,
   type GymMemberRow,
   type GymMembershipSummary,
+  type GymPlanRow,
   type GymRow,
   type GymStaffRow,
 } from "@/lib/gyms";
@@ -33,6 +35,7 @@ import {
   adminFetch,
   deleteAdmin,
   patchAdmin,
+  postAdmin,
   postAdminResponse,
 } from "@/lib/hooks";
 import { getSpojexClient } from "@/lib/spojex/client";
@@ -46,15 +49,18 @@ const areaClass =
 const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp,image/gif";
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
-type TabId = "overview" | "staff" | "members" | "edit";
+type TabId = "overview" | "plans" | "staff" | "members" | "edit";
 type ImageKind = "logo" | "cover";
 
 const tabs: { id: TabId; label: string }[] = [
   { id: "overview", label: "Overview" },
+  { id: "plans", label: "Plans" },
   { id: "staff", label: "Staff" },
   { id: "members", label: "Members" },
   { id: "edit", label: "Edit" },
 ];
+
+const MONTH_PRESETS = [1, 3, 6, 12] as const;
 
 function validateImageFile(file: File) {
   if (!IMAGE_ACCEPT.split(",").includes(file.type)) {
@@ -170,11 +176,23 @@ export default function GymDetailPage() {
   const [catalog, setCatalog] = useState<GymCategoryRow[]>([]);
   const [staff, setStaff] = useState<GymStaffRow[]>([]);
   const [members, setMembers] = useState<GymMemberRow[]>([]);
+  const [plans, setPlans] = useState<GymPlanRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [uploadingKind, setUploadingKind] = useState<ImageKind | null>(null);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [savingPlan, setSavingPlan] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<GymPlanRow | null>(null);
+  const [planDraft, setPlanDraft] = useState({
+    title: "",
+    description: "",
+    price_amount: "0",
+    currency: "ETB",
+    duration_months: "1",
+    is_active: true,
+  });
 
   const [draft, setDraft] = useState({
     name: "",
@@ -211,8 +229,10 @@ export default function GymDetailPage() {
       data?: GymRow;
       staff?: GymStaffRow[];
       members?: GymMemberRow[];
+      plans?: GymPlanRow[];
       staff_error?: string | null;
       members_error?: string | null;
+      plans_error?: string | null;
       error?: string;
     };
     if (!response.ok) throw new Error(payload.error || "Failed to load gym");
@@ -220,6 +240,7 @@ export default function GymDetailPage() {
     setGym(next);
     setStaff(payload.staff ?? []);
     setMembers(payload.members ?? []);
+    setPlans(payload.plans ?? []);
     if (!categoriesRes.error && (categoriesRes.data?.length ?? 0) > 0) {
       setCatalog(categoriesRes.data as GymCategoryRow[]);
     } else {
@@ -235,6 +256,7 @@ export default function GymDetailPage() {
     }
     if (payload.staff_error) setError(payload.staff_error);
     if (payload.members_error) setError(payload.members_error);
+    if (payload.plans_error) setError(payload.plans_error);
     if (next) {
       setDraft({
         name: next.name ?? "",
@@ -455,6 +477,98 @@ export default function GymDetailPage() {
     }
   };
 
+  const openCreatePlan = () => {
+    setEditingPlan(null);
+    setPlanDraft({
+      title: "",
+      description: "",
+      price_amount: "0",
+      currency: "ETB",
+      duration_months: "1",
+      is_active: true,
+    });
+    setPlanOpen(true);
+  };
+
+  const openEditPlan = (row: GymPlanRow) => {
+    const months =
+      row.duration_months && row.duration_months > 0
+        ? row.duration_months
+        : Math.max(1, Math.round((row.duration_days || 30) / 30));
+    setEditingPlan(row);
+    setPlanDraft({
+      title: row.title ?? "",
+      description: row.description ?? "",
+      price_amount: String(row.price_amount ?? 0),
+      currency: row.currency || "ETB",
+      duration_months: String(months),
+      is_active: row.is_active !== false,
+    });
+    setPlanOpen(true);
+  };
+
+  const savePlan = async () => {
+    if (!canWrite) return;
+    const title = planDraft.title.trim();
+    if (!title) {
+      setError("Plan title is required");
+      return;
+    }
+    const months = Math.max(1, Math.floor(Number(planDraft.duration_months) || 1));
+    const price = Number(planDraft.price_amount);
+    if (!Number.isFinite(price) || price < 0) {
+      setError("Price must be 0 or more");
+      return;
+    }
+    setSavingPlan(true);
+    setError(null);
+    try {
+      const body = {
+        title,
+        description: planDraft.description.trim(),
+        price_amount: price,
+        currency: planDraft.currency.trim() || "ETB",
+        duration_months: months,
+        is_active: planDraft.is_active,
+      };
+      if (editingPlan) {
+        await patchAdmin(`/api/admin/gyms/${id}/plans/${editingPlan.id}`, body);
+        setNotice("Membership plan updated.");
+      } else {
+        await postAdmin(`/api/admin/gyms/${id}/plans`, body);
+        setNotice("Membership plan created.");
+      }
+      setPlanOpen(false);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save plan");
+    } finally {
+      setSavingPlan(false);
+    }
+  };
+
+  const removePlan = async (row: GymPlanRow) => {
+    if (!canWrite) return;
+    if (
+      !window.confirm(
+        `Remove "${row.title}"? If members already used this plan it will be deactivated instead.`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteAdmin(`/api/admin/gyms/${id}/plans/${row.id}`);
+      await load();
+      setNotice("Membership plan removed.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not remove plan");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const toggleMember = async (row: GymMemberRow) => {
     if (!canWrite) return;
     setBusy(true);
@@ -633,6 +747,7 @@ export default function GymDetailPage() {
             }`}
           >
             {item.label}
+            {item.id === "plans" ? ` (${plans.length})` : null}
             {item.id === "staff" ? ` (${staff.length})` : null}
             {item.id === "members" ? ` (${members.length})` : null}
           </button>
@@ -1011,6 +1126,139 @@ export default function GymDetailPage() {
               ) : null}
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {tab === "plans" ? (
+        <div className="space-y-6">
+          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="font-heading text-sm font-semibold">Membership plans</h2>
+                <p className="mt-1 text-xs text-text-secondary">
+                  Packages members choose in the app. Duration in months sets when a subscription
+                  expires.
+                </p>
+              </div>
+              {canWrite ? (
+                <button
+                  type="button"
+                  onClick={openCreatePlan}
+                  className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+                >
+                  Add plan
+                </button>
+              ) : null}
+            </div>
+            {plans.length === 0 ? (
+              <AdminEmpty
+                title="No membership plans"
+                description={
+                  canWrite
+                    ? "Add Monthly, Quarterly, or custom packages with a month length."
+                    : "Membership packages for this gym appear here."
+                }
+              />
+            ) : (
+              <AdminTableShell>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+                      <tr>
+                        <th className="px-4 py-3 font-semibold">Plan</th>
+                        <th className="px-4 py-3 font-semibold">Months</th>
+                        <th className="px-4 py-3 font-semibold">Price</th>
+                        <th className="px-4 py-3 font-semibold">Status</th>
+                        {canWrite ? (
+                          <th className="px-4 py-3 font-semibold">Actions</th>
+                        ) : null}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {plans.map((row) => (
+                        <tr key={row.id} className="border-b border-border last:border-0">
+                          <td className="px-4 py-3">
+                            <p className="font-medium">{row.title}</p>
+                            {row.description ? (
+                              <p className="mt-0.5 text-xs text-text-secondary line-clamp-2">
+                                {row.description}
+                              </p>
+                            ) : null}
+                          </td>
+                          <td className="px-4 py-3 font-medium">
+                            {gymPlanMonthsLabel(row.duration_months, row.duration_days)}
+                          </td>
+                          <td className="px-4 py-3">
+                            {formatMoney(row.price_amount, row.currency || "ETB")}
+                          </td>
+                          <td className="px-4 py-3">
+                            <StatusBadge tone={row.is_active ? "success" : "neutral"}>
+                              {row.is_active ? "Active" : "Inactive"}
+                            </StatusBadge>
+                          </td>
+                          {canWrite ? (
+                            <td className="px-4 py-3">
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => openEditPlan(row)}
+                                  className="text-sm text-primary hover:underline disabled:opacity-50"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => {
+                                    void (async () => {
+                                      setBusy(true);
+                                      setError(null);
+                                      try {
+                                        await patchAdmin(
+                                          `/api/admin/gyms/${id}/plans/${row.id}`,
+                                          { is_active: !row.is_active },
+                                        );
+                                        await load();
+                                        setNotice(
+                                          row.is_active
+                                            ? "Plan deactivated."
+                                            : "Plan activated.",
+                                        );
+                                      } catch (err) {
+                                        setError(
+                                          err instanceof Error
+                                            ? err.message
+                                            : "Could not update plan",
+                                        );
+                                      } finally {
+                                        setBusy(false);
+                                      }
+                                    })();
+                                  }}
+                                  className="text-sm text-text-secondary hover:text-text-primary disabled:opacity-50"
+                                >
+                                  {row.is_active ? "Deactivate" : "Activate"}
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => void removePlan(row)}
+                                  className="text-sm text-red-600 disabled:opacity-50"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </td>
+                          ) : null}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </AdminTableShell>
+            )}
+          </section>
         </div>
       ) : null}
 
@@ -1455,6 +1703,120 @@ export default function GymDetailPage() {
           )}
         </section>
       ) : null}
+
+      <AdminModal
+        open={planOpen}
+        title={editingPlan ? "Edit membership plan" : "Add membership plan"}
+        onClose={() => {
+          if (savingPlan) return;
+          setPlanOpen(false);
+        }}
+        footer={
+          <AdminModalFooter
+            onCancel={() => setPlanOpen(false)}
+            onSave={() => void savePlan()}
+            saving={savingPlan}
+            saveLabel={editingPlan ? "Save plan" : "Create plan"}
+          />
+        }
+      >
+        <div className="space-y-4">
+          <label className="grid gap-1 text-sm">
+            <span className="text-text-secondary">Title</span>
+            <input
+              className={fieldClass}
+              value={planDraft.title}
+              onChange={(event) =>
+                setPlanDraft((prev) => ({ ...prev, title: event.target.value }))
+              }
+              placeholder="Monthly membership"
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-text-secondary">Description</span>
+            <textarea
+              className={areaClass}
+              rows={2}
+              value={planDraft.description}
+              onChange={(event) =>
+                setPlanDraft((prev) => ({ ...prev, description: event.target.value }))
+              }
+              placeholder="Access hours, perks, etc."
+            />
+          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="grid gap-1 text-sm">
+              <span className="text-text-secondary">Price</span>
+              <input
+                className={fieldClass}
+                type="number"
+                min={0}
+                step="1"
+                value={planDraft.price_amount}
+                onChange={(event) =>
+                  setPlanDraft((prev) => ({ ...prev, price_amount: event.target.value }))
+                }
+              />
+            </label>
+            <label className="grid gap-1 text-sm">
+              <span className="text-text-secondary">Currency</span>
+              <input
+                className={fieldClass}
+                value={planDraft.currency}
+                onChange={(event) =>
+                  setPlanDraft((prev) => ({ ...prev, currency: event.target.value }))
+                }
+              />
+            </label>
+          </div>
+          <label className="grid gap-1 text-sm">
+            <span className="text-text-secondary">Duration (months)</span>
+            <div className="flex flex-wrap gap-2">
+              {MONTH_PRESETS.map((months) => (
+                <button
+                  key={months}
+                  type="button"
+                  onClick={() =>
+                    setPlanDraft((prev) => ({ ...prev, duration_months: String(months) }))
+                  }
+                  className={`rounded-md border px-3 py-1.5 text-xs font-medium ${
+                    planDraft.duration_months === String(months)
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-card text-text-secondary hover:bg-muted"
+                  }`}
+                >
+                  {months === 1 ? "1 month" : `${months} months`}
+                </button>
+              ))}
+            </div>
+            <input
+              className={`${fieldClass} mt-2`}
+              type="number"
+              min={1}
+              step={1}
+              value={planDraft.duration_months}
+              onChange={(event) =>
+                setPlanDraft((prev) => ({ ...prev, duration_months: event.target.value }))
+              }
+              placeholder="Custom months"
+            />
+            <p className="text-xs text-text-hint">
+              Used by the API to set membership end date (calendar months from purchase).
+            </p>
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={planDraft.is_active}
+              onChange={(event) =>
+                setPlanDraft((prev) => ({ ...prev, is_active: event.target.checked }))
+              }
+              className="h-4 w-4 rounded border-border"
+            />
+            <span>Active (visible in the app)</span>
+          </label>
+        </div>
+      </AdminModal>
 
       <AdminModal
         open={staffOpen}
