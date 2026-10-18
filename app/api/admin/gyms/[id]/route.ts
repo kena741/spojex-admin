@@ -214,10 +214,8 @@ export async function GET(
     data: gymRes.data,
     staff,
     members,
-    plans: plansRes.error ? [] : (plansRes.data ?? []),
     staff_error: staffError,
     members_error: membersError,
-    plans_error: plansRes.error?.message ?? null,
   });
 }
 
