@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
+import { withServiceMediaUrls } from "@/lib/services-media";
 
 const listingSelect =
   "*, users:provider_id(id, display_name, verified, avatar_url, role), category:category_id(id, label, emoji), subcategory:subcategory_id(id, label, emoji)";
@@ -26,13 +27,13 @@ export async function GET() {
       return NextResponse.json({ error: fallback.error.message }, { status: 400 });
     }
     return NextResponse.json({
-      data: fallback.data ?? [],
+      data: (fallback.data ?? []).map(withServiceMediaUrls),
       categories: categories.data ?? [],
       subcategories: subcategories.data ?? [],
     });
   }
   return NextResponse.json({
-    data: services.data ?? [],
+    data: (services.data ?? []).map(withServiceMediaUrls),
     categories: categories.data ?? [],
     subcategories: subcategories.data ?? [],
   });

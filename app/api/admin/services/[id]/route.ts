@@ -6,6 +6,7 @@ import {
   bookingEmbedSelect,
   isMissingRelation,
 } from "@/lib/marketplace";
+import { withServiceMediaUrls } from "@/lib/services-media";
 
 const allowed = [
   "published",
@@ -69,7 +70,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Service not found" }, { status: 404 });
     }
     return NextResponse.json({
-      data: fallback.data,
+      data: withServiceMediaUrls(fallback.data as Record<string, unknown>),
       categories: categories.data ?? [],
       subcategories: subcategories.data ?? [],
       bookings,
@@ -79,7 +80,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Service not found" }, { status: 404 });
   }
   return NextResponse.json({
-    data: service.data,
+    data: withServiceMediaUrls(service.data as Record<string, unknown>),
     categories: categories.data ?? [],
     subcategories: subcategories.data ?? [],
     bookings,

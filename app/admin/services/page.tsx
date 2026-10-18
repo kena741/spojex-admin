@@ -14,13 +14,9 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
+import { serviceCoverUrl } from "@/lib/services-media";
 import type { ServiceCategory, ServiceRow, ServiceSubcategory } from "@/lib/types";
 import { formatDate, formatStatusLabel } from "@/lib/utils";
-
-function coverOf(row: ServiceRow) {
-  const images = Array.isArray(row.images) ? row.images.filter((item) => typeof item === "string") : [];
-  return (typeof images[0] === "string" && images[0]) || row.cover_url || "";
-}
 
 function money(row: ServiceRow) {
   if (row.price_amount == null) return formatStatusLabel(row.pricing_type);
@@ -195,7 +191,7 @@ export default function ServicesPage() {
               </thead>
               <tbody>
                 {filtered.map((row) => {
-                  const cover = coverOf(row);
+                  const cover = serviceCoverUrl(row);
                   return (
                     <tr key={row.id} className="border-b border-border last:border-0 hover:bg-muted/40">
                       <td className="px-4 py-3">

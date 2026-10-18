@@ -8,16 +8,9 @@ import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { deleteAdmin, patchAdmin } from "@/lib/hooks";
 import { firstPayment } from "@/lib/marketplace";
+import { serviceImageUrls } from "@/lib/services-media";
 import type { ServiceCategory, ServiceRequestRow, ServiceRow, ServiceSubcategory } from "@/lib/types";
 import { formatDate, formatMoney, formatStatusLabel, locationLabel } from "@/lib/utils";
-
-function imagesOf(row: ServiceRow) {
-  const images = Array.isArray(row.images)
-    ? row.images.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
-    : [];
-  if (row.cover_url && !images.includes(row.cover_url)) images.unshift(row.cover_url);
-  return images;
-}
 
 const pricingTypes = ["fixed", "starting", "hourly", "per_session", "per_day", "custom_quote", "free"];
 const availabilityModes = [
@@ -148,7 +141,7 @@ export default function ServiceDetailPage() {
   if (loading) return <AdminLoadingRow label="Loading service…" />;
   if (!service) return <AdminErrorAlert message={error || "Service not found"} />;
 
-  const photos = imagesOf(service);
+  const photos = serviceImageUrls(service);
   const categoryLabel = service.category
     ? `${service.category.emoji ?? ""} ${service.category.label}`.trim()
     : categories.find((item) => item.id === service.category_id)?.label || service.category_id;
