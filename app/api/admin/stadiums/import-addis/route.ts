@@ -84,22 +84,23 @@ function facilitiesFromAddis(field: AddisSportField): string[] {
 }
 
 function pricingFromBookingItems(items: AddisSportField["bookingItems"]): StadiumPricing {
-  let session: number | null = null;
+  let hourly: number | null = null;
   for (const item of items || []) {
     const duration = `${item.duration || ""}`.toUpperCase();
     const price = Number(item.price);
     if (!Number.isFinite(price) || price <= 0) continue;
     if (duration === "ONE_HOUR" || duration.includes("ONE")) {
-      session = price;
+      hourly = price;
       break;
     }
-    if (session == null) session = price;
+    if (hourly == null) hourly = price;
   }
   return {
     currency: "ETB",
-    session,
-    monthly: session != null ? Math.round(session * 20) : null,
-    yearly: session != null ? Math.round(session * 20 * 10) : null,
+    hourly,
+    daily: hourly != null ? Math.round(hourly * 8) : null,
+    monthly: hourly != null ? Math.round(hourly * 20) : null,
+    yearly: hourly != null ? Math.round(hourly * 20 * 10) : null,
   };
 }
 

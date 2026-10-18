@@ -62,7 +62,8 @@ export default function StadiumDetailPage() {
   const [stadium, setStadium] = useState<StadiumRow | null>(null);
   const [pricing, setPricing] = useState<StadiumPricing>({
     currency: "ETB",
-    session: null,
+    hourly: null,
+    daily: null,
     monthly: null,
     yearly: null,
   });
@@ -916,7 +917,7 @@ export default function StadiumDetailPage() {
         <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
           <h2 className="mb-1 font-heading text-sm font-semibold">Pricing</h2>
           <p className="mb-4 text-sm text-text-secondary">
-            One price each for daily/session, monthly, and yearly. Leave a field empty if that option is not offered.
+            Unit prices for hourly, daily, monthly, and yearly. Fans can buy multiple units (e.g. 3 hours or 6 months). Leave a field empty if that option is not offered.
           </p>
           <form onSubmit={savePricing} className="grid gap-3 md:grid-cols-2">
             {stadiumPlanTypes.map((item) => (

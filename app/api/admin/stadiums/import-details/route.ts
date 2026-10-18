@@ -268,7 +268,8 @@ export async function POST(request: Request) {
           contact_email: existing.data.contact_email || "",
           pricing: existing.data.pricing ?? stadiumPricingPayload({
             currency: "ETB",
-            session: null,
+            hourly: null,
+            daily: null,
             monthly: null,
             yearly: null,
           }),
@@ -293,7 +294,8 @@ export async function POST(request: Request) {
           photos: [],
           pricing: stadiumPricingPayload({
             currency: "ETB",
-            session: null,
+            hourly: null,
+            daily: null,
             monthly: null,
             yearly: null,
           }),

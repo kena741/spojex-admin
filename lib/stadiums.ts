@@ -1,6 +1,6 @@
 export type StadiumSizeType = "mini" | "small" | "medium" | "large" | "professional";
 export type StadiumStatus = "pending" | "active" | "inactive" | "rejected";
-export type StadiumPlanType = "session" | "monthly" | "yearly";
+export type StadiumPlanType = "hourly" | "daily" | "monthly" | "yearly";
 
 export const stadiumSizeTypes: { id: StadiumSizeType; label: string }[] = [
   { id: "mini", label: "Mini" },
@@ -18,21 +18,24 @@ export const stadiumStatuses: { id: StadiumStatus; label: string }[] = [
 ];
 
 export const stadiumPlanTypes: { id: StadiumPlanType; label: string }[] = [
-  { id: "session", label: "Daily / session" },
+  { id: "hourly", label: "Hourly" },
+  { id: "daily", label: "Daily" },
   { id: "monthly", label: "Monthly" },
   { id: "yearly", label: "Yearly" },
 ];
 
 export type StadiumPricing = {
   currency: string;
-  session: number | null;
+  hourly: number | null;
+  daily: number | null;
   monthly: number | null;
   yearly: number | null;
 };
 
 export const emptyStadiumPricing: StadiumPricing = {
   currency: "ETB",
-  session: null,
+  hourly: null,
+  daily: null,
   monthly: null,
   yearly: null,
 };
@@ -55,7 +58,8 @@ export function parseStadiumPricing(value: unknown): StadiumPricing {
   const record = value as Record<string, unknown>;
   return {
     currency: `${record.currency ?? "ETB"}`.trim() || "ETB",
-    session: jsonAmount(record.session ?? record.one_time ?? record.daily),
+    hourly: jsonAmount(record.hourly ?? record.hour ?? record.per_hour),
+    daily: jsonAmount(record.daily ?? record.session ?? record.one_time ?? record.day),
     monthly: jsonAmount(record.monthly),
     yearly: jsonAmount(record.yearly),
   };
@@ -64,7 +68,10 @@ export function parseStadiumPricing(value: unknown): StadiumPricing {
 export function stadiumPricingPayload(pricing: StadiumPricing) {
   return {
     currency: pricing.currency.trim() || "ETB",
-    ...(pricing.session != null ? { session: pricing.session } : {}),
+    ...(pricing.hourly != null ? { hourly: pricing.hourly } : {}),
+    ...(pricing.daily != null
+      ? { daily: pricing.daily, session: pricing.daily }
+      : {}),
     ...(pricing.monthly != null ? { monthly: pricing.monthly } : {}),
     ...(pricing.yearly != null ? { yearly: pricing.yearly } : {}),
   };
@@ -79,7 +86,13 @@ export function stadiumStatusLabel(status?: string | null) {
 }
 
 export function planTypeLabel(planType?: string | null) {
-  const type = planType === "one_time" ? "session" : planType;
+  const raw = `${planType ?? ""}`.trim().toLowerCase();
+  const type =
+    raw === "one_time" || raw === "session" || raw === "day"
+      ? "daily"
+      : raw === "hour" || raw === "hr"
+        ? "hourly"
+        : raw;
   return stadiumPlanTypes.find((item) => item.id === type)?.label ?? type ?? "—";
 }
 
