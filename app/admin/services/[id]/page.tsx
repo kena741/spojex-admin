@@ -6,6 +6,7 @@ import Link from "next/link";
 import AdminPageHeader from "@/components/admin-header";
 import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
+import { clipboardImageFile } from "@/lib/clipboard-image";
 import { adminFetch, deleteAdmin, patchAdmin } from "@/lib/hooks";
 import { firstPayment } from "@/lib/marketplace";
 import { serviceImageUrls } from "@/lib/services-media";
@@ -33,6 +34,7 @@ export default function ServiceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [photoDragOver, setPhotoDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -90,10 +92,19 @@ export default function ServiceDetailPage() {
     [categoryId, subcategories],
   );
 
+  const photosRef = useRef(photos);
+  const uploadingRef = useRef(uploading);
+  const serviceRef = useRef(service);
+  const photoZoneRef = useRef<HTMLDivElement>(null);
+  photosRef.current = photos;
+  uploadingRef.current = uploading;
+  serviceRef.current = service;
+
   const persistPhotos = async (next: string[]) => {
-    if (!service) return;
+    const current = serviceRef.current;
+    if (!current) return;
     const trimmed = next.map((url) => url.trim()).filter(Boolean).slice(0, MAX_PHOTOS);
-    const data = (await patchAdmin(`/api/admin/services/${service.id}`, {
+    const data = (await patchAdmin(`/api/admin/services/${current.id}`, {
       cover_url: trimmed[0] ?? null,
       images: trimmed,
     })) as ServiceRow | undefined;
@@ -102,11 +113,12 @@ export default function ServiceDetailPage() {
   };
 
   const addPhoto = async (file: File) => {
-    if (!service) return;
-    if (photos.length >= MAX_PHOTOS) {
+    if (!serviceRef.current) return;
+    if (photosRef.current.length >= MAX_PHOTOS) {
       setError(`Maximum ${MAX_PHOTOS} photos allowed.`);
       return;
     }
+    if (uploadingRef.current) return;
     setUploading(true);
     setError(null);
     try {
@@ -124,7 +136,7 @@ export default function ServiceDetailPage() {
       if (!response.ok) throw new Error(payload.error || "Upload failed");
       const url = (payload.image_url || payload.publicUrl || "").trim();
       if (!url) throw new Error("Upload returned no URL");
-      await persistPhotos([...photos, url]);
+      await persistPhotos([...photosRef.current, url]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -133,13 +145,43 @@ export default function ServiceDetailPage() {
     }
   };
 
+  const acceptPhotoFromClipboard = (data: DataTransfer | null) => {
+    if (uploadingRef.current || photosRef.current.length >= MAX_PHOTOS) return false;
+    const file = clipboardImageFile(data);
+    if (!file) return false;
+    void addPhoto(file);
+    return true;
+  };
+
+  useEffect(() => {
+    const onWindowPaste = (event: ClipboardEvent) => {
+      if (!serviceRef.current) return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable) &&
+        !photoZoneRef.current?.contains(target)
+      ) {
+        return;
+      }
+      if (acceptPhotoFromClipboard(event.clipboardData)) {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener("paste", onWindowPaste);
+    return () => window.removeEventListener("paste", onWindowPaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [service?.id]);
+
   const removePhoto = async (url: string) => {
-    if (!service) return;
+    if (!serviceRef.current) return;
     if (!window.confirm("Remove this photo from the listing?")) return;
     setUploading(true);
     setError(null);
     try {
-      await persistPhotos(photos.filter((item) => item !== url));
+      await persistPhotos(photosRef.current.filter((item) => item !== url));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not remove photo");
     } finally {
@@ -294,40 +336,83 @@ export default function ServiceDetailPage() {
                 </button>
               </div>
             </div>
-            {photos.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {photos.map((src, index) => (
-                  <div
-                    key={`${src}-${index}`}
-                    className="group relative overflow-hidden rounded-lg border border-border bg-muted"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={src}
-                      alt=""
-                      className="aspect-[4/3] w-full object-contain"
-                    />
-                    {index === 0 ? (
-                      <span className="absolute left-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
-                        Cover
-                      </span>
-                    ) : null}
-                    <button
-                      type="button"
-                      disabled={uploading}
-                      onClick={() => void removePhoto(src)}
-                      className="absolute right-2 top-2 rounded bg-black/65 px-2 py-1 text-[11px] font-medium text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 disabled:opacity-50"
+            <div
+              ref={photoZoneRef}
+              tabIndex={0}
+              role="button"
+              aria-label="Paste or drop service photo"
+              onPaste={(pasteEvent) => {
+                if (acceptPhotoFromClipboard(pasteEvent.clipboardData)) {
+                  pasteEvent.preventDefault();
+                }
+              }}
+              onDragEnter={(dragEvent) => {
+                dragEvent.preventDefault();
+                if (!uploading && photos.length < MAX_PHOTOS) setPhotoDragOver(true);
+              }}
+              onDragOver={(dragEvent) => {
+                dragEvent.preventDefault();
+                if (!uploading && photos.length < MAX_PHOTOS) setPhotoDragOver(true);
+              }}
+              onDragLeave={() => setPhotoDragOver(false)}
+              onDrop={(dropEvent) => {
+                dropEvent.preventDefault();
+                setPhotoDragOver(false);
+                acceptPhotoFromClipboard(dropEvent.dataTransfer);
+              }}
+              className={`rounded-lg border border-dashed outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                photoDragOver
+                  ? "border-primary bg-primary/10"
+                  : "border-border bg-muted/30"
+              }`}
+            >
+              {photos.length > 0 ? (
+                <div className="grid grid-cols-2 gap-3 p-3 sm:grid-cols-3">
+                  {photos.map((src, index) => (
+                    <div
+                      key={`${src}-${index}`}
+                      className="group relative overflow-hidden rounded-lg border border-border bg-muted"
                     >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex aspect-[4/3] max-w-sm items-center justify-center rounded-lg border border-dashed border-border bg-muted text-sm text-text-secondary">
-                No photos yet
-              </div>
-            )}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={src}
+                        alt=""
+                        className="aspect-[4/3] w-full object-contain"
+                      />
+                      {index === 0 ? (
+                        <span className="absolute left-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                          Cover
+                        </span>
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={uploading}
+                        onClick={() => void removePhoto(src)}
+                        className="absolute right-2 top-2 rounded bg-black/65 px-2 py-1 text-[11px] font-medium text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex aspect-[4/3] max-w-sm flex-col items-center justify-center gap-1 px-3 text-center text-sm text-text-secondary">
+                  <span>
+                    {photoDragOver
+                      ? "Drop image to upload"
+                      : "Paste (⌘V / Ctrl+V) or drop an image"}
+                  </span>
+                  <span className="text-xs text-text-hint">JPG, PNG, WebP, or GIF</span>
+                </div>
+              )}
+              {photos.length > 0 && photos.length < MAX_PHOTOS ? (
+                <p className="border-t border-border/60 px-3 py-2 text-center text-xs text-text-hint">
+                  {photoDragOver
+                    ? "Drop to add another photo"
+                    : "Paste or drop another image · or use Add photo"}
+                </p>
+              ) : null}
+            </div>
           </div>
 
           <p className="text-sm text-text-secondary">{service.description || "No description."}</p>
