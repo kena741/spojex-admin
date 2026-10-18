@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import AdminPageHeader from "@/components/admin-header";
 import { AdminErrorAlert, AdminLoadingRow, AdminTableShell } from "@/components/admin-layout";
+import BeneficiarySelect from "@/components/beneficiary-select";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import {
   campaignDisplayGoal,
@@ -332,11 +333,6 @@ export default function DonationDetailPage() {
               ? ` of ${formatDonationAmount(goal, displayCurrency)} (${progress}%)`
               : ""}
           </p>
-          {!campaign.beneficiary_user_id ? (
-            <p className="mt-2 text-sm text-text-secondary">
-              No beneficiary saved — coin gifts use the Spojex platform org by default.
-            </p>
-          ) : null}
         </section>
 
         <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
@@ -434,26 +430,17 @@ export default function DonationDetailPage() {
                   className="h-10 w-full rounded-lg border border-border px-3"
                 />
               </label>
-              <label className="text-sm">
-                <span className="mb-1 block text-text-secondary">
-                  Beneficiary user ID (receives gift coins)
-                </span>
-                <input
-                  defaultValue={campaign.beneficiary_user_id ?? ""}
-                  placeholder="Blank = Spojex org (default)"
-                  onBlur={(e) => {
-                    const value = e.target.value.trim() || null;
-                    if (value !== (campaign.beneficiary_user_id ?? null)) {
-                      // null/empty → API resets to Spojex platform org owner.
-                      save({ beneficiary_user_id: value });
-                    }
-                  }}
-                  className="h-10 w-full rounded-lg border border-border px-3 font-mono text-xs"
-                />
-                <span className="mt-1 block text-xs text-text-secondary">
-                  Defaults to Spojex platform org. Change only to send gifts to another user.
-                </span>
-              </label>
+              <BeneficiarySelect
+                value={campaign.beneficiary_user_id ?? ""}
+                disabled={!canWrite}
+                onChange={(userId) => {
+                  const next = userId.trim() || null;
+                  if (next !== (campaign.beneficiary_user_id ?? null)) {
+                    // empty → API sets Spojex platform org owner.
+                    void save({ beneficiary_user_id: next });
+                  }
+                }}
+              />
               <label className="text-sm">
                 <span className="mb-1 block text-text-secondary">Status</span>
                 <select

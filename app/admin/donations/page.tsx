@@ -25,6 +25,7 @@ import {
   formatDonationAmount,
   slugifyDonation,
 } from "@/lib/donations";
+import BeneficiarySelect from "@/components/beneficiary-select";
 import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
@@ -341,16 +342,11 @@ export default function DonationsPage() {
             required
             className="h-10 rounded-lg border border-border px-3 text-sm"
           />
-          <input
+          <BeneficiarySelect
             value={beneficiaryId}
-            onChange={(e) => setBeneficiaryId(e.target.value)}
-            placeholder="Leave blank = Spojex org (default)"
-            className="h-10 rounded-lg border border-border px-3 font-mono text-xs"
+            onChange={setBeneficiaryId}
+            disabled={!canWrite || creating}
           />
-          <p className="text-xs text-text-secondary">
-            Default beneficiary is the Spojex platform org. Override with a user ID to credit
-            someone else.
-          </p>
           <AdminSelect value={createStatus} onChange={setCreateStatus}>
             {donationStatuses.map((item) => (
               <option key={item.id} value={item.id}>
