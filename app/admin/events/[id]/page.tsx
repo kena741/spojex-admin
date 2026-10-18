@@ -15,6 +15,11 @@ import { AdminCode } from "@/components/admin-code";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { VisiblePassword } from "@/components/visible-password";
 import {
+  clipboardImageFile,
+  eventImageAccept,
+  validateEventImageFile,
+} from "@/lib/clipboard-image";
+import {
   eventCategories,
   eventCategoryLabel,
   eventCoverUrl,
@@ -79,6 +84,8 @@ export default function EventDetailPage() {
   const [code, setCode] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState<"cover" | "gallery" | null>(null);
+  const [coverDragOver, setCoverDragOver] = useState(false);
+  const [coverPasteHint, setCoverPasteHint] = useState<string | null>(null);
   const [tierOpen, setTierOpen] = useState(false);
   const [savingTier, setSavingTier] = useState(false);
   const [editingTierId, setEditingTierId] = useState<string | null>(null);
@@ -289,8 +296,15 @@ export default function EventDetailPage() {
   };
 
   const uploadImage = async (file: File, kind: "cover" | "gallery") => {
+    const invalid = validateEventImageFile(file);
+    if (invalid) {
+      if (kind === "cover") setCoverPasteHint(invalid);
+      else setError(invalid);
+      return;
+    }
     setUploading(kind);
     setError(null);
+    setCoverPasteHint(null);
     try {
       const form = new FormData();
       form.append("file", file);
@@ -310,6 +324,13 @@ export default function EventDetailPage() {
       if (kind === "cover" && coverInputRef.current) coverInputRef.current.value = "";
       if (kind === "gallery" && galleryInputRef.current) galleryInputRef.current.value = "";
     }
+  };
+
+  const acceptCoverFromClipboard = (data: DataTransfer | null) => {
+    const file = clipboardImageFile(data);
+    if (!file) return false;
+    void uploadImage(file, "cover");
+    return true;
   };
 
   const removePhoto = async (url: string) => {
@@ -546,32 +567,91 @@ export default function EventDetailPage() {
                 <h2 className="font-heading text-sm font-semibold">Images</h2>
                 <StatusBadge tone={requestTone(event.status)}>{eventStatusLabel(event.status)}</StatusBadge>
               </div>
-              {cover ? (
-                <div className="relative mb-4">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={cover} alt="" className="h-56 w-full rounded-xl object-cover" />
-                  {canWrite ? (
-                    <button
-                      type="button"
-                      onClick={() => removePhoto(cover)}
-                      className="absolute right-3 top-3 rounded-md bg-black/70 px-2.5 py-1.5 text-xs font-medium text-white"
-                    >
-                      Remove cover
-                    </button>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="mb-4 flex h-56 items-center justify-center rounded-xl border border-dashed border-border bg-muted/40 text-sm text-text-secondary">
-                  No cover image yet
-                </div>
-              )}
+              <div
+                tabIndex={canWrite ? 0 : undefined}
+                role={canWrite ? "button" : undefined}
+                aria-label={canWrite ? "Paste or drop event cover image" : undefined}
+                onPaste={
+                  canWrite
+                    ? (pasteEvent) => {
+                        if (acceptCoverFromClipboard(pasteEvent.clipboardData)) {
+                          pasteEvent.preventDefault();
+                        }
+                      }
+                    : undefined
+                }
+                onDragEnter={
+                  canWrite
+                    ? (dragEvent) => {
+                        dragEvent.preventDefault();
+                        if (!uploading) setCoverDragOver(true);
+                      }
+                    : undefined
+                }
+                onDragOver={
+                  canWrite
+                    ? (dragEvent) => {
+                        dragEvent.preventDefault();
+                        if (!uploading) setCoverDragOver(true);
+                      }
+                    : undefined
+                }
+                onDragLeave={canWrite ? () => setCoverDragOver(false) : undefined}
+                onDrop={
+                  canWrite
+                    ? (dropEvent) => {
+                        dropEvent.preventDefault();
+                        setCoverDragOver(false);
+                        acceptCoverFromClipboard(dropEvent.dataTransfer);
+                      }
+                    : undefined
+                }
+                className={`relative mb-4 overflow-hidden rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                  coverDragOver ? "ring-2 ring-primary" : ""
+                }`}
+              >
+                {cover ? (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={cover} alt="" className="h-56 w-full object-cover" />
+                    {canWrite ? (
+                      <button
+                        type="button"
+                        onClick={() => removePhoto(cover)}
+                        className="absolute right-3 top-3 rounded-md bg-black/70 px-2.5 py-1.5 text-xs font-medium text-white"
+                      >
+                        Remove cover
+                      </button>
+                    ) : null}
+                  </>
+                ) : (
+                  <div
+                    className={`flex h-56 flex-col items-center justify-center gap-1 border border-dashed px-4 text-center text-sm text-text-secondary ${
+                      coverDragOver
+                        ? "border-primary bg-primary/10"
+                        : "border-border bg-muted/40"
+                    }`}
+                  >
+                    <span>
+                      {coverDragOver
+                        ? "Drop image to use as cover"
+                        : canWrite
+                          ? "Paste (⌘V / Ctrl+V) or drop a cover image"
+                          : "No cover image yet"}
+                    </span>
+                    {canWrite ? (
+                      <span className="text-xs text-text-hint">JPG, PNG, WebP, or GIF · max 5 MB</span>
+                    ) : null}
+                  </div>
+                )}
+              </div>
               {canWrite ? (
                 <div className="mb-5">
                   <p className="mb-1 text-sm font-medium">Cover image</p>
                   <input
                     ref={coverInputRef}
                     type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    accept={eventImageAccept}
                     disabled={Boolean(uploading)}
                     onChange={(changeEvent) => {
                       const file = changeEvent.target.files?.[0];
@@ -579,7 +659,10 @@ export default function EventDetailPage() {
                     }}
                     className="block w-full text-sm text-text-secondary file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-foreground"
                   />
-                  <p className="mt-1 text-xs text-text-secondary">JPG, PNG, WebP, or GIF · max 5 MB</p>
+                  <p className="mt-1 text-xs text-text-secondary">
+                    Paste, drop, or choose a file · JPG, PNG, WebP, or GIF · max 5 MB
+                  </p>
+                  {coverPasteHint ? <p className="mt-1 text-xs text-red-600">{coverPasteHint}</p> : null}
                   {uploading === "cover" ? <p className="mt-1 text-xs text-text-secondary">Uploading cover…</p> : null}
                 </div>
               ) : null}

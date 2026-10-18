@@ -19,6 +19,11 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import {
+  clipboardImageFile,
+  eventImageAccept,
+  validateEventImageFile,
+} from "@/lib/clipboard-image";
+import {
   eventCategoryLabel,
   eventCoverUrl,
   eventLifecycleLabel,
@@ -51,6 +56,10 @@ export default function EventsPage() {
   const [status, setStatus] = useState("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [coverHint, setCoverHint] = useState<string | null>(null);
+  const [coverDragOver, setCoverDragOver] = useState(false);
   const [form, setForm] = useState({
     name: "",
     venue_name: "",
@@ -59,6 +68,30 @@ export default function EventsPage() {
     ticket_price: "250",
     capacity: "0",
   });
+
+  const clearCover = () => {
+    setCoverFile(null);
+    setCoverPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setCoverHint(null);
+  };
+
+  const acceptCoverFile = (file: File | null) => {
+    if (!file) return;
+    const invalid = validateEventImageFile(file);
+    if (invalid) {
+      setCoverHint(invalid);
+      return;
+    }
+    setCoverHint(null);
+    setCoverPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+    setCoverFile(file);
+  };
 
   const load = async () => {
     const response = await adminFetch("/api/admin/events");
@@ -123,6 +156,7 @@ export default function EventsPage() {
     if (!canWrite) return;
     setCreating(true);
     setError(null);
+    setCoverHint(null);
     try {
       const payload = await postAdminResponse("/api/admin/events", {
         name: form.name,
@@ -134,7 +168,21 @@ export default function EventsPage() {
         status: "active",
       });
       const created = payload.data as EventRow | undefined;
+      if (created?.id && coverFile) {
+        const body = new FormData();
+        body.append("file", coverFile, coverFile.name);
+        body.append("kind", "cover");
+        const uploadRes = await adminFetch(`/api/admin/events/${created.id}/image`, {
+          method: "POST",
+          body,
+        });
+        const uploadPayload = (await uploadRes.json()) as { error?: string };
+        if (!uploadRes.ok) {
+          throw new Error(uploadPayload.error || "Event created, but cover upload failed.");
+        }
+      }
       setForm({ name: "", venue_name: "", location: "", starts_at: "", ticket_price: "250", capacity: "0" });
+      clearCover();
       setCreateOpen(false);
       if (created?.id) {
         router.push(`/admin/events/${created.id}`);
@@ -369,6 +417,7 @@ export default function EventsPage() {
         title="Add event"
         onClose={() => {
           if (creating) return;
+          clearCover();
           setCreateOpen(false);
         }}
         className="max-w-xl"
@@ -376,7 +425,11 @@ export default function EventsPage() {
           <div className="flex justify-end gap-2">
             <button
               type="button"
-              onClick={() => setCreateOpen(false)}
+              onClick={() => {
+                if (creating) return;
+                clearCover();
+                setCreateOpen(false);
+              }}
               className="rounded-md border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted"
             >
               Cancel
@@ -402,6 +455,75 @@ export default function EventsPage() {
               className={fieldClass}
             />
           </label>
+          <div className="grid gap-1 text-sm sm:col-span-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-text-secondary">Cover image</span>
+              {coverFile ? (
+                <button
+                  type="button"
+                  disabled={creating}
+                  onClick={clearCover}
+                  className="text-xs font-medium text-red-600 hover:underline"
+                >
+                  Remove
+                </button>
+              ) : null}
+            </div>
+            <div
+              tabIndex={0}
+              role="button"
+              aria-label="Paste or drop event cover image"
+              onPaste={(pasteEvent) => {
+                const file = clipboardImageFile(pasteEvent.clipboardData);
+                if (!file) return;
+                pasteEvent.preventDefault();
+                acceptCoverFile(file);
+              }}
+              onDragEnter={(dragEvent) => {
+                dragEvent.preventDefault();
+                if (!creating) setCoverDragOver(true);
+              }}
+              onDragOver={(dragEvent) => {
+                dragEvent.preventDefault();
+                if (!creating) setCoverDragOver(true);
+              }}
+              onDragLeave={() => setCoverDragOver(false)}
+              onDrop={(dropEvent) => {
+                dropEvent.preventDefault();
+                setCoverDragOver(false);
+                acceptCoverFile(clipboardImageFile(dropEvent.dataTransfer));
+              }}
+              className={`overflow-hidden rounded-lg border border-dashed outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+                coverDragOver ? "border-primary bg-primary/10" : "border-border bg-muted/40"
+              }`}
+            >
+              {coverPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={coverPreview} alt="" className="h-40 w-full object-cover" />
+              ) : (
+                <div className="flex h-28 flex-col items-center justify-center gap-1 px-3 text-center text-xs text-text-secondary">
+                  <span>
+                    {coverDragOver
+                      ? "Drop image to use as cover"
+                      : "Paste (⌘V / Ctrl+V) or drop a cover image"}
+                  </span>
+                  <span className="text-[11px] text-text-hint">JPG, PNG, WebP, or GIF · max 5 MB</span>
+                </div>
+              )}
+            </div>
+            {coverHint ? <p className="text-xs text-red-600">{coverHint}</p> : null}
+            <input
+              type="file"
+              accept={eventImageAccept}
+              disabled={creating}
+              className="block w-full text-sm text-text-secondary file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-foreground"
+              onChange={(changeEvent) => {
+                const file = changeEvent.target.files?.[0] ?? null;
+                acceptCoverFile(file);
+                changeEvent.target.value = "";
+              }}
+            />
+          </div>
           <label className="grid gap-1 text-sm">
             <span className="text-text-secondary">Venue</span>
             <input
