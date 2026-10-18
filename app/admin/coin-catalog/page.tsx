@@ -9,7 +9,7 @@ import {
   AdminLoadingRow,
   AdminTableShell,
 } from "@/components/admin-layout";
-import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
+import { adminFetch, deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 
@@ -71,6 +71,9 @@ export default function CoinCatalogPage() {
   });
   /** Primary admin knob: how many coins 1 Birr buys (default 10). */
   const [coinsPerBirr, setCoinsPerBirr] = useState("10");
+  const [minRedeem, setMinRedeem] = useState("100");
+  const [maxRedeem, setMaxRedeem] = useState("50000");
+  const [maxPending, setMaxPending] = useState("3");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -84,13 +87,33 @@ export default function CoinCatalogPage() {
   const [giftEmoji, setGiftEmoji] = useState("🎁");
   const [giftCoins, setGiftCoins] = useState("10");
 
+  const applySettingsPayload = (raw: Record<string, unknown> | null | undefined) => {
+    if (!raw) return;
+    const etb = Number(raw.etb_per_coin);
+    if (Number.isFinite(etb) && etb > 0) {
+      const perBirr = 1 / etb;
+      setCoinsPerBirr(
+        Number.isInteger(perBirr) ? String(perBirr) : perBirr.toFixed(2),
+      );
+    }
+    if (raw.min_redemption_coins != null) {
+      setMinRedeem(String(Number(raw.min_redemption_coins) || 100));
+    }
+    if (raw.max_redemption_coins != null) {
+      setMaxRedeem(String(Number(raw.max_redemption_coins) || 0));
+    }
+    if (raw.max_pending_redemptions != null) {
+      setMaxPending(String(Number(raw.max_pending_redemptions) || 3));
+    }
+  };
+
   const load = async () => {
     const spojex = getSpojexClient();
-    const [packRes, giftRes, settingsRes, purchaseRes, appSettingsRes] =
+    const [packRes, giftRes, settingsHttp, purchaseRes, appSettingsRes] =
       await Promise.all([
         spojex.from("coin_packages").select("*").order("sort_order"),
         spojex.from("coin_gifts").select("*").order("sort_order"),
-        spojex.from("coin_settings").select("etb_per_coin").eq("id", 1).maybeSingle(),
+        adminFetch("/api/admin/coin-settings"),
         spojex
           .from("coin_purchases")
           .select("id,user_id,coins,price_etb,status,provider_ref,paid_at,created_at")
@@ -105,13 +128,19 @@ export default function CoinCatalogPage() {
     if (!purchaseRes.error) {
       setPurchases((purchaseRes.data ?? []) as CoinPurchaseRow[]);
     }
-    if (settingsRes.data?.etb_per_coin != null) {
-      const etb = Number(settingsRes.data.etb_per_coin);
-      if (Number.isFinite(etb) && etb > 0) {
-        const perBirr = 1 / etb;
-        setCoinsPerBirr(
-          Number.isInteger(perBirr) ? String(perBirr) : perBirr.toFixed(2),
-        );
+    if (settingsHttp.ok) {
+      const settingsPayload = (await settingsHttp.json()) as Record<string, unknown>;
+      applySettingsPayload(settingsPayload);
+    } else {
+      const fallback = await spojex
+        .from("coin_settings")
+        .select(
+          "etb_per_coin,min_redemption_coins,max_redemption_coins,max_pending_redemptions",
+        )
+        .eq("id", 1)
+        .maybeSingle();
+      if (fallback.data) {
+        applySettingsPayload(fallback.data as Record<string, unknown>);
       }
     }
     const paymentData =
@@ -154,6 +183,46 @@ export default function CoinCatalogPage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save rate");
+    }
+  };
+
+  const saveRedeemLimits = async () => {
+    if (!canWrite) return;
+    setError(null);
+    setNotice(null);
+    const min = Number(minRedeem);
+    const max = Number(maxRedeem);
+    const pending = Number(maxPending);
+    if (!Number.isFinite(min) || min < 1) {
+      setError("Minimum redeem coins must be at least 1.");
+      return;
+    }
+    if (!Number.isFinite(max) || max < 0) {
+      setError("Maximum redeem coins must be 0 (unlimited) or greater.");
+      return;
+    }
+    if (max > 0 && min > max) {
+      setError("Minimum cannot exceed maximum redemption.");
+      return;
+    }
+    if (!Number.isFinite(pending) || pending < 1) {
+      setError("Max pending redemptions must be at least 1.");
+      return;
+    }
+    try {
+      await postAdmin("/api/admin/coin-settings", {
+        min_redemption_coins: Math.floor(min),
+        max_redemption_coins: Math.floor(max),
+        max_pending_redemptions: Math.floor(pending),
+      });
+      setNotice(
+        `Saved redeem limits: min ${Math.floor(min)}, max ${
+          max > 0 ? Math.floor(max) : "unlimited"
+        }, pending ${Math.floor(pending)}.`,
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save redeem limits");
     }
   };
 
@@ -236,7 +305,7 @@ export default function CoinCatalogPage() {
     <>
       <AdminPageHeader
         title="Coin catalog"
-        description="Chapa buy packs for the app, gift stickers, and redemption ETB rate"
+        description="Chapa buy packs, gift stickers, ETB rate, and withdraw/redeem limits"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Link
@@ -321,6 +390,73 @@ export default function CoinCatalogPage() {
             {(1 / Number(coinsPerBirr)).toFixed(2)} ETB
           </p>
         ) : null}
+      </section>
+
+      <section className="mb-6 rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="mb-1 font-heading text-sm font-semibold">
+              Redeem / withdraw limits
+            </h2>
+            <p className="text-sm text-text-secondary">
+              Controls mobile coin cash-out requests. Users redeem received coins; admin
+              pays or rejects under{" "}
+              <Link href="/admin/coin-redemptions" className="underline">
+                Coin redemptions
+              </Link>
+              .
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            <span className="mb-1 block text-text-secondary">Min coins / request</span>
+            <input
+              type="number"
+              min={1}
+              step="1"
+              value={minRedeem}
+              disabled={!canWrite}
+              onChange={(e) => setMinRedeem(e.target.value)}
+              className="h-10 w-36 rounded-lg border border-border px-3"
+            />
+          </label>
+          <label className="text-sm">
+            <span className="mb-1 block text-text-secondary">
+              Max coins / request (0 = unlimited)
+            </span>
+            <input
+              type="number"
+              min={0}
+              step="1"
+              value={maxRedeem}
+              disabled={!canWrite}
+              onChange={(e) => setMaxRedeem(e.target.value)}
+              className="h-10 w-44 rounded-lg border border-border px-3"
+            />
+          </label>
+          <label className="text-sm">
+            <span className="mb-1 block text-text-secondary">Max pending requests</span>
+            <input
+              type="number"
+              min={1}
+              step="1"
+              value={maxPending}
+              disabled={!canWrite}
+              onChange={(e) => setMaxPending(e.target.value)}
+              className="h-10 w-36 rounded-lg border border-border px-3"
+            />
+          </label>
+          {canWrite ? (
+            <button
+              type="button"
+              onClick={() => void saveRedeemLimits()}
+              className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"
+            >
+              Save limits
+            </button>
+          ) : null}
+        </div>
       </section>
 
       {loading ? <AdminLoadingRow label="Loading catalog…" /> : null}

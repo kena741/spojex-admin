@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AdminPageHeader from "@/components/admin-header";
 import {
@@ -97,6 +98,14 @@ export default function CoinRedemptionsPage() {
       <AdminPageHeader
         title="Coin redemptions"
         description="Payout requests for redeemable coins received as gifts"
+        actions={
+          <Link
+            href="/admin/coin-catalog"
+            className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
+          >
+            Redeem limits &amp; rate
+          </Link>
+        }
       />
       <AdminFilterPanel>
         <AdminSearchInput value={query} onChange={setQuery} placeholder="Search" />
