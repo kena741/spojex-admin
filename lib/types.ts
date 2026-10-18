@@ -655,6 +655,8 @@ export type EventRow = {
   status: string;
   /** Shown in the app Upcoming Events rail when true. */
   is_upcoming?: boolean;
+  /** Shown in the app Featured Events carousel when true. */
+  is_featured?: boolean;
   category?: string;
   visibility?: string;
   lifecycle?: string;

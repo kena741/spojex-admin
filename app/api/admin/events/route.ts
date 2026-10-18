@@ -87,6 +87,7 @@ export async function POST(request: Request) {
       image_url: body.image_url ?? "",
       status: body.status ?? "active",
       is_upcoming: body.is_upcoming === true,
+      is_featured: false,
       category: body.category?.trim() || "other",
       visibility: body.visibility?.trim() || "public",
       lifecycle: body.lifecycle?.trim() || "sales_open",

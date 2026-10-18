@@ -477,6 +477,17 @@ export default function EventDetailPage() {
               </button>
               <button
                 type="button"
+                onClick={() => save({ is_featured: !event.is_featured })}
+                className={`rounded-md border px-3 py-2 text-sm font-medium ${
+                  event.is_featured
+                    ? "border-violet-200 bg-violet-50 text-violet-800 hover:bg-violet-100"
+                    : "border-border bg-card hover:bg-muted"
+                }`}
+              >
+                {event.is_featured ? "Featured: On" : "Feature on app"}
+              </button>
+              <button
+                type="button"
                 className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
                 onClick={async () => {
                   if (!window.confirm(`Delete "${event.name}"? This cannot be undone.`)) return;
@@ -738,6 +749,7 @@ export default function EventDetailPage() {
                     description: data.get("description"),
                     status: data.get("status"),
                     is_upcoming: data.get("is_upcoming") === "on",
+                    is_featured: data.get("is_featured") === "on",
                     category: data.get("category"),
                     visibility: data.get("visibility"),
                     lifecycle: data.get("lifecycle"),
@@ -877,6 +889,20 @@ export default function EventDetailPage() {
                     <span className="font-medium text-text-primary">Show in Upcoming Events</span>
                     <span className="mt-0.5 block text-xs text-text-secondary">
                       Lists this event in the Spojex app Upcoming Events horizontal rail.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 px-3 py-3 text-sm">
+                  <input
+                    name="is_featured"
+                    type="checkbox"
+                    defaultChecked={Boolean(event.is_featured)}
+                    className="mt-0.5 h-4 w-4 rounded border-border"
+                  />
+                  <span>
+                    <span className="font-medium text-text-primary">Feature on app</span>
+                    <span className="mt-0.5 block text-xs text-text-secondary">
+                      Shows this event in the Spojex app Featured Events carousel.
                     </span>
                   </span>
                 </label>

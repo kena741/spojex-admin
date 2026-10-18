@@ -209,6 +209,19 @@ export default function EventsPage() {
     }
   };
 
+  const toggleFeatured = async (row: EventRow) => {
+    if (!canWrite) return;
+    setError(null);
+    try {
+      await patchAdmin(`/api/admin/events/${row.id}`, {
+        is_featured: !row.is_featured,
+      });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Update failed");
+    }
+  };
+
   const remove = async (row: EventRow) => {
     if (!window.confirm(`Delete "${row.name}"? This cannot be undone.`)) return;
     setError(null);
@@ -280,6 +293,7 @@ export default function EventsPage() {
                   <th className="px-4 py-3 font-semibold">Sold</th>
                   <th className="px-4 py-3 font-semibold">Sales</th>
                   <th className="px-4 py-3 font-semibold">Upcoming</th>
+                  <th className="px-4 py-3 font-semibold">Featured</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
                   <th className="px-4 py-3 font-semibold">Created</th>
                   {canWrite ? <th className="px-4 py-3 font-semibold">Actions</th> : null}
@@ -291,7 +305,7 @@ export default function EventsPage() {
                   const sales = salesByEvent[row.id];
                   const holders = ticketsByEvent[row.id] ?? [];
                   const open = expandedId === row.id;
-                  const colSpan = canWrite ? 9 : 8;
+                  const colSpan = canWrite ? 10 : 9;
                   return (
                     <Fragment key={row.id}>
                     <tr className="border-b border-border last:border-0 hover:bg-muted/30">
@@ -347,6 +361,25 @@ export default function EventsPage() {
                           </button>
                         ) : row.is_upcoming ? (
                           <StatusBadge tone="success">Upcoming</StatusBadge>
+                        ) : (
+                          <span className="text-xs text-text-secondary">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {canWrite ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleFeatured(row)}
+                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                              row.is_featured
+                                ? "bg-violet-100 text-violet-800"
+                                : "bg-muted text-text-secondary hover:bg-muted/80"
+                            }`}
+                          >
+                            {row.is_featured ? "Featured" : "Off"}
+                          </button>
+                        ) : row.is_featured ? (
+                          <StatusBadge tone="info">Featured</StatusBadge>
                         ) : (
                           <span className="text-xs text-text-secondary">—</span>
                         )}

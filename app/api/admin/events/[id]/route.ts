@@ -33,6 +33,7 @@ const allowed = [
   "invite_token",
   "latitude",
   "longitude",
+  "is_featured",
 ] as const;
 
 /**
