@@ -89,10 +89,6 @@ export default function DonationsPage() {
       return;
     }
     const beneficiary = beneficiaryId.trim();
-    if (!beneficiary) {
-      setError("Beneficiary user ID is required for coin campaigns");
-      return;
-    }
     setCreating(true);
     setError(null);
     try {
@@ -105,7 +101,8 @@ export default function DonationsPage() {
         goal_coins: goalCoins,
         currency: "COIN",
         status: createStatus || "active",
-        beneficiary_user_id: beneficiary,
+        // Empty → API defaults to Spojex platform org owner.
+        ...(beneficiary ? { beneficiary_user_id: beneficiary } : {}),
       });
       setTitle("");
       setGoal("");
@@ -347,12 +344,12 @@ export default function DonationsPage() {
           <input
             value={beneficiaryId}
             onChange={(e) => setBeneficiaryId(e.target.value)}
-            placeholder="Beneficiary user ID (uuid)"
-            required
+            placeholder="Leave blank = Spojex org (default)"
             className="h-10 rounded-lg border border-border px-3 font-mono text-xs"
           />
           <p className="text-xs text-text-secondary">
-            Coin gifts credit this user&apos;s redeemable wallet. Copy a user id from Users.
+            Default beneficiary is the Spojex platform org. Override with a user ID to credit
+            someone else.
           </p>
           <AdminSelect value={createStatus} onChange={setCreateStatus}>
             {donationStatuses.map((item) => (

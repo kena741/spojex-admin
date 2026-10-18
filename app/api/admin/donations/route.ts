@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { slugifyDonation } from "@/lib/donations";
+import { resolvePlatformBeneficiaryUserId } from "@/lib/platform-beneficiary";
 
 export async function POST(request: Request) {
   const auth = await requireAdminPermission("donations:write");
@@ -44,18 +45,22 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const beneficiary =
+  // Explicit admin choice wins; otherwise default to Spojex platform org owner.
+  let beneficiary =
     typeof body.beneficiary_user_id === "string" && body.beneficiary_user_id.trim()
       ? body.beneficiary_user_id.trim()
       : null;
   if (isCoin && !beneficiary) {
-    return NextResponse.json(
-      {
-        error:
-          "Beneficiary user ID is required for COIN campaigns so gifts can credit a wallet.",
-      },
-      { status: 400 },
-    );
+    beneficiary = await resolvePlatformBeneficiaryUserId(auth.context.client);
+    if (!beneficiary) {
+      return NextResponse.json(
+        {
+          error:
+            "Spojex platform org has no owner user. Create the platform org first, or set a beneficiary.",
+        },
+        { status: 400 },
+      );
+    }
   }
   const status = (body.status ?? "active").trim() || "active";
   const { data, error: insertError } = await auth.context.client

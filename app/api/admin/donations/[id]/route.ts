@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAdminPermission } from "@/lib/admin-auth";
+import { resolvePlatformBeneficiaryUserId } from "@/lib/platform-beneficiary";
 
 const allowed = [
   "title",
@@ -26,6 +27,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const patch: Record<string, unknown> = {};
   for (const key of allowed) {
     if (key in body) patch[key] = body[key];
+  }
+  // Empty / null beneficiary → Spojex platform org owner (default).
+  if ("beneficiary_user_id" in patch) {
+    const raw = patch.beneficiary_user_id;
+    const trimmed =
+      typeof raw === "string" ? raw.trim() : raw == null ? "" : String(raw).trim();
+    if (!trimmed) {
+      const platformUser = await resolvePlatformBeneficiaryUserId(auth.context.client);
+      patch.beneficiary_user_id = platformUser;
+    } else {
+      patch.beneficiary_user_id = trimmed;
+    }
   }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "No valid fields" }, { status: 400 });

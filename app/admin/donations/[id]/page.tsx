@@ -333,8 +333,8 @@ export default function DonationDetailPage() {
               : ""}
           </p>
           {!campaign.beneficiary_user_id ? (
-            <p className="mt-2 text-sm text-amber-700">
-              Set a beneficiary user ID so coin gifts can credit a redeemable wallet.
+            <p className="mt-2 text-sm text-text-secondary">
+              No beneficiary saved — coin gifts use the Spojex platform org by default.
             </p>
           ) : null}
         </section>
@@ -440,15 +440,19 @@ export default function DonationDetailPage() {
                 </span>
                 <input
                   defaultValue={campaign.beneficiary_user_id ?? ""}
-                  placeholder="uuid of Spojex user"
+                  placeholder="Blank = Spojex org (default)"
                   onBlur={(e) => {
                     const value = e.target.value.trim() || null;
-                    if (value !== campaign.beneficiary_user_id) {
+                    if (value !== (campaign.beneficiary_user_id ?? null)) {
+                      // null/empty → API resets to Spojex platform org owner.
                       save({ beneficiary_user_id: value });
                     }
                   }}
                   className="h-10 w-full rounded-lg border border-border px-3 font-mono text-xs"
                 />
+                <span className="mt-1 block text-xs text-text-secondary">
+                  Defaults to Spojex platform org. Change only to send gifts to another user.
+                </span>
               </label>
               <label className="text-sm">
                 <span className="mb-1 block text-text-secondary">Status</span>
