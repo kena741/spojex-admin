@@ -126,8 +126,8 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
       { status: 400 },
     );
   }
-  const orderIds = (orders ?? [])
-    .map((row) => `${(row as { id?: string }).id ?? ""}`)
+  const orderIds = ((orders ?? []) as Array<{ id?: string }>)
+    .map((row) => `${row.id ?? ""}`)
     .filter(Boolean);
   if (orderIds.length > 0) {
     const { error: itemsError } = await client
