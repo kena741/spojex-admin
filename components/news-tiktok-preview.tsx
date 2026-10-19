@@ -72,7 +72,7 @@ export function NewsTikTokPreview({
     const s = source.trim();
     if (!s) return "";
     if (org && s.toLowerCase() === org.toLowerCase()) return "";
-    return s;
+    return /^source\s*:/i.test(s) ? s : `Source: ${s}`;
   })();
   const caption = [title.trim(), body.trim()].filter(Boolean).join(" — ");
   const shortCaption =
