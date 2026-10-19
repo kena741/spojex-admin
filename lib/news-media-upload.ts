@@ -13,12 +13,57 @@ import {
   removeWatermarkViaSpojexMediaApi,
   signUploadComplete,
   toBackendMediaUrl,
+  trimVideoViaSpojexMediaApi,
   uploadViaSpojexMediaApi,
 } from "@/lib/spojex-media";
 import { requestAccessToken } from "@/lib/spojex/server";
 
 /** Cloud Run request body limit is ~32MB; stay under that for multipart proxy. */
 const MULTIPART_SAFE_BYTES = 28 * 1024 * 1024;
+
+async function downloadNewsVideoBlob(
+  sourceUrlRaw: string,
+  token: string,
+): Promise<{ blob: Blob; filename: string } | NextResponse> {
+  const fetchUrl = toBackendMediaUrl(sourceUrlRaw);
+  let videoRes: Response;
+  try {
+    videoRes = await fetch(fetchUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    return NextResponse.json(
+      { error: "Could not download the uploaded video." },
+      { status: 400 },
+    );
+  }
+  if (!videoRes.ok) {
+    return NextResponse.json(
+      { error: `Could not download video (${videoRes.status}). Re-upload and try again.` },
+      { status: 400 },
+    );
+  }
+  const bytes = new Uint8Array(await videoRes.arrayBuffer());
+  if (bytes.byteLength <= 0) {
+    return NextResponse.json({ error: "Downloaded video was empty." }, { status: 400 });
+  }
+  if (bytes.byteLength > MULTIPART_SAFE_BYTES) {
+    return NextResponse.json(
+      {
+        error: "Video must be under 28 MB to edit. Compress the clip first.",
+      },
+      { status: 400 },
+    );
+  }
+  const contentType =
+    (videoRes.headers.get("content-type") || "").split(";")[0].trim() || "video/mp4";
+  const blob = new Blob([bytes], {
+    type: contentType.startsWith("video/") ? contentType : "video/mp4",
+  });
+  const match = fetchUrl.match(/\/([^/?#]+)$/);
+  const filename = match?.[1] || `video-${Date.now()}.mp4`;
+  return { blob, filename };
+}
 
 export type WatermarkPreset = "tiktok" | "instagram" | "both";
 export type WatermarkMode = "delogo" | "crop_bottom";
@@ -61,48 +106,14 @@ export async function removeNewsVideoWatermarkFromForm(
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const fetchUrl = toBackendMediaUrl(sourceUrlRaw);
-  let videoRes: Response;
-  try {
-    videoRes = await fetch(fetchUrl, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-  } catch {
-    return NextResponse.json(
-      { error: "Could not download the uploaded video for watermark removal." },
-      { status: 400 },
-    );
-  }
-  if (!videoRes.ok) {
-    return NextResponse.json(
-      { error: `Could not download video (${videoRes.status}). Re-upload and try again.` },
-      { status: 400 },
-    );
-  }
-
-  const bytes = new Uint8Array(await videoRes.arrayBuffer());
-  if (bytes.byteLength <= 0) {
-    return NextResponse.json({ error: "Downloaded video was empty." }, { status: 400 });
-  }
-  if (bytes.byteLength > MULTIPART_SAFE_BYTES) {
-    return NextResponse.json(
-      {
-        error:
-          "Watermark removal needs a video under 28 MB. Compress the clip or crop it first.",
-      },
-      { status: 400 },
-    );
-  }
-
-  const contentType =
-    (videoRes.headers.get("content-type") || "").split(";")[0].trim() || "video/mp4";
-  const uploadBlob = new Blob([bytes], { type: contentType.startsWith("video/") ? contentType : "video/mp4" });
+  const downloaded = await downloadNewsVideoBlob(sourceUrlRaw, token);
+  if (downloaded instanceof NextResponse) return downloaded;
   const filename = `video-clean-${Date.now()}.mp4`;
 
   try {
     const cleaned = await removeWatermarkViaSpojexMediaApi({
       accessToken: token,
-      file: uploadBlob,
+      file: downloaded.blob,
       filename,
       preset,
       mode: watermarkMode,
@@ -124,6 +135,64 @@ export async function removeNewsVideoWatermarkFromForm(
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Watermark removal failed";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}
+
+/**
+ * Trim an already-uploaded news video to [start, end) and store the clip.
+ */
+export async function trimNewsVideoFromForm(
+  form: FormData,
+  folder: string,
+): Promise<NextResponse> {
+  const sourceUrlRaw = `${form.get("source_url") ?? form.get("sourceUrl") ?? ""}`.trim();
+  if (!sourceUrlRaw) {
+    return NextResponse.json({ error: "source_url is required" }, { status: 400 });
+  }
+
+  const start = Number(form.get("start_seconds") ?? 0);
+  const end = Number(form.get("end_seconds"));
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    return NextResponse.json(
+      { error: "Choose a valid trim range (end after start)." },
+      { status: 400 },
+    );
+  }
+
+  const token = await requestAccessToken();
+  if (!token) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const downloaded = await downloadNewsVideoBlob(sourceUrlRaw, token);
+  if (downloaded instanceof NextResponse) return downloaded;
+
+  try {
+    const trimmed = await trimVideoViaSpojexMediaApi({
+      accessToken: token,
+      file: downloaded.blob,
+      filename: downloaded.filename || `video-trim-${Date.now()}.mp4`,
+      startSeconds: Math.max(0, start),
+      endSeconds: end,
+      module: "news",
+      folder: folder.includes("video") ? folder : "sport-news/videos",
+    });
+    if (!trimmed.publicUrl) {
+      return NextResponse.json({ error: "Video trim failed. No URL returned." }, { status: 400 });
+    }
+    return NextResponse.json({
+      kind: "video",
+      path: trimmed.path,
+      publicUrl: trimmed.publicUrl,
+      objectId: trimmed.objectId,
+      durationSeconds: trimmed.durationSeconds ?? Math.max(0, Math.round(end - start)),
+      trimmed: true,
+      startSeconds: start,
+      endSeconds: end,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Video trim failed";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

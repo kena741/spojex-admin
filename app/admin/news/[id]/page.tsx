@@ -458,6 +458,7 @@ export default function NewsDetailPage() {
                 }}
               />
               <NewsMediaFields
+                articleId={id}
                 imageUrl={image}
                 imageUrls={gallery}
                 videoUrl={article.video_url ?? ""}
@@ -473,6 +474,7 @@ export default function NewsDetailPage() {
                 onRemoveVideo={() => void removeVideo()}
                 onRemoveAudio={() => void removeAudio()}
                 onRemoveWatermark={(options) => void removeWatermark(options)}
+                onTrimVideo={(result) => void trimVideo(result)}
                 onSoundSelect={async (sound) => {
                   if (article.video_url?.trim()) {
                     return "Remove the video before adding an image soundtrack.";

@@ -3,6 +3,7 @@ import { requireAdminPermission } from "@/lib/admin-auth";
 import { parseNewsUploadKind } from "@/lib/news-media";
 import {
   removeNewsVideoWatermarkFromForm,
+  trimNewsVideoFromForm,
   uploadNewsMediaFromForm,
 } from "@/lib/news-media-upload";
 
@@ -26,6 +27,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const action = `${form.get("action") ?? ""}`.trim().toLowerCase();
   if (action === "remove-watermark") {
     return removeNewsVideoWatermarkFromForm(form, `sport-news/${id}`);
+  }
+  if (action === "trim") {
+    return trimNewsVideoFromForm(form, `sport-news/${id}`);
   }
 
   const kind = parseNewsUploadKind(`${form.get("kind") ?? ""}`);

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NewsSoundPicker } from "@/components/news-sound-picker";
+import { VideoClipEditor } from "@/components/video-clip-editor";
 import {
   isNewsVideoFile,
   newsImageAccept,
@@ -205,6 +206,7 @@ export { NewsMediaPreview, NewsTikTokPreview } from "@/components/news-tiktok-pr
 const MAX_NEWS_IMAGES = 10;
 
 export function NewsMediaFields({
+  articleId = null,
   imageUrl,
   imageUrls,
   videoUrl,
@@ -220,8 +222,11 @@ export function NewsMediaFields({
   onRemoveVideo,
   onRemoveAudio,
   onRemoveWatermark,
+  onTrimVideo,
   onSoundSelect,
 }: {
+  /** When editing an existing article — used for trim / watermark API paths. */
+  articleId?: string | null;
   imageUrl: string;
   /** Ordered gallery (preferred). Falls back to [imageUrl] when empty. */
   imageUrls?: string[];
@@ -245,6 +250,10 @@ export function NewsMediaFields({
   onRemoveWatermark?: (options: {
     preset: NewsWatermarkPreset;
     mode: NewsWatermarkMode;
+  }) => void | Promise<void>;
+  onTrimVideo?: (result: {
+    publicUrl: string;
+    durationSeconds: number | null;
   }) => void | Promise<void>;
   onSoundSelect?: (sound: SportNewsSoundRow | null) => void;
 }) {
@@ -445,17 +454,17 @@ export function NewsMediaFields({
         ) : null}
       </div>
       {hasImage ? (
-        <div className="mb-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+        <div className="mb-2 grid max-w-[220px] grid-cols-2 gap-2">
           {gallery.map((url, index) => (
             <div
               key={`${url}-${index}`}
-              className="relative overflow-hidden rounded-lg border border-border bg-muted/40"
+              className="relative aspect-[3/4] overflow-hidden rounded-lg border border-border bg-muted/40"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={toBackendMediaUrl(url)}
                 alt=""
-                className="h-24 w-full object-cover"
+                className="h-full w-full object-cover"
               />
               {onRemoveImageAt ? (
                 <button
@@ -506,14 +515,14 @@ export function NewsMediaFields({
           const file = clipboardImageFile(event.dataTransfer);
           acceptImageFile(file);
         }}
-        className={`relative mb-2 overflow-hidden rounded-lg border border-dashed outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+        className={`relative mb-2 max-w-[220px] overflow-hidden rounded-lg border border-dashed outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
           dragOver
             ? "border-primary bg-primary/10"
             : "border-border bg-muted/40"
         }`}
       >
         {stagingPreview ? (
-          <div className="relative h-40 w-full">
+          <div className="relative aspect-[3/4] w-full">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={stagingPreview}
@@ -528,7 +537,7 @@ export function NewsMediaFields({
             </div>
           </div>
         ) : (
-          <div className="flex h-28 flex-col items-center justify-center gap-1 px-3 text-center text-xs text-text-secondary">
+          <div className="flex aspect-[3/4] flex-col items-center justify-center gap-1 px-3 text-center text-xs text-text-secondary">
             <span>
               {dragOver
                 ? "Drop images to upload"
@@ -573,7 +582,14 @@ export function NewsMediaFields({
               </button>
             ) : null}
           </div>
-          {hasVideo ? (
+          {hasVideo && onTrimVideo ? (
+            <VideoClipEditor
+              videoUrl={videoUrl}
+              articleId={articleId}
+              disabled={busy}
+              onTrimmed={onTrimVideo}
+            />
+          ) : hasVideo ? (
             <video
               key={videoUrl}
               src={toBackendMediaUrl(videoUrl)}

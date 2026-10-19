@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import {
   removeNewsVideoWatermarkFromForm,
+  trimNewsVideoFromForm,
   uploadNewsMediaFromForm,
 } from "@/lib/news-media-upload";
 
@@ -25,6 +26,9 @@ export async function POST(request: Request) {
   const action = `${form.get("action") ?? ""}`.trim().toLowerCase();
   if (action === "remove-watermark") {
     return removeNewsVideoWatermarkFromForm(form, "sport-news/drafts");
+  }
+  if (action === "trim") {
+    return trimNewsVideoFromForm(form, "sport-news/drafts");
   }
 
   return uploadNewsMediaFromForm(form, "sport-news/drafts");
