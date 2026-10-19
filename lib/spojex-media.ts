@@ -26,9 +26,13 @@ export type SpojexMediaUploadResult = {
   durationSeconds?: number | null;
 };
 
-function apiErrorMessage(payload: { detail?: unknown; error?: string }, fallback: string) {
+function apiErrorMessage(
+  payload: { detail?: unknown; error?: string; message?: string },
+  fallback: string,
+) {
   if (typeof payload.detail === "string" && payload.detail.trim()) return payload.detail;
   if (Array.isArray(payload.detail) && payload.detail[0]?.msg) return String(payload.detail[0].msg);
+  if (typeof payload.message === "string" && payload.message.trim()) return payload.message;
   if (payload.error?.trim()) return payload.error;
   return fallback;
 }

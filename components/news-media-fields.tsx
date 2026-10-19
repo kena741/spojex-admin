@@ -220,7 +220,7 @@ export function NewsMediaFields({
   onRemoveAudio: () => void;
   onSoundSelect?: (sound: SportNewsSoundRow | null) => void;
 }) {
-  const [watermark, setWatermark] = useState<"none" | "tiktok" | "instagram" | "both">("both");
+  const [watermark, setWatermark] = useState<"none" | "tiktok" | "instagram" | "both">("none");
   const [watermarkMode, setWatermarkMode] = useState<"delogo" | "crop_bottom">("delogo");
 
   const gallery = (
