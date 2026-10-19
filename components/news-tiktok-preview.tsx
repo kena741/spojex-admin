@@ -67,12 +67,11 @@ export function NewsTikTokPreview({
   const image = toBackendMediaUrl(imageUrl);
   const video = toBackendMediaUrl(videoUrl);
   const audio = toBackendMediaUrl(audioUrl);
-  const org =
-    organizationName.trim() || source.trim() || "SpoJex";
+  const org = organizationName.trim();
   const sourceLine = (() => {
     const s = source.trim();
     if (!s) return "";
-    if (s.toLowerCase() === org.toLowerCase()) return "";
+    if (org && s.toLowerCase() === org.toLowerCase()) return "";
     return s;
   })();
   const caption = [title.trim(), body.trim()].filter(Boolean).join(" — ");
@@ -121,7 +120,9 @@ export function NewsTikTokPreview({
 
           {/* Caption */}
           <div className="absolute bottom-14 left-3 right-16 z-10 text-white">
-            <p className="text-[13px] font-bold leading-tight drop-shadow">{org}</p>
+            <p className="text-[13px] font-bold leading-tight drop-shadow">
+              {org || "Select publishing organization"}
+            </p>
             {shortCaption ? (
               <p className="mt-1 text-[12px] leading-snug text-white/95 drop-shadow">
                 {shortCaption.includes("… more") ? (

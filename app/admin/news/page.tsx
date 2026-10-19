@@ -24,6 +24,7 @@ import {
   type NewsWatermarkMode,
   type NewsWatermarkPreset,
 } from "@/components/news-media-fields";
+import { NewsOrgPicker } from "@/components/news-org-picker";
 import { NewsSourceField } from "@/components/news-source-field";
 import { NewsTikTokPreview } from "@/components/news-tiktok-preview";
 import { newsCategories, newsRecency, newsStatusLabel, newsStatuses } from "@/lib/news";
@@ -56,6 +57,8 @@ export default function NewsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [body, setBody] = useState("");
   const [source, setSource] = useState("");
+  const [organizationId, setOrganizationId] = useState("");
+  const [organizationName, setOrganizationName] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [videoUrl, setVideoUrl] = useState("");
@@ -102,6 +105,8 @@ export default function NewsPage() {
     setTitle("");
     setBody("");
     setSource("");
+    setOrganizationId("");
+    setOrganizationName("");
     setImageUrl("");
     setImageUrls([]);
     setVideoUrl("");
@@ -186,6 +191,10 @@ export default function NewsPage() {
 
   const create = async () => {
     if (!canWrite || !title.trim() || uploading) return;
+    if (!organizationId.trim()) {
+      setError("Publishing organization is required.");
+      return;
+    }
     setCreating(true);
     setError(null);
     try {
@@ -204,6 +213,7 @@ export default function NewsPage() {
         summary: "",
         body: body.trim(),
         source: sourceLabel,
+        organization_id: organizationId.trim(),
         image_url: image,
         cover_url: image,
         image_urls: gallery,
@@ -474,6 +484,14 @@ export default function NewsPage() {
             rows={5}
             className="rounded-lg border border-border px-3 py-2 text-sm"
           />
+          <NewsOrgPicker
+            value={organizationId}
+            disabled={creating || Boolean(uploading)}
+            onChange={(orgId, org) => {
+              setOrganizationId(orgId);
+              setOrganizationName(org?.name ?? "");
+            }}
+          />
           <NewsSourceField
             label="Source label"
             optional
@@ -491,6 +509,7 @@ export default function NewsPage() {
           <NewsTikTokPreview
             title={title}
             body={body}
+            organizationName={organizationName}
             source={source.trim()}
             imageUrl={imageUrls[0] ?? imageUrl}
             videoUrl={videoUrl}

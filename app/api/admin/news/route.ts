@@ -123,7 +123,13 @@ export async function POST(request: Request) {
   const organizationId =
     typeof payload.organization_id === "string" && payload.organization_id.trim()
       ? payload.organization_id.trim()
-      : null;
+      : "";
+  if (!organizationId) {
+    return NextResponse.json(
+      { error: "Publishing organization is required." },
+      { status: 400 },
+    );
+  }
   const base = (payload.slug?.trim() || slugifyNews(title) || "article").toLowerCase();
   const slug = await uniqueNewsSlug(auth.context.client, base);
   const now = new Date().toISOString();
@@ -157,7 +163,7 @@ export async function POST(request: Request) {
     save_count: 0,
     share_count: 0,
     ...(publishedAt ? { published_at: publishedAt } : {}),
-    ...(organizationId ? { organization_id: organizationId } : {}),
+    organization_id: organizationId,
   };
 
   const insertArticle = (value: NewsInsert) =>

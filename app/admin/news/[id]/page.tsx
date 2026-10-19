@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
@@ -14,6 +13,7 @@ import {
   type NewsWatermarkMode,
   type NewsWatermarkPreset,
 } from "@/components/news-media-fields";
+import { NewsOrgPicker } from "@/components/news-org-picker";
 import { NewsSourceField } from "@/components/news-source-field";
 import { NewsTikTokPreview } from "@/components/news-tiktok-preview";
 import { newsCategories, newsStatusLabel, newsStatuses } from "@/lib/news";
@@ -21,81 +21,8 @@ import { resolveNewsStoryMedia, type NewsStoryMedia, type NewsUploadKind } from 
 import { deleteAdmin, patchAdmin } from "@/lib/hooks";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
-import type { OrganizationRow, SportNewsRow } from "@/lib/types";
+import type { SportNewsRow } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
-
-const fieldClass =
-  "h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-text-primary";
-
-function NewsOrgPicker({
-  value,
-  disabled,
-  onChange,
-}: {
-  value: string;
-  disabled?: boolean;
-  onChange: (orgId: string) => void;
-}) {
-  const [orgs, setOrgs] = useState<OrganizationRow[]>([]);
-  const appliedDefault = useRef(false);
-
-  useEffect(() => {
-    getSpojexClient()
-      .from("organizations")
-      .select("id, name, public_id, logo_url, user_id, is_platform, verified")
-      .order("is_platform", { ascending: false })
-      .order("name")
-      .limit(200)
-      .then(({ data }) => {
-        setOrgs((data ?? []) as OrganizationRow[]);
-      });
-  }, []);
-
-  useEffect(() => {
-    if (disabled || value || appliedDefault.current || orgs.length === 0) return;
-    const platform = orgs.find((item) => item.is_platform);
-    if (!platform?.id) return;
-    appliedDefault.current = true;
-    onChange(platform.id);
-  }, [disabled, onChange, orgs, value]);
-
-  const selected = orgs.find((item) => item.id === value);
-
-  return (
-    <label className="grid gap-1 text-sm">
-      <span className="mb-1 block text-text-secondary">Publishing organization</span>
-      <select
-        className={fieldClass}
-        disabled={disabled}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        <option value="">— None —</option>
-        {orgs.map((org) => (
-          <option key={org.id} value={org.id}>
-            {org.is_platform ? "★ " : ""}
-            {org.name}
-            {org.is_platform ? " (SpoJex)" : ""}
-            {org.verified ? " ✓" : ""}
-          </option>
-        ))}
-      </select>
-      {selected ? (
-        <p className="text-xs text-text-secondary">
-          App users follow this org from the news rail ·{" "}
-          <Link href={`/admin/organizations/${selected.id}`} className="text-primary underline">
-            View org
-          </Link>
-        </p>
-      ) : (
-        <p className="text-xs text-text-secondary">
-          Link an organization so readers can follow who posted the story. Run
-          migration 104 if this field fails to save.
-        </p>
-      )}
-    </label>
-  );
-}
 
 export default function NewsDetailPage() {
   const { id } = useParams<{ id: string }>();

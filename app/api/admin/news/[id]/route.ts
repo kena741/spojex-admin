@@ -47,8 +47,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
   if ("organization_id" in patch) {
     const raw = patch.organization_id;
-    patch.organization_id =
-      typeof raw === "string" && raw.trim() ? raw.trim() : null;
+    const orgId = typeof raw === "string" ? raw.trim() : "";
+    if (!orgId) {
+      return NextResponse.json(
+        { error: "Publishing organization is required." },
+        { status: 400 },
+      );
+    }
+    patch.organization_id = orgId;
   }
   if ("sound_id" in patch) {
     const raw = patch.sound_id;
