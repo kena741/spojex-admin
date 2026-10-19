@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import {
   NEWS_SOUND_KINDS,
   SOUNDTRACK_SOURCE_LABEL,
+  displaySoundTitle,
   newsSoundKindLabel,
   shortSoundTitle,
   type SoundtrackCatalogItem,
   type SportNewsSoundRow,
 } from "@/lib/news-sounds";
-import { postAdmin } from "@/lib/hooks";
+import { patchAdmin, postAdmin } from "@/lib/hooks";
 import { toBackendMediaUrl } from "@/lib/spojex-media";
 
 export function NewsSoundPicker({
@@ -29,6 +30,9 @@ export function NewsSoundPicker({
   const [rows, setRows] = useState<SoundtrackCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [promoting, setPromoting] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [kind, setKind] = useState("all");
   const [source, setSource] = useState<"all" | SoundtrackCatalogItem["source"]>("all");
@@ -107,8 +111,9 @@ export function NewsSoundPicker({
   };
 
   const pick = async (item: SoundtrackCatalogItem | null) => {
-    if (disabled || promoting) return;
+    if (disabled || promoting || renaming) return;
     setError(null);
+    setEditingKey(null);
     if (!item) {
       try {
         await applySelection(null);
@@ -157,32 +162,77 @@ export function NewsSoundPicker({
     }
   };
 
+  const startRename = (row: SoundtrackCatalogItem) => {
+    if (!row.sound_id || disabled) return;
+    setEditingKey(row.key);
+    setEditName(shortSoundTitle(row.name));
+    setError(null);
+  };
+
+  const cancelRename = () => {
+    setEditingKey(null);
+    setEditName("");
+  };
+
+  const saveRename = async (row: SoundtrackCatalogItem) => {
+    if (!row.sound_id || renaming || disabled) return;
+    const next = shortSoundTitle(editName);
+    if (!next) {
+      setError("Title is required.");
+      return;
+    }
+    setRenaming(true);
+    setError(null);
+    try {
+      await patchAdmin(`/api/admin/news-sounds/${row.sound_id}`, { name: next });
+      await load();
+      if (selectedKey === row.key) {
+        await applySelection({
+          id: row.sound_id,
+          name: next,
+          kind: row.kind,
+          audio_url: row.audio_url,
+          duration_seconds: null,
+          sort_order: 0,
+          is_active: true,
+          created_at: "",
+          updated_at: "",
+        });
+      }
+      cancelRename();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not rename sound");
+    } finally {
+      setRenaming(false);
+    }
+  };
+
   return (
-    <div className="mt-3 rounded-lg border border-dashed border-border bg-muted/30 p-3">
-      <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
-        <div>
+    <div className="mt-3 min-w-0 overflow-hidden rounded-lg border border-dashed border-border bg-muted/30 p-3">
+      <div className="mb-2 flex min-w-0 flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
           <p className="text-xs font-medium text-text-secondary">Image soundtrack</p>
-          <p className="text-[11px] text-text-hint">
-            Pick from the sound library ({rows.length}). Long file names are shortened.
+          <p className="truncate text-[11px] text-text-hint">
+            Library ({rows.length}) · short titles · tap edit to rename
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex shrink-0 flex-wrap gap-2">
           <select
             value={source}
             disabled={disabled || loading}
             onChange={(e) => setSource(e.target.value as typeof source)}
-            className="h-8 rounded-md border border-border bg-card px-2 text-xs"
+            className="h-8 max-w-[7.5rem] rounded-md border border-border bg-card px-2 text-xs"
           >
             <option value="all">All sources</option>
             <option value="library">Library</option>
-            <option value="news">News audio</option>
+            <option value="news">News</option>
             <option value="media">Uploads</option>
           </select>
           <select
             value={kind}
             disabled={disabled || loading}
             onChange={(e) => setKind(e.target.value)}
-            className="h-8 rounded-md border border-border bg-card px-2 text-xs"
+            className="h-8 max-w-[7rem] rounded-md border border-border bg-card px-2 text-xs"
           >
             <option value="all">All kinds</option>
             {NEWS_SOUND_KINDS.map((item) => (
@@ -198,24 +248,24 @@ export function NewsSoundPicker({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         disabled={disabled || loading}
-        placeholder="Search Spojex audio…"
-        className="mb-2 h-9 w-full rounded-lg border border-border bg-card px-3 text-sm"
+        placeholder="Search audio…"
+        className="mb-2 h-9 w-full min-w-0 rounded-lg border border-border bg-card px-3 text-sm"
       />
 
-      {error ? <p className="mb-2 text-xs text-red-600">{error}</p> : null}
+      {error ? <p className="mb-2 break-words text-xs text-red-600">{error}</p> : null}
       {loading ? (
-        <p className="text-xs text-text-secondary">Loading Spojex audio…</p>
+        <p className="text-xs text-text-secondary">Loading audio…</p>
       ) : filtered.length === 0 ? (
         <p className="text-xs text-text-secondary">
-          No audio found. Upload tracks in Sound library or publish news with audio.
+          No audio found. Upload in Sound library or publish news with audio.
         </p>
       ) : (
-        <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-border bg-card p-1">
+        <div className="max-h-56 space-y-1 overflow-x-hidden overflow-y-auto rounded-lg border border-border bg-card p-1">
           <button
             type="button"
-            disabled={disabled || promoting}
+            disabled={disabled || promoting || renaming}
             onClick={() => void pick(null)}
-            className={`flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm ${
+            className={`flex w-full min-w-0 items-center rounded-md px-2 py-2 text-left text-sm ${
               !selectedKey ? "bg-primary/10 text-primary" : "hover:bg-muted"
             }`}
           >
@@ -223,23 +273,80 @@ export function NewsSoundPicker({
           </button>
           {filtered.map((row) => {
             const active = row.key === selectedKey;
-            const label = shortSoundTitle(row.name);
+            const label = displaySoundTitle(row.name);
+            const editing = editingKey === row.key;
+            const meta = `${SOUNDTRACK_SOURCE_LABEL[row.source]} · ${newsSoundKindLabel(row.kind)}`;
+            if (editing) {
+              return (
+                <div
+                  key={row.key}
+                  className="flex min-w-0 items-center gap-1.5 rounded-md bg-muted/60 px-2 py-1.5"
+                >
+                  <input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    maxLength={40}
+                    disabled={renaming}
+                    autoFocus
+                    className="h-8 min-w-0 flex-1 rounded-md border border-border bg-card px-2 text-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void saveRename(row);
+                      }
+                      if (e.key === "Escape") cancelRename();
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={renaming}
+                    onClick={() => void saveRename(row)}
+                    className="shrink-0 text-xs font-medium text-primary hover:underline disabled:opacity-50"
+                  >
+                    {renaming ? "…" : "Save"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={renaming}
+                    onClick={cancelRename}
+                    className="shrink-0 text-xs text-text-secondary hover:underline"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              );
+            }
             return (
-              <button
+              <div
                 key={row.key}
-                type="button"
-                disabled={disabled || promoting}
-                title={row.name !== label ? row.name : undefined}
-                onClick={() => void pick(row)}
-                className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-2 text-left text-sm ${
+                className={`flex w-full min-w-0 items-center gap-1 rounded-md ${
                   active ? "bg-primary/10 text-primary" : "hover:bg-muted"
                 }`}
               >
-                <span className="min-w-0 truncate font-medium">{label}</span>
-                <span className="shrink-0 text-[11px] text-text-hint">
-                  {SOUNDTRACK_SOURCE_LABEL[row.source]} · {newsSoundKindLabel(row.kind)}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  disabled={disabled || promoting || renaming}
+                  title={row.name !== label ? row.name : undefined}
+                  onClick={() => void pick(row)}
+                  className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left text-sm"
+                >
+                  <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
+                  <span className="max-w-[5.5rem] shrink-0 truncate text-[11px] text-text-hint" title={meta}>
+                    {meta}
+                  </span>
+                </button>
+                {row.sound_id ? (
+                  <button
+                    type="button"
+                    disabled={disabled || promoting || renaming}
+                    title="Edit title"
+                    onClick={() => startRename(row)}
+                    className="mr-1 shrink-0 rounded px-1.5 py-1 text-[11px] font-medium text-text-secondary hover:bg-card hover:text-primary disabled:opacity-50"
+                  >
+                    Edit
+                  </button>
+                ) : null}
+              </div>
             );
           })}
         </div>
@@ -254,7 +361,7 @@ export function NewsSoundPicker({
           key={selected.key}
           src={toBackendMediaUrl(selected.audio_url)}
           controls
-          className="mt-2 w-full"
+          className="mt-2 w-full max-w-full"
         />
       ) : null}
     </div>

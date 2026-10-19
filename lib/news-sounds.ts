@@ -49,13 +49,20 @@ export function newsSoundKindLabel(kind: string) {
   return NEWS_SOUND_KINDS.find((item) => item.id === kind)?.label ?? kind;
 }
 
-/** Short display / storage title for library sounds (filenames can be very long). */
-export function shortSoundTitle(raw: string, max = 48): string {
-  let value = `${raw ?? ""}`.trim();
+/** Normalize a sound title (strip extension / separators). No ellipsis — safe to store. */
+export function shortSoundTitle(raw: string, max = 40): string {
+  let value = `${raw ?? ""}`.trim().replace(/…+$/g, "").replace(/\.{2,}$/g, "");
   if (!value) return "Untitled sound";
   value = value.replace(/\.[a-z0-9]{1,8}$/i, "");
   value = value.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
   if (!value) return "Untitled sound";
   if (value.length <= max) return value;
   return value.slice(0, max).trimEnd();
+}
+
+/** UI label: short title with … when truncated so long filenames don't blow the layout. */
+export function displaySoundTitle(raw: string, max = 28): string {
+  const cleaned = shortSoundTitle(raw, 500);
+  if (cleaned.length <= max) return cleaned;
+  return `${cleaned.slice(0, Math.max(1, max - 1)).trimEnd()}…`;
 }

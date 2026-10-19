@@ -14,6 +14,7 @@ import {
   NEWS_SOUND_KINDS,
   SOUNDTRACK_SOURCE_LABEL,
   newsSoundKindLabel,
+  displaySoundTitle,
   shortSoundTitle,
   type SoundtrackCatalogItem,
   type SportNewsSoundRow,
@@ -410,7 +411,9 @@ export default function SoundLibraryPage() {
                         </button>
                       </div>
                     ) : (
-                      <span title={row.name}>{shortSoundTitle(row.name)}</span>
+                      <span className="block max-w-[14rem] truncate" title={row.name}>
+                        {displaySoundTitle(row.name)}
+                      </span>
                     )}
                   </td>
                   <td className="px-3 py-3 text-text-secondary">
@@ -517,8 +520,8 @@ export default function SoundLibraryPage() {
               <tbody>
                 {catalogFiltered.map((row) => (
                   <tr key={row.key} className="border-b border-border/70">
-                    <td className="px-3 py-3 font-medium" title={row.name}>
-                      {shortSoundTitle(row.name)}
+                    <td className="max-w-[14rem] truncate px-3 py-3 font-medium" title={row.name}>
+                      {displaySoundTitle(row.name)}
                     </td>
                     <td className="px-3 py-3 text-text-secondary">
                       {SOUNDTRACK_SOURCE_LABEL[row.source]}
