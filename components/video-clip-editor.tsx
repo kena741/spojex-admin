@@ -1,37 +1,62 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  EditorProvider,
-  Preview,
-  Timeline,
-  beginImportUrl,
-  createDefaultDemuxerFactory,
-  exportVideo,
-  framesToTimecode,
-  growClipToAssetDuration,
-  insertMediaAsset,
-  mediaLibraryStore,
-  splitClipAtPlayhead,
-  transformFromCoverRect,
-  usePlaybackStore,
-  useSelectionStore,
-  useTimelineEngine,
-  type TimelineRef,
-} from "@elah/editor";
-import "@elah/editor/styles.css";
+  Component,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ErrorInfo,
+  type ReactNode,
+} from "react";
+import dynamic from "next/dynamic";
 import { toBackendMediaUrl } from "@/lib/spojex-media";
 
-async function uploadEditedVideo(
-  articleId: string | null,
-  file: File,
-): Promise<string> {
+type TrimResult = {
+  publicUrl: string;
+  durationSeconds: number | null;
+};
+
+export type VideoClipEditorProps = {
+  videoUrl: string;
+  articleId?: string | null;
+  disabled?: boolean;
+  onTrimmed: (result: TrimResult) => void | Promise<void>;
+};
+
+function formatTime(seconds: number) {
+  const s = Math.max(0, seconds);
+  const m = Math.floor(s / 60);
+  const r = Math.floor(s % 60);
+  return `${m}:${r.toString().padStart(2, "0")}`;
+}
+
+function hasWebGL2(): boolean {
+  if (typeof document === "undefined") return false;
+  try {
+    const canvas = document.createElement("canvas");
+    const gl = canvas.getContext("webgl2", { failIfMajorPerformanceCaveat: false });
+    return Boolean(gl);
+  } catch {
+    return false;
+  }
+}
+
+async function applyServerTrim(
+  articleId: string | null | undefined,
+  videoUrl: string,
+  start: number,
+  end: number,
+): Promise<TrimResult> {
   const endpoint = articleId
     ? `/api/admin/news/${articleId}/media`
     : "/api/admin/news/media";
   const body = new FormData();
-  body.set("kind", "video");
-  body.set("file", file, file.name);
+  body.set("action", "trim");
+  body.set("source_url", videoUrl);
+  body.set("start_seconds", String(start));
+  body.set("end_seconds", String(end));
   const response = await fetch(endpoint, {
     method: "POST",
     credentials: "same-origin",
@@ -39,321 +64,336 @@ async function uploadEditedVideo(
   });
   const text = await response.text();
   const payload = text.trim()
-    ? (JSON.parse(text) as { error?: string; publicUrl?: string })
+    ? (JSON.parse(text) as {
+        error?: string;
+        publicUrl?: string;
+        durationSeconds?: number | null;
+      })
     : {};
-  if (!response.ok) throw new Error(payload.error || "Upload failed");
-  if (!payload.publicUrl) throw new Error("Upload failed. No public URL was returned.");
-  return toBackendMediaUrl(payload.publicUrl);
+  if (!response.ok) throw new Error(payload.error || "Trim failed");
+  if (!payload.publicUrl) throw new Error("Trim failed. No URL returned.");
+  return {
+    publicUrl: toBackendMediaUrl(payload.publicUrl),
+    durationSeconds:
+      typeof payload.durationSeconds === "number"
+        ? payload.durationSeconds
+        : Math.max(0, Math.round(end - start)),
+  };
 }
 
-const FPS = 30;
-/** TikTok / Reels vertical canvas */
-const STAGE = { width: 1080, height: 1920 } as const;
+/** HTML5 vertical trimmer — works without WebGL. */
+function HtmlVerticalTrimEditor({
+  videoUrl,
+  articleId = null,
+  disabled,
+  onTrimmed,
+  webglBlocked,
+}: VideoClipEditorProps & { webglBlocked?: boolean }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const [duration, setDuration] = useState(0);
+  const [current, setCurrent] = useState(0);
+  const [start, setStart] = useState(0);
+  const [end, setEnd] = useState(0);
+  const [drag, setDrag] = useState<"start" | "end" | "playhead" | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-const demuxerFactory = createDefaultDemuxerFactory();
-
-function LoadUploadedVideo({ proxyUrl }: { proxyUrl: string }) {
-  const engine = useTimelineEngine();
-  const started = useRef(false);
+  const src = useMemo(() => toBackendMediaUrl(videoUrl), [videoUrl]);
 
   useEffect(() => {
-    if (started.current || !proxyUrl) return;
-    started.current = true;
-    let cancelled = false;
-    let unsubscribe: (() => void) | undefined;
+    setStart(0);
+    setEnd(0);
+    setDuration(0);
+    setCurrent(0);
+    setError(null);
+  }, [videoUrl]);
 
-    void (async () => {
-      try {
-        const asset = await beginImportUrl(proxyUrl);
-        if (cancelled) return;
-        const result = await insertMediaAsset(engine, asset.id, {
-          videoOnly: true,
-          desiredStartFrame: 0,
-        });
-        if (!result.ok || cancelled) return;
-        const clipId = result.clipIds[0];
-        if (!clipId) return;
-        const found = engine.findClip(clipId);
-        const fallbackFrames = found?.clip.durationFrames ?? FPS * 3;
+  useEffect(() => {
+    if (duration > 0 && end <= 0) setEnd(duration);
+  }, [duration, end]);
 
-        const applyReady = (durationSec: number, width?: number, height?: number) => {
-          growClipToAssetDuration(engine, clipId, fallbackFrames, durationSec);
-          if (width && height && width > 0 && height > 0) {
-            engine.updateClip(clipId, result.trackId, {
-              transform: transformFromCoverRect(
-                width,
-                height,
-                STAGE.width,
-                STAGE.height,
-              ),
-              name: "Clip",
-            });
-          }
-        };
+  const clipLength = Math.max(0, end - start);
+  const canTrim =
+    !disabled &&
+    !saving &&
+    duration > 0 &&
+    end > start + 0.25 &&
+    (start > 0.05 || end < duration - 0.05);
 
-        const readyNow = mediaLibraryStore.getState().assets[asset.id];
-        if (readyNow?.status === "ready") {
-          applyReady(readyNow.durationSec, readyNow.width, readyNow.height);
-          return;
-        }
+  const timeFromClientX = useCallback(
+    (clientX: number) => {
+      const el = trackRef.current;
+      if (!el || duration <= 0) return 0;
+      const rect = el.getBoundingClientRect();
+      const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+      return ratio * duration;
+    },
+    [duration],
+  );
 
-        unsubscribe = mediaLibraryStore.subscribe((state) => {
-          const ready = state.assets[asset.id];
-          if (ready?.status !== "ready") return;
-          unsubscribe?.();
-          unsubscribe = undefined;
-          applyReady(ready.durationSec, ready.width, ready.height);
-        });
-      } catch {
-        // Surface via parent toolbar if needed; Timeline stays empty.
+  useEffect(() => {
+    if (!drag) return;
+    const onMove = (event: PointerEvent) => {
+      const t = timeFromClientX(event.clientX);
+      if (drag === "start") {
+        const next = Math.min(t, end - 0.25);
+        setStart(Math.max(0, next));
+        if (videoRef.current) videoRef.current.currentTime = Math.max(0, next);
+      } else if (drag === "end") {
+        const next = Math.max(t, start + 0.25);
+        setEnd(Math.min(duration, next));
+        if (videoRef.current) videoRef.current.currentTime = Math.min(duration, next);
+      } else {
+        setCurrent(t);
+        if (videoRef.current) videoRef.current.currentTime = t;
       }
-    })();
-
-    return () => {
-      cancelled = true;
-      unsubscribe?.();
     };
-  }, [engine, proxyUrl]);
+    const onUp = () => setDrag(null);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [drag, duration, end, start, timeFromClientX]);
 
-  return null;
-}
-
-function EditorToolbar({
-  disabled,
-  saving,
-  exportProgress,
-  onSave,
-  error,
-}: {
-  disabled?: boolean;
-  saving: boolean;
-  exportProgress: string | null;
-  onSave: () => void;
-  error: string | null;
-}) {
-  const engine = useTimelineEngine();
-  const isPlaying = usePlaybackStore((s) => s.isPlaying);
-  const currentFrame = usePlaybackStore((s) => s.currentFrame);
-  const togglePlayPause = usePlaybackStore((s) => s.togglePlayPause);
-  const selectedClipIds = useSelectionStore((s) => s.selectedClipIds);
-
-  const busy = Boolean(disabled) || saving;
-
-  const onSplit = () => {
-    splitClipAtPlayhead(engine);
+  const previewSelection = () => {
+    const el = videoRef.current;
+    if (!el) return;
+    el.currentTime = start;
+    void el.play();
+    const stopAt = end;
+    const onTime = () => {
+      if (el.currentTime >= stopAt) {
+        el.pause();
+        el.removeEventListener("timeupdate", onTime);
+      }
+    };
+    el.addEventListener("timeupdate", onTime);
   };
 
-  const onDelete = () => {
-    for (const clipId of selectedClipIds) {
-      const found = engine.findClip(clipId);
-      if (found) engine.removeClip(clipId, found.trackId);
+  const applyTrim = async () => {
+    if (!canTrim) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const result = await applyServerTrim(articleId, videoUrl, start, end);
+      await onTrimmed(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Trim failed");
+    } finally {
+      setSaving(false);
     }
   };
 
+  const startPct = duration > 0 ? (start / duration) * 100 : 0;
+  const endPct = duration > 0 ? (end / duration) * 100 : 100;
+  const playPct = duration > 0 ? (current / duration) * 100 : 0;
+
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="mb-3 space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-medium text-text-secondary">Edit video</p>
+        <p className="text-[11px] text-text-hint">
+          9:16 TikTok ·{" "}
+          {duration > 0
+            ? `full ${formatTime(duration)} · keep ${formatTime(clipLength)}`
+            : "loading…"}
+        </p>
+      </div>
+
+      {webglBlocked ? (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">
+          Timeline editor needs WebGL (not available here). Using vertical trim — open in
+          Chrome/Safari desktop for split/cut timeline.
+        </p>
+      ) : null}
+
+      <div className="flex justify-center rounded-lg bg-black p-3">
+        <div
+          className="relative w-full max-w-[240px] overflow-hidden rounded-md bg-black"
+          style={{ aspectRatio: "9 / 16" }}
+        >
+          <video
+            ref={videoRef}
+            key={src}
+            src={src}
+            playsInline
+            className="absolute inset-0 h-full w-full object-cover"
+            onLoadedMetadata={(e) => {
+              const d = e.currentTarget.duration;
+              if (!Number.isFinite(d) || d <= 0) return;
+              setDuration(d);
+              setEnd((prev) => (prev > 0 && prev <= d ? prev : d));
+            }}
+            onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
         <button
           type="button"
-          disabled={busy}
-          onClick={() => togglePlayPause()}
+          disabled={disabled || saving || duration <= 0}
+          onClick={() => {
+            const el = videoRef.current;
+            if (!el) return;
+            if (el.paused) void el.play();
+            else el.pause();
+          }}
           className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
         >
-          {isPlaying ? "Pause" : "Play"}
+          Play / pause
         </button>
         <button
           type="button"
-          disabled={busy}
-          onClick={onSplit}
-          title="Select a clip, move the playhead, then Split"
+          disabled={disabled || saving || duration <= 0}
+          onClick={() => {
+            const t = Math.min(current, end - 0.25);
+            setStart(Math.max(0, t));
+          }}
           className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
         >
-          Split
+          Set in
         </button>
         <button
           type="button"
-          disabled={busy || selectedClipIds.size === 0}
-          onClick={onDelete}
+          disabled={disabled || saving || duration <= 0}
+          onClick={() => {
+            const t = Math.max(current, start + 0.25);
+            setEnd(Math.min(duration, t));
+          }}
           className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
         >
-          Cut / delete
+          Set out
         </button>
         <button
           type="button"
-          disabled={busy}
-          onClick={() => engine.undo()}
+          disabled={disabled || saving || duration <= 0 || end <= start}
+          onClick={previewSelection}
           className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
         >
-          Undo
+          Preview keep
         </button>
         <button
           type="button"
-          disabled={busy}
-          onClick={() => engine.redo()}
-          className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
-        >
-          Redo
-        </button>
-        <span className="font-mono text-[11px] text-text-hint">
-          {framesToTimecode(currentFrame, FPS)}
-        </span>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onSave}
+          disabled={!canTrim}
+          onClick={() => void applyTrim()}
           className="ml-auto rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
         >
-          {saving ? exportProgress || "Saving…" : "Save edit"}
+          {saving ? "Saving…" : "Apply trim"}
         </button>
       </div>
-      <p className="text-[11px] text-text-hint">
-        Drag clip edges to trim · Split at playhead · Delete unwanted segments · Vertical
-        9:16 TikTok canvas
-      </p>
+
+      <div className="space-y-1">
+        <div
+          ref={trackRef}
+          className="relative h-10 cursor-pointer rounded-md bg-muted"
+          onPointerDown={(event) => {
+            if (disabled || saving || duration <= 0) return;
+            const t = timeFromClientX(event.clientX);
+            setCurrent(t);
+            if (videoRef.current) videoRef.current.currentTime = t;
+            setDrag("playhead");
+          }}
+        >
+          <div
+            className="absolute inset-y-0 bg-primary/35"
+            style={{ left: `${startPct}%`, width: `${Math.max(0, endPct - startPct)}%` }}
+          />
+          <div
+            className="absolute top-0 bottom-0 z-10 w-0.5 bg-white"
+            style={{ left: `${playPct}%` }}
+          />
+          <button
+            type="button"
+            aria-label="Trim start"
+            className="absolute top-0 bottom-0 z-20 w-3 -translate-x-1/2 cursor-ew-resize rounded-sm bg-primary"
+            style={{ left: `${startPct}%` }}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              if (disabled || saving) return;
+              setDrag("start");
+            }}
+          />
+          <button
+            type="button"
+            aria-label="Trim end"
+            className="absolute top-0 bottom-0 z-20 w-3 -translate-x-1/2 cursor-ew-resize rounded-sm bg-primary"
+            style={{ left: `${endPct}%` }}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              if (disabled || saving) return;
+              setDrag("end");
+            }}
+          />
+        </div>
+        <div className="flex justify-between text-[11px] text-text-hint">
+          <span>In {formatTime(start)}</span>
+          <span>{formatTime(current)}</span>
+          <span>Out {formatTime(end)}</span>
+        </div>
+      </div>
+
       {error ? <p className="text-xs text-red-600">{error}</p> : null}
     </div>
   );
 }
 
-function EditorShell({
-  videoUrl,
-  articleId,
-  disabled,
-  onTrimmed,
-}: {
-  videoUrl: string;
-  articleId?: string | null;
-  disabled?: boolean;
-  onTrimmed: (result: {
-    publicUrl: string;
-    durationSeconds: number | null;
-  }) => void | Promise<void>;
-}) {
-  const timelineRef = useRef<TimelineRef>(null);
-  const [saving, setSaving] = useState(false);
-  const [exportProgress, setExportProgress] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const engine = useTimelineEngine();
+class WebGLErrorBoundary extends Component<
+  { fallback: ReactNode; children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
 
-  const proxyUrl = useMemo(() => {
-    const raw = videoUrl.trim();
-    if (!raw) return "";
-    return `/api/admin/news/media/source?url=${encodeURIComponent(raw)}`;
-  }, [videoUrl]);
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
 
-  const onSave = useCallback(async () => {
-    if (disabled || saving) return;
-    setSaving(true);
-    setError(null);
-    setExportProgress("Exporting…");
-    try {
-      const project = engine.getProject();
-      const blob = await exportVideo(project, {
-        videoCodec: "avc",
-        audioCodec: "aac",
-        outputHeight: STAGE.height,
-        onProgress: ({ frame, totalFrames }) => {
-          if (totalFrames <= 0) return;
-          const pct = Math.min(99, Math.round((frame / totalFrames) * 100));
-          setExportProgress(`Exporting ${pct}%…`);
-        },
-      });
-      setExportProgress("Uploading…");
-      const file = new File([blob], `news-edit-${Date.now()}.mp4`, {
-        type: "video/mp4",
-      });
-      const publicUrl = await uploadEditedVideo(articleId ?? null, file);
-      const durationSec = project.fps > 0 ? engine.getTotalFrames() / project.fps : null;
-      await onTrimmed({
-        publicUrl,
-        durationSeconds:
-          durationSec != null && Number.isFinite(durationSec)
-            ? Math.round(durationSec)
-            : null,
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
-    } finally {
-      setSaving(false);
-      setExportProgress(null);
+  componentDidCatch(error: Error, _info: ErrorInfo) {
+    if (typeof console !== "undefined") {
+      console.warn("[VideoClipEditor] falling back to HTML trimmer:", error.message);
     }
-  }, [articleId, disabled, engine, onTrimmed, saving]);
+  }
 
-  return (
-    <div className="elah-news-editor space-y-3">
-      <LoadUploadedVideo proxyUrl={proxyUrl} />
-      <EditorToolbar
-        disabled={disabled}
-        saving={saving}
-        exportProgress={exportProgress}
-        onSave={() => void onSave()}
-        error={error}
-      />
-
-      <div className="flex justify-center rounded-lg bg-black/95 p-3">
-        <div
-          className="relative w-full max-w-[240px] overflow-hidden rounded-md bg-black"
-          style={{ aspectRatio: "9 / 16" }}
-        >
-          <Preview
-            demuxerFactory={demuxerFactory}
-            enableAudio
-            className="absolute inset-0 h-full w-full"
-            style={{ width: "100%", height: "100%" }}
-          />
-        </div>
-      </div>
-
-      <div className="overflow-hidden rounded-lg border border-border">
-        <Timeline
-          ref={timelineRef}
-          fps={FPS}
-          style={{ height: 200 }}
-        />
-      </div>
-    </div>
-  );
+  render() {
+    if (this.state.failed) return this.props.fallback;
+    return this.props.children;
+  }
 }
 
-export function VideoClipEditor({
-  videoUrl,
-  articleId = null,
-  disabled,
-  onTrimmed,
-}: {
-  videoUrl: string;
-  articleId?: string | null;
-  disabled?: boolean;
-  onTrimmed: (result: {
-    publicUrl: string;
-    durationSeconds: number | null;
-  }) => void | Promise<void>;
-}) {
-  const srcKey = toBackendMediaUrl(videoUrl) || videoUrl;
+const ElahEditor = dynamic(() => import("@/components/video-clip-editor-elah"), {
+  ssr: false,
+  loading: () => (
+    <div className="mb-3 rounded-lg border border-border bg-muted/30 p-4 text-xs text-text-secondary">
+      Loading timeline editor…
+    </div>
+  ),
+});
+
+export function VideoClipEditor(props: VideoClipEditorProps) {
+  const [mode, setMode] = useState<"checking" | "elah" | "html">("checking");
+
+  useEffect(() => {
+    setMode(hasWebGL2() ? "elah" : "html");
+  }, []);
+
+  if (mode === "checking") {
+    return (
+      <div className="mb-3 rounded-lg border border-border bg-muted/30 p-4 text-xs text-text-secondary">
+        Preparing video editor…
+      </div>
+    );
+  }
+
+  if (mode === "html") {
+    return <HtmlVerticalTrimEditor {...props} webglBlocked />;
+  }
 
   return (
-    <div className="mb-3 space-y-2 rounded-lg border border-border bg-muted/30 p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-medium text-text-secondary">Edit video</p>
-        <p className="text-[11px] text-text-hint">9:16 TikTok canvas · @elah/editor</p>
-      </div>
-
-      <EditorProvider
-        key={srcKey}
-        fps={FPS}
-        stage={STAGE}
-        initialTracks={[
-          { kind: "video", name: "Video", protected: true },
-          { kind: "audio", name: "Audio", protected: true },
-        ]}
-      >
-        <EditorShell
-          videoUrl={videoUrl}
-          articleId={articleId}
-          disabled={disabled}
-          onTrimmed={onTrimmed}
-        />
-      </EditorProvider>
-    </div>
+    <WebGLErrorBoundary fallback={<HtmlVerticalTrimEditor {...props} webglBlocked />}>
+      <ElahEditor {...props} />
+    </WebGLErrorBoundary>
   );
 }
