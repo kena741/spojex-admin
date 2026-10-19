@@ -8,6 +8,7 @@ import {
   AdminLoadingRow,
   AdminTableShell,
 } from "@/components/admin-layout";
+import { SoundClipEditor } from "@/components/sound-clip-editor";
 import { deleteAdmin, patchAdmin, postAdminResponse } from "@/lib/hooks";
 import { newsLibrarySoundAccept, validateLibrarySound } from "@/lib/news-media";
 import {
@@ -61,6 +62,7 @@ export default function SoundLibraryPage() {
   const [kind, setKind] = useState("stadium");
   const [audioUrl, setAudioUrl] = useState("");
   const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
+  const [extractedFromVideo, setExtractedFromVideo] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -95,23 +97,26 @@ export default function SoundLibraryPage() {
     setKind("stadium");
     setAudioUrl("");
     setDurationSeconds(null);
+    setExtractedFromVideo(false);
   };
 
   const onUpload = async (file: File) => {
     if (!canWrite) return;
     setUploading(true);
     setError(null);
+    setNotice(null);
     try {
       const uploaded = await uploadLibrarySound(file);
       setAudioUrl(uploaded.publicUrl);
       setDurationSeconds(uploaded.durationSeconds);
+      setExtractedFromVideo(uploaded.extractedFromVideo);
       if (!name.trim()) {
-        setName(shortSoundTitle(file.name));
+        setName(shortSoundTitle(file.name.replace(/\.[^.]+$/, "")));
       }
       setNotice(
         uploaded.extractedFromVideo
-          ? "Audio extracted from video. Save to add it to the library."
-          : "Sound uploaded. Save to add it to the library.",
+          ? "Audio extracted from video. Trim if needed, then add to the library."
+          : "Sound uploaded. Trim if needed, then add to the library.",
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
@@ -214,7 +219,7 @@ export default function SoundLibraryPage() {
     <>
       <AdminPageHeader
         title="Sound library"
-        description="Curated reusable tracks for image posts. Upload here once — news pickers only show this library (no duplicate scrapes from videos)."
+        description="Upload audio, or a video to extract its soundtrack. Trim the clip, then add it once to the curated library."
       />
       {error ? <AdminErrorAlert message={error} /> : null}
       {notice ? (
@@ -254,8 +259,10 @@ export default function SoundLibraryPage() {
               ))}
             </select>
           </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-text-secondary">Audio or video file</span>
+          <label className="grid gap-1 text-sm md:col-span-2">
+            <span className="text-text-secondary">
+              Audio file or video (extract soundtrack)
+            </span>
             <input
               type="file"
               accept={newsLibrarySoundAccept}
@@ -267,17 +274,35 @@ export default function SoundLibraryPage() {
                 if (file) void onUpload(file);
               }}
             />
+            <span className="text-[11px] text-text-hint">
+              MP3 / M4A / WAV (max 20 MB), or MP4 / MOV / WebM video (max 28 MB). Video uploads extract
+              audio only — original video is not stored.
+            </span>
           </label>
           {audioUrl ? (
-            <audio
-              src={toBackendMediaUrl(audioUrl)}
-              controls
-              className="w-full md:col-span-2"
-            />
+            <>
+              {extractedFromVideo ? (
+                <p className="text-xs text-emerald-700 md:col-span-2">
+                  Soundtrack extracted from video.
+                </p>
+              ) : null}
+              <SoundClipEditor
+                audioUrl={audioUrl}
+                durationSeconds={durationSeconds}
+                disabled={uploading || saving}
+                onDuration={(seconds) => setDurationSeconds(seconds)}
+                onTrimmed={(result) => {
+                  setAudioUrl(result.publicUrl);
+                  setDurationSeconds(result.durationSeconds);
+                  setExtractedFromVideo(false);
+                  setNotice("Clip trimmed. Preview it, then add to the library.");
+                }}
+              />
+            </>
           ) : (
             <p className="text-xs text-text-secondary md:col-span-2">
-              Upload MP3 / M4A / WAV (max 20 MB), or MP4 / MOV / WebM video (max 28 MB) — only the
-              audio track is kept. Same file URL will not create a duplicate.
+              After upload you can trim start/end, then save. Same audio URL will not create a
+              duplicate library row.
             </p>
           )}
           <div className="md:col-span-2">
@@ -286,7 +311,11 @@ export default function SoundLibraryPage() {
               disabled={!name.trim() || !audioUrl.trim() || saving || uploading}
               className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
             >
-              {uploading ? "Uploading…" : saving ? "Saving…" : "Add to library"}
+              {uploading
+                ? "Uploading / extracting…"
+                : saving
+                  ? "Saving…"
+                  : "Add to library"}
             </button>
           </div>
         </form>

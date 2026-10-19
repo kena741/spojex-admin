@@ -176,6 +176,84 @@ export async function extractAudioViaSpojexMediaApi(opts: {
   };
 }
 
+/**
+ * Trim an audio blob to [startSeconds, endSeconds) via Spojex ffmpeg.
+ */
+export async function trimAudioViaSpojexMediaApi(opts: {
+  accessToken: string;
+  file: Blob;
+  filename: string;
+  startSeconds: number;
+  endSeconds: number;
+  module?: SpojexMediaModule;
+  folder?: string;
+}): Promise<SpojexMediaUploadResult> {
+  const base = getSpojexApiBaseUrl();
+  if (!base) {
+    throw new Error("Spojex API base URL is not configured.");
+  }
+  if (!(opts.endSeconds > opts.startSeconds)) {
+    throw new Error("Trim end must be after start.");
+  }
+
+  const outbound = new FormData();
+  outbound.set("module", opts.module ?? "news");
+  outbound.set("folder", opts.folder ?? "sport-news/sounds");
+  outbound.set("start_seconds", String(Math.max(0, opts.startSeconds)));
+  outbound.set("end_seconds", String(opts.endSeconds));
+  const type = (opts.file.type && opts.file.type.trim()) || "audio/mp4";
+  const filePart =
+    typeof File !== "undefined"
+      ? new File([opts.file], opts.filename, { type })
+      : opts.file;
+  if (filePart instanceof File) {
+    outbound.set("file", filePart);
+  } else {
+    outbound.set("file", filePart, opts.filename);
+  }
+
+  const upstream = await fetch(`${base}/api/v1/media/trim-audio`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${opts.accessToken}` },
+    body: outbound,
+  });
+  const text = await upstream.text();
+  let payload: {
+    error?: string;
+    detail?: unknown;
+    publicUrl?: string | null;
+    url?: string | null;
+    path?: string;
+    object_path?: string;
+    objectId?: string;
+    id?: string;
+    visibility?: string;
+    status?: string;
+    durationSeconds?: number | null;
+  } = {};
+  try {
+    payload = text ? (JSON.parse(text) as typeof payload) : {};
+  } catch {
+    throw new Error(text || "Audio trim failed");
+  }
+  if (!upstream.ok) {
+    throw new Error(apiErrorMessage(payload, "Audio trim failed"));
+  }
+
+  const publicUrl = payload.publicUrl ?? payload.url ?? null;
+  const path = payload.path || payload.object_path || "";
+  return {
+    objectId: payload.objectId ?? payload.id,
+    path,
+    publicUrl,
+    url: publicUrl,
+    visibility: payload.visibility,
+    status: payload.status,
+    durationSeconds:
+      typeof payload.durationSeconds === "number" ? payload.durationSeconds : null,
+  };
+}
+
 type SignResponse = {
   objectId: string;
   uploadUrl: string;
