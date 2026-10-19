@@ -92,8 +92,11 @@ export async function uploadNewsFile(articleId: string | null, file: File, kind:
 
 export { NewsMediaPreview, NewsTikTokPreview } from "@/components/news-tiktok-preview";
 
+const MAX_NEWS_IMAGES = 10;
+
 export function NewsMediaFields({
   imageUrl,
+  imageUrls,
   videoUrl,
   audioUrl,
   soundId = "",
@@ -103,11 +106,14 @@ export function NewsMediaFields({
   onKind,
   onUpload,
   onRemoveImage,
+  onRemoveImageAt,
   onRemoveVideo,
   onRemoveAudio,
   onSoundSelect,
 }: {
   imageUrl: string;
+  /** Ordered gallery (preferred). Falls back to [imageUrl] when empty. */
+  imageUrls?: string[];
   videoUrl: string;
   audioUrl: string;
   soundId?: string;
@@ -117,20 +123,31 @@ export function NewsMediaFields({
   onKind: (kind: NewsStoryMedia) => void;
   onUpload: (file: File, kind: NewsUploadKind) => void;
   onRemoveImage: () => void;
+  onRemoveImageAt?: (index: number) => void;
   onRemoveVideo: () => void;
   onRemoveAudio: () => void;
   onSoundSelect?: (sound: SportNewsSoundRow | null) => void;
 }) {
-  const hasImage = Boolean(imageUrl.trim());
+  const gallery = (
+    imageUrls && imageUrls.length > 0
+      ? imageUrls
+      : imageUrl.trim()
+        ? [imageUrl.trim()]
+        : []
+  )
+    .map((url) => url.trim())
+    .filter(Boolean);
+  const hasImage = gallery.length > 0;
+  const canAddMoreImages = gallery.length < MAX_NEWS_IMAGES;
   const hasVideo = Boolean(videoUrl.trim());
   const hasLibrarySound = Boolean(soundId.trim());
   const hasDedicatedAudio = Boolean(audioUrl.trim()) && !hasLibrarySound;
   const mediaKind = resolveNewsStoryMedia(videoUrl, audioUrl, pickedKind, {
-    imageUrl,
+    imageUrl: gallery[0] ?? imageUrl,
     soundId,
   });
   const busy = Boolean(uploading) || Boolean(disabled);
-  const imagePreview = toBackendMediaUrl(imageUrl);
+  const imagePreview = toBackendMediaUrl(gallery[0] ?? "");
   const showSoundPicker =
     Boolean(onSoundSelect) && mediaKind === "none" && hasImage && !hasVideo;
   const [dragOver, setDragOver] = useState(false);
@@ -140,6 +157,10 @@ export function NewsMediaFields({
   const acceptImageFile = useCallback(
     (file: File | null) => {
       if (!file || busy) return;
+      if (!canAddMoreImages) {
+        setPasteHint(`You can add up to ${MAX_NEWS_IMAGES} images.`);
+        return;
+      }
       const invalid = validateNewsMedia("image", file.type, file.name, file.size);
       if (invalid) {
         setPasteHint(invalid);
@@ -148,7 +169,7 @@ export function NewsMediaFields({
       setPasteHint(null);
       onUpload(file, "image");
     },
-    [busy, onUpload],
+    [busy, canAddMoreImages, onUpload],
   );
 
   const onImagePaste = useCallback(
@@ -237,7 +258,9 @@ export function NewsMediaFields({
       </div>
 
       <div className="mb-1 flex items-center justify-between gap-2">
-        <label className="text-xs font-medium text-text-secondary">Image</label>
+        <label className="text-xs font-medium text-text-secondary">
+          Images {hasImage ? `(${gallery.length}/${MAX_NEWS_IMAGES})` : ""}
+        </label>
         {hasImage ? (
           <button
             type="button"
@@ -245,28 +268,69 @@ export function NewsMediaFields({
             onClick={onRemoveImage}
             className="text-xs font-medium text-red-600 hover:underline"
           >
-            Delete image
+            Clear all
           </button>
         ) : null}
       </div>
+      {hasImage ? (
+        <div className="mb-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+          {gallery.map((url, index) => (
+            <div
+              key={`${url}-${index}`}
+              className="relative overflow-hidden rounded-lg border border-border bg-muted/40"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={toBackendMediaUrl(url)}
+                alt=""
+                className="h-24 w-full object-cover"
+              />
+              {onRemoveImageAt ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onRemoveImageAt(index)}
+                  className="absolute right-1 top-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white"
+                >
+                  Remove
+                </button>
+              ) : null}
+              {index === 0 ? (
+                <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                  Cover
+                </span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
       <div
         ref={imageZoneRef}
         tabIndex={0}
         role="button"
-        aria-label="Paste or drop news image"
+        aria-label="Paste or drop news images"
         onPaste={onImagePaste}
         onDragEnter={(event) => {
           event.preventDefault();
-          if (!busy) setDragOver(true);
+          if (!busy && canAddMoreImages) setDragOver(true);
         }}
         onDragOver={(event) => {
           event.preventDefault();
-          if (!busy) setDragOver(true);
+          if (!busy && canAddMoreImages) setDragOver(true);
         }}
         onDragLeave={() => setDragOver(false)}
         onDrop={(event) => {
           event.preventDefault();
           setDragOver(false);
+          const files = event.dataTransfer?.files
+            ? Array.from(event.dataTransfer.files)
+            : [];
+          if (files.length > 1) {
+            for (const file of files.slice(0, MAX_NEWS_IMAGES - gallery.length)) {
+              acceptImageFile(file);
+            }
+            return;
+          }
           const file = clipboardImageFile(event.dataTransfer);
           acceptImageFile(file);
         }}
@@ -276,30 +340,32 @@ export function NewsMediaFields({
             : "border-border bg-muted/40"
         }`}
       >
-        {hasImage ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imagePreview}
-            alt=""
-            className="h-36 w-full object-cover"
-          />
-        ) : (
-          <div className="flex h-28 flex-col items-center justify-center gap-1 px-3 text-center text-xs text-text-secondary">
-            <span>{dragOver ? "Drop image to upload" : "Paste (⌘V / Ctrl+V) or drop an image"}</span>
-            <span className="text-[11px] text-text-hint">JPG, PNG, WebP, or GIF · max 5 MB</span>
-          </div>
-        )}
+        <div className="flex h-28 flex-col items-center justify-center gap-1 px-3 text-center text-xs text-text-secondary">
+          <span>
+            {dragOver
+              ? "Drop images to upload"
+              : canAddMoreImages
+                ? "Paste (⌘V / Ctrl+V) or drop images"
+                : `Maximum ${MAX_NEWS_IMAGES} images`}
+          </span>
+          <span className="text-[11px] text-text-hint">
+            JPG, PNG, WebP, or GIF · max 5 MB each · swipe gallery in the app
+          </span>
+        </div>
       </div>
       {pasteHint ? <p className="mb-2 text-xs text-red-600">{pasteHint}</p> : null}
       <input
         type="file"
         accept={newsImageAccept}
-        disabled={busy}
+        multiple
+        disabled={busy || !canAddMoreImages}
         className={fileInputClass}
         onChange={(event) => {
-          const file = event.target.files?.[0];
+          const files = event.target.files ? Array.from(event.target.files) : [];
           event.target.value = "";
-          if (file) acceptImageFile(file);
+          for (const file of files.slice(0, MAX_NEWS_IMAGES - gallery.length)) {
+            acceptImageFile(file);
+          }
         }}
       />
 

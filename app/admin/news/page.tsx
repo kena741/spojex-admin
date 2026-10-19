@@ -48,6 +48,7 @@ export default function NewsPage() {
   const [body, setBody] = useState("");
   const [source, setSource] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [videoUrl, setVideoUrl] = useState("");
   const [audioUrl, setAudioUrl] = useState("");
   const [soundId, setSoundId] = useState("");
@@ -93,6 +94,7 @@ export default function NewsPage() {
     setBody("");
     setSource("");
     setImageUrl("");
+    setImageUrls([]);
     setVideoUrl("");
     setAudioUrl("");
     setSoundId("");
@@ -115,7 +117,13 @@ export default function NewsPage() {
     setError(null);
     try {
       const publicUrl = await uploadNewsFile(null, file, kind);
-      if (kind === "image") setImageUrl(publicUrl);
+      if (kind === "image") {
+        setImageUrls((prev) => {
+          const next = prev.includes(publicUrl) ? prev : [...prev, publicUrl].slice(0, 10);
+          setImageUrl(next[0] ?? "");
+          return next;
+        });
+      }
       if (kind === "video") {
         setVideoUrl(publicUrl);
         setSoundId("");
@@ -139,7 +147,13 @@ export default function NewsPage() {
     setCreating(true);
     setError(null);
     try {
-      const image = imageUrl.trim();
+      const gallery =
+        imageUrls.length > 0
+          ? imageUrls
+          : imageUrl.trim()
+            ? [imageUrl.trim()]
+            : [];
+      const image = gallery[0] ?? "";
       await postAdmin("/api/admin/news", {
         title: title.trim(),
         category,
@@ -149,6 +163,7 @@ export default function NewsPage() {
         source: source.trim() || undefined,
         image_url: image,
         cover_url: image,
+        image_urls: gallery,
         video_url: videoUrl.trim(),
         audio_url: audioUrl.trim(),
         sound_id: soundId.trim() || null,
@@ -429,17 +444,18 @@ export default function NewsPage() {
             title={title}
             body={body}
             source={source.trim() || "SpoJex Desk"}
-            imageUrl={imageUrl}
+            imageUrl={imageUrls[0] ?? imageUrl}
             videoUrl={videoUrl}
             audioUrl={audioUrl}
             mediaKind={resolveNewsStoryMedia(videoUrl, audioUrl, pickedKind, {
-              imageUrl,
+              imageUrl: imageUrls[0] ?? imageUrl,
               soundId,
             })}
             className="mb-2"
           />
           <NewsMediaFields
-            imageUrl={imageUrl}
+            imageUrl={imageUrls[0] ?? imageUrl}
+            imageUrls={imageUrls}
             videoUrl={videoUrl}
             audioUrl={audioUrl}
             soundId={soundId}
@@ -449,10 +465,22 @@ export default function NewsPage() {
             onUpload={(file, kind) => void uploadMedia(file, kind)}
             onRemoveImage={() => {
               setImageUrl("");
+              setImageUrls([]);
               if (soundId) {
                 setSoundId("");
                 setAudioUrl("");
               }
+            }}
+            onRemoveImageAt={(index) => {
+              setImageUrls((prev) => {
+                const next = prev.filter((_, i) => i !== index);
+                setImageUrl(next[0] ?? "");
+                if (next.length === 0 && soundId) {
+                  setSoundId("");
+                  setAudioUrl("");
+                }
+                return next;
+              });
             }}
             onRemoveVideo={() => {
               setVideoUrl("");

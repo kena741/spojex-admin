@@ -9,6 +9,7 @@ const allowed = [
   "body",
   "image_url",
   "cover_url",
+  "image_urls",
   "video_url",
   "audio_url",
   "sound_id",
@@ -21,6 +22,19 @@ const allowed = [
   "published_at",
   "organization_id",
 ] as const;
+
+function normalizeImageUrls(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const url = `${item ?? ""}`.trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    out.push(url);
+  }
+  return out.slice(0, 10);
+}
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdminPermission("news:write");
@@ -41,12 +55,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     patch.sound_id =
       typeof raw === "string" && raw.trim() ? raw.trim() : null;
   }
-  if ("image_url" in patch || "cover_url" in patch) {
+  if ("image_urls" in patch) {
+    const urls = normalizeImageUrls(patch.image_urls);
+    patch.image_urls = urls;
+    const primary = urls[0] ?? "";
+    patch.image_url = primary;
+    patch.cover_url = primary;
+  } else if ("image_url" in patch || "cover_url" in patch) {
     const image = "image_url" in patch ? `${patch.image_url ?? ""}`.trim() : "";
     const cover = "cover_url" in patch ? `${patch.cover_url ?? ""}`.trim() : "";
     const url = image || cover;
     patch.image_url = url;
     patch.cover_url = url;
+    if (url) patch.image_urls = [url];
+    else patch.image_urls = [];
   }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "No valid fields" }, { status: 400 });

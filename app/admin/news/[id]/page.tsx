@@ -179,8 +179,29 @@ export default function NewsDetailPage() {
       } else if (kind === "audio") {
         if (!(await save({ audio_url: publicUrl, sound_id: null }))) return;
         setPickedKind("audio");
-      } else if (!(await save({ image_url: publicUrl, cover_url: publicUrl }))) {
-        return;
+      } else {
+        const existing = Array.isArray(article?.image_urls)
+          ? article!.image_urls!.map((u) => `${u ?? ""}`.trim()).filter(Boolean)
+          : [];
+        const legacy = `${article?.image_url ?? article?.cover_url ?? ""}`.trim();
+        const current = existing.length > 0 ? existing : legacy ? [legacy] : [];
+        if (current.includes(publicUrl)) {
+          setNotice("Image already added.");
+          return;
+        }
+        if (current.length >= 10) {
+          throw new Error("You can add up to 10 images.");
+        }
+        const next = [...current, publicUrl];
+        if (
+          !(await save({
+            image_urls: next,
+            image_url: next[0] ?? "",
+            cover_url: next[0] ?? "",
+          }))
+        ) {
+          return;
+        }
       }
       setNotice(kind === "video" ? "Video added." : kind === "audio" ? "Audio added." : "Image added.");
     } catch (err) {
@@ -191,8 +212,31 @@ export default function NewsDetailPage() {
   };
 
   const removeImage = async () => {
-    const patch: Record<string, unknown> = { image_url: "", cover_url: "" };
+    const patch: Record<string, unknown> = {
+      image_url: "",
+      cover_url: "",
+      image_urls: [],
+    };
     if (article?.sound_id) {
+      patch.sound_id = null;
+      patch.audio_url = "";
+    }
+    if (!(await save(patch))) return;
+  };
+
+  const removeImageAt = async (index: number) => {
+    const existing = Array.isArray(article?.image_urls)
+      ? article!.image_urls!.map((u) => `${u ?? ""}`.trim()).filter(Boolean)
+      : [];
+    const legacy = `${article?.image_url ?? article?.cover_url ?? ""}`.trim();
+    const current = existing.length > 0 ? existing : legacy ? [legacy] : [];
+    const next = current.filter((_, i) => i !== index);
+    const patch: Record<string, unknown> = {
+      image_urls: next,
+      image_url: next[0] ?? "",
+      cover_url: next[0] ?? "",
+    };
+    if (next.length === 0 && article?.sound_id) {
       patch.sound_id = null;
       patch.audio_url = "";
     }
@@ -223,7 +267,15 @@ export default function NewsDetailPage() {
   if (loading) return <AdminLoadingRow label="Loading article…" />;
   if (!article) return <AdminErrorAlert message={error || "Article not found"} />;
 
-  const image = article.image_url?.trim() || article.cover_url?.trim() || "";
+  const gallery = (
+    Array.isArray(article.image_urls) && article.image_urls.length > 0
+      ? article.image_urls
+      : [article.image_url, article.cover_url]
+  )
+    .map((u) => `${u ?? ""}`.trim())
+    .filter(Boolean)
+    .filter((url, i, arr) => arr.indexOf(url) === i);
+  const image = gallery[0] ?? "";
   const soundId = article.sound_id?.trim() || "";
   const mediaKind = resolveNewsStoryMedia(
     article.video_url ?? "",
@@ -344,6 +396,7 @@ export default function NewsDetailPage() {
               />
               <NewsMediaFields
                 imageUrl={image}
+                imageUrls={gallery}
                 videoUrl={article.video_url ?? ""}
                 audioUrl={article.audio_url ?? ""}
                 soundId={soundId}
@@ -353,6 +406,7 @@ export default function NewsDetailPage() {
                 onKind={setPickedKind}
                 onUpload={(file, kind) => void uploadMedia(file, kind)}
                 onRemoveImage={() => void removeImage()}
+                onRemoveImageAt={(index) => void removeImageAt(index)}
                 onRemoveVideo={() => void removeVideo()}
                 onRemoveAudio={() => void removeAudio()}
                 onSoundSelect={(sound) => {

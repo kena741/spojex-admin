@@ -533,6 +533,8 @@ export type SportNewsRow = {
   body: string;
   image_url: string;
   cover_url: string;
+  /** Ordered gallery for TikTok-style multi-image stories. */
+  image_urls?: string[] | null;
   video_url?: string;
   audio_url?: string;
   sound_id?: string | null;

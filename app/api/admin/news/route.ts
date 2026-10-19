@@ -11,6 +11,7 @@ type NewsInsert = {
   body: string;
   image_url: string;
   cover_url: string;
+  image_urls: string[];
   video_url: string;
   audio_url: string;
   sound_id?: string | null;
@@ -29,6 +30,19 @@ type NewsInsert = {
   share_count: number;
   organization_id?: string;
 };
+
+function normalizeImageUrls(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const url = `${item ?? ""}`.trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    out.push(url);
+  }
+  return out.slice(0, 10);
+}
 
 function isSlugConflict(error: { code?: string; message?: string }) {
   return error.code === "23505" || /sport_news_slug_key|duplicate key value/i.test(error.message ?? "");
@@ -58,6 +72,7 @@ export async function POST(request: Request) {
     body?: string;
     image_url?: string;
     cover_url?: string;
+    image_urls?: string[];
     video_url?: string;
     audio_url?: string;
     sound_id?: string | null;
@@ -93,7 +108,10 @@ export async function POST(request: Request) {
     );
   }
 
-  const image = `${payload.image_url ?? payload.cover_url ?? ""}`.trim();
+  const gallery = normalizeImageUrls(payload.image_urls);
+  const single = `${payload.image_url ?? payload.cover_url ?? ""}`.trim();
+  const imageUrls = gallery.length > 0 ? gallery : single ? [single] : [];
+  const image = imageUrls[0] ?? "";
   const author =
     auth.context.staff.full_name?.trim() ||
     auth.context.staff.email?.trim() ||
@@ -117,6 +135,7 @@ export async function POST(request: Request) {
     body: payload.body ?? "",
     image_url: image,
     cover_url: image,
+    image_urls: imageUrls,
     video_url: video,
     audio_url: audio,
     sound_id: soundId,
