@@ -5,6 +5,7 @@ import {
   NEWS_SOUND_KINDS,
   SOUNDTRACK_SOURCE_LABEL,
   newsSoundKindLabel,
+  shortSoundTitle,
   type SoundtrackCatalogItem,
   type SportNewsSoundRow,
 } from "@/lib/news-sounds";
@@ -20,7 +21,10 @@ export function NewsSoundPicker({
   soundId: string;
   audioUrl?: string;
   disabled?: boolean;
-  onSelect: (sound: SportNewsSoundRow | null) => void;
+  /** Return false / error string when the parent failed to persist the choice. */
+  onSelect: (
+    sound: SportNewsSoundRow | null,
+  ) => void | boolean | string | Promise<void | boolean | string>;
 }) {
   const [rows, setRows] = useState<SoundtrackCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,7 +81,9 @@ export function NewsSoundPicker({
 
   const selectedKey = useMemo(() => {
     if (soundId.trim()) {
-      const hit = rows.find((row) => row.sound_id === soundId || row.key === `library:${soundId}`);
+      const hit = rows.find(
+        (row) => row.sound_id === soundId || row.key === `library:${soundId}`,
+      );
       if (hit) return hit.key;
     }
     const url = toBackendMediaUrl(audioUrl.trim());
@@ -90,33 +96,52 @@ export function NewsSoundPicker({
 
   const selected = rows.find((row) => row.key === selectedKey) ?? null;
 
+  const applySelection = async (sound: SportNewsSoundRow | null) => {
+    const result = await onSelect(sound);
+    if (result === false) {
+      throw new Error("Could not apply soundtrack. Try again.");
+    }
+    if (typeof result === "string" && result.trim()) {
+      throw new Error(result.trim());
+    }
+  };
+
   const pick = async (item: SoundtrackCatalogItem | null) => {
     if (disabled || promoting) return;
+    setError(null);
     if (!item) {
-      onSelect(null);
+      try {
+        await applySelection(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not clear sound");
+      }
       return;
     }
+
     if (item.sound_id) {
-      onSelect({
-        id: item.sound_id,
-        name: item.name,
-        kind: item.kind,
-        audio_url: item.audio_url,
-        duration_seconds: null,
-        sort_order: 0,
-        is_active: true,
-        created_at: "",
-        updated_at: "",
-      });
+      try {
+        await applySelection({
+          id: item.sound_id,
+          name: shortSoundTitle(item.name),
+          kind: item.kind,
+          audio_url: item.audio_url,
+          duration_seconds: null,
+          sort_order: 0,
+          is_active: true,
+          created_at: "",
+          updated_at: "",
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not select sound");
+      }
       return;
     }
 
     // Promote news/media audio into the sound library so soundtrack stays linked.
     setPromoting(true);
-    setError(null);
     try {
       const row = (await postAdmin("/api/admin/news-sounds", {
-        name: item.name,
+        name: shortSoundTitle(item.name),
         kind: item.kind || "general",
         audio_url: item.audio_url,
         is_active: true,
@@ -124,7 +149,7 @@ export function NewsSoundPicker({
       })) as SportNewsSoundRow;
       if (!row?.id) throw new Error("Could not add sound to library");
       await load();
-      onSelect(row);
+      await applySelection(row);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not select sound");
     } finally {
@@ -138,7 +163,7 @@ export function NewsSoundPicker({
         <div>
           <p className="text-xs font-medium text-text-secondary">Image soundtrack</p>
           <p className="text-[11px] text-text-hint">
-            All Spojex audio — library, news tracks, and uploads ({rows.length}).
+            Pick from the sound library ({rows.length}). Long file names are shortened.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -198,17 +223,19 @@ export function NewsSoundPicker({
           </button>
           {filtered.map((row) => {
             const active = row.key === selectedKey;
+            const label = shortSoundTitle(row.name);
             return (
               <button
                 key={row.key}
                 type="button"
                 disabled={disabled || promoting}
+                title={row.name !== label ? row.name : undefined}
                 onClick={() => void pick(row)}
                 className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-2 text-left text-sm ${
                   active ? "bg-primary/10 text-primary" : "hover:bg-muted"
                 }`}
               >
-                <span className="min-w-0 truncate font-medium">{row.name}</span>
+                <span className="min-w-0 truncate font-medium">{label}</span>
                 <span className="shrink-0 text-[11px] text-text-hint">
                   {SOUNDTRACK_SOURCE_LABEL[row.source]} · {newsSoundKindLabel(row.kind)}
                 </span>

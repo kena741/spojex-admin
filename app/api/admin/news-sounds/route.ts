@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAdminPermission } from "@/lib/admin-auth";
-import { NEWS_SOUND_KINDS } from "@/lib/news-sounds";
+import { NEWS_SOUND_KINDS, shortSoundTitle } from "@/lib/news-sounds";
 
 const KIND_IDS = new Set(NEWS_SOUND_KINDS.map((item) => item.id));
 
@@ -30,10 +30,11 @@ export async function POST(request: Request) {
     sort_order?: number;
     is_active?: boolean;
   };
-  const name = body.name?.trim();
-  if (!name) {
+  const rawName = body.name?.trim() ?? "";
+  if (!rawName) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
+  const name = shortSoundTitle(rawName);
   const audioUrl = `${body.audio_url ?? ""}`.trim();
   if (!audioUrl) {
     return NextResponse.json({ error: "Upload a sound file first." }, { status: 400 });

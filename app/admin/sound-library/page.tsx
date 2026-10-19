@@ -14,6 +14,7 @@ import {
   NEWS_SOUND_KINDS,
   SOUNDTRACK_SOURCE_LABEL,
   newsSoundKindLabel,
+  shortSoundTitle,
   type SoundtrackCatalogItem,
   type SportNewsSoundRow,
 } from "@/lib/news-sounds";
@@ -69,6 +70,9 @@ export default function SoundLibraryPage() {
   const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [renaming, setRenaming] = useState(false);
 
   const load = async () => {
     const [libRes, catRes] = await Promise.all([
@@ -120,14 +124,15 @@ export default function SoundLibraryPage() {
     setPromotingKey(item.key);
     setError(null);
     try {
+      const title = shortSoundTitle(item.name);
       await postAdmin("/api/admin/news-sounds", {
-        name: item.name,
+        name: title,
         kind: item.kind || "general",
         audio_url: item.audio_url,
         is_active: true,
         sort_order: rows.length,
       });
-      setNotice(`“${item.name}” added to the curated library.`);
+      setNotice(`“${title}” added to the curated library.`);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not add to library");
@@ -152,7 +157,7 @@ export default function SoundLibraryPage() {
       setAudioUrl(uploaded.publicUrl);
       setDurationSeconds(uploaded.durationSeconds);
       if (!name.trim()) {
-        setName(file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim());
+        setName(shortSoundTitle(file.name));
       }
       setNotice(
         uploaded.extractedFromVideo
@@ -174,7 +179,7 @@ export default function SoundLibraryPage() {
     setNotice(null);
     try {
       await postAdmin("/api/admin/news-sounds", {
-        name: name.trim(),
+        name: shortSoundTitle(name),
         kind,
         audio_url: audioUrl.trim(),
         duration_seconds: durationSeconds,
@@ -201,6 +206,39 @@ export default function SoundLibraryPage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update sound");
+    }
+  };
+
+  const startRename = (row: SportNewsSoundRow) => {
+    setEditingId(row.id);
+    setEditName(row.name);
+    setError(null);
+    setNotice(null);
+  };
+
+  const cancelRename = () => {
+    setEditingId(null);
+    setEditName("");
+  };
+
+  const saveRename = async (row: SportNewsSoundRow) => {
+    if (!canWrite || renaming) return;
+    const next = shortSoundTitle(editName);
+    if (!next) {
+      setError("Title is required.");
+      return;
+    }
+    setRenaming(true);
+    setError(null);
+    try {
+      await patchAdmin(`/api/admin/news-sounds/${row.id}`, { name: next });
+      setNotice(`Renamed to “${next}”.`);
+      cancelRename();
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not rename sound");
+    } finally {
+      setRenaming(false);
     }
   };
 
@@ -239,10 +277,12 @@ export default function SoundLibraryPage() {
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Stadium roar"
+              placeholder="Short title (e.g. Stadium roar)"
+              maxLength={48}
               className="h-10 rounded-lg border border-border px-3"
               required
             />
+            <span className="text-[11px] text-text-hint">Keep it short — max 48 characters.</span>
           </label>
           <label className="grid gap-1 text-sm">
             <span className="text-text-secondary">Kind</span>
@@ -335,7 +375,44 @@ export default function SoundLibraryPage() {
             <tbody>
               {filtered.map((row) => (
                 <tr key={row.id} className="border-b border-border/70">
-                  <td className="px-3 py-3 font-medium">{row.name}</td>
+                  <td className="px-3 py-3 font-medium">
+                    {editingId === row.id ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          maxLength={48}
+                          className="h-9 min-w-[160px] flex-1 rounded-md border border-border px-2 text-sm"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              void saveRename(row);
+                            }
+                            if (e.key === "Escape") cancelRename();
+                          }}
+                        />
+                        <button
+                          type="button"
+                          disabled={renaming}
+                          onClick={() => void saveRename(row)}
+                          className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
+                        >
+                          {renaming ? "Saving…" : "Save"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={renaming}
+                          onClick={cancelRename}
+                          className="text-xs font-medium text-text-secondary hover:underline"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <span title={row.name}>{shortSoundTitle(row.name)}</span>
+                    )}
+                  </td>
                   <td className="px-3 py-3 text-text-secondary">
                     {newsSoundKindLabel(row.kind)}
                   </td>
@@ -357,6 +434,13 @@ export default function SoundLibraryPage() {
                   <td className="px-3 py-3">
                     {canWrite ? (
                       <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => startRename(row)}
+                          className="text-xs font-medium text-primary hover:underline"
+                        >
+                          Rename
+                        </button>
                         <button
                           type="button"
                           onClick={() => void toggleActive(row)}
@@ -433,7 +517,9 @@ export default function SoundLibraryPage() {
               <tbody>
                 {catalogFiltered.map((row) => (
                   <tr key={row.key} className="border-b border-border/70">
-                    <td className="px-3 py-3 font-medium">{row.name}</td>
+                    <td className="px-3 py-3 font-medium" title={row.name}>
+                      {shortSoundTitle(row.name)}
+                    </td>
                     <td className="px-3 py-3 text-text-secondary">
                       {SOUNDTRACK_SOURCE_LABEL[row.source]}
                     </td>

@@ -52,6 +52,10 @@ function isMissingOrgColumn(error: { message?: string }) {
   return /organization_id|column .* does not exist/i.test(error.message ?? "");
 }
 
+function isMissingImageUrlsColumn(error: { message?: string }) {
+  return /image_urls|column .* does not exist/i.test(error.message ?? "");
+}
+
 async function uniqueNewsSlug(client: SpojexClient, base: string) {
   const root = base.replace(/^-+|-+$/g, "") || "article";
   for (let n = 0; n < 30; n += 1) {
@@ -159,20 +163,34 @@ export async function POST(request: Request) {
     auth.context.client.from("sport_news").insert(value).select().single();
 
   let omitOrg = false;
+  let omitImageUrls = false;
+  const stripOptional = (value: NewsInsert) => {
+    let next: NewsInsert = value;
+    if (omitOrg) {
+      const { organization_id: _organizationId, ...rest } = next;
+      next = rest as NewsInsert;
+    }
+    if (omitImageUrls) {
+      const { image_urls: _imageUrls, ...rest } = next as NewsInsert & {
+        image_urls?: string[];
+      };
+      next = rest as NewsInsert;
+    }
+    return next;
+  };
+
   let result = await insertArticle(row);
   if (result.error && organizationId && isMissingOrgColumn(result.error)) {
     omitOrg = true;
-    const { organization_id: _organizationId, ...withoutOrg } = row;
-    result = await insertArticle(withoutOrg);
+    result = await insertArticle(stripOptional(row));
+  }
+  if (result.error && isMissingImageUrlsColumn(result.error)) {
+    omitImageUrls = true;
+    result = await insertArticle(stripOptional(row));
   }
   if (result.error && isSlugConflict(result.error)) {
     const retryRow = { ...row, slug: `${slug}-${Date.now().toString(36).slice(-4)}` };
-    if (omitOrg) {
-      const { organization_id: _organizationId, ...withoutOrg } = retryRow;
-      result = await insertArticle(withoutOrg);
-    } else {
-      result = await insertArticle(retryRow);
-    }
+    result = await insertArticle(stripOptional(retryRow));
   }
 
   if (result.error) {

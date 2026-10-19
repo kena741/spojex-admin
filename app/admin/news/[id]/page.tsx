@@ -129,7 +129,7 @@ export default function NewsDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const save = async (patch: Record<string, unknown>) => {
+  const save = async (patch: Record<string, unknown>): Promise<true | string> => {
     setError(null);
     setNotice(null);
     try {
@@ -138,8 +138,9 @@ export default function NewsDetailPage() {
       setNotice("Saved.");
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
-      return false;
+      const message = err instanceof Error ? err.message : "Save failed";
+      setError(message);
+      return message;
     }
   };
 
@@ -166,18 +167,16 @@ export default function NewsDetailPage() {
       }
       const publicUrl = await uploadNewsFile(id, file, kind);
       if (kind === "video") {
-        if (
-          !(await save({
+        if ((await save({
             video_url: publicUrl,
             audio_url: "",
             sound_id: null,
-          }))
-        ) {
+          })) !== true) {
           return;
         }
         setPickedKind("video");
       } else if (kind === "audio") {
-        if (!(await save({ audio_url: publicUrl, sound_id: null }))) return;
+        if ((await save({ audio_url: publicUrl, sound_id: null })) !== true) return;
         setPickedKind("audio");
       } else {
         const existing = Array.isArray(article?.image_urls)
@@ -193,13 +192,11 @@ export default function NewsDetailPage() {
           throw new Error("You can add up to 10 images.");
         }
         const next = [...current, publicUrl];
-        if (
-          !(await save({
+        if ((await save({
             image_urls: next,
             image_url: next[0] ?? "",
             cover_url: next[0] ?? "",
-          }))
-        ) {
+          })) !== true) {
           return;
         }
       }
@@ -221,7 +218,7 @@ export default function NewsDetailPage() {
       patch.sound_id = null;
       patch.audio_url = "";
     }
-    if (!(await save(patch))) return;
+    if ((await save(patch)) !== true) return;
   };
 
   const removeImageAt = async (index: number) => {
@@ -240,16 +237,16 @@ export default function NewsDetailPage() {
       patch.sound_id = null;
       patch.audio_url = "";
     }
-    if (!(await save(patch))) return;
+    if ((await save(patch)) !== true) return;
   };
 
   const removeVideo = async () => {
-    if (!(await save({ video_url: "" }))) return;
+    if ((await save({ video_url: "" })) !== true) return;
     setPickedKind("none");
   };
 
   const removeAudio = async () => {
-    if (!(await save({ audio_url: "", sound_id: null }))) return;
+    if ((await save({ audio_url: "", sound_id: null })) !== true) return;
     setPickedKind("none");
   };
 
@@ -409,13 +406,17 @@ export default function NewsDetailPage() {
                 onRemoveImageAt={(index) => void removeImageAt(index)}
                 onRemoveVideo={() => void removeVideo()}
                 onRemoveAudio={() => void removeAudio()}
-                onSoundSelect={(sound) => {
-                  void save({
+                onSoundSelect={async (sound) => {
+                  if (article.video_url?.trim()) {
+                    return "Remove the video before adding an image soundtrack.";
+                  }
+                  const result = await save({
                     sound_id: sound?.id ?? null,
                     audio_url: sound?.audio_url?.trim() ?? "",
-                  }).then((ok) => {
-                    if (ok) setPickedKind("none");
                   });
+                  if (result !== true) return result;
+                  setPickedKind("none");
+                  return true;
                 }}
               />
               <label className="text-sm">

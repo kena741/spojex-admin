@@ -60,12 +60,17 @@ export function resolveNewsStoryMedia(
   options?: { imageUrl?: string; soundId?: string | null },
 ): NewsStoryMedia {
   if (videoUrl.trim()) return "video";
-  // Library / image soundtrack stays in text/image mode (not dedicated audio story).
-  if (options?.soundId?.trim() || (picked === "none" && options?.imageUrl?.trim())) {
-    return picked === "audio" ? "audio" : picked ?? "none";
+  const hasImage = Boolean(options?.imageUrl?.trim());
+  const hasLibrarySound = Boolean(options?.soundId?.trim());
+  // Image + library/soundtrack audio stays in text/image mode (picker stays visible).
+  if (hasImage && (hasLibrarySound || picked === "none")) {
+    return picked === "audio" ? "audio" : "none";
+  }
+  if (hasImage && audioUrl.trim() && picked !== "audio") {
+    return "none";
   }
   if (picked === "audio") return "audio";
-  if (audioUrl.trim() && !options?.imageUrl?.trim()) return "audio";
+  if (audioUrl.trim() && !hasImage) return "audio";
   if (audioUrl.trim() && picked == null) return "audio";
   if (audioUrl.trim()) return "audio";
   return picked ?? "none";

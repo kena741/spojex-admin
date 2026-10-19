@@ -98,21 +98,40 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const nextAudio =
     "audio_url" in patch ? `${patch.audio_url ?? ""}`.trim() : currentAudio;
 
+  const nextSoundId =
+    "sound_id" in patch
+      ? patch.sound_id == null
+        ? null
+        : `${patch.sound_id}`.trim() || null
+      : undefined;
+  // Library soundtrack on an image story is audio_url + sound_id, not a video conflict
+  // unless a video file is already attached.
   if (nextVideo && nextAudio) {
     return NextResponse.json(
-      { error: "A story can have video or audio, not both. Remove the current file first." },
+      {
+        error:
+          nextSoundId || currentVideo
+            ? "A story can have video or an image soundtrack, not both. Remove the video first."
+            : "A story can have video or audio, not both. Remove the current file first.",
+      },
       { status: 400 },
     );
   }
   if (currentAudio && nextVideo) {
     return NextResponse.json(
-      { error: "Remove the audio file before adding video." },
+      { error: "Remove the audio / soundtrack before adding video." },
       { status: 400 },
     );
   }
   if (currentVideo && nextAudio) {
     return NextResponse.json(
-      { error: "Remove the video file before adding audio." },
+      { error: "Remove the video file before adding an image soundtrack." },
+      { status: 400 },
+    );
+  }
+  if (currentVideo && nextSoundId) {
+    return NextResponse.json(
+      { error: "Remove the video file before adding an image soundtrack." },
       { status: 400 },
     );
   }

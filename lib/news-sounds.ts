@@ -48,3 +48,14 @@ export const SOUNDTRACK_SOURCE_LABEL: Record<
 export function newsSoundKindLabel(kind: string) {
   return NEWS_SOUND_KINDS.find((item) => item.id === kind)?.label ?? kind;
 }
+
+/** Short display / storage title for library sounds (filenames can be very long). */
+export function shortSoundTitle(raw: string, max = 48): string {
+  let value = `${raw ?? ""}`.trim();
+  if (!value) return "Untitled sound";
+  value = value.replace(/\.[a-z0-9]{1,8}$/i, "");
+  value = value.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!value) return "Untitled sound";
+  if (value.length <= max) return value;
+  return value.slice(0, max).trimEnd();
+}

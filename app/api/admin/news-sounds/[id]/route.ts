@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAdminPermission } from "@/lib/admin-auth";
-import { NEWS_SOUND_KINDS } from "@/lib/news-sounds";
+import { NEWS_SOUND_KINDS, shortSoundTitle } from "@/lib/news-sounds";
 
 const KIND_IDS = new Set(NEWS_SOUND_KINDS.map((item) => item.id));
 const allowed = [
@@ -26,7 +26,7 @@ export async function PATCH(
     if (key in body) patch[key] = body[key];
   }
   if ("name" in patch) {
-    const name = `${patch.name ?? ""}`.trim();
+    const name = shortSoundTitle(`${patch.name ?? ""}`);
     if (!name) {
       return NextResponse.json({ error: "name is required" }, { status: 400 });
     }
