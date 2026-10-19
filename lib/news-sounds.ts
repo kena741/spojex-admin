@@ -23,13 +23,13 @@ export type SportNewsSoundRow = {
   updated_at: string;
 };
 
-/** TikTok-style reusable soundtrack catalog entry (library + news + uploads). */
+/** Curated sound library entry (explicitly added — not scraped from news/video). */
 export type SoundtrackCatalogItem = {
   key: string;
   name: string;
   kind: string;
   audio_url: string;
-  source: "library" | "news" | "media";
+  source: "library";
   sound_id: string | null;
   media_object_id?: string | null;
   is_active?: boolean;
@@ -41,8 +41,6 @@ export const SOUNDTRACK_SOURCE_LABEL: Record<
   string
 > = {
   library: "Library",
-  news: "News audio",
-  media: "Uploads",
 };
 
 export function newsSoundKindLabel(kind: string) {
