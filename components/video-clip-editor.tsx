@@ -1,16 +1,6 @@
 "use client";
 
-import {
-  Component,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ErrorInfo,
-  type ReactNode,
-} from "react";
-import dynamic from "next/dynamic";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toBackendMediaUrl } from "@/lib/spojex-media";
 
 type TrimResult = {
@@ -30,17 +20,6 @@ function formatTime(seconds: number) {
   const m = Math.floor(s / 60);
   const r = Math.floor(s % 60);
   return `${m}:${r.toString().padStart(2, "0")}`;
-}
-
-function hasWebGL2(): boolean {
-  if (typeof document === "undefined") return false;
-  try {
-    const canvas = document.createElement("canvas");
-    const gl = canvas.getContext("webgl2", { failIfMajorPerformanceCaveat: false });
-    return Boolean(gl);
-  } catch {
-    return false;
-  }
 }
 
 async function applyServerTrim(
@@ -81,14 +60,16 @@ async function applyServerTrim(
   };
 }
 
-/** HTML5 vertical trimmer — works without WebGL. */
-function HtmlVerticalTrimEditor({
+/**
+ * Vertical 9:16 HTML5 trimmer (no WebGL).
+ * Cursor / embedded browsers often disable WebGL — @elah/editor Preview crashes there.
+ */
+export function VideoClipEditor({
   videoUrl,
   articleId = null,
   disabled,
   onTrimmed,
-  webglBlocked,
-}: VideoClipEditorProps & { webglBlocked?: boolean }) {
+}: VideoClipEditorProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [duration, setDuration] = useState(0);
@@ -202,13 +183,6 @@ function HtmlVerticalTrimEditor({
             : "loading…"}
         </p>
       </div>
-
-      {webglBlocked ? (
-        <p className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">
-          Timeline editor needs WebGL (not available here). Using vertical trim — open in
-          Chrome/Safari desktop for split/cut timeline.
-        </p>
-      ) : null}
 
       <div className="flex justify-center rounded-lg bg-black p-3">
         <div
@@ -337,63 +311,9 @@ function HtmlVerticalTrimEditor({
       </div>
 
       {error ? <p className="text-xs text-red-600">{error}</p> : null}
+      <p className="text-[11px] text-text-hint">
+        Drag the keep range or Set in / Set out at the playhead, then Apply trim.
+      </p>
     </div>
-  );
-}
-
-class WebGLErrorBoundary extends Component<
-  { fallback: ReactNode; children: ReactNode },
-  { failed: boolean }
-> {
-  state = { failed: false };
-
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-
-  componentDidCatch(error: Error, _info: ErrorInfo) {
-    if (typeof console !== "undefined") {
-      console.warn("[VideoClipEditor] falling back to HTML trimmer:", error.message);
-    }
-  }
-
-  render() {
-    if (this.state.failed) return this.props.fallback;
-    return this.props.children;
-  }
-}
-
-const ElahEditor = dynamic(() => import("@/components/video-clip-editor-elah"), {
-  ssr: false,
-  loading: () => (
-    <div className="mb-3 rounded-lg border border-border bg-muted/30 p-4 text-xs text-text-secondary">
-      Loading timeline editor…
-    </div>
-  ),
-});
-
-export function VideoClipEditor(props: VideoClipEditorProps) {
-  const [mode, setMode] = useState<"checking" | "elah" | "html">("checking");
-
-  useEffect(() => {
-    setMode(hasWebGL2() ? "elah" : "html");
-  }, []);
-
-  if (mode === "checking") {
-    return (
-      <div className="mb-3 rounded-lg border border-border bg-muted/30 p-4 text-xs text-text-secondary">
-        Preparing video editor…
-      </div>
-    );
-  }
-
-  if (mode === "html") {
-    return <HtmlVerticalTrimEditor {...props} webglBlocked />;
-  }
-
-  return (
-    <WebGLErrorBoundary fallback={<HtmlVerticalTrimEditor {...props} webglBlocked />}>
-      <ElahEditor {...props} />
-    </WebGLErrorBoundary>
   );
 }
