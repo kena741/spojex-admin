@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Inter, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
@@ -27,13 +27,21 @@ export const metadata: Metadata = {
   description: "Operate SpoJex identities, organizations, and the football services marketplace.",
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${spaceGrotesk.variable} ${geistMono.variable} h-full`}
+      className={`${inter.variable} ${spaceGrotesk.variable} ${geistMono.variable} h-full overflow-x-hidden`}
     >
-      <body className="min-h-full bg-background font-sans text-text-primary">{children}</body>
+      <body className="min-h-full overflow-x-hidden bg-background font-sans text-text-primary antialiased">
+        {children}
+      </body>
     </html>
   );
 }

@@ -121,8 +121,15 @@
   * {
     @apply border-border;
   }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
   body {
     @apply bg-background font-sans text-base leading-normal text-text-primary antialiased;
+  }
+  /* Wide admin tables scroll inside cards instead of blowing the page width. */
+  table {
+    @apply min-w-0;
   }
 }
 

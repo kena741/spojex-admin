@@ -532,7 +532,7 @@ export default function Sidebar() {
       <button
         type="button"
         onClick={() => setMobileOpen(true)}
-        className="fixed left-4 top-4 z-50 grid h-10 w-10 place-items-center rounded-lg border border-border bg-card shadow-sm lg:hidden"
+        className="fixed left-[max(1rem,env(safe-area-inset-left))] top-[max(1rem,env(safe-area-inset-top))] z-50 grid h-11 w-11 place-items-center rounded-lg border border-border bg-card shadow-sm lg:hidden"
         aria-label="Open menu"
       >
         <Menu className="h-5 w-5 text-text-primary" />
@@ -550,7 +550,7 @@ export default function Sidebar() {
       {/* Mobile sidebar (slide-over) */}
       <aside
         className={cn(
-          "fixed left-0 top-0 z-50 flex h-screen w-72 max-w-[85vw] flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-300 ease-in-out lg:hidden",
+          "fixed left-0 top-0 z-50 flex h-[100dvh] w-72 max-w-[min(18rem,85vw)] flex-col border-r border-sidebar-border bg-sidebar pt-[env(safe-area-inset-top)] text-sidebar-foreground transition-transform duration-300 ease-in-out lg:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >

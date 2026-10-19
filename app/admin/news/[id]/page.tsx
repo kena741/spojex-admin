@@ -138,17 +138,18 @@ export default function NewsDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    getSpojexClient()
-      .from("sport_news")
-      .select("source")
-      .order("created_at", { ascending: false })
-      .limit(100)
-      .then(({ data }) => {
+    void (async () => {
+      try {
+        const { data } = await getSpojexClient()
+          .from("sport_news")
+          .select("source")
+          .order("created_at", { ascending: false })
+          .limit(100);
         setRecentSourceRows((data ?? []) as Array<{ source?: string | null }>);
-      })
-      .catch(() => {
+      } catch {
         setRecentSourceRows([]);
-      });
+      }
+    })();
   }, []);
 
   const save = async (patch: Record<string, unknown>): Promise<true | string> => {

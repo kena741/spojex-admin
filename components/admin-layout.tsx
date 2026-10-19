@@ -3,12 +3,14 @@ import { Search } from "lucide-react";
 import Sidebar from "@/components/sidebar";
 import { cn } from "@/lib/utils";
 
-export const adminPageMainClassName = "min-h-screen min-w-0 flex-1 overflow-x-hidden lg:ml-64";
-export const adminPageContentClassName = "mx-auto min-w-0 w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8";
+export const adminPageMainClassName =
+  "min-h-screen min-w-0 flex-1 overflow-x-hidden pb-[env(safe-area-inset-bottom)] lg:ml-64";
+export const adminPageContentClassName =
+  "mx-auto min-w-0 w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8";
 
 export function AdminShell({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-screen w-full overflow-x-hidden">
+    <div className="flex min-h-screen w-full max-w-[100vw] overflow-x-hidden">
       <Sidebar />
       <main className={adminPageMainClassName}>
         <div className={adminPageContentClassName}>{children}</div>
@@ -28,7 +30,7 @@ export function AdminStatCard({ title, value }: { title: string; value: string }
 
 export function AdminFilterPanel({ children }: { children: ReactNode }) {
   return (
-    <div className="mb-6 min-w-0 space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm">
+    <div className="mb-4 min-w-0 space-y-3 rounded-xl border border-border bg-card p-3 shadow-sm sm:mb-6 sm:p-4 [&_input]:w-full [&_select]:w-full sm:[&_select]:w-auto">
       {children}
     </div>
   );
@@ -72,7 +74,7 @@ export function AdminSelect({
       value={value}
       onChange={(event) => onChange(event.target.value)}
       className={cn(
-        "h-10 rounded-lg border border-border bg-card px-3 text-sm text-text-primary shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20",
+        "h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-text-primary shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:w-auto",
         className,
       )}
     >
@@ -101,7 +103,7 @@ export function AdminErrorAlert({ message }: { message: string }) {
 export function AdminTableShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-w-0 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-      {children}
+      <div className="-mx-0 overflow-x-auto overscroll-x-contain">{children}</div>
     </div>
   );
 }
