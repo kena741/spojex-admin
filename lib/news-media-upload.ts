@@ -12,6 +12,7 @@ import {
   extractAudioViaSpojexMediaApi,
   removeWatermarkViaSpojexMediaApi,
   signUploadComplete,
+  toBackendMediaUrl,
   uploadViaSpojexMediaApi,
 } from "@/lib/spojex-media";
 import { requestAccessToken } from "@/lib/spojex/server";
@@ -19,18 +20,112 @@ import { requestAccessToken } from "@/lib/spojex/server";
 /** Cloud Run request body limit is ~32MB; stay under that for multipart proxy. */
 const MULTIPART_SAFE_BYTES = 28 * 1024 * 1024;
 
-export type WatermarkPreset = "none" | "tiktok" | "instagram" | "both";
+export type WatermarkPreset = "tiktok" | "instagram" | "both";
 export type WatermarkMode = "delogo" | "crop_bottom";
 
-function parseWatermarkPreset(raw: FormDataEntryValue | null): WatermarkPreset {
+function parseWatermarkPreset(raw: FormDataEntryValue | null): WatermarkPreset | null {
   const value = `${raw ?? ""}`.trim().toLowerCase();
   if (value === "tiktok" || value === "instagram" || value === "both") return value;
-  return "none";
+  return null;
 }
 
 function parseWatermarkMode(raw: FormDataEntryValue | null): WatermarkMode {
   const value = `${raw ?? ""}`.trim().toLowerCase();
   return value === "crop_bottom" ? "crop_bottom" : "delogo";
+}
+
+/**
+ * Re-process an already-uploaded news video: download → ffmpeg watermark removal → store.
+ * Used after the editor can preview the original upload.
+ */
+export async function removeNewsVideoWatermarkFromForm(
+  form: FormData,
+  folder: string,
+): Promise<NextResponse> {
+  const sourceUrlRaw = `${form.get("source_url") ?? form.get("sourceUrl") ?? ""}`.trim();
+  if (!sourceUrlRaw) {
+    return NextResponse.json({ error: "source_url is required" }, { status: 400 });
+  }
+
+  const preset = parseWatermarkPreset(form.get("watermark") ?? form.get("preset"));
+  if (!preset) {
+    return NextResponse.json(
+      { error: "watermark must be tiktok, instagram, or both." },
+      { status: 400 },
+    );
+  }
+  const watermarkMode = parseWatermarkMode(form.get("watermark_mode") ?? form.get("mode"));
+
+  const token = await requestAccessToken();
+  if (!token) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const fetchUrl = toBackendMediaUrl(sourceUrlRaw);
+  let videoRes: Response;
+  try {
+    videoRes = await fetch(fetchUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    return NextResponse.json(
+      { error: "Could not download the uploaded video for watermark removal." },
+      { status: 400 },
+    );
+  }
+  if (!videoRes.ok) {
+    return NextResponse.json(
+      { error: `Could not download video (${videoRes.status}). Re-upload and try again.` },
+      { status: 400 },
+    );
+  }
+
+  const bytes = new Uint8Array(await videoRes.arrayBuffer());
+  if (bytes.byteLength <= 0) {
+    return NextResponse.json({ error: "Downloaded video was empty." }, { status: 400 });
+  }
+  if (bytes.byteLength > MULTIPART_SAFE_BYTES) {
+    return NextResponse.json(
+      {
+        error:
+          "Watermark removal needs a video under 28 MB. Compress the clip or crop it first.",
+      },
+      { status: 400 },
+    );
+  }
+
+  const contentType =
+    (videoRes.headers.get("content-type") || "").split(";")[0].trim() || "video/mp4";
+  const uploadBlob = new Blob([bytes], { type: contentType.startsWith("video/") ? contentType : "video/mp4" });
+  const filename = `video-clean-${Date.now()}.mp4`;
+
+  try {
+    const cleaned = await removeWatermarkViaSpojexMediaApi({
+      accessToken: token,
+      file: uploadBlob,
+      filename,
+      preset,
+      mode: watermarkMode,
+      module: "news",
+      folder: folder.includes("video") ? folder : "sport-news/videos",
+    });
+    if (!cleaned.publicUrl) {
+      return NextResponse.json({ error: "Watermark removal failed. No URL returned." }, { status: 400 });
+    }
+    return NextResponse.json({
+      kind: "video",
+      path: cleaned.path,
+      publicUrl: cleaned.publicUrl,
+      objectId: cleaned.objectId,
+      durationSeconds: cleaned.durationSeconds ?? null,
+      watermarkRemoved: true,
+      watermarkPreset: preset,
+      watermarkMode,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Watermark removal failed";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
 }
 
 /**
@@ -121,48 +216,6 @@ export async function uploadNewsMediaFromForm(
     return NextResponse.json({ error: "Empty file" }, { status: 400 });
   }
   const uploadBlob = new Blob([bytes], { type: mime });
-
-  // Video + watermark removal (TikTok / Instagram) — server ffmpeg path.
-  const watermarkPreset = parseWatermarkPreset(form.get("watermark"));
-  const watermarkMode = parseWatermarkMode(form.get("watermark_mode"));
-  if (kind === "video" && watermarkPreset !== "none") {
-    if (uploadBlob.size > MULTIPART_SAFE_BYTES) {
-      return NextResponse.json(
-        {
-          error:
-            "Watermark removal needs a video under 28 MB. Compress the clip or upload without watermark removal.",
-        },
-        { status: 400 },
-      );
-    }
-    try {
-      const cleaned = await removeWatermarkViaSpojexMediaApi({
-        accessToken: token,
-        file: uploadBlob,
-        filename,
-        preset: watermarkPreset,
-        mode: watermarkMode,
-        module: "news",
-        folder: folder.includes("video") ? folder : "sport-news/videos",
-      });
-      if (!cleaned.publicUrl) {
-        return NextResponse.json({ error: "Watermark removal failed. No URL returned." }, { status: 400 });
-      }
-      return NextResponse.json({
-        kind: "video",
-        path: cleaned.path,
-        publicUrl: cleaned.publicUrl,
-        objectId: cleaned.objectId,
-        durationSeconds: cleaned.durationSeconds ?? null,
-        watermarkRemoved: true,
-        watermarkPreset,
-        watermarkMode,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Watermark removal failed";
-      return NextResponse.json({ error: message }, { status: 400 });
-    }
-  }
 
   const preferMultipart = kind === "image" || uploadBlob.size <= MULTIPART_SAFE_BYTES;
 

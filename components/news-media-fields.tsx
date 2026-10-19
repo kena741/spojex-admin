@@ -58,10 +58,10 @@ type NewsUploadPayload = {
 
 export type NewsUploadOptions = {
   onProgress?: (percent: number) => void;
-  /** Remove TikTok / Instagram watermark while uploading video. */
-  watermark?: "none" | "tiktok" | "instagram" | "both";
-  watermarkMode?: "delogo" | "crop_bottom";
 };
+
+export type NewsWatermarkPreset = "tiktok" | "instagram" | "both";
+export type NewsWatermarkMode = "delogo" | "crop_bottom";
 
 function parseUploadPayload(text: string): NewsUploadPayload {
   if (!text.trim()) {
@@ -91,10 +91,6 @@ export async function uploadNewsFile(
   const body = new FormData();
   body.set("kind", kind);
   body.set("file", file, file.name);
-  if (kind === "video" && options?.watermark && options.watermark !== "none") {
-    body.set("watermark", options.watermark);
-    body.set("watermark_mode", options.watermarkMode ?? "delogo");
-  }
 
   const onProgress = options?.onProgress;
   // XHR so we can show circular progress while pasting / uploading images.
@@ -138,6 +134,32 @@ export async function uploadNewsFile(
   const payload = parseUploadPayload(await response.text());
   if (!response.ok) throw new Error(payload.error || "Upload failed");
   if (!payload.publicUrl) throw new Error("Upload failed. No public URL was returned.");
+  return toBackendMediaUrl(payload.publicUrl);
+}
+
+/** Re-process an already-uploaded video to remove TikTok / Instagram watermarks. */
+export async function removeNewsVideoWatermark(
+  articleId: string | null,
+  sourceUrl: string,
+  options: { preset: NewsWatermarkPreset; mode?: NewsWatermarkMode },
+) {
+  const url = sourceUrl.trim();
+  if (!url) throw new Error("Upload a video first.");
+  const endpoint = articleId ? `/api/admin/news/${articleId}/media` : "/api/admin/news/media";
+  const body = new FormData();
+  body.set("action", "remove-watermark");
+  body.set("source_url", url);
+  body.set("watermark", options.preset);
+  body.set("watermark_mode", options.mode ?? "delogo");
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    credentials: "same-origin",
+    body,
+  });
+  const payload = parseUploadPayload(await response.text());
+  if (!response.ok) throw new Error(payload.error || "Watermark removal failed");
+  if (!payload.publicUrl) throw new Error("Watermark removal failed. No public URL was returned.");
   return toBackendMediaUrl(payload.publicUrl);
 }
 
@@ -197,6 +219,7 @@ export function NewsMediaFields({
   onRemoveImageAt,
   onRemoveVideo,
   onRemoveAudio,
+  onRemoveWatermark,
   onSoundSelect,
 }: {
   imageUrl: string;
@@ -218,10 +241,17 @@ export function NewsMediaFields({
   onRemoveImageAt?: (index: number) => void;
   onRemoveVideo: () => void;
   onRemoveAudio: () => void;
+  /** After video is uploaded and previewed — optional TikTok/IG cleanup. */
+  onRemoveWatermark?: (options: {
+    preset: NewsWatermarkPreset;
+    mode: NewsWatermarkMode;
+  }) => void | Promise<void>;
   onSoundSelect?: (sound: SportNewsSoundRow | null) => void;
 }) {
-  const [watermark, setWatermark] = useState<"none" | "tiktok" | "instagram" | "both">("none");
-  const [watermarkMode, setWatermarkMode] = useState<"delogo" | "crop_bottom">("delogo");
+  const [watermark, setWatermark] = useState<NewsWatermarkPreset>("both");
+  const [watermarkMode, setWatermarkMode] = useState<NewsWatermarkMode>("delogo");
+  const [videoStagingPreview, setVideoStagingPreview] = useState<string | null>(null);
+  const videoStagingUrlRef = useRef<string | null>(null);
 
   const gallery = (
     imageUrls && imageUrls.length > 0
@@ -261,11 +291,29 @@ export function NewsMediaFields({
     setUploadPercent(0);
   }, []);
 
+  const clearVideoStagingPreview = useCallback(() => {
+    if (videoStagingUrlRef.current) {
+      URL.revokeObjectURL(videoStagingUrlRef.current);
+      videoStagingUrlRef.current = null;
+    }
+    setVideoStagingPreview(null);
+  }, []);
+
   useEffect(() => {
     if (uploading !== "image") clearStagingPreview();
   }, [clearStagingPreview, uploading]);
 
-  useEffect(() => () => clearStagingPreview(), [clearStagingPreview]);
+  useEffect(() => {
+    if (uploading !== "video" || hasVideo) clearVideoStagingPreview();
+  }, [clearVideoStagingPreview, hasVideo, uploading]);
+
+  useEffect(
+    () => () => {
+      clearStagingPreview();
+      clearVideoStagingPreview();
+    },
+    [clearStagingPreview, clearVideoStagingPreview],
+  );
 
   const acceptImageFile = useCallback(
     (file: File | null) => {
@@ -527,29 +575,41 @@ export function NewsMediaFields({
           </div>
           {hasVideo ? (
             <video
+              key={videoUrl}
               src={toBackendMediaUrl(videoUrl)}
               controls
               poster={imagePreview || undefined}
               className="mb-2 h-36 w-full rounded-lg bg-black object-contain"
             />
+          ) : videoStagingPreview ? (
+            <div className="relative mb-2 overflow-hidden rounded-lg bg-black">
+              <video
+                src={videoStagingPreview}
+                muted
+                playsInline
+                className="h-36 w-full object-contain opacity-60"
+              />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                <span className="text-xs font-medium text-white">Uploading video…</span>
+              </div>
+            </div>
           ) : (
             <div className="mb-2 flex h-28 items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 text-xs text-text-secondary">
               No video uploaded
             </div>
           )}
-          {!hasVideo ? (
-            <div className="mb-3 grid gap-2 rounded-lg border border-dashed border-border bg-muted/20 p-3 sm:grid-cols-2">
+          {hasVideo && onRemoveWatermark ? (
+            <div className="mb-3 grid gap-2 rounded-lg border border-border bg-muted/20 p-3 sm:grid-cols-2">
               <label className="grid gap-1 text-xs">
-                <span className="font-medium text-text-secondary">Remove watermark</span>
+                <span className="font-medium text-text-secondary">Watermark type</span>
                 <select
                   value={watermark}
                   disabled={busy}
                   onChange={(e) =>
-                    setWatermark(e.target.value as typeof watermark)
+                    setWatermark(e.target.value as NewsWatermarkPreset)
                   }
                   className="h-9 rounded-md border border-border bg-card px-2 text-sm"
                 >
-                  <option value="none">Keep as uploaded</option>
                   <option value="tiktok">TikTok</option>
                   <option value="instagram">Instagram</option>
                   <option value="both">TikTok + Instagram</option>
@@ -559,19 +619,29 @@ export function NewsMediaFields({
                 <span className="font-medium text-text-secondary">Method</span>
                 <select
                   value={watermarkMode}
-                  disabled={busy || watermark === "none"}
+                  disabled={busy}
                   onChange={(e) =>
-                    setWatermarkMode(e.target.value as typeof watermarkMode)
+                    setWatermarkMode(e.target.value as NewsWatermarkMode)
                   }
-                  className="h-9 rounded-md border border-border bg-card px-2 text-sm disabled:opacity-50"
+                  className="h-9 rounded-md border border-border bg-card px-2 text-sm"
                 >
                   <option value="delogo">Inpaint corners (keep full frame)</option>
                   <option value="crop_bottom">Crop bottom band (stronger)</option>
                 </select>
               </label>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  void onRemoveWatermark({ preset: watermark, mode: watermarkMode })
+                }
+                className="h-9 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50 sm:col-span-2"
+              >
+                {uploading === "video" ? "Removing watermark…" : "Remove watermark"}
+              </button>
               <p className="text-[11px] text-text-hint sm:col-span-2">
-                Works best on static corner marks. Moving watermarks may remain. Max 28 MB when
-                removing a watermark.
+                Upload and preview first, then clean static corner marks. Max 28 MB. Moving
+                watermarks may remain.
               </p>
             </div>
           ) : null}
@@ -584,9 +654,12 @@ export function NewsMediaFields({
               const file = event.target.files?.[0];
               event.target.value = "";
               if (!file) return;
-              void onUpload(file, "video", {
-                watermark,
-                watermarkMode,
+              if (videoStagingUrlRef.current) URL.revokeObjectURL(videoStagingUrlRef.current);
+              const previewUrl = URL.createObjectURL(file);
+              videoStagingUrlRef.current = previewUrl;
+              setVideoStagingPreview(previewUrl);
+              void Promise.resolve(onUpload(file, "video")).catch(() => {
+                clearVideoStagingPreview();
               });
             }}
           />

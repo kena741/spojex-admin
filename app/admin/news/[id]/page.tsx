@@ -8,8 +8,11 @@ import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import {
   NewsMediaFields,
+  removeNewsVideoWatermark,
   uploadNewsFile,
   type NewsUploadOptions,
+  type NewsWatermarkMode,
+  type NewsWatermarkPreset,
 } from "@/components/news-media-fields";
 import { NewsSourceField } from "@/components/news-source-field";
 import { NewsTikTokPreview } from "@/components/news-tiktok-preview";
@@ -277,6 +280,30 @@ export default function NewsDetailPage() {
     setPickedKind("none");
   };
 
+  const removeWatermark = async (options: {
+    preset: NewsWatermarkPreset;
+    mode: NewsWatermarkMode;
+  }) => {
+    const source = article?.video_url?.trim() || "";
+    if (!source) {
+      setError("Upload a video first.");
+      return;
+    }
+    setUploading("video");
+    setError(null);
+    setNotice(null);
+    try {
+      const publicUrl = await removeNewsVideoWatermark(id, source, options);
+      if ((await save({ video_url: publicUrl })) !== true) return;
+      setPickedKind("video");
+      setNotice("Watermark removed.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Watermark removal failed");
+    } finally {
+      setUploading(null);
+    }
+  };
+
   const remove = async () => {
     if (!window.confirm(`Delete "${article?.title}"? This cannot be undone.`)) return;
     setError(null);
@@ -433,6 +460,7 @@ export default function NewsDetailPage() {
                 onRemoveImageAt={(index) => void removeImageAt(index)}
                 onRemoveVideo={() => void removeVideo()}
                 onRemoveAudio={() => void removeAudio()}
+                onRemoveWatermark={(options) => void removeWatermark(options)}
                 onSoundSelect={async (sound) => {
                   if (article.video_url?.trim()) {
                     return "Remove the video before adding an image soundtrack.";

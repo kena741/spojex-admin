@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { parseNewsUploadKind } from "@/lib/news-media";
-import { uploadNewsMediaFromForm } from "@/lib/news-media-upload";
+import {
+  removeNewsVideoWatermarkFromForm,
+  uploadNewsMediaFromForm,
+} from "@/lib/news-media-upload";
 
 export const maxDuration = 300;
 
@@ -18,6 +21,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       { error: "Upload could not start. Refresh and try again (max 50 MB for video)." },
       { status: 400 },
     );
+  }
+
+  const action = `${form.get("action") ?? ""}`.trim().toLowerCase();
+  if (action === "remove-watermark") {
+    return removeNewsVideoWatermarkFromForm(form, `sport-news/${id}`);
   }
 
   const kind = parseNewsUploadKind(`${form.get("kind") ?? ""}`);

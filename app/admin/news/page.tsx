@@ -18,8 +18,11 @@ import {
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import {
   NewsMediaFields,
+  removeNewsVideoWatermark,
   uploadNewsFile,
   type NewsUploadOptions,
+  type NewsWatermarkMode,
+  type NewsWatermarkPreset,
 } from "@/components/news-media-fields";
 import { NewsSourceField } from "@/components/news-source-field";
 import { NewsTikTokPreview } from "@/components/news-tiktok-preview";
@@ -147,6 +150,27 @@ export default function NewsPage() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  const removeWatermark = async (options: {
+    preset: NewsWatermarkPreset;
+    mode: NewsWatermarkMode;
+  }) => {
+    if (!videoUrl.trim()) {
+      setError("Upload a video first.");
+      return;
+    }
+    setUploading("video");
+    setError(null);
+    try {
+      const publicUrl = await removeNewsVideoWatermark(null, videoUrl, options);
+      setVideoUrl(publicUrl);
+      setPickedKind("video");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Watermark removal failed");
     } finally {
       setUploading(null);
     }
@@ -504,6 +528,7 @@ export default function NewsPage() {
               setSoundId("");
               setPickedKind("none");
             }}
+            onRemoveWatermark={(options) => void removeWatermark(options)}
             onSoundSelect={(sound) => {
               setSoundId(sound?.id ?? "");
               setAudioUrl(sound?.audio_url?.trim() ?? "");
