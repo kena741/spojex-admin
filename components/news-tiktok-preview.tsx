@@ -6,6 +6,9 @@ import { toBackendMediaUrl } from "@/lib/spojex-media";
 type NewsTikTokPreviewProps = {
   title?: string;
   body?: string;
+  /** Publishing organization shown as the bold poster line. */
+  organizationName?: string;
+  /** Optional credit under the org — hidden when empty. */
   source?: string;
   imageUrl?: string;
   videoUrl?: string;
@@ -49,6 +52,7 @@ function RailButton({
 export function NewsTikTokPreview({
   title = "",
   body = "",
+  organizationName = "",
   source = "",
   imageUrl = "",
   videoUrl = "",
@@ -63,7 +67,14 @@ export function NewsTikTokPreview({
   const image = toBackendMediaUrl(imageUrl);
   const video = toBackendMediaUrl(videoUrl);
   const audio = toBackendMediaUrl(audioUrl);
-  const org = source.trim() || "SpoJex";
+  const org =
+    organizationName.trim() || source.trim() || "SpoJex";
+  const sourceLine = (() => {
+    const s = source.trim();
+    if (!s) return "";
+    if (s.toLowerCase() === org.toLowerCase()) return "";
+    return s;
+  })();
   const caption = [title.trim(), body.trim()].filter(Boolean).join(" — ");
   const shortCaption =
     caption.length > 110 ? `${caption.slice(0, 108).trimEnd()}… more` : caption;
@@ -111,6 +122,11 @@ export function NewsTikTokPreview({
           {/* Caption */}
           <div className="absolute bottom-14 left-3 right-16 z-10 text-white">
             <p className="text-[13px] font-bold leading-tight drop-shadow">{org}</p>
+            {sourceLine ? (
+              <p className="mt-0.5 text-[10px] font-medium leading-tight text-white/80 drop-shadow">
+                {sourceLine}
+              </p>
+            ) : null}
             {shortCaption ? (
               <p className="mt-1 text-[12px] leading-snug text-white/95 drop-shadow">
                 {shortCaption.includes("… more") ? (

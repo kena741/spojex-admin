@@ -55,6 +55,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     patch.sound_id =
       typeof raw === "string" && raw.trim() ? raw.trim() : null;
   }
+  if ("source" in patch) {
+    patch.source = typeof patch.source === "string" ? patch.source.trim() : "";
+  }
   if ("image_urls" in patch) {
     const urls = normalizeImageUrls(patch.image_urls);
     patch.image_urls = urls;

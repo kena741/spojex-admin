@@ -304,6 +304,17 @@ export default function NewsDetailPage() {
     }
   };
 
+  const trimVideo = async (result: {
+    publicUrl: string;
+    durationSeconds: number | null;
+  }) => {
+    setError(null);
+    setNotice(null);
+    if ((await save({ video_url: result.publicUrl })) !== true) return;
+    setPickedKind("video");
+    setNotice("Video trimmed.");
+  };
+
   const remove = async () => {
     if (!window.confirm(`Delete "${article?.title}"? This cannot be undone.`)) return;
     setError(null);
@@ -394,7 +405,8 @@ export default function NewsDetailPage() {
           <NewsTikTokPreview
             title={article.title}
             body={article.body}
-            source={orgLabel}
+            organizationName={article.organizations?.name ?? ""}
+            source={article.source ?? ""}
             imageUrl={image}
             videoUrl={article.video_url ?? ""}
             audioUrl={article.audio_url ?? ""}
@@ -491,13 +503,17 @@ export default function NewsDetailPage() {
               <NewsSourceField
                 key={`source-${article.source}-${article.organization_id ?? ""}`}
                 label="Source label"
-                defaultValue={article.source}
+                optional
+                defaultValue={article.source ?? ""}
                 knownSources={recentSourceRows}
                 disabled={!canWrite}
-                inputClassName="h-10 w-full rounded-lg border border-border px-3"
-                hint="Auto-fills from the organization name when you link an org. Tap a recent source to reuse it."
+                inputClassName="h-10 w-full rounded-lg border border-border px-3 text-sm"
+                hint="Optional credit under the org on the app (leave blank to hide). Tap a recent source to reuse it."
                 onCommit={(next) => {
-                  if (next !== article.source) void save({ source: next });
+                  const trimmed = next.trim();
+                  if (trimmed !== (article.source ?? "").trim()) {
+                    void save({ source: trimmed });
+                  }
                 }}
               />
               <label className="text-sm">

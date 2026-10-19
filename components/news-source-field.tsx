@@ -19,6 +19,8 @@ type NewsSourceFieldProps = {
   placeholder?: string;
   label?: string;
   hint?: string;
+  /** When true, shows an “optional” marker next to the label. */
+  optional?: boolean;
 };
 
 export function NewsSourceField({
@@ -30,9 +32,10 @@ export function NewsSourceField({
   disabled,
   className,
   inputClassName = "h-10 w-full rounded-lg border border-border px-3 text-sm",
-  placeholder = "Source (default: SpoJex Desk)",
+  placeholder = "Optional — e.g. Reuters, ESPN",
   label,
   hint,
+  optional = true,
 }: NewsSourceFieldProps) {
   const listId = useId();
   const controlled = value !== undefined;
@@ -73,7 +76,12 @@ export function NewsSourceField({
   return (
     <div className={className}>
       {label ? (
-        <span className="mb-1 block text-sm text-text-secondary">{label}</span>
+        <span className="mb-1 flex items-baseline gap-1.5 text-sm text-text-secondary">
+          {label}
+          {optional ? (
+            <span className="text-[11px] font-normal text-text-hint">optional</span>
+          ) : null}
+        </span>
       ) : null}
       <input
         value={current}
@@ -86,7 +94,7 @@ export function NewsSourceField({
             rememberNewsSource(next);
             setTick((n) => n + 1);
           }
-          onCommit?.(next);
+          onCommit?.(next.trim());
         }}
         className={inputClassName}
         list={listId}

@@ -144,7 +144,8 @@ export async function POST(request: Request) {
     audio_url: audio,
     sound_id: soundId,
     category: payload.category ?? "General",
-    source: payload.source ?? "SpoJex Desk",
+    source:
+      typeof payload.source === "string" ? payload.source.trim() : "",
     author,
     status,
     is_featured: payload.is_featured ?? false,

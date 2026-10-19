@@ -176,6 +176,14 @@ export default function NewsPage() {
     }
   };
 
+  const trimVideo = async (result: {
+    publicUrl: string;
+    durationSeconds: number | null;
+  }) => {
+    setVideoUrl(result.publicUrl);
+    setPickedKind("video");
+  };
+
   const create = async () => {
     if (!canWrite || !title.trim() || uploading) return;
     setCreating(true);
@@ -188,14 +196,14 @@ export default function NewsPage() {
             ? [imageUrl.trim()]
             : [];
       const image = gallery[0] ?? "";
-      const sourceLabel = source.trim() || "SpoJex Desk";
+      const sourceLabel = source.trim();
       await postAdmin("/api/admin/news", {
         title: title.trim(),
         category,
         status: statusValue,
         summary: "",
         body: body.trim(),
-        source: source.trim() || undefined,
+        source: sourceLabel,
         image_url: image,
         cover_url: image,
         image_urls: gallery,
@@ -204,7 +212,7 @@ export default function NewsPage() {
         sound_id: soundId.trim() || null,
         is_featured: featured,
       });
-      rememberNewsSource(sourceLabel);
+      if (sourceLabel) rememberNewsSource(sourceLabel);
       resetCreate();
       setCreateOpen(false);
       await load();
@@ -467,11 +475,14 @@ export default function NewsPage() {
             className="rounded-lg border border-border px-3 py-2 text-sm"
           />
           <NewsSourceField
+            label="Source label"
+            optional
             value={source}
             onChange={setSource}
             knownSources={rows}
             disabled={creating || Boolean(uploading)}
             inputClassName="h-10 w-full rounded-lg border border-border px-3 text-sm"
+            hint="Optional credit under the org on the app. Leave blank to hide."
           />
           <p className="text-sm text-text-secondary">
             Author{" "}
@@ -480,7 +491,7 @@ export default function NewsPage() {
           <NewsTikTokPreview
             title={title}
             body={body}
-            source={source.trim() || "SpoJex Desk"}
+            source={source.trim()}
             imageUrl={imageUrls[0] ?? imageUrl}
             videoUrl={videoUrl}
             audioUrl={audioUrl}
@@ -529,6 +540,7 @@ export default function NewsPage() {
               setPickedKind("none");
             }}
             onRemoveWatermark={(options) => void removeWatermark(options)}
+            onTrimVideo={(result) => void trimVideo(result)}
             onSoundSelect={(sound) => {
               setSoundId(sound?.id ?? "");
               setAudioUrl(sound?.audio_url?.trim() ?? "");
