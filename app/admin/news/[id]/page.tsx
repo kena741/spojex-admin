@@ -510,7 +510,7 @@ export default function NewsDetailPage() {
                 knownSources={recentSourceRows}
                 disabled={!canWrite}
                 inputClassName="h-10 w-full rounded-lg border border-border px-3 text-sm"
-                hint="Optional credit under the org on the app (leave blank to hide). Tap a recent source to reuse it."
+                hint="Optional credit under the title on the app (leave blank to hide). Tap a recent source to reuse it."
                 onCommit={(next) => {
                   const trimmed = next.trim();
                   if (trimmed !== (article.source ?? "").trim()) {

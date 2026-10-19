@@ -122,11 +122,6 @@ export function NewsTikTokPreview({
           {/* Caption */}
           <div className="absolute bottom-14 left-3 right-16 z-10 text-white">
             <p className="text-[13px] font-bold leading-tight drop-shadow">{org}</p>
-            {sourceLine ? (
-              <p className="mt-0.5 text-[10px] font-medium leading-tight text-white/80 drop-shadow">
-                {sourceLine}
-              </p>
-            ) : null}
             {shortCaption ? (
               <p className="mt-1 text-[12px] leading-snug text-white/95 drop-shadow">
                 {shortCaption.includes("… more") ? (
@@ -141,6 +136,11 @@ export function NewsTikTokPreview({
             ) : (
               <p className="mt-1 text-[12px] text-white/60">No caption yet</p>
             )}
+            {sourceLine ? (
+              <p className="mt-1 text-[10px] font-medium leading-tight text-white/75 drop-shadow">
+                {sourceLine}
+              </p>
+            ) : null}
             {hasAudio && !hasVideo ? (
               <p className="mt-2 flex items-center gap-1 text-[11px] text-white/80">
                 <span aria-hidden>♪</span>

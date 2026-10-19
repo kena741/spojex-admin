@@ -482,7 +482,7 @@ export default function NewsPage() {
             knownSources={rows}
             disabled={creating || Boolean(uploading)}
             inputClassName="h-10 w-full rounded-lg border border-border px-3 text-sm"
-            hint="Optional credit under the org on the app. Leave blank to hide."
+            hint="Optional credit under the title on the app. Leave blank to hide."
           />
           <p className="text-sm text-text-secondary">
             Author{" "}
