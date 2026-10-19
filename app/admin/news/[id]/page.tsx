@@ -11,6 +11,7 @@ import {
   uploadNewsFile,
   type NewsUploadOptions,
 } from "@/components/news-media-fields";
+import { NewsSourceField } from "@/components/news-source-field";
 import { NewsTikTokPreview } from "@/components/news-tiktok-preview";
 import { newsCategories, newsStatusLabel, newsStatuses } from "@/lib/news";
 import { resolveNewsStoryMedia, type NewsStoryMedia, type NewsUploadKind } from "@/lib/news-media";
@@ -99,6 +100,9 @@ export default function NewsDetailPage() {
   const { can } = useAdminPermissions();
   const canWrite = can("news:write");
   const [article, setArticle] = useState<SportNewsRow | null>(null);
+  const [recentSourceRows, setRecentSourceRows] = useState<
+    Array<{ source?: string | null }>
+  >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -132,6 +136,20 @@ export default function NewsDetailPage() {
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    getSpojexClient()
+      .from("sport_news")
+      .select("source")
+      .order("created_at", { ascending: false })
+      .limit(100)
+      .then(({ data }) => {
+        setRecentSourceRows((data ?? []) as Array<{ source?: string | null }>);
+      })
+      .catch(() => {
+        setRecentSourceRows([]);
+      });
+  }, []);
 
   const save = async (patch: Record<string, unknown>): Promise<true | string> => {
     setError(null);
@@ -441,20 +459,18 @@ export default function NewsDetailPage() {
                   ))}
                 </select>
               </label>
-              <label className="text-sm">
-                <span className="mb-1 block text-text-secondary">Source label</span>
-                <input
-                  key={`source-${article.source}-${article.organization_id ?? ""}`}
-                  defaultValue={article.source}
-                  onBlur={(e) => {
-                    if (e.target.value !== article.source) save({ source: e.target.value });
-                  }}
-                  className="h-10 w-full rounded-lg border border-border px-3"
-                />
-                <p className="mt-1 text-xs text-text-secondary">
-                  Auto-fills from the organization name when you link an org.
-                </p>
-              </label>
+              <NewsSourceField
+                key={`source-${article.source}-${article.organization_id ?? ""}`}
+                label="Source label"
+                defaultValue={article.source}
+                knownSources={recentSourceRows}
+                disabled={!canWrite}
+                inputClassName="h-10 w-full rounded-lg border border-border px-3"
+                hint="Auto-fills from the organization name when you link an org. Tap a recent source to reuse it."
+                onCommit={(next) => {
+                  if (next !== article.source) void save({ source: next });
+                }}
+              />
               <label className="text-sm">
                 <span className="mb-1 block text-text-secondary">Author</span>
                 <input

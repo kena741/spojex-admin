@@ -21,8 +21,10 @@ import {
   uploadNewsFile,
   type NewsUploadOptions,
 } from "@/components/news-media-fields";
+import { NewsSourceField } from "@/components/news-source-field";
 import { NewsTikTokPreview } from "@/components/news-tiktok-preview";
 import { newsCategories, newsRecency, newsStatusLabel, newsStatuses } from "@/lib/news";
+import { rememberNewsSource } from "@/lib/news-sources";
 import { resolveNewsStoryMedia, type NewsStoryMedia, type NewsUploadKind } from "@/lib/news-media";
 import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
 import { getSpojexClient } from "@/lib/spojex/client";
@@ -162,6 +164,7 @@ export default function NewsPage() {
             ? [imageUrl.trim()]
             : [];
       const image = gallery[0] ?? "";
+      const sourceLabel = source.trim() || "SpoJex Desk";
       await postAdmin("/api/admin/news", {
         title: title.trim(),
         category,
@@ -177,6 +180,7 @@ export default function NewsPage() {
         sound_id: soundId.trim() || null,
         is_featured: featured,
       });
+      rememberNewsSource(sourceLabel);
       resetCreate();
       setCreateOpen(false);
       await load();
@@ -438,11 +442,12 @@ export default function NewsPage() {
             rows={5}
             className="rounded-lg border border-border px-3 py-2 text-sm"
           />
-          <input
+          <NewsSourceField
             value={source}
-            onChange={(e) => setSource(e.target.value)}
-            placeholder="Source (default: SpoJex Desk)"
-            className="h-10 rounded-lg border border-border px-3 text-sm"
+            onChange={setSource}
+            knownSources={rows}
+            disabled={creating || Boolean(uploading)}
+            inputClassName="h-10 w-full rounded-lg border border-border px-3 text-sm"
           />
           <p className="text-sm text-text-secondary">
             Author{" "}
