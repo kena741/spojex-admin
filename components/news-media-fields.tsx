@@ -58,6 +58,9 @@ type NewsUploadPayload = {
 
 export type NewsUploadOptions = {
   onProgress?: (percent: number) => void;
+  /** Remove TikTok / Instagram watermark while uploading video. */
+  watermark?: "none" | "tiktok" | "instagram" | "both";
+  watermarkMode?: "delogo" | "crop_bottom";
 };
 
 function parseUploadPayload(text: string): NewsUploadPayload {
@@ -88,6 +91,10 @@ export async function uploadNewsFile(
   const body = new FormData();
   body.set("kind", kind);
   body.set("file", file, file.name);
+  if (kind === "video" && options?.watermark && options.watermark !== "none") {
+    body.set("watermark", options.watermark);
+    body.set("watermark_mode", options.watermarkMode ?? "delogo");
+  }
 
   const onProgress = options?.onProgress;
   // XHR so we can show circular progress while pasting / uploading images.
@@ -213,6 +220,9 @@ export function NewsMediaFields({
   onRemoveAudio: () => void;
   onSoundSelect?: (sound: SportNewsSoundRow | null) => void;
 }) {
+  const [watermark, setWatermark] = useState<"none" | "tiktok" | "instagram" | "both">("both");
+  const [watermarkMode, setWatermarkMode] = useState<"delogo" | "crop_bottom">("delogo");
+
   const gallery = (
     imageUrls && imageUrls.length > 0
       ? imageUrls
@@ -527,6 +537,44 @@ export function NewsMediaFields({
               No video uploaded
             </div>
           )}
+          {!hasVideo ? (
+            <div className="mb-3 grid gap-2 rounded-lg border border-dashed border-border bg-muted/20 p-3 sm:grid-cols-2">
+              <label className="grid gap-1 text-xs">
+                <span className="font-medium text-text-secondary">Remove watermark</span>
+                <select
+                  value={watermark}
+                  disabled={busy}
+                  onChange={(e) =>
+                    setWatermark(e.target.value as typeof watermark)
+                  }
+                  className="h-9 rounded-md border border-border bg-card px-2 text-sm"
+                >
+                  <option value="none">Keep as uploaded</option>
+                  <option value="tiktok">TikTok</option>
+                  <option value="instagram">Instagram</option>
+                  <option value="both">TikTok + Instagram</option>
+                </select>
+              </label>
+              <label className="grid gap-1 text-xs">
+                <span className="font-medium text-text-secondary">Method</span>
+                <select
+                  value={watermarkMode}
+                  disabled={busy || watermark === "none"}
+                  onChange={(e) =>
+                    setWatermarkMode(e.target.value as typeof watermarkMode)
+                  }
+                  className="h-9 rounded-md border border-border bg-card px-2 text-sm disabled:opacity-50"
+                >
+                  <option value="delogo">Inpaint corners (keep full frame)</option>
+                  <option value="crop_bottom">Crop bottom band (stronger)</option>
+                </select>
+              </label>
+              <p className="text-[11px] text-text-hint sm:col-span-2">
+                Works best on static corner marks. Moving watermarks may remain. Max 28 MB when
+                removing a watermark.
+              </p>
+            </div>
+          ) : null}
           <input
             type="file"
             accept={newsVideoAccept}
@@ -535,7 +583,11 @@ export function NewsMediaFields({
             onChange={(event) => {
               const file = event.target.files?.[0];
               event.target.value = "";
-              if (file) onUpload(file, "video");
+              if (!file) return;
+              void onUpload(file, "video", {
+                watermark,
+                watermarkMode,
+              });
             }}
           />
         </div>

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { uploadNewsMediaFromForm } from "@/lib/news-media-upload";
 
-export const maxDuration = 180;
+export const maxDuration = 300;
 
 /** Proxy draft news media upload to Spojex API → GCS. */
 export async function POST(request: Request) {

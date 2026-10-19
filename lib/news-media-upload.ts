@@ -10,6 +10,7 @@ import {
 } from "@/lib/news-media";
 import {
   extractAudioViaSpojexMediaApi,
+  removeWatermarkViaSpojexMediaApi,
   signUploadComplete,
   uploadViaSpojexMediaApi,
 } from "@/lib/spojex-media";
@@ -17,6 +18,20 @@ import { requestAccessToken } from "@/lib/spojex/server";
 
 /** Cloud Run request body limit is ~32MB; stay under that for multipart proxy. */
 const MULTIPART_SAFE_BYTES = 28 * 1024 * 1024;
+
+export type WatermarkPreset = "none" | "tiktok" | "instagram" | "both";
+export type WatermarkMode = "delogo" | "crop_bottom";
+
+function parseWatermarkPreset(raw: FormDataEntryValue | null): WatermarkPreset {
+  const value = `${raw ?? ""}`.trim().toLowerCase();
+  if (value === "tiktok" || value === "instagram" || value === "both") return value;
+  return "none";
+}
+
+function parseWatermarkMode(raw: FormDataEntryValue | null): WatermarkMode {
+  const value = `${raw ?? ""}`.trim().toLowerCase();
+  return value === "crop_bottom" ? "crop_bottom" : "delogo";
+}
 
 /**
  * Shared news media upload: Blob-safe parse, MIME from extension.
@@ -106,6 +121,49 @@ export async function uploadNewsMediaFromForm(
     return NextResponse.json({ error: "Empty file" }, { status: 400 });
   }
   const uploadBlob = new Blob([bytes], { type: mime });
+
+  // Video + watermark removal (TikTok / Instagram) — server ffmpeg path.
+  const watermarkPreset = parseWatermarkPreset(form.get("watermark"));
+  const watermarkMode = parseWatermarkMode(form.get("watermark_mode"));
+  if (kind === "video" && watermarkPreset !== "none") {
+    if (uploadBlob.size > MULTIPART_SAFE_BYTES) {
+      return NextResponse.json(
+        {
+          error:
+            "Watermark removal needs a video under 28 MB. Compress the clip or upload without watermark removal.",
+        },
+        { status: 400 },
+      );
+    }
+    try {
+      const cleaned = await removeWatermarkViaSpojexMediaApi({
+        accessToken: token,
+        file: uploadBlob,
+        filename,
+        preset: watermarkPreset,
+        mode: watermarkMode,
+        module: "news",
+        folder: folder.includes("video") ? folder : "sport-news/videos",
+      });
+      if (!cleaned.publicUrl) {
+        return NextResponse.json({ error: "Watermark removal failed. No URL returned." }, { status: 400 });
+      }
+      return NextResponse.json({
+        kind: "video",
+        path: cleaned.path,
+        publicUrl: cleaned.publicUrl,
+        objectId: cleaned.objectId,
+        durationSeconds: cleaned.durationSeconds ?? null,
+        watermarkRemoved: true,
+        watermarkPreset,
+        watermarkMode,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Watermark removal failed";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+  }
+
   const preferMultipart = kind === "image" || uploadBlob.size <= MULTIPART_SAFE_BYTES;
 
   try {

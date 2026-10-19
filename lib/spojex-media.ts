@@ -177,6 +177,85 @@ export async function extractAudioViaSpojexMediaApi(opts: {
 }
 
 /**
+ * Remove TikTok / Instagram watermark overlays from a video via Spojex ffmpeg.
+ */
+export async function removeWatermarkViaSpojexMediaApi(opts: {
+  accessToken: string;
+  file: Blob;
+  filename: string;
+  /** tiktok | instagram | both */
+  preset?: "tiktok" | "instagram" | "both";
+  /** delogo | crop_bottom */
+  mode?: "delogo" | "crop_bottom";
+  module?: SpojexMediaModule;
+  folder?: string;
+}): Promise<SpojexMediaUploadResult & { watermarkRemoved?: boolean }> {
+  const base = getSpojexApiBaseUrl();
+  if (!base) {
+    throw new Error("Spojex API base URL is not configured.");
+  }
+
+  const outbound = new FormData();
+  outbound.set("module", opts.module ?? "news");
+  outbound.set("folder", opts.folder ?? "sport-news/videos");
+  outbound.set("preset", opts.preset ?? "both");
+  outbound.set("mode", opts.mode ?? "delogo");
+  const type = (opts.file.type && opts.file.type.trim()) || "video/mp4";
+  const filePart =
+    typeof File !== "undefined"
+      ? new File([opts.file], opts.filename, { type })
+      : opts.file;
+  if (filePart instanceof File) {
+    outbound.set("file", filePart);
+  } else {
+    outbound.set("file", filePart, opts.filename);
+  }
+
+  const upstream = await fetch(`${base}/api/v1/media/remove-watermark`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${opts.accessToken}` },
+    body: outbound,
+  });
+  const text = await upstream.text();
+  let payload: {
+    error?: string;
+    detail?: unknown;
+    publicUrl?: string | null;
+    url?: string | null;
+    path?: string;
+    object_path?: string;
+    objectId?: string;
+    id?: string;
+    visibility?: string;
+    status?: string;
+    durationSeconds?: number | null;
+    watermarkRemoved?: boolean;
+  } = {};
+  try {
+    payload = text ? (JSON.parse(text) as typeof payload) : {};
+  } catch {
+    throw new Error(text || "Watermark removal failed");
+  }
+  if (!upstream.ok) {
+    throw new Error(apiErrorMessage(payload, "Watermark removal failed"));
+  }
+
+  const publicUrl = payload.publicUrl ?? payload.url ?? null;
+  const path = payload.path || payload.object_path || "";
+  return {
+    objectId: payload.objectId ?? payload.id,
+    path,
+    publicUrl,
+    url: publicUrl,
+    visibility: payload.visibility,
+    status: payload.status,
+    durationSeconds:
+      typeof payload.durationSeconds === "number" ? payload.durationSeconds : null,
+    watermarkRemoved: payload.watermarkRemoved !== false,
+  };
+}
+
+/**
  * Trim an audio blob to [startSeconds, endSeconds) via Spojex ffmpeg.
  */
 export async function trimAudioViaSpojexMediaApi(opts: {
