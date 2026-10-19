@@ -75,3 +75,64 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   return NextResponse.json({ data });
 }
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const auth = await requireAdminPermission("organizations:write");
+  if (!auth.ok) return auth.error;
+  const { id } = await params;
+
+  const { data: existing, error: loadError } = await auth.context.client
+    .from("organizations")
+    .select("id, name, public_id, is_platform")
+    .eq("id", id)
+    .maybeSingle();
+  if (loadError) {
+    const hint = missingServiceRoleMessage();
+    return NextResponse.json(
+      { error: hint ? `${loadError.message}. ${hint}` : loadError.message },
+      { status: 400 },
+    );
+  }
+  if (!existing) {
+    return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+  }
+  if (existing.is_platform) {
+    return NextResponse.json(
+      { error: "The Spojex platform organization cannot be deleted." },
+      { status: 400 },
+    );
+  }
+
+  const { error: deleteError } = await auth.context.client
+    .from("organizations")
+    .delete()
+    .eq("id", id);
+  if (deleteError) {
+    const hint = missingServiceRoleMessage();
+    const message = deleteError.message.includes("foreign key")
+      ? `Cannot delete “${existing.name}”: linked records still reference it (${deleteError.message}).`
+      : deleteError.message;
+    return NextResponse.json(
+      { error: hint ? `${message}. ${hint}` : message },
+      { status: 400 },
+    );
+  }
+
+  await logAdminActivity({
+    context: auth.context,
+    request,
+    action: "delete",
+    resource_type: "organization",
+    resource_id: id,
+    summary: `Deleted organization ${String(existing.name ?? existing.public_id ?? id)}`,
+    metadata: {
+      name: existing.name,
+      public_id: existing.public_id,
+    },
+  });
+
+  return NextResponse.json({ ok: true });
+}

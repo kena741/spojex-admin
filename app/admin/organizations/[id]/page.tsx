@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import AdminPageHeader from "@/components/admin-header";
 import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
 import { StatusBadge, verifiedTone } from "@/components/status-badge";
 import { organizationTypeLabel, organizationTypes } from "@/lib/catalog";
 import { loadCoinWalletsByUserIds, loadOrgLiveGiftTotals } from "@/lib/coin-wallets";
-import { adminFetch, patchAdmin } from "@/lib/hooks";
+import { adminFetch, deleteAdmin, patchAdmin } from "@/lib/hooks";
 import { getSpojexClient } from "@/lib/spojex/client";
+import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { CoinWalletRow, OrganizationRow } from "@/lib/types";
 import { formatCoins, formatDate, locationLabel } from "@/lib/utils";
 
@@ -17,12 +18,16 @@ const fieldClass = "h-10 w-full rounded-lg border border-border px-3 text-sm";
 
 export default function OrganizationDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const { can } = useAdminPermissions();
+  const canWrite = can("organizations:write");
   const fileRef = useRef<HTMLInputElement>(null);
   const [org, setOrg] = useState<OrganizationRow | null>(null);
   const [ownerCoinWallet, setOwnerCoinWallet] = useState<CoinWalletRow | null>(null);
   const [liveGiftsReceived, setLiveGiftsReceived] = useState(0);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -88,6 +93,27 @@ export default function OrganizationDetailPage() {
     }
   };
 
+  const remove = async () => {
+    if (!org || org.is_platform) return;
+    const label = org.name?.trim() || org.public_id || "this organization";
+    if (
+      !window.confirm(
+        `Delete “${label}”? Followers, org chat, and related links will be removed. This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    try {
+      await deleteAdmin(`/api/admin/organizations/${id}`);
+      router.replace("/admin/organizations");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+      setDeleting(false);
+    }
+  };
+
   if (loading) return <AdminLoadingRow label="Loading organization…" />;
   if (!org) return <AdminErrorAlert message={error || "Organization not found"} />;
 
@@ -106,13 +132,25 @@ export default function OrganizationDetailPage() {
           { label: org.name || org.public_id },
         ]}
         actions={
-          <button
-            type="button"
-            onClick={() => save({ verified: !org.verified })}
-            className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
-          >
-            {org.verified ? "Unverify" : "Verify"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => save({ verified: !org.verified })}
+              className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
+            >
+              {org.verified ? "Unverify" : "Verify"}
+            </button>
+            {canWrite && !org.is_platform ? (
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => void remove()}
+                className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+              >
+                {deleting ? "Deleting…" : "Delete"}
+              </button>
+            ) : null}
+          </div>
         }
       />
       {error ? <AdminErrorAlert message={error} /> : null}
@@ -322,6 +360,33 @@ export default function OrganizationDetailPage() {
           </div>
         </section>
       </div>
+
+      {canWrite ? (
+        <section className="mt-6 rounded-xl border border-red-200 bg-red-50/40 p-5">
+          <h2 className="font-heading text-sm font-semibold text-red-800">Danger zone</h2>
+          {org.is_platform ? (
+            <p className="mt-2 text-sm text-text-secondary">
+              The Spojex platform organization cannot be deleted.
+            </p>
+          ) : (
+            <>
+              <p className="mt-2 text-sm text-text-secondary">
+                Permanently delete this organization. Followers, org chat membership, and
+                cascade-linked rows are removed. Linked gyms, news, or events that block
+                deletion will return an error.
+              </p>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => void remove()}
+                className="mt-4 rounded-md border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+              >
+                {deleting ? "Deleting…" : "Delete organization"}
+              </button>
+            </>
+          )}
+        </section>
+      ) : null}
     </>
   );
 }
