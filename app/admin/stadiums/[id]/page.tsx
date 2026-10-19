@@ -99,9 +99,13 @@ export default function StadiumDetailPage() {
   const [savingBlock, setSavingBlock] = useState(false);
   const [blockForm, setBlockForm] = useState({
     date: "",
+    end_date: "",
     start_time: "09:00",
     end_time: "11:00",
     notes: "Emergency",
+    whole_day: false,
+    recurrence: "" as "" | "weekly",
+    weekdays: [] as number[],
   });
 
   const load = async () => {
@@ -307,20 +311,52 @@ export default function StadiumDetailPage() {
     setSavingBlock(true);
     setError(null);
     try {
-      await postAdmin(`/api/admin/stadiums/${id}/availability`, blockForm);
+      const payload = {
+        date: blockForm.date,
+        end_date: blockForm.end_date || blockForm.date,
+        start_time: blockForm.start_time,
+        end_time: blockForm.end_time,
+        notes: blockForm.notes,
+        whole_day: blockForm.whole_day,
+        recurrence: blockForm.recurrence,
+        weekdays: blockForm.recurrence === "weekly" ? blockForm.weekdays : [],
+      };
+      const result = await postAdminResponse<{ ok?: boolean; created?: number }>(
+        `/api/admin/stadiums/${id}/availability`,
+        payload,
+      );
       setBlockForm({
         date: "",
+        end_date: "",
         start_time: "09:00",
         end_time: "11:00",
         notes: "Emergency",
+        whole_day: false,
+        recurrence: "",
+        weekdays: [],
       });
       await load();
-      setNotice("Slot blocked. Fans will see it as unavailable.");
+      const created = Number(result.created ?? 0);
+      setNotice(
+        created > 1
+          ? `${created} days blocked. Fans cannot book those times.`
+          : "Slot blocked. Fans will see it as unavailable.",
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Block failed");
     } finally {
       setSavingBlock(false);
     }
+  };
+
+  const toggleBlockWeekday = (day: number) => {
+    setBlockForm((prev) => {
+      const has = prev.weekdays.includes(day);
+      return {
+        ...prev,
+        weekdays: has ? prev.weekdays.filter((d) => d !== day) : [...prev.weekdays, day].sort(),
+      };
+    });
   };
 
   const removeBlock = async (blockId: string) => {
@@ -839,63 +875,144 @@ export default function StadiumDetailPage() {
           </section>
 
           <section className="rounded-2xl border border-border bg-card p-5 sm:p-6">
-            <h2 className="font-heading text-sm font-semibold">Block a slot</h2>
+            <h2 className="font-heading text-sm font-semibold">Block availability</h2>
             <p className="mt-1 mb-5 text-sm text-text-secondary">
-              Hide visiting hours for an emergency or an internal event. Fans cannot buy a day pass if the whole day is blocked.
+              Block a day, specific hours, a date range, or a weekly recurrence. Fans cannot book blocked times or days.
             </p>
             {canWrite ? (
-              <form onSubmit={addBlock} className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                <label className="text-sm">
-                  <span className="mb-1 block text-text-secondary">Date</span>
-                  <input
-                    type="date"
-                    required
-                    value={blockForm.date}
-                    onChange={(event) => setBlockForm({ ...blockForm, date: event.target.value })}
-                    className="h-10 w-full rounded-lg border border-border px-3"
-                  />
-                </label>
-                <label className="text-sm">
-                  <span className="mb-1 block text-text-secondary">From</span>
-                  <input
-                    type="time"
-                    required
-                    value={blockForm.start_time}
-                    onChange={(event) => setBlockForm({ ...blockForm, start_time: event.target.value })}
-                    className="h-10 w-full rounded-lg border border-border px-3"
-                  />
-                </label>
-                <label className="text-sm">
-                  <span className="mb-1 block text-text-secondary">To</span>
-                  <input
-                    type="time"
-                    required
-                    value={blockForm.end_time}
-                    onChange={(event) => setBlockForm({ ...blockForm, end_time: event.target.value })}
-                    className="h-10 w-full rounded-lg border border-border px-3"
-                  />
-                </label>
-                <label className="text-sm">
-                  <span className="mb-1 block text-text-secondary">Reason</span>
-                  <select
-                    value={blockForm.notes}
-                    onChange={(event) => setBlockForm({ ...blockForm, notes: event.target.value })}
-                    className="h-10 w-full rounded-lg border border-border px-3"
-                  >
-                    <option value="Emergency">Emergency</option>
-                    <option value="Internal event">Internal event</option>
-                    <option value="Maintenance">Maintenance</option>
-                  </select>
-                </label>
-                <div className="flex items-end">
-                  <button
-                    type="submit"
-                    disabled={savingBlock}
-                    className="h-10 w-full rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
-                  >
-                    {savingBlock ? "Saving…" : "Block slot"}
-                  </button>
+              <form onSubmit={addBlock} className="mb-5 space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <label className="text-sm">
+                    <span className="mb-1 block text-text-secondary">Start date</span>
+                    <input
+                      type="date"
+                      required
+                      value={blockForm.date}
+                      onChange={(event) =>
+                        setBlockForm({
+                          ...blockForm,
+                          date: event.target.value,
+                          end_date: blockForm.end_date || event.target.value,
+                        })
+                      }
+                      className="h-10 w-full rounded-lg border border-border px-3"
+                    />
+                  </label>
+                  <label className="text-sm">
+                    <span className="mb-1 block text-text-secondary">End date</span>
+                    <input
+                      type="date"
+                      value={blockForm.end_date}
+                      min={blockForm.date || undefined}
+                      onChange={(event) => setBlockForm({ ...blockForm, end_date: event.target.value })}
+                      className="h-10 w-full rounded-lg border border-border px-3"
+                    />
+                  </label>
+                  <label className="text-sm">
+                    <span className="mb-1 block text-text-secondary">From</span>
+                    <input
+                      type="time"
+                      required={!blockForm.whole_day}
+                      disabled={blockForm.whole_day}
+                      value={blockForm.start_time}
+                      onChange={(event) => setBlockForm({ ...blockForm, start_time: event.target.value })}
+                      className="h-10 w-full rounded-lg border border-border px-3 disabled:opacity-50"
+                    />
+                  </label>
+                  <label className="text-sm">
+                    <span className="mb-1 block text-text-secondary">To</span>
+                    <input
+                      type="time"
+                      required={!blockForm.whole_day}
+                      disabled={blockForm.whole_day}
+                      value={blockForm.end_time}
+                      onChange={(event) => setBlockForm({ ...blockForm, end_time: event.target.value })}
+                      className="h-10 w-full rounded-lg border border-border px-3 disabled:opacity-50"
+                    />
+                  </label>
                 </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <label className="flex items-center gap-2 text-sm sm:pt-7">
+                    <input
+                      type="checkbox"
+                      checked={blockForm.whole_day}
+                      onChange={(event) =>
+                        setBlockForm({ ...blockForm, whole_day: event.target.checked })
+                      }
+                      className="size-4 rounded border-border"
+                    />
+                    <span>Block entire day(s)</span>
+                  </label>
+                  <label className="text-sm">
+                    <span className="mb-1 block text-text-secondary">Recurrence</span>
+                    <select
+                      value={blockForm.recurrence}
+                      onChange={(event) =>
+                        setBlockForm({
+                          ...blockForm,
+                          recurrence: event.target.value === "weekly" ? "weekly" : "",
+                        })
+                      }
+                      className="h-10 w-full rounded-lg border border-border px-3"
+                    >
+                      <option value="">One-time / date range</option>
+                      <option value="weekly">Weekly (selected weekdays)</option>
+                    </select>
+                  </label>
+                  <label className="text-sm">
+                    <span className="mb-1 block text-text-secondary">Reason</span>
+                    <select
+                      value={blockForm.notes}
+                      onChange={(event) => setBlockForm({ ...blockForm, notes: event.target.value })}
+                      className="h-10 w-full rounded-lg border border-border px-3"
+                    >
+                      <option value="Emergency">Emergency</option>
+                      <option value="Internal event">Internal event</option>
+                      <option value="Maintenance">Maintenance</option>
+                    </select>
+                  </label>
+                  <div className="flex items-end">
+                    <button
+                      type="submit"
+                      disabled={savingBlock}
+                      className="h-10 w-full rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
+                    >
+                      {savingBlock ? "Saving…" : "Block"}
+                    </button>
+                  </div>
+                </div>
+                {blockForm.recurrence === "weekly" ? (
+                  <div>
+                    <p className="mb-2 text-sm text-text-secondary">Repeat on</p>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { day: 0, label: "Sun" },
+                        { day: 1, label: "Mon" },
+                        { day: 2, label: "Tue" },
+                        { day: 3, label: "Wed" },
+                        { day: 4, label: "Thu" },
+                        { day: 5, label: "Fri" },
+                        { day: 6, label: "Sat" },
+                      ].map((item) => {
+                        const active = blockForm.weekdays.includes(item.day);
+                        return (
+                          <button
+                            key={item.day}
+                            type="button"
+                            onClick={() => toggleBlockWeekday(item.day)}
+                            className={`h-9 rounded-lg border px-3 text-sm font-medium ${
+                              active
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border bg-card text-foreground"
+                            }`}
+                          >
+                            {item.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
               </form>
             ) : null}
             {blocks.length === 0 ? (

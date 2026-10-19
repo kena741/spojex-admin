@@ -161,31 +161,86 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   const body = (await request.json()) as {
     date?: string;
+    end_date?: string;
     start_time?: string;
     end_time?: string;
     notes?: string;
+    recurrence?: string;
+    weekdays?: number[];
+    /** When true, block the whole calendar day (00:00–23:59). */
+    whole_day?: boolean;
   };
-  const date = dateOnly(body.date);
-  const start = timeInputValue(body.start_time);
-  const end = timeInputValue(body.end_time);
+  const startDate = dateOnly(body.date);
+  const endDate = dateOnly(body.end_date || body.date);
+  const wholeDay = body.whole_day === true;
+  const start = wholeDay ? "00:00" : timeInputValue(body.start_time);
+  const end = wholeDay ? "23:59" : timeInputValue(body.end_time);
   const notes = `${body.notes ?? ""}`.trim() || "Blocked";
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return NextResponse.json({ error: "Pick a date" }, { status: 400 });
+  const recurrence = `${body.recurrence ?? ""}`.trim().toLowerCase();
+  const weekdays = Array.isArray(body.weekdays)
+    ? body.weekdays.map((d) => Number(d)).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+    : [];
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+    return NextResponse.json({ error: "Pick a start date" }, { status: 400 });
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+    return NextResponse.json({ error: "Pick an end date" }, { status: 400 });
+  }
+  if (endDate < startDate) {
+    return NextResponse.json({ error: "End date must be on or after start date" }, { status: 400 });
   }
   if (start >= end) {
     return NextResponse.json({ error: "End time must be after start time" }, { status: 400 });
   }
 
-  const { error } = await auth.context.client.from("stadium_availability").insert({
-    stadium_id: id,
-    specific_date: date,
-    start_time: start,
-    end_time: end,
-    is_blocked: true,
-    notes,
-  });
+  const startMs = Date.parse(`${startDate}T00:00:00Z`);
+  const endMs = Date.parse(`${endDate}T00:00:00Z`);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
+    return NextResponse.json({ error: "Invalid date range" }, { status: 400 });
+  }
+  const daySpan = Math.round((endMs - startMs) / 86_400_000);
+  if (daySpan > 366) {
+    return NextResponse.json({ error: "Date range is too long (max 1 year)" }, { status: 400 });
+  }
+
+  /** Spojex day_of_week: 0=Sun … 6=Sat (JS getUTCDay matches). */
+  const rows: {
+    stadium_id: string;
+    specific_date: string;
+    start_time: string;
+    end_time: string;
+    is_blocked: boolean;
+    notes: string;
+  }[] = [];
+
+  for (let i = 0; i <= daySpan; i++) {
+    const day = new Date(startMs + i * 86_400_000);
+    const iso = day.toISOString().slice(0, 10);
+    const dow = day.getUTCDay();
+    if (recurrence === "weekly" && weekdays.length > 0 && !weekdays.includes(dow)) {
+      continue;
+    }
+    rows.push({
+      stadium_id: id,
+      specific_date: iso,
+      start_time: start,
+      end_time: end,
+      is_blocked: true,
+      notes,
+    });
+  }
+
+  if (rows.length === 0) {
+    return NextResponse.json(
+      { error: "No days matched. Check recurrence weekdays." },
+      { status: 400 },
+    );
+  }
+
+  const { error } = await auth.context.client.from("stadium_availability").insert(rows);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, created: rows.length });
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
