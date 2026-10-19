@@ -49,25 +49,35 @@ function clipboardImageFile(data: DataTransfer | null): File | null {
   return null;
 }
 
-async function readJson(response: Response) {
-  const text = await response.text();
+type NewsUploadPayload = {
+  error?: string;
+  path?: string;
+  publicUrl?: string;
+  extractedFromVideo?: boolean;
+};
+
+export type NewsUploadOptions = {
+  onProgress?: (percent: number) => void;
+};
+
+function parseUploadPayload(text: string): NewsUploadPayload {
   if (!text.trim()) {
     throw new Error("Upload failed. Try a smaller file or refresh the page.");
   }
   try {
-    return JSON.parse(text) as {
-      error?: string;
-      path?: string;
-      publicUrl?: string;
-      extractedFromVideo?: boolean;
-    };
+    return JSON.parse(text) as NewsUploadPayload;
   } catch {
     throw new Error("Upload failed. Unexpected server response.");
   }
 }
 
 /** Upload news media via Spojex API (GCS behind the API), return display URL. */
-export async function uploadNewsFile(articleId: string | null, file: File, kind: NewsUploadKind) {
+export async function uploadNewsFile(
+  articleId: string | null,
+  file: File,
+  kind: NewsUploadKind,
+  options?: NewsUploadOptions,
+) {
   const invalid =
     kind === "audio" && isNewsVideoFile(file.type, file.name)
       ? validateLibrarySound(file.type, file.name, file.size)
@@ -79,15 +89,86 @@ export async function uploadNewsFile(articleId: string | null, file: File, kind:
   body.set("kind", kind);
   body.set("file", file, file.name);
 
+  const onProgress = options?.onProgress;
+  // XHR so we can show circular progress while pasting / uploading images.
+  if (onProgress) {
+    onProgress(0);
+    const payload = await new Promise<NewsUploadPayload>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", endpoint);
+      xhr.withCredentials = true;
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable || event.total <= 0) return;
+        const pct = Math.min(99, Math.round((event.loaded / event.total) * 100));
+        onProgress(pct);
+      };
+      xhr.onload = () => {
+        try {
+          const parsed = parseUploadPayload(xhr.responseText || "");
+          if (xhr.status < 200 || xhr.status >= 300) {
+            reject(new Error(parsed.error || "Upload failed"));
+            return;
+          }
+          onProgress(100);
+          resolve(parsed);
+        } catch (err) {
+          reject(err instanceof Error ? err : new Error("Upload failed"));
+        }
+      };
+      xhr.onerror = () => reject(new Error("Upload failed. Check your connection."));
+      xhr.onabort = () => reject(new Error("Upload cancelled."));
+      xhr.send(body);
+    });
+    if (!payload.publicUrl) throw new Error("Upload failed. No public URL was returned.");
+    return toBackendMediaUrl(payload.publicUrl);
+  }
+
   const response = await fetch(endpoint, {
     method: "POST",
     credentials: "same-origin",
     body,
   });
-  const payload = await readJson(response);
+  const payload = parseUploadPayload(await response.text());
   if (!response.ok) throw new Error(payload.error || "Upload failed");
   if (!payload.publicUrl) throw new Error("Upload failed. No public URL was returned.");
   return toBackendMediaUrl(payload.publicUrl);
+}
+
+function UploadCircleProgress({ percent }: { percent: number }) {
+  const clamped = Math.max(0, Math.min(100, percent));
+  const radius = 22;
+  const stroke = 3.5;
+  const c = 2 * Math.PI * radius;
+  const offset = c - (clamped / 100) * c;
+  return (
+    <div className="relative flex h-16 w-16 items-center justify-center">
+      <svg className="h-16 w-16 -rotate-90" viewBox="0 0 56 56" aria-hidden>
+        <circle
+          cx="28"
+          cy="28"
+          r={radius}
+          fill="none"
+          stroke="rgba(255,255,255,0.28)"
+          strokeWidth={stroke}
+        />
+        <circle
+          cx="28"
+          cy="28"
+          r={radius}
+          fill="none"
+          stroke="white"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+          className="transition-[stroke-dashoffset] duration-150 ease-out"
+        />
+      </svg>
+      <span className="absolute text-xs font-semibold text-white tabular-nums">
+        {clamped}%
+      </span>
+    </div>
+  );
 }
 
 export { NewsMediaPreview, NewsTikTokPreview } from "@/components/news-tiktok-preview";
@@ -121,7 +202,11 @@ export function NewsMediaFields({
   uploading: NewsUploadKind | null;
   disabled?: boolean;
   onKind: (kind: NewsStoryMedia) => void;
-  onUpload: (file: File, kind: NewsUploadKind) => void;
+  onUpload: (
+    file: File,
+    kind: NewsUploadKind,
+    options?: NewsUploadOptions,
+  ) => void | Promise<void>;
   onRemoveImage: () => void;
   onRemoveImageAt?: (index: number) => void;
   onRemoveVideo: () => void;
@@ -152,7 +237,25 @@ export function NewsMediaFields({
     Boolean(onSoundSelect) && mediaKind === "none" && hasImage && !hasVideo;
   const [dragOver, setDragOver] = useState(false);
   const [pasteHint, setPasteHint] = useState<string | null>(null);
+  const [stagingPreview, setStagingPreview] = useState<string | null>(null);
+  const [uploadPercent, setUploadPercent] = useState(0);
   const imageZoneRef = useRef<HTMLDivElement>(null);
+  const stagingUrlRef = useRef<string | null>(null);
+
+  const clearStagingPreview = useCallback(() => {
+    if (stagingUrlRef.current) {
+      URL.revokeObjectURL(stagingUrlRef.current);
+      stagingUrlRef.current = null;
+    }
+    setStagingPreview(null);
+    setUploadPercent(0);
+  }, []);
+
+  useEffect(() => {
+    if (uploading !== "image") clearStagingPreview();
+  }, [clearStagingPreview, uploading]);
+
+  useEffect(() => () => clearStagingPreview(), [clearStagingPreview]);
 
   const acceptImageFile = useCallback(
     (file: File | null) => {
@@ -167,9 +270,20 @@ export function NewsMediaFields({
         return;
       }
       setPasteHint(null);
-      onUpload(file, "image");
+      if (stagingUrlRef.current) URL.revokeObjectURL(stagingUrlRef.current);
+      const previewUrl = URL.createObjectURL(file);
+      stagingUrlRef.current = previewUrl;
+      setStagingPreview(previewUrl);
+      setUploadPercent(0);
+      void Promise.resolve(
+        onUpload(file, "image", {
+          onProgress: (percent) => setUploadPercent(percent),
+        }),
+      ).catch(() => {
+        clearStagingPreview();
+      });
     },
-    [busy, canAddMoreImages, onUpload],
+    [busy, canAddMoreImages, clearStagingPreview, onUpload],
   );
 
   const onImagePaste = useCallback(
@@ -334,24 +448,41 @@ export function NewsMediaFields({
           const file = clipboardImageFile(event.dataTransfer);
           acceptImageFile(file);
         }}
-        className={`mb-2 overflow-hidden rounded-lg border border-dashed outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+        className={`relative mb-2 overflow-hidden rounded-lg border border-dashed outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
           dragOver
             ? "border-primary bg-primary/10"
             : "border-border bg-muted/40"
         }`}
       >
-        <div className="flex h-28 flex-col items-center justify-center gap-1 px-3 text-center text-xs text-text-secondary">
-          <span>
-            {dragOver
-              ? "Drop images to upload"
-              : canAddMoreImages
-                ? "Paste (⌘V / Ctrl+V) or drop images"
-                : `Maximum ${MAX_NEWS_IMAGES} images`}
-          </span>
-          <span className="text-[11px] text-text-hint">
-            JPG, PNG, WebP, or GIF · max 5 MB each · swipe gallery in the app
-          </span>
-        </div>
+        {stagingPreview ? (
+          <div className="relative h-40 w-full">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={stagingPreview}
+              alt=""
+              className="h-full w-full object-cover blur-md scale-105"
+            />
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/45">
+              <UploadCircleProgress percent={uploadPercent} />
+              <span className="text-xs font-medium text-white/90">
+                {uploadPercent >= 100 ? "Saving…" : "Uploading…"}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex h-28 flex-col items-center justify-center gap-1 px-3 text-center text-xs text-text-secondary">
+            <span>
+              {dragOver
+                ? "Drop images to upload"
+                : canAddMoreImages
+                  ? "Paste (⌘V / Ctrl+V) or drop images"
+                  : `Maximum ${MAX_NEWS_IMAGES} images`}
+            </span>
+            <span className="text-[11px] text-text-hint">
+              JPG, PNG, WebP, or GIF · max 5 MB each · swipe gallery in the app
+            </span>
+          </div>
+        )}
       </div>
       {pasteHint ? <p className="mb-2 text-xs text-red-600">{pasteHint}</p> : null}
       <input
@@ -459,7 +590,7 @@ export function NewsMediaFields({
         />
       ) : null}
 
-      {uploading ? (
+      {uploading && uploading !== "image" ? (
         <p className="mt-2 text-xs text-text-secondary">Uploading {uploading}…</p>
       ) : null}
     </div>

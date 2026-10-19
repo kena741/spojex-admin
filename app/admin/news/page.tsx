@@ -16,7 +16,11 @@ import {
   AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
-import { NewsMediaFields, uploadNewsFile } from "@/components/news-media-fields";
+import {
+  NewsMediaFields,
+  uploadNewsFile,
+  type NewsUploadOptions,
+} from "@/components/news-media-fields";
 import { NewsTikTokPreview } from "@/components/news-tiktok-preview";
 import { newsCategories, newsRecency, newsStatusLabel, newsStatuses } from "@/lib/news";
 import { resolveNewsStoryMedia, type NewsStoryMedia, type NewsUploadKind } from "@/lib/news-media";
@@ -104,7 +108,11 @@ export default function NewsPage() {
     setFeatured(false);
   };
 
-  const uploadMedia = async (file: File, kind: NewsUploadKind) => {
+  const uploadMedia = async (
+    file: File,
+    kind: NewsUploadKind,
+    options?: NewsUploadOptions,
+  ) => {
     if (kind === "video" && (audioUrl.trim() || soundId.trim())) {
       setError("Remove the audio or soundtrack before uploading video.");
       return;
@@ -116,7 +124,7 @@ export default function NewsPage() {
     setUploading(kind);
     setError(null);
     try {
-      const publicUrl = await uploadNewsFile(null, file, kind);
+      const publicUrl = await uploadNewsFile(null, file, kind, options);
       if (kind === "image") {
         setImageUrls((prev) => {
           const next = prev.includes(publicUrl) ? prev : [...prev, publicUrl].slice(0, 10);
@@ -462,7 +470,7 @@ export default function NewsPage() {
             pickedKind={pickedKind}
             uploading={uploading}
             onKind={setPickedKind}
-            onUpload={(file, kind) => void uploadMedia(file, kind)}
+            onUpload={(file, kind, options) => void uploadMedia(file, kind, options)}
             onRemoveImage={() => {
               setImageUrl("");
               setImageUrls([]);

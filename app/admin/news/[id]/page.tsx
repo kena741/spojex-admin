@@ -6,7 +6,11 @@ import { useParams, useRouter } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
-import { NewsMediaFields, uploadNewsFile } from "@/components/news-media-fields";
+import {
+  NewsMediaFields,
+  uploadNewsFile,
+  type NewsUploadOptions,
+} from "@/components/news-media-fields";
 import { NewsTikTokPreview } from "@/components/news-tiktok-preview";
 import { newsCategories, newsStatusLabel, newsStatuses } from "@/lib/news";
 import { resolveNewsStoryMedia, type NewsStoryMedia, type NewsUploadKind } from "@/lib/news-media";
@@ -151,7 +155,11 @@ export default function NewsDetailPage() {
     });
   };
 
-  const uploadMedia = async (file: File, kind: NewsUploadKind) => {
+  const uploadMedia = async (
+    file: File,
+    kind: NewsUploadKind,
+    options?: NewsUploadOptions,
+  ) => {
     setUploading(kind);
     setError(null);
     setNotice(null);
@@ -165,7 +173,7 @@ export default function NewsDetailPage() {
       if (kind === "audio" && article?.video_url?.trim()) {
         throw new Error("Remove the video file before uploading audio.");
       }
-      const publicUrl = await uploadNewsFile(id, file, kind);
+      const publicUrl = await uploadNewsFile(id, file, kind, options);
       if (kind === "video") {
         if ((await save({
             video_url: publicUrl,
@@ -401,7 +409,7 @@ export default function NewsDetailPage() {
                 uploading={uploading}
                 disabled={!canWrite}
                 onKind={setPickedKind}
-                onUpload={(file, kind) => void uploadMedia(file, kind)}
+                onUpload={(file, kind, options) => void uploadMedia(file, kind, options)}
                 onRemoveImage={() => void removeImage()}
                 onRemoveImageAt={(index) => void removeImageAt(index)}
                 onRemoveVideo={() => void removeVideo()}
