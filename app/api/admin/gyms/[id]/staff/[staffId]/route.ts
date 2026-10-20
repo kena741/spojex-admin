@@ -22,6 +22,10 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid staff_role" }, { status: 400 });
     }
     patch.staff_role = body.staff_role;
+    // Assigned owners must keep full defaults (videos.upload); drop stale overrides.
+    if (body.staff_role === "owner") {
+      patch.permissions = {};
+    }
   }
   if (typeof body.is_active === "boolean") {
     patch.is_active = body.is_active;
