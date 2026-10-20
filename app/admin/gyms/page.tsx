@@ -637,10 +637,13 @@ export default function GymsAdminPage() {
       setError("Name is required");
       return;
     }
+    if (!form.owner_user_id.trim()) {
+      setError("Select an existing SpoJex user as the gym owner.");
+      return;
+    }
     setCreating(true);
     setError(null);
     try {
-      const ownerEmail = (form.owner_user_id ? "" : form.owner_email || ownerQuery).trim();
       const payload = await postAdminResponse("/api/admin/gyms", {
         name: form.name,
         category: form.category,
@@ -653,8 +656,7 @@ export default function GymsAdminPage() {
         contact_email: form.contact_email,
         website: form.website,
         monthly_payment: Number(form.monthly_payment) || 0,
-        owner_user_id: form.owner_user_id || undefined,
-        owner_email: form.owner_user_id ? undefined : ownerEmail || undefined,
+        owner_user_id: form.owner_user_id,
         owner_name: form.owner_name || undefined,
         activate: form.activate,
       });
@@ -1179,6 +1181,7 @@ export default function GymsAdminPage() {
             onCancel={() => setCreateOpen(false)}
             onSave={create}
             saving={creating}
+            disabled={!form.name.trim() || !form.owner_user_id.trim()}
             saveLabel="Create gym"
           />
         }
@@ -1282,10 +1285,10 @@ export default function GymsAdminPage() {
 
           <section className="space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-text-hint">
-              Owner (optional)
+              Owner (required)
             </h3>
             <label className="grid gap-1 text-sm">
-              <span className="text-text-secondary">Search SpoJex user</span>
+              <span className="text-text-secondary">Link existing SpoJex user</span>
               <input
                 value={ownerQuery}
                 onChange={(event) => {
@@ -1297,16 +1300,18 @@ export default function GymsAdminPage() {
                   }));
                 }}
                 className={fieldClass}
-                placeholder="Name or email"
+                placeholder="Search by name or email"
+                required
               />
               {selectedOwner ? (
-                <p className="text-xs text-text-secondary">
-                  Selected: {selectedOwner.display_name}
+                <p className="text-xs text-emerald-700">
+                  Linked: {selectedOwner.display_name}
                   {selectedOwner.email ? ` · ${selectedOwner.email}` : ""}
                 </p>
               ) : (
                 <p className="text-xs text-text-secondary">
-                  Optional. Paste an email if they are not listed; they become gym owner staff.
+                  Required. Pick a user from the results — create the account under Users first if
+                  they are not listed.
                 </p>
               )}
               {ownerLoading ? <p className="text-xs text-text-hint">Searching…</p> : null}

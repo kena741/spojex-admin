@@ -190,11 +190,14 @@ export function AdminModalFooter({
   onCancel,
   onSave,
   saving,
+  disabled,
   saveLabel = "Save",
 }: {
   onCancel: () => void;
   onSave: () => void;
   saving?: boolean;
+  /** Extra disable (e.g. missing required fields). Does not show “Saving…”. */
+  disabled?: boolean;
   saveLabel?: string;
 }) {
   return (
@@ -208,7 +211,7 @@ export function AdminModalFooter({
       </button>
       <button
         type="button"
-        disabled={saving}
+        disabled={saving || disabled}
         onClick={onSave}
         className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
       >

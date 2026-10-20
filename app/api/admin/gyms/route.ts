@@ -74,6 +74,7 @@ export async function POST(request: Request) {
   const ownerEmail = body.owner_email?.trim().toLowerCase() || "";
   let ownerName = body.owner_name?.trim() || "";
 
+  // Gym create must link to an existing SpoJex user (no orphan gyms).
   if (!ownerUserId && ownerEmail) {
     const { data: owner, error: ownerError } = await auth.context.client
       .from("users")
@@ -85,7 +86,10 @@ export async function POST(request: Request) {
     }
     if (!owner?.id) {
       return NextResponse.json(
-        { error: "No SpoJex user found with that email. Create or invite the owner first." },
+        {
+          error:
+            "No SpoJex user found with that email. Create the user first, then link them as gym owner.",
+        },
         { status: 400 },
       );
     }
@@ -93,7 +97,17 @@ export async function POST(request: Request) {
     if (!ownerName) ownerName = owner.display_name?.trim() || owner.email || "";
   }
 
-  if (ownerUserId) {
+  if (!ownerUserId) {
+    return NextResponse.json(
+      {
+        error:
+          "Link an existing SpoJex user as the gym owner before creating the gym.",
+      },
+      { status: 400 },
+    );
+  }
+
+  {
     const { data: ownerRow, error: ownerCheckError } = await auth.context.client
       .from("users")
       .select("id, display_name, email")
@@ -103,7 +117,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: ownerCheckError.message }, { status: 400 });
     }
     if (!ownerRow?.id) {
-      return NextResponse.json({ error: "Owner user not found" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Owner user not found. Pick an existing SpoJex account." },
+        { status: 400 },
+      );
     }
     if (!ownerName) {
       ownerName = ownerRow.display_name?.trim() || ownerRow.email || "";
