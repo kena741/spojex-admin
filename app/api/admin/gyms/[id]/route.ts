@@ -280,8 +280,16 @@ export async function PATCH(
     }
     Object.assign(patch, featuredPatch({ isFeatured, featureStatus }));
   }
-  if ("owner_user_id" in patch && patch.owner_user_id) {
-    const ownerId = String(patch.owner_user_id);
+  let previousOwnerId: string | null = null;
+  if ("owner_user_id" in patch) {
+    const ownerId = String(patch.owner_user_id ?? "").trim();
+    if (!ownerId) {
+      return NextResponse.json(
+        { error: "Owner must be an existing SpoJex user." },
+        { status: 400 },
+      );
+    }
+    patch.owner_user_id = ownerId;
     const { data: ownerRow, error: ownerError } = await auth.context.client
       .from("users")
       .select("id, display_name, email")
@@ -291,11 +299,22 @@ export async function PATCH(
       return NextResponse.json({ error: ownerError.message }, { status: 400 });
     }
     if (!ownerRow?.id) {
-      return NextResponse.json({ error: "Owner user not found" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Owner user not found. Pick an existing SpoJex account." },
+        { status: 400 },
+      );
     }
     if (!("owner_name" in patch) || !String(patch.owner_name ?? "").trim()) {
       patch.owner_name = ownerRow.display_name?.trim() || ownerRow.email || "";
     }
+    const { data: currentGym } = await auth.context.client
+      .from("gyms")
+      .select("owner_user_id")
+      .eq("id", id)
+      .maybeSingle();
+    previousOwnerId = currentGym?.owner_user_id
+      ? String(currentGym.owner_user_id)
+      : null;
   }
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "No valid fields" }, { status: 400 });
@@ -310,15 +329,25 @@ export async function PATCH(
   const data = saved.row;
 
   if (patch.owner_user_id) {
+    const nextOwnerId = String(patch.owner_user_id);
     await auth.context.client.from("gym_staff").upsert(
       {
         gym_id: id,
-        user_id: String(patch.owner_user_id),
+        user_id: nextOwnerId,
         staff_role: "owner",
         is_active: true,
       },
       { onConflict: "gym_id,user_id" },
     );
+    // Previous owner keeps access as manager (not removed from staff).
+    if (previousOwnerId && previousOwnerId !== nextOwnerId) {
+      await auth.context.client
+        .from("gym_staff")
+        .update({ staff_role: "manager", is_active: true })
+        .eq("gym_id", id)
+        .eq("user_id", previousOwnerId)
+        .eq("staff_role", "owner");
+    }
     const ens = await auth.context.client.rpc("ensure_gym_organization", {
       p_gym_id: id,
     });

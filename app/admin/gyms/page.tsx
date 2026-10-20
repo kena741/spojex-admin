@@ -86,6 +86,7 @@ type GymDraft = {
   contact_email: string;
   website: string;
   monthly_payment: string;
+  owner_user_id: string;
   owner_name: string;
   status: string;
   verification_status: string;
@@ -104,6 +105,7 @@ function draftFromRow(row: GymRow): GymDraft {
     contact_email: row.contact_email ?? "",
     website: row.website ?? "",
     monthly_payment: String(row.monthly_payment ?? 0),
+    owner_user_id: row.owner_user_id ?? "",
     owner_name: row.owner_name ?? "",
     status: row.status || "pending",
     verification_status: row.verification_status || "pending",
@@ -491,7 +493,7 @@ export default function GymsAdminPage() {
   }, []);
 
   useEffect(() => {
-    if (!createOpen) return;
+    if (!createOpen && !editOpen) return;
     const q = ownerQuery.trim().replace(/[%(),]/g, " ");
     if (q.length < 2) {
       setOwnerOptions([]);
@@ -527,7 +529,7 @@ export default function GymsAdminPage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [createOpen, ownerQuery]);
+  }, [createOpen, editOpen, ownerQuery]);
 
   useEffect(() => {
     return () => {
@@ -581,6 +583,9 @@ export default function GymsAdminPage() {
   }, [filtered]);
 
   const selectedOwner = ownerOptions.find((item) => item.id === form.owner_user_id);
+  const selectedEditOwner = ownerOptions.find(
+    (item) => item.id === (draft?.owner_user_id ?? ""),
+  );
 
   const clearCreateLogo = () => {
     if (createLogoPreview.startsWith("blob:")) URL.revokeObjectURL(createLogoPreview);
@@ -678,6 +683,8 @@ export default function GymsAdminPage() {
   const openEdit = (row: GymRow) => {
     setEditingId(row.id);
     setDraft(draftFromRow(row));
+    setOwnerQuery((row.owner_name || row.owner_user_id || "").trim());
+    setOwnerOptions([]);
     setEditingLogo((row.logo_url ?? "").trim());
     setEditingCover((row.cover_url ?? "").trim());
     setEditOpen(true);
@@ -692,6 +699,8 @@ export default function GymsAdminPage() {
     setEditOpen(false);
     setEditingId(null);
     setDraft(null);
+    setOwnerQuery("");
+    setOwnerOptions([]);
     setEditingLogo("");
     setEditingCover("");
     if (editLogoRef.current) editLogoRef.current.value = "";
@@ -760,6 +769,10 @@ export default function GymsAdminPage() {
       setError("Name is required");
       return;
     }
+    if (!draft.owner_user_id.trim()) {
+      setError("Select an existing SpoJex user as the gym owner.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -775,6 +788,7 @@ export default function GymsAdminPage() {
         contact_email: draft.contact_email.trim(),
         website: draft.website.trim(),
         monthly_payment: Number(draft.monthly_payment) || 0,
+        owner_user_id: draft.owner_user_id.trim(),
         owner_name: draft.owner_name.trim(),
         status: draft.status,
         verification_status: draft.verification_status,
@@ -782,6 +796,8 @@ export default function GymsAdminPage() {
       setEditOpen(false);
       setEditingId(null);
       setDraft(null);
+      setOwnerQuery("");
+      setOwnerOptions([]);
       setEditingLogo("");
       setEditingCover("");
       await load();
@@ -1443,12 +1459,99 @@ export default function GymsAdminPage() {
             onCancel={closeEdit}
             onSave={saveEdit}
             saving={saving || !!uploadingKind}
+            disabled={!draft?.name.trim() || !draft?.owner_user_id.trim()}
             saveLabel="Save changes"
           />
         }
       >
         {draft ? (
           <div className="space-y-5">
+            <section className="space-y-3">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-text-hint">
+                Owner (required)
+              </h3>
+              <label className="grid gap-1 text-sm">
+                <span className="text-text-secondary">Link existing SpoJex user</span>
+                <input
+                  value={ownerQuery}
+                  onChange={(event) => {
+                    setOwnerQuery(event.target.value);
+                    setDraft((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            owner_user_id: "",
+                          }
+                        : prev,
+                    );
+                  }}
+                  className={fieldClass}
+                  placeholder="Search by name or email to change owner"
+                  disabled={saving || !canWrite}
+                />
+                {draft.owner_user_id ? (
+                  <p className="text-xs text-emerald-700">
+                    Linked:{" "}
+                    {selectedEditOwner?.display_name ||
+                      draft.owner_name ||
+                      draft.owner_user_id}
+                    {selectedEditOwner?.email
+                      ? ` · ${selectedEditOwner.email}`
+                      : ""}
+                  </p>
+                ) : (
+                  <p className="text-xs text-text-secondary">
+                    Required. Search and pick a user to set or change the gym owner.
+                  </p>
+                )}
+                {ownerLoading ? <p className="text-xs text-text-hint">Searching…</p> : null}
+                {ownerOptions.length > 0 ? (
+                  <ul className="max-h-40 overflow-y-auto rounded-lg border border-border">
+                    {ownerOptions.map((owner) => (
+                      <li key={owner.id}>
+                        <button
+                          type="button"
+                          disabled={saving || !canWrite}
+                          onClick={() => {
+                            setDraft((prev) =>
+                              prev
+                                ? {
+                                    ...prev,
+                                    owner_user_id: owner.id,
+                                    owner_name: owner.display_name || prev.owner_name,
+                                  }
+                                : prev,
+                            );
+                            setOwnerQuery(owner.email || owner.display_name);
+                          }}
+                          className={`flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50 ${
+                            draft.owner_user_id === owner.id ? "bg-primary/10" : ""
+                          }`}
+                        >
+                          <span className="font-medium">{owner.display_name}</span>
+                          <span className="text-xs text-text-secondary">
+                            {[owner.email, owner.role, owner.city].filter(Boolean).join(" · ")}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="text-text-secondary">Owner display name</span>
+                <input
+                  value={draft.owner_name}
+                  onChange={(event) =>
+                    setDraft({ ...draft, owner_name: event.target.value })
+                  }
+                  className={fieldClass}
+                  placeholder="Shown on the gym profile"
+                  disabled={saving || !canWrite}
+                />
+              </label>
+            </section>
+
             <section className="space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-text-hint">
                 Media
