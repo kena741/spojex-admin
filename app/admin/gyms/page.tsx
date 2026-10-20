@@ -662,7 +662,6 @@ export default function GymsAdminPage() {
         website: form.website,
         monthly_payment: Number(form.monthly_payment) || 0,
         owner_user_id: form.owner_user_id,
-        owner_name: form.owner_name || undefined,
         activate: form.activate,
       });
       const gym = payload.data as GymRow | undefined;
@@ -789,7 +788,6 @@ export default function GymsAdminPage() {
         website: draft.website.trim(),
         monthly_payment: Number(draft.monthly_payment) || 0,
         owner_user_id: draft.owner_user_id.trim(),
-        owner_name: draft.owner_name.trim(),
         status: draft.status,
         verification_status: draft.verification_status,
       });
@@ -1360,15 +1358,6 @@ export default function GymsAdminPage() {
                 </ul>
               ) : null}
             </label>
-            <label className="grid gap-1 text-sm">
-              <span className="text-text-secondary">Owner display name</span>
-              <input
-                value={form.owner_name}
-                onChange={(event) => setForm({ ...form, owner_name: event.target.value })}
-                className={fieldClass}
-                placeholder="Shown on the gym profile"
-              />
-            </label>
           </section>
 
           <section className="space-y-3">
@@ -1537,18 +1526,6 @@ export default function GymsAdminPage() {
                     ))}
                   </ul>
                 ) : null}
-              </label>
-              <label className="grid gap-1 text-sm">
-                <span className="text-text-secondary">Owner display name</span>
-                <input
-                  value={draft.owner_name}
-                  onChange={(event) =>
-                    setDraft({ ...draft, owner_name: event.target.value })
-                  }
-                  className={fieldClass}
-                  placeholder="Shown on the gym profile"
-                  disabled={saving || !canWrite}
-                />
               </label>
             </section>
 
