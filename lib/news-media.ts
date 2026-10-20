@@ -145,3 +145,85 @@ export function validateNewsMedia(kind: NewsUploadKind, type: string, filename: 
   if (size > IMAGE_MAX) return "Image must be 5 MB or smaller.";
   return null;
 }
+
+/**
+ * Grab an early frame from a local video file as a JPEG cover.
+ * Used when admin uploads Sport news video without a separate cover image
+ * so the feed doesn't fall back to the soccer-ball placeholder.
+ */
+export async function captureVideoCoverFile(
+  source: File,
+  opts?: { seekSeconds?: number },
+): Promise<File> {
+  if (typeof document === "undefined") {
+    throw new Error("Cover capture requires a browser.");
+  }
+  const objectUrl = URL.createObjectURL(source);
+  try {
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    video.setAttribute("playsinline", "true");
+
+    await new Promise<void>((resolve, reject) => {
+      const onReady = () => resolve();
+      const onError = () => reject(new Error("Could not read video for cover."));
+      video.addEventListener("loadeddata", onReady, { once: true });
+      video.addEventListener("error", onError, { once: true });
+      video.src = objectUrl;
+      video.load();
+    });
+
+    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    const preferred = opts?.seekSeconds ?? 0.25;
+    const seekTo =
+      duration > 0
+        ? Math.min(Math.max(preferred, 0.05), Math.max(duration * 0.05, 0.05))
+        : preferred;
+
+    if (seekTo > 0) {
+      await new Promise<void>((resolve, reject) => {
+        const onSeeked = () => resolve();
+        const onError = () => reject(new Error("Could not seek video for cover."));
+        video.addEventListener("seeked", onSeeked, { once: true });
+        video.addEventListener("error", onError, { once: true });
+        try {
+          video.currentTime = seekTo;
+        } catch {
+          resolve();
+        }
+      });
+    }
+
+    const width = video.videoWidth || 720;
+    const height = video.videoHeight || 1280;
+    if (width < 2 || height < 2) {
+      throw new Error("Video has no visible frame for cover.");
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Could not capture cover frame.");
+    ctx.drawImage(video, 0, 0, width, height);
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (result) =>
+          result
+            ? resolve(result)
+            : reject(new Error("Could not encode cover image.")),
+        "image/jpeg",
+        0.88,
+      );
+    });
+
+    return new File([blob], `news-cover-${Date.now()}.jpg`, {
+      type: "image/jpeg",
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}

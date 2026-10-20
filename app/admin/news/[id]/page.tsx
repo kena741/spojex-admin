@@ -17,7 +17,12 @@ import { NewsOrgPicker } from "@/components/news-org-picker";
 import { NewsSourceField } from "@/components/news-source-field";
 import { NewsTikTokPreview } from "@/components/news-tiktok-preview";
 import { newsCategories, newsStatusLabel, newsStatuses } from "@/lib/news";
-import { resolveNewsStoryMedia, type NewsStoryMedia, type NewsUploadKind } from "@/lib/news-media";
+import {
+  captureVideoCoverFile,
+  resolveNewsStoryMedia,
+  type NewsStoryMedia,
+  type NewsUploadKind,
+} from "@/lib/news-media";
 import { deleteAdmin, patchAdmin } from "@/lib/hooks";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
@@ -122,13 +127,39 @@ export default function NewsDetailPage() {
       if (kind === "audio" && article?.video_url?.trim()) {
         throw new Error("Remove the video file before uploading audio.");
       }
+      const existingGallery = Array.isArray(article?.image_urls)
+        ? article!.image_urls!.map((u) => `${u ?? ""}`.trim()).filter(Boolean)
+        : [];
+      const legacyCover = `${article?.image_url ?? article?.cover_url ?? ""}`.trim();
+      const hasCover =
+        existingGallery.length > 0 || Boolean(legacyCover);
+      const coverPromise =
+        kind === "video" && !hasCover
+          ? captureVideoCoverFile(file).catch(() => null)
+          : Promise.resolve(null);
+
       const publicUrl = await uploadNewsFile(id, file, kind, options);
       if (kind === "video") {
-        if ((await save({
-            video_url: publicUrl,
-            audio_url: "",
-            sound_id: null,
-          })) !== true) {
+        const coverFile = await coverPromise;
+        let coverUrl = "";
+        if (coverFile && !hasCover) {
+          try {
+            coverUrl = await uploadNewsFile(id, coverFile, "image");
+          } catch {
+            coverUrl = "";
+          }
+        }
+        const patch: Record<string, unknown> = {
+          video_url: publicUrl,
+          audio_url: "",
+          sound_id: null,
+        };
+        if (coverUrl) {
+          patch.image_urls = [coverUrl];
+          patch.image_url = coverUrl;
+          patch.cover_url = coverUrl;
+        }
+        if ((await save(patch)) !== true) {
           return;
         }
         setPickedKind("video");

@@ -29,7 +29,12 @@ import { NewsSourceField } from "@/components/news-source-field";
 import { NewsTikTokPreview } from "@/components/news-tiktok-preview";
 import { newsCategories, newsRecency, newsStatusLabel, newsStatuses } from "@/lib/news";
 import { rememberNewsSource } from "@/lib/news-sources";
-import { resolveNewsStoryMedia, type NewsStoryMedia, type NewsUploadKind } from "@/lib/news-media";
+import {
+  captureVideoCoverFile,
+  resolveNewsStoryMedia,
+  type NewsStoryMedia,
+  type NewsUploadKind,
+} from "@/lib/news-media";
 import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
@@ -134,6 +139,13 @@ export default function NewsPage() {
     setUploading(kind);
     setError(null);
     try {
+      const needsAutoCover =
+        kind === "video" && imageUrls.length === 0 && !imageUrl.trim();
+      // Capture from the local file before upload so we avoid CORS-tainted canvas.
+      const coverPromise = needsAutoCover
+        ? captureVideoCoverFile(file).catch(() => null)
+        : Promise.resolve(null);
+
       const publicUrl = await uploadNewsFile(null, file, kind, options);
       if (kind === "image") {
         setImageUrls((prev) => {
@@ -147,6 +159,16 @@ export default function NewsPage() {
         setSoundId("");
         setAudioUrl("");
         setPickedKind("video");
+        const coverFile = await coverPromise;
+        if (coverFile && imageUrls.length === 0 && !imageUrl.trim()) {
+          try {
+            const coverUrl = await uploadNewsFile(null, coverFile, "image");
+            setImageUrls([coverUrl]);
+            setImageUrl(coverUrl);
+          } catch {
+            // Non-fatal: list can still show placeholder until a cover is added.
+          }
+        }
       }
       if (kind === "audio") {
         setAudioUrl(publicUrl);
