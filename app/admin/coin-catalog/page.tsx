@@ -81,7 +81,6 @@ export default function CoinCatalogPage() {
   const [packName, setPackName] = useState("");
   const [packCoins, setPackCoins] = useState("100");
   const [packBonus, setPackBonus] = useState("0");
-  const [packPrice, setPackPrice] = useState("50");
 
   const [giftName, setGiftName] = useState("");
   const [giftEmoji, setGiftEmoji] = useState("🎁");
@@ -166,6 +165,25 @@ export default function CoinCatalogPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const etbPerCoin = (() => {
+    const perBirr = Number(coinsPerBirr);
+    return Number.isFinite(perBirr) && perBirr > 0 ? 1 / perBirr : 0.1;
+  })();
+
+  const priceForCoins = (coins: number) =>
+    Math.round(Math.max(0, coins) * etbPerCoin * 100) / 100;
+
+  const syncPackPrices = async (rateEtbPerCoin: number) => {
+    const spojex = getSpojexClient();
+    for (const row of packages) {
+      const next = Math.round(row.coins * rateEtbPerCoin * 100) / 100;
+      if (Math.abs(Number(row.price_etb) - next) < 0.005) continue;
+      await patchAdmin(`/api/admin/coin-packages/${row.id}`, {
+        price_etb: next,
+      });
+    }
+  };
+
   const saveRate = async () => {
     if (!canWrite) return;
     setError(null);
@@ -179,7 +197,11 @@ export default function CoinCatalogPage() {
       await postAdmin("/api/admin/coin-settings", {
         coins_per_birr: perBirr,
       });
-      setNotice(`Saved: 1 Birr = ${perBirr} coins (used after every Chapa payment).`);
+      const rate = 1 / perBirr;
+      await syncPackPrices(rate);
+      setNotice(
+        `Saved: 1 Birr = ${perBirr} coins. Pack prices now use coins × ${(rate).toFixed(4)} ETB.`,
+      );
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save rate");
@@ -231,17 +253,18 @@ export default function CoinCatalogPage() {
     if (!canWrite) return;
     setError(null);
     try {
+      const coins = Number(packCoins) || 0;
       await postAdmin("/api/admin/coin-packages", {
         name: packName.trim(),
-        coins: Number(packCoins) || 0,
+        coins,
         bonus_coins: Number(packBonus) || 0,
-        price_etb: Number(packPrice) || 0,
+        // Server also derives from coin_settings; send preview for clarity.
+        price_etb: priceForCoins(coins),
         sort_order: packages.length + 1,
       });
       setPackName("");
       setPackCoins("100");
       setPackBonus("0");
-      setPackPrice("50");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create package failed");
@@ -276,12 +299,15 @@ export default function CoinCatalogPage() {
     try {
       if (packages.length === 0) {
         const starters = [
-          { name: "Starter", coins: 50, bonus_coins: 0, price_etb: 50, sort_order: 10 },
-          { name: "Popular", coins: 120, bonus_coins: 20, price_etb: 100, sort_order: 20 },
-          { name: "Fan Pack", coins: 300, bonus_coins: 50, price_etb: 250, sort_order: 30 },
+          { name: "Starter", coins: 500, bonus_coins: 0, sort_order: 10 },
+          { name: "Popular", coins: 1000, bonus_coins: 20, sort_order: 20 },
+          { name: "Fan Pack", coins: 2500, bonus_coins: 50, sort_order: 30 },
         ];
         for (const pack of starters) {
-          await postAdmin("/api/admin/coin-packages", pack);
+          await postAdmin("/api/admin/coin-packages", {
+            ...pack,
+            price_etb: priceForCoins(pack.coins),
+          });
         }
       }
       if (gifts.length === 0) {
@@ -358,8 +384,9 @@ export default function CoinCatalogPage() {
       <section className="mb-6 rounded-xl border border-border bg-card p-4 shadow-sm">
         <h2 className="mb-3 font-heading text-sm font-semibold">Coin ↔ Birr rate</h2>
         <p className="mb-3 text-sm text-text-secondary">
-          After a successful Chapa payment, coins credited = paid Birr × this rate
-          (plus any pack bonus).
+          Pack prices and custom buys use this rate: ETB = coins ÷ coins-per-Birr
+          (bonus coins are free). After Chapa pays, credited coins = paid Birr × this
+          rate (+ pack bonus).
         </p>
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm">
@@ -474,14 +501,6 @@ export default function CoinCatalogPage() {
                 className="h-10 rounded-lg border border-border px-3 text-sm"
               />
               <input
-                value={packPrice}
-                onChange={(e) => setPackPrice(e.target.value)}
-                placeholder="Price ETB"
-                type="number"
-                min={0}
-                className="h-10 rounded-lg border border-border px-3 text-sm"
-              />
-              <input
                 value={packCoins}
                 onChange={(e) => setPackCoins(e.target.value)}
                 placeholder="Coins"
@@ -492,11 +511,15 @@ export default function CoinCatalogPage() {
               <input
                 value={packBonus}
                 onChange={(e) => setPackBonus(e.target.value)}
-                placeholder="Bonus"
+                placeholder="Bonus (free)"
                 type="number"
                 min={0}
                 className="h-10 rounded-lg border border-border px-3 text-sm"
               />
+              <div className="flex h-10 items-center rounded-lg border border-border bg-muted/40 px-3 text-sm text-text-secondary">
+                ETB {priceForCoins(Number(packCoins) || 0)}
+                <span className="ml-1 text-xs">(from rate)</span>
+              </div>
               <button
                 type="submit"
                 className="h-10 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground md:col-span-2"
@@ -531,7 +554,14 @@ export default function CoinCatalogPage() {
                         {row.coins}
                         {row.bonus_coins > 0 ? ` +${row.bonus_coins}` : ""}
                       </td>
-                      <td className="px-3 py-2">{row.price_etb}</td>
+                      <td className="px-3 py-2">
+                        {priceForCoins(row.coins)}
+                        {Math.abs(Number(row.price_etb) - priceForCoins(row.coins)) > 0.01 ? (
+                          <span className="ml-1 text-xs text-text-secondary">
+                            (was {row.price_etb})
+                          </span>
+                        ) : null}
+                      </td>
                       <td className="px-3 py-2 text-right">
                         {canWrite ? (
                           <div className="flex justify-end gap-2">

@@ -2,6 +2,24 @@ import { NextResponse } from "next/server";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAdminPermission } from "@/lib/admin-auth";
 
+const DEFAULT_ETB_PER_COIN = 0.1;
+
+async function etbPerCoinFromDb(client: {
+  from: (table: string) => any;
+}): Promise<number> {
+  const { data } = await client
+    .from("coin_settings")
+    .select("etb_per_coin")
+    .eq("id", 1)
+    .maybeSingle();
+  const rate = Number(data?.etb_per_coin);
+  return Number.isFinite(rate) && rate > 0 ? rate : DEFAULT_ETB_PER_COIN;
+}
+
+function priceEtbForCoins(coins: number, etbPerCoin: number): number {
+  return Math.round(coins * etbPerCoin * 100) / 100;
+}
+
 export async function POST(request: Request) {
   const auth = await requireAdminPermission("donations:write");
   if (!auth.ok) return auth.error;
@@ -21,13 +39,16 @@ export async function POST(request: Request) {
   if (coins <= 0) {
     return NextResponse.json({ error: "coins must be > 0" }, { status: 400 });
   }
+  const rate = await etbPerCoinFromDb(auth.context.client);
+  // Always derive ETB from admin 1-coin rate; ignore client price_etb.
+  const price_etb = priceEtbForCoins(coins, rate);
   const { data, error } = await auth.context.client
     .from("coin_packages")
     .insert({
       name,
       coins,
       bonus_coins: Number(body.bonus_coins) || 0,
-      price_etb: Number(body.price_etb) || 0,
+      price_etb,
       sort_order: Number(body.sort_order) || 0,
       is_active: body.is_active !== false,
     })
