@@ -51,6 +51,13 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 type TabId = "overview" | "plans" | "staff" | "members" | "edit";
 type ImageKind = "logo" | "cover";
+type OwnerOption = {
+  id: string;
+  display_name: string;
+  email?: string | null;
+  role?: string | null;
+  city?: string | null;
+};
 
 const tabs: { id: TabId; label: string }[] = [
   { id: "overview", label: "Overview" },
@@ -206,10 +213,17 @@ export default function GymDetailPage() {
     contact_email: "",
     website: "",
     monthly_payment: "0",
+    owner_user_id: "",
     owner_name: "",
     status: "pending",
     verification_status: "pending",
   });
+
+  const [ownerQuery, setOwnerQuery] = useState("");
+  const [ownerOptions, setOwnerOptions] = useState<OwnerOption[]>([]);
+  const [ownerLoading, setOwnerLoading] = useState(false);
+  const [pendingOwnerId, setPendingOwnerId] = useState("");
+  const [pendingOwnerName, setPendingOwnerName] = useState("");
 
   const [staffOpen, setStaffOpen] = useState(false);
   const [savingStaff, setSavingStaff] = useState(false);
@@ -258,6 +272,13 @@ export default function GymDetailPage() {
     if (payload.members_error) setError(payload.members_error);
     if (payload.plans_error) setError(payload.plans_error);
     if (next) {
+      const ownerId = next.owner_user_id ?? "";
+      const ownerLabel =
+        next.users?.display_name ||
+        next.owner_name ||
+        next.users?.email ||
+        ownerId ||
+        "";
       setDraft({
         name: next.name ?? "",
         category: next.category || "gym",
@@ -270,10 +291,15 @@ export default function GymDetailPage() {
         contact_email: next.contact_email ?? "",
         website: next.website ?? "",
         monthly_payment: String(next.monthly_payment ?? 0),
+        owner_user_id: ownerId,
         owner_name: next.owner_name ?? "",
         status: next.status || "pending",
         verification_status: next.verification_status || "pending",
       });
+      setPendingOwnerId(ownerId);
+      setPendingOwnerName(next.owner_name ?? ownerLabel);
+      setOwnerQuery(ownerLabel);
+      setOwnerOptions([]);
     }
   };
 
@@ -283,6 +309,45 @@ export default function GymDetailPage() {
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    if (!canWrite) return;
+    const q = ownerQuery.trim().replace(/[%(),]/g, " ");
+    if (q.length < 2) {
+      setOwnerOptions([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setOwnerLoading(true);
+      void adminFetch(`/api/admin/users?q=${encodeURIComponent(q)}&limit=12`)
+        .then(async (res) => {
+          const json = (await res.json().catch(() => ({}))) as {
+            data?: OwnerOption[];
+            error?: string;
+          };
+          if (cancelled) return;
+          if (!res.ok) {
+            setError(json.error || "Failed to search users");
+            setOwnerOptions([]);
+          } else {
+            setOwnerOptions(json.data ?? []);
+          }
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          setError(err instanceof Error ? err.message : "Failed to search users");
+          setOwnerOptions([]);
+        })
+        .finally(() => {
+          if (!cancelled) setOwnerLoading(false);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [canWrite, ownerQuery]);
 
   const save = async (patch: Record<string, unknown>, success = "Saved.") => {
     if (!canWrite) return;
@@ -306,6 +371,10 @@ export default function GymDetailPage() {
       setError("Monthly payment must be a non-negative number");
       return;
     }
+    if (!draft.owner_user_id.trim()) {
+      setError("Select an existing SpoJex user as the gym owner.");
+      return;
+    }
     await save(
       {
         name: draft.name.trim(),
@@ -319,10 +388,32 @@ export default function GymDetailPage() {
         contact_email: draft.contact_email.trim(),
         website: draft.website.trim(),
         monthly_payment: monthly,
+        owner_user_id: draft.owner_user_id.trim(),
+        owner_name: draft.owner_name.trim(),
         status: draft.status,
         verification_status: draft.verification_status,
       },
       "Gym details updated.",
+    );
+  };
+
+  const saveOwner = async () => {
+    if (!canWrite) return;
+    const ownerId = pendingOwnerId.trim();
+    if (!ownerId) {
+      setError("Select an existing SpoJex user as the gym owner.");
+      return;
+    }
+    if (ownerId === (gym?.owner_user_id ?? "")) {
+      setNotice("Owner is already assigned.");
+      return;
+    }
+    await save(
+      {
+        owner_user_id: ownerId,
+        owner_name: pendingOwnerName.trim(),
+      },
+      "Gym owner updated.",
     );
   };
 
@@ -1077,6 +1168,84 @@ export default function GymDetailPage() {
                     </dd>
                   </div>
                 </dl>
+                {canWrite ? (
+                  <div className="mt-4 space-y-2 border-t border-border pt-4">
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-text-secondary">Change assigned owner</span>
+                      <input
+                        value={ownerQuery}
+                        disabled={busy}
+                        onChange={(event) => {
+                          setOwnerQuery(event.target.value);
+                          setPendingOwnerId("");
+                          setPendingOwnerName("");
+                        }}
+                        className={fieldClass}
+                        placeholder="Search by name or email"
+                      />
+                    </label>
+                    {pendingOwnerId ? (
+                      <p className="text-xs text-emerald-700">
+                        Selected: {pendingOwnerName || pendingOwnerId}
+                        {pendingOwnerId !== (gym.owner_user_id ?? "")
+                          ? " · click Save owner to apply"
+                          : " · current owner"}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-text-secondary">
+                        Pick a SpoJex user from the results, then save.
+                      </p>
+                    )}
+                    {ownerLoading ? (
+                      <p className="text-xs text-text-hint">Searching…</p>
+                    ) : null}
+                    {ownerOptions.length > 0 ? (
+                      <ul className="max-h-40 overflow-y-auto rounded-lg border border-border">
+                        {ownerOptions.map((owner) => (
+                          <li key={owner.id}>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => {
+                                setPendingOwnerId(owner.id);
+                                setPendingOwnerName(owner.display_name || owner.email || "");
+                                setOwnerQuery(owner.email || owner.display_name);
+                                setDraft((prev) => ({
+                                  ...prev,
+                                  owner_user_id: owner.id,
+                                  owner_name: owner.display_name || prev.owner_name,
+                                }));
+                                setOwnerOptions([]);
+                              }}
+                              className={`flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50 ${
+                                pendingOwnerId === owner.id ? "bg-primary/10" : ""
+                              }`}
+                            >
+                              <span className="font-medium">{owner.display_name}</span>
+                              <span className="text-xs text-text-secondary">
+                                {[owner.email, owner.role, owner.city]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={
+                        busy ||
+                        !pendingOwnerId ||
+                        pendingOwnerId === (gym.owner_user_id ?? "")
+                      }
+                      onClick={() => void saveOwner()}
+                      className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                    >
+                      {busy ? "Saving…" : "Save owner"}
+                    </button>
+                  </div>
+                ) : null}
               </section>
 
               {canWrite ? (
@@ -1637,6 +1806,68 @@ export default function GymDetailPage() {
                     onChange={(event) => setDraft({ ...draft, website: event.target.value })}
                   />
                 </label>
+                <div className="grid gap-2 sm:col-span-2">
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-text-secondary">Assigned owner</span>
+                    <input
+                      className={fieldClass}
+                      value={ownerQuery}
+                      disabled={busy}
+                      onChange={(event) => {
+                        setOwnerQuery(event.target.value);
+                        setPendingOwnerId("");
+                        setPendingOwnerName("");
+                        setDraft((prev) => ({ ...prev, owner_user_id: "" }));
+                      }}
+                      placeholder="Search by name or email"
+                    />
+                  </label>
+                  {draft.owner_user_id ? (
+                    <p className="text-xs text-emerald-700">
+                      Linked: {draft.owner_name || pendingOwnerName || draft.owner_user_id}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-text-secondary">
+                      Required. Pick a SpoJex user from the results.
+                    </p>
+                  )}
+                  {ownerLoading ? (
+                    <p className="text-xs text-text-hint">Searching…</p>
+                  ) : null}
+                  {ownerOptions.length > 0 ? (
+                    <ul className="max-h-40 overflow-y-auto rounded-lg border border-border">
+                      {ownerOptions.map((owner) => (
+                        <li key={owner.id}>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              setPendingOwnerId(owner.id);
+                              setPendingOwnerName(owner.display_name || owner.email || "");
+                              setOwnerQuery(owner.email || owner.display_name);
+                              setDraft((prev) => ({
+                                ...prev,
+                                owner_user_id: owner.id,
+                                owner_name: owner.display_name || prev.owner_name,
+                              }));
+                              setOwnerOptions([]);
+                            }}
+                            className={`flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50 ${
+                              draft.owner_user_id === owner.id ? "bg-primary/10" : ""
+                            }`}
+                          >
+                            <span className="font-medium">{owner.display_name}</span>
+                            <span className="text-xs text-text-secondary">
+                              {[owner.email, owner.role, owner.city]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
                 <label className="grid gap-1 text-sm">
                   <span className="text-text-secondary">Commission (read-only)</span>
                   <input
@@ -1681,7 +1912,7 @@ export default function GymDetailPage() {
               <div className="flex justify-end">
                 <button
                   type="button"
-                  disabled={busy || !draft.name.trim()}
+                  disabled={busy || !draft.name.trim() || !draft.owner_user_id.trim()}
                   onClick={() => void saveEdit()}
                   className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
                 >
