@@ -7,6 +7,7 @@ import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import {
   NewsMediaFields,
+  extractNewsVideoPoster,
   removeNewsVideoWatermark,
   uploadNewsFile,
   type NewsUploadOptions,
@@ -140,13 +141,22 @@ export default function NewsDetailPage() {
 
       const publicUrl = await uploadNewsFile(id, file, kind, options);
       if (kind === "video") {
-        const coverFile = await coverPromise;
         let coverUrl = "";
-        if (coverFile && !hasCover) {
-          try {
-            coverUrl = await uploadNewsFile(id, coverFile, "image");
-          } catch {
-            coverUrl = "";
+        if (!hasCover) {
+          const coverFile = await coverPromise;
+          if (coverFile) {
+            try {
+              coverUrl = await uploadNewsFile(id, coverFile, "image");
+            } catch {
+              coverUrl = "";
+            }
+          }
+          if (!coverUrl) {
+            try {
+              coverUrl = await extractNewsVideoPoster(id, publicUrl);
+            } catch {
+              coverUrl = "";
+            }
           }
         }
         const patch: Record<string, unknown> = {

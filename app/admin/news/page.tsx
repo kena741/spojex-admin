@@ -19,6 +19,7 @@ import { StatusBadge, requestTone } from "@/components/status-badge";
 import {
   NewsMediaFields,
   removeNewsVideoWatermark,
+  extractNewsVideoPoster,
   uploadNewsFile,
   type NewsUploadOptions,
   type NewsWatermarkMode,
@@ -159,14 +160,26 @@ export default function NewsPage() {
         setSoundId("");
         setAudioUrl("");
         setPickedKind("video");
-        const coverFile = await coverPromise;
-        if (coverFile && imageUrls.length === 0 && !imageUrl.trim()) {
-          try {
-            const coverUrl = await uploadNewsFile(null, coverFile, "image");
+        if (needsAutoCover) {
+          let coverUrl = "";
+          const coverFile = await coverPromise;
+          if (coverFile) {
+            try {
+              coverUrl = await uploadNewsFile(null, coverFile, "image");
+            } catch {
+              coverUrl = "";
+            }
+          }
+          if (!coverUrl) {
+            try {
+              coverUrl = await extractNewsVideoPoster(null, publicUrl);
+            } catch {
+              coverUrl = "";
+            }
+          }
+          if (coverUrl) {
             setImageUrls([coverUrl]);
             setImageUrl(coverUrl);
-          } catch {
-            // Non-fatal: list can still show placeholder until a cover is added.
           }
         }
       }

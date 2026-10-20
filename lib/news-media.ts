@@ -146,10 +146,72 @@ export function validateNewsMedia(kind: NewsUploadKind, type: string, filename: 
   return null;
 }
 
+function _waitForVideoEvent(
+  video: HTMLVideoElement,
+  event: string,
+  timeoutMs: number,
+  errorMessage: string,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      cleanup();
+      reject(new Error(errorMessage));
+    }, timeoutMs);
+    const onReady = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = () => {
+      cleanup();
+      reject(new Error(errorMessage));
+    };
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      video.removeEventListener(event, onReady);
+      video.removeEventListener("error", onError);
+    };
+    video.addEventListener(event, onReady, { once: true });
+    video.addEventListener("error", onError, { once: true });
+  });
+}
+
+async function _seekVideo(video: HTMLVideoElement, seekTo: number): Promise<void> {
+  if (!(seekTo > 0) || !Number.isFinite(seekTo)) return;
+  if (Math.abs(video.currentTime - seekTo) < 0.02) return;
+  const seeked = _waitForVideoEvent(
+    video,
+    "seeked",
+    8000,
+    "Could not seek video for cover.",
+  );
+  try {
+    video.currentTime = seekTo;
+  } catch {
+    return;
+  }
+  await seeked;
+}
+
+function _frameLooksBlank(ctx: CanvasRenderingContext2D, width: number, height: number): boolean {
+  // Sample a few pixels; pure black/transparent first frames are treated as blank.
+  const samples = [
+    [Math.floor(width * 0.5), Math.floor(height * 0.5)],
+    [Math.floor(width * 0.25), Math.floor(height * 0.25)],
+    [Math.floor(width * 0.75), Math.floor(height * 0.75)],
+  ] as const;
+  let dark = 0;
+  for (const [x, y] of samples) {
+    const pixel = ctx.getImageData(Math.max(0, x), Math.max(0, y), 1, 1).data;
+    const lum = (pixel[0] + pixel[1] + pixel[2]) / 3;
+    if (lum < 8) dark += 1;
+  }
+  return dark >= samples.length;
+}
+
 /**
  * Grab an early frame from a local video file as a JPEG cover.
  * Used when admin uploads Sport news video without a separate cover image
- * so the feed doesn't fall back to the soccer-ball placeholder.
+ * so the feed doesn't fall back to a blank tile.
  */
 export async function captureVideoCoverFile(
   source: File,
@@ -162,42 +224,62 @@ export async function captureVideoCoverFile(
   try {
     const video = document.createElement("video");
     video.muted = true;
+    video.defaultMuted = true;
     video.playsInline = true;
     video.preload = "auto";
+    video.crossOrigin = "anonymous";
     video.setAttribute("playsinline", "true");
+    video.setAttribute("webkit-playsinline", "true");
 
     await new Promise<void>((resolve, reject) => {
-      const onReady = () => resolve();
-      const onError = () => reject(new Error("Could not read video for cover."));
+      const timer = window.setTimeout(() => {
+        cleanup();
+        reject(new Error("Could not read video for cover."));
+      }, 15000);
+      const onReady = () => {
+        cleanup();
+        resolve();
+      };
+      const onError = () => {
+        cleanup();
+        reject(new Error("Could not read video for cover."));
+      };
+      const cleanup = () => {
+        window.clearTimeout(timer);
+        video.removeEventListener("loadeddata", onReady);
+        video.removeEventListener("loadedmetadata", onReady);
+        video.removeEventListener("error", onError);
+      };
       video.addEventListener("loadeddata", onReady, { once: true });
+      video.addEventListener("loadedmetadata", onReady, { once: true });
       video.addEventListener("error", onError, { once: true });
       video.src = objectUrl;
       video.load();
     });
 
-    const duration = Number.isFinite(video.duration) ? video.duration : 0;
-    const preferred = opts?.seekSeconds ?? 0.25;
-    const seekTo =
-      duration > 0
-        ? Math.min(Math.max(preferred, 0.05), Math.max(duration * 0.05, 0.05))
-        : preferred;
-
-    if (seekTo > 0) {
-      await new Promise<void>((resolve, reject) => {
-        const onSeeked = () => resolve();
-        const onError = () => reject(new Error("Could not seek video for cover."));
-        video.addEventListener("seeked", onSeeked, { once: true });
-        video.addEventListener("error", onError, { once: true });
-        try {
-          video.currentTime = seekTo;
-        } catch {
-          resolve();
-        }
-      });
+    // Some browsers only populate dimensions after a tiny play/pause.
+    if ((video.videoWidth || 0) < 2) {
+      try {
+        await video.play();
+        video.pause();
+      } catch {
+        // ignore autoplay restrictions — we only need a decoded frame
+      }
     }
 
-    const width = video.videoWidth || 720;
-    const height = video.videoHeight || 1280;
+    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    const preferred = opts?.seekSeconds ?? 0.2;
+    const seekCandidates = [
+      duration > 0
+        ? Math.min(Math.max(preferred, 0.05), Math.max(duration * 0.08, 0.05))
+        : preferred,
+      0.5,
+      0.05,
+      0,
+    ];
+
+    const width = video.videoWidth || 0;
+    const height = video.videoHeight || 0;
     if (width < 2 || height < 2) {
       throw new Error("Video has no visible frame for cover.");
     }
@@ -205,9 +287,26 @@ export async function captureVideoCoverFile(
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) throw new Error("Could not capture cover frame.");
-    ctx.drawImage(video, 0, 0, width, height);
+
+    let captured = false;
+    for (const seekTo of seekCandidates) {
+      try {
+        await _seekVideo(video, seekTo);
+      } catch {
+        continue;
+      }
+      ctx.drawImage(video, 0, 0, width, height);
+      if (!_frameLooksBlank(ctx, width, height)) {
+        captured = true;
+        break;
+      }
+    }
+    if (!captured) {
+      // Last resort: keep whatever frame we have (even if dark).
+      ctx.drawImage(video, 0, 0, width, height);
+    }
 
     const blob = await new Promise<Blob>((resolve, reject) => {
       canvas.toBlob(

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { parseNewsUploadKind } from "@/lib/news-media";
 import {
+  extractNewsVideoPosterFromForm,
   removeNewsVideoWatermarkFromForm,
   trimNewsVideoFromForm,
   uploadNewsMediaFromForm,
@@ -30,6 +31,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
   if (action === "trim") {
     return trimNewsVideoFromForm(form, `sport-news/${id}`);
+  }
+  if (action === "extract-poster") {
+    return extractNewsVideoPosterFromForm(form, `sport-news/${id}`);
   }
 
   const kind = parseNewsUploadKind(`${form.get("kind") ?? ""}`);

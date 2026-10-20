@@ -164,6 +164,31 @@ export async function removeNewsVideoWatermark(
   return toBackendMediaUrl(payload.publicUrl);
 }
 
+/**
+ * Server-side first-frame poster via ffmpeg (fallback when browser canvas fails).
+ */
+export async function extractNewsVideoPoster(
+  articleId: string | null,
+  sourceUrl: string,
+) {
+  const url = sourceUrl.trim();
+  if (!url) throw new Error("Upload a video first.");
+  const endpoint = articleId ? `/api/admin/news/${articleId}/media` : "/api/admin/news/media";
+  const body = new FormData();
+  body.set("action", "extract-poster");
+  body.set("source_url", url);
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    credentials: "same-origin",
+    body,
+  });
+  const payload = parseUploadPayload(await response.text());
+  if (!response.ok) throw new Error(payload.error || "Could not create video cover.");
+  if (!payload.publicUrl) throw new Error("Could not create video cover. No URL was returned.");
+  return toBackendMediaUrl(payload.publicUrl);
+}
+
 function UploadCircleProgress({ percent }: { percent: number }) {
   const clamped = Math.max(0, Math.min(100, percent));
   const radius = 22;

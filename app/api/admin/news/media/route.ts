@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import {
+  extractNewsVideoPosterFromForm,
   removeNewsVideoWatermarkFromForm,
   trimNewsVideoFromForm,
   uploadNewsMediaFromForm,
@@ -29,6 +30,9 @@ export async function POST(request: Request) {
   }
   if (action === "trim") {
     return trimNewsVideoFromForm(form, "sport-news/drafts");
+  }
+  if (action === "extract-poster") {
+    return extractNewsVideoPosterFromForm(form, "sport-news/drafts");
   }
 
   return uploadNewsMediaFromForm(form, "sport-news/drafts");

@@ -10,6 +10,7 @@ import {
 } from "@/lib/news-media";
 import {
   extractAudioViaSpojexMediaApi,
+  extractPosterViaSpojexMediaApi,
   removeWatermarkViaSpojexMediaApi,
   signUploadComplete,
   toBackendMediaUrl,
@@ -193,6 +194,58 @@ export async function trimNewsVideoFromForm(
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Video trim failed";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}
+
+/**
+ * Download an already-uploaded news video and extract a JPEG poster (first frame).
+ * Used when browser canvas cover capture fails.
+ */
+export async function extractNewsVideoPosterFromForm(
+  form: FormData,
+  folder: string,
+): Promise<NextResponse> {
+  const sourceUrlRaw = `${form.get("source_url") ?? form.get("sourceUrl") ?? ""}`.trim();
+  if (!sourceUrlRaw) {
+    return NextResponse.json({ error: "source_url is required" }, { status: 400 });
+  }
+
+  const token = await requestAccessToken();
+  if (!token) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const downloaded = await downloadNewsVideoBlob(sourceUrlRaw, token);
+  if (downloaded instanceof NextResponse) return downloaded;
+
+  const coverFolder = folder.includes("draft")
+    ? "sport-news/drafts"
+    : folder.startsWith("sport-news/")
+      ? folder
+      : "sport-news/covers";
+
+  try {
+    const poster = await extractPosterViaSpojexMediaApi({
+      accessToken: token,
+      file: downloaded.blob,
+      filename: downloaded.filename || `video-${Date.now()}.mp4`,
+      module: "news",
+      folder: coverFolder,
+      seekSeconds: 0.15,
+    });
+    if (!poster.publicUrl) {
+      return NextResponse.json({ error: "Poster extract failed. No URL returned." }, { status: 400 });
+    }
+    return NextResponse.json({
+      kind: "image",
+      path: poster.path,
+      publicUrl: poster.publicUrl,
+      objectId: poster.objectId,
+      extractedPoster: true,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Poster extract failed";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

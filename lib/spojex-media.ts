@@ -339,6 +339,77 @@ export async function trimVideoViaSpojexMediaApi(opts: {
 }
 
 /**
+ * Extract an early video frame as a JPEG cover via Spojex ffmpeg.
+ */
+export async function extractPosterViaSpojexMediaApi(opts: {
+  accessToken: string;
+  file: Blob;
+  filename: string;
+  module?: SpojexMediaModule;
+  folder?: string;
+  seekSeconds?: number;
+}): Promise<SpojexMediaUploadResult> {
+  const base = getSpojexApiBaseUrl();
+  if (!base) {
+    throw new Error("Spojex API base URL is not configured.");
+  }
+
+  const outbound = new FormData();
+  outbound.set("module", opts.module ?? "news");
+  outbound.set("folder", opts.folder ?? "sport-news/covers");
+  outbound.set("seek_seconds", String(opts.seekSeconds ?? 0.15));
+  const type = (opts.file.type && opts.file.type.trim()) || "video/mp4";
+  const filePart =
+    typeof File !== "undefined"
+      ? new File([opts.file], opts.filename, { type })
+      : opts.file;
+  if (filePart instanceof File) {
+    outbound.set("file", filePart);
+  } else {
+    outbound.set("file", filePart, opts.filename);
+  }
+
+  const upstream = await fetch(`${base}/api/v1/media/extract-poster`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${opts.accessToken}` },
+    body: outbound,
+  });
+  const text = await upstream.text();
+  let payload: {
+    error?: string;
+    detail?: unknown;
+    message?: string;
+    publicUrl?: string | null;
+    url?: string | null;
+    path?: string;
+    object_path?: string;
+    objectId?: string;
+    id?: string;
+    visibility?: string;
+    status?: string;
+  } = {};
+  try {
+    payload = text ? (JSON.parse(text) as typeof payload) : {};
+  } catch {
+    throw new Error(text || "Poster extract failed");
+  }
+  if (!upstream.ok) {
+    throw new Error(apiErrorMessage(payload, "Poster extract failed"));
+  }
+
+  const publicUrl = payload.publicUrl ?? payload.url ?? null;
+  const path = payload.path || payload.object_path || "";
+  return {
+    objectId: payload.objectId ?? payload.id,
+    path,
+    publicUrl,
+    url: publicUrl,
+    visibility: payload.visibility,
+    status: payload.status,
+  };
+}
+
+/**
  * Trim an audio blob to [startSeconds, endSeconds) via Spojex ffmpeg.
  */
 export async function trimAudioViaSpojexMediaApi(opts: {
