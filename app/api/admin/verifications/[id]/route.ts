@@ -35,24 +35,48 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     )
     .filter(Boolean);
 
-  let signed: { path: string; signedUrl: string }[] = [];
-  if (paths.length > 0) {
-    const { data: signedData, error: signedError } = await auth.context.client.storage
-      .from("identity-docs")
-      .createSignedUrls(paths, 60 * 60);
-    if (signedError) {
-      return NextResponse.json({ error: signedError.message }, { status: 400 });
+  // Prefer already-public / API media URLs stored by the mobile client.
+  // Legacy rows may still use raw storage paths — try signed URLs, but never
+  // fail the whole request when signing is unavailable on Spojex.
+  const directUrl = (path: string) => {
+    const trimmed = path.trim();
+    if (!trimmed) return "";
+    if (
+      trimmed.startsWith("http://") ||
+      trimmed.startsWith("https://") ||
+      trimmed.startsWith("/api/v1/media/")
+    ) {
+      return trimmed;
     }
-    signed = (signedData ?? [])
-      .filter((item) => item.path && item.signedUrl)
-      .map((item) => ({ path: item.path as string, signedUrl: item.signedUrl as string }));
+    return "";
+  };
+
+  let signed: { path: string; signedUrl: string }[] = [];
+  const legacyPaths = paths.filter((path: string) => !directUrl(path));
+  if (legacyPaths.length > 0) {
+    try {
+      const { data: signedData } = await auth.context.client.storage
+        .from("identity-docs")
+        .createSignedUrls(legacyPaths, 60 * 60);
+      signed = (signedData ?? [])
+        .filter((item) => item.path && item.signedUrl)
+        .map((item) => ({
+          path: item.path as string,
+          signedUrl: item.signedUrl as string,
+        }));
+    } catch {
+      signed = [];
+    }
   }
 
   const urlByPath = new Map(signed.map((item) => [item.path, item.signedUrl]));
-  const documents = docs.map((doc: { storage_path?: string }) => ({
-    ...doc,
-    signed_url: urlByPath.get(doc.storage_path ?? "") ?? "",
-  }));
+  const documents = docs.map((doc: { storage_path?: string }) => {
+    const path = doc.storage_path ?? "";
+    return {
+      ...doc,
+      signed_url: directUrl(path) || urlByPath.get(path) || "",
+    };
+  });
 
   const role = typeof data.users === "object" && data.users && !Array.isArray(data.users)
     ? String((data.users as { role?: string }).role ?? "")
