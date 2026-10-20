@@ -204,6 +204,7 @@ export async function POST(request: Request) {
         user_id: ownerUserId,
         staff_role: "owner",
         is_active: true,
+        permissions: {},
       },
       { onConflict: "gym_id,user_id" },
     );

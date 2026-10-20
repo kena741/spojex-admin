@@ -329,12 +329,14 @@ export async function PATCH(
 
   if (patch.owner_user_id) {
     const nextOwnerId = String(patch.owner_user_id);
+    // Clear stale permission overrides so assigned owners keep videos.upload etc.
     await auth.context.client.from("gym_staff").upsert(
       {
         gym_id: id,
         user_id: nextOwnerId,
         staff_role: "owner",
         is_active: true,
+        permissions: {},
       },
       { onConflict: "gym_id,user_id" },
     );
