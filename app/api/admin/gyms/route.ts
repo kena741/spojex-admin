@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { ensureGymOrganizationViaTables } from "@/lib/ensure-gym-organization";
-import { isRpcUnavailable } from "@/lib/rpc-unavailable";
 import {
   gymCategories,
   gymStatuses,
@@ -208,11 +207,12 @@ export async function POST(request: Request) {
       },
       { onConflict: "gym_id,user_id" },
     );
-    // Ensure org chat link (RPC when installed; otherwise table fallback).
+    // Ensure org chat link. Prefer table path when RPC is missing OR fails
+    // (SQL RPC historically omitted organizations.public_id → Message errors).
     const ens = await auth.context.client.rpc("ensure_gym_organization", {
       p_gym_id: data.id,
     });
-    if (ens.error && isRpcUnavailable(ens.error)) {
+    if (ens.error) {
       await ensureGymOrganizationViaTables(auth.context.client, data.id);
     }
     const refreshed = await auth.context.client

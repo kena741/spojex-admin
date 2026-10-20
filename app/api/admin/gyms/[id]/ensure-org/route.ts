@@ -35,12 +35,17 @@ export async function POST(
     p_gym_id: gymId,
   });
   if (error) {
-    if (!isRpcUnavailable(error)) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+    // Any RPC failure (missing fn or omitted public_id) → table fallback.
     const fallback = await ensureGymOrganizationViaTables(client, gymId);
     if (fallback.error && !fallback.organizationId) {
-      return NextResponse.json({ error: fallback.error }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: isRpcUnavailable(error)
+            ? fallback.error
+            : fallback.error || error.message,
+        },
+        { status: 400 },
+      );
     }
     return NextResponse.json({
       data: { organization_id: fallback.organizationId },

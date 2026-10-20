@@ -35,7 +35,7 @@ export async function ensureGymOrganizationViaTables(
       ? "Ethiopia"
       : rawCountry;
   const orgType = String(gym.category ?? "").trim() || "gym";
-  const publicId = `gym-${gymId.replace(/-/g, "").slice(0, 12)}`;
+  const publicId = `gym-${gymId.replace(/-/g, "")}`;
 
   const { data: org, error: orgError } = await client
     .from("organizations")
@@ -53,6 +53,7 @@ export async function ensureGymOrganizationViaTables(
       public_id: publicId,
       images: [],
       is_platform: false,
+      follower_count: 0,
     })
     .select("id")
     .single();

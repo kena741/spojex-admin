@@ -3,7 +3,6 @@ import { createSpojexClient } from "@/lib/api/client";
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { ensureGymOrganizationViaTables } from "@/lib/ensure-gym-organization";
-import { isRpcUnavailable } from "@/lib/rpc-unavailable";
 import {
   gymFeatureStatuses,
   gymStatuses,
@@ -351,7 +350,7 @@ export async function PATCH(
     const ens = await auth.context.client.rpc("ensure_gym_organization", {
       p_gym_id: id,
     });
-    if (ens.error && isRpcUnavailable(ens.error)) {
+    if (ens.error) {
       await ensureGymOrganizationViaTables(auth.context.client, id);
     }
     const refreshed = await auth.context.client
