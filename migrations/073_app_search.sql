@@ -169,6 +169,7 @@ alter table public.users drop column if exists search_text;
 alter table public.users
   add column search_text text generated always as (
     public.search_norm(
+      coalesce(username, '') || ' ' ||
       coalesce(display_name, '') || ' ' ||
       coalesce(full_name, '') || ' ' ||
       coalesce(headline, '') || ' ' ||
@@ -347,17 +348,29 @@ begin
       select
         'person'::text as kind,
         u.id,
-        coalesce(nullif(u.display_name, ''), nullif(u.full_name, ''), 'Member') as title,
-        trim(both ' · ' from concat_ws(' · ', coalesce(r.label, u.role), nullif(u.city, ''))) as subtitle,
+        coalesce(nullif(u.display_name, ''), nullif(u.full_name, ''), nullif(u.username, ''), 'Member') as title,
+        trim(both ' · ' from concat_ws(' · ',
+          case when coalesce(u.username, '') <> '' then '@' || u.username else null end,
+          coalesce(r.label, u.role),
+          nullif(u.city, '')
+        )) as subtitle,
         coalesce(u.avatar_url, '') as image_url,
         u.city,
         u.country,
         public.search_rank(
-          u.display_name || ' ' || u.full_name,
+          coalesce(u.username, '') || ' ' || coalesce(u.display_name, '') || ' ' || coalesce(u.full_name, ''),
           u.headline || ' ' || u.bio || ' ' || u.city || ' ' || coalesce(r.label, u.role, ''),
           q,
           tokens
         )
+        + case
+            when public.search_norm(coalesce(u.username, '')) = q then 110
+            when public.search_norm(coalesce(u.username, '')) like q || '%' then 90
+            when public.search_norm(coalesce(u.username, '')) like '%' || q || '%' then 70
+            when lower(coalesce(u.username, '')) = lower(trim(p_query)) then 110
+            when lower(coalesce(u.username, '')) like lower(trim(p_query)) || '%' then 90
+            else 0
+          end
         + case
             when exists (
               select 1 from unnest(related) rel
@@ -389,6 +402,7 @@ begin
           'id', u.id,
           'user_id', u.user_id,
           'display_name', u.display_name,
+          'username', u.username,
           'full_name', u.full_name,
           'headline', u.headline,
           'bio', u.bio,
@@ -404,6 +418,8 @@ begin
         and (
           u.search_text like '%' || q || '%'
           or u.search_text % q
+          or public.search_norm(coalesce(u.username, '')) like '%' || q || '%'
+          or lower(coalesce(u.username, '')) like '%' || lower(trim(p_query)) || '%'
           or exists (
             select 1 from unnest(tokens) t
             where char_length(t) >= 2 and u.search_text like '%' || t || '%'
