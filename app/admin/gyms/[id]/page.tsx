@@ -319,7 +319,6 @@ export default function GymDetailPage() {
         contact_email: draft.contact_email.trim(),
         website: draft.website.trim(),
         monthly_payment: monthly,
-        owner_name: draft.owner_name.trim(),
         status: draft.status,
         verification_status: draft.verification_status,
       },
@@ -1636,16 +1635,6 @@ export default function GymDetailPage() {
                     className={fieldClass}
                     value={draft.website}
                     onChange={(event) => setDraft({ ...draft, website: event.target.value })}
-                  />
-                </label>
-                <label className="grid gap-1 text-sm">
-                  <span className="text-text-secondary">Owner display name</span>
-                  <input
-                    className={fieldClass}
-                    value={draft.owner_name}
-                    onChange={(event) =>
-                      setDraft({ ...draft, owner_name: event.target.value })
-                    }
                   />
                 </label>
                 <label className="grid gap-1 text-sm">
