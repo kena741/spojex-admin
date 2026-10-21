@@ -4,7 +4,7 @@ export function opportunityPaymentLabel(
   feeType: string | null | undefined,
   paymentStatus: string | null | undefined,
 ): string {
-  if (!feeType || feeType === "free") return "Not required";
+  if (!feeType || feeType === "free") return "Not required — free opportunity";
   const s = String(paymentStatus || "").trim().toLowerCase();
   if (!s || s === "none" || s === "null") return "Awaiting payment";
   if (["completed", "paid", "success", "verified"].includes(s)) return "Verified";

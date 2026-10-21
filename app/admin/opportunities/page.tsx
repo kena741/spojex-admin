@@ -26,6 +26,7 @@ import {
   opportunityStatusLabel,
   opportunityStatuses,
   opportunityStatusTone,
+  validateOpportunityDraft,
   type OpportunityDraft,
   type OpportunityRow,
 } from "@/lib/opportunities";
@@ -151,8 +152,29 @@ export default function OpportunitiesPage() {
     setModalOpen(true);
   };
 
+  const rememberReturn = () => {
+    try {
+      sessionStorage.setItem(
+        "opportunities-return",
+        `${pathname}?${searchParams.toString()}`,
+      );
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const detailHref = (id: string, tab?: string) => {
+    rememberReturn();
+    return tab ? `/admin/opportunities/${id}?tab=${tab}` : `/admin/opportunities/${id}`;
+  };
+
   const save = async () => {
     if (!canWrite) return;
+    const validation = validateOpportunityDraft(draft);
+    if (validation) {
+      setError(validation);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -165,8 +187,10 @@ export default function OpportunitiesPage() {
       if (!response.ok) throw new Error(payload.error || "Create failed");
       setModalOpen(false);
       const created = payload.data;
-      if (created?.id) router.push(`/admin/opportunities/${created.id}`);
-      else await load();
+      if (created?.id) {
+        rememberReturn();
+        router.push(`/admin/opportunities/${created.id}`);
+      } else await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
     } finally {
@@ -392,7 +416,7 @@ export default function OpportunitiesPage() {
                   <th className="px-4 py-3 font-semibold">Opportunity</th>
                   <th className="px-4 py-3 font-semibold">Publication</th>
                   <th className="px-4 py-3 font-semibold">Applications</th>
-                  <th className="px-4 py-3 font-semibold">Deadline</th>
+                  <th className="px-4 py-3 font-semibold">Opens / deadline</th>
                   <th className="px-4 py-3 font-semibold">Fee</th>
                   <th className="px-4 py-3 font-semibold">Applicants</th>
                   <th className="px-4 py-3 font-semibold">Waitlist</th>
@@ -423,7 +447,8 @@ export default function OpportunitiesPage() {
                           )}
                           <div className="min-w-0">
                             <Link
-                              href={`/admin/opportunities/${row.id}`}
+                              href={detailHref(row.id)}
+                              onClick={rememberReturn}
                               className="font-medium text-text-primary hover:text-primary"
                             >
                               {row.title}
@@ -447,19 +472,34 @@ export default function OpportunitiesPage() {
                         </StatusBadge>
                       </td>
                       <td className="px-4 py-3 text-xs text-text-secondary">
-                        {row.application_deadline
-                          ? formatDateTime(row.application_deadline)
-                          : "—"}
+                        <p>
+                          Open{" "}
+                          {row.application_opens_at
+                            ? formatDateTime(row.application_opens_at)
+                            : "—"}
+                        </p>
+                        <p className="text-text-hint">
+                          Due{" "}
+                          {row.application_deadline
+                            ? formatDateTime(row.application_deadline)
+                            : "—"}
+                        </p>
                       </td>
                       <td className="px-4 py-3 text-text-secondary">
                         {formatOpportunityFee(row.fee_type, row.fee_amount)}
                         {row.max_applicants != null ? (
-                          <p className="text-[10px] text-text-hint">Cap {row.max_applicants}</p>
+                          <p className="text-[10px] text-text-hint">
+                            Cap {row.max_applicants} · {row.applicant_count ?? 0} in
+                          </p>
                         ) : null}
                       </td>
                       <td className="px-4 py-3">
                         <Link
-                          href={row.href_applications || `/admin/opportunities/${row.id}?tab=applications`}
+                          href={
+                            row.href_applications ||
+                            detailHref(row.id, "applications")
+                          }
+                          onClick={rememberReturn}
                           className="tabular-nums font-medium text-primary hover:underline"
                         >
                           {row.applicant_count ?? 0}
@@ -467,7 +507,8 @@ export default function OpportunitiesPage() {
                       </td>
                       <td className="px-4 py-3">
                         <Link
-                          href={row.href_waitlist || `/admin/opportunities/${row.id}?tab=waitlist`}
+                          href={row.href_waitlist || detailHref(row.id, "waitlist")}
+                          onClick={rememberReturn}
                           className="tabular-nums font-medium text-primary hover:underline"
                         >
                           {row.waitlist_count ?? 0}
@@ -476,7 +517,8 @@ export default function OpportunitiesPage() {
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-3">
                           <Link
-                            href={`/admin/opportunities/${row.id}`}
+                            href={detailHref(row.id)}
+                            onClick={rememberReturn}
                             className="text-sm font-medium text-primary hover:underline"
                           >
                             Manage

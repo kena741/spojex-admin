@@ -28,6 +28,7 @@ import {
   opportunityStatuses,
   opportunityStatusTone,
   rowToDraft,
+  validateOpportunityDraft,
   type OpportunityDraft,
   type OpportunityRevenue,
   type OpportunityRow,
@@ -50,6 +51,16 @@ const tabs = [
 
 type TabId = (typeof tabs)[number]["id"];
 
+type DecisionEntry = {
+  at?: string;
+  actor_id?: string;
+  from?: string;
+  to?: string;
+  reason?: string | null;
+  internal_note?: string | null;
+  applicant_message?: string | null;
+};
+
 type ApplicationRow = {
   id: string;
   status: string;
@@ -67,6 +78,25 @@ type ApplicationRow = {
   people_href?: string;
   allowed_transitions?: string[];
   extra_answers?: Record<string, unknown>;
+  fee_snapshot?: {
+    fee_type?: string;
+    fee_amount?: string;
+    currency?: string;
+    quoted_at?: string;
+  } | null;
+  terms_snapshot?: {
+    terms_version?: number;
+    additional_terms?: string;
+    eligibility_requirements?: string;
+    required_documents?: string;
+    snapshotted_at?: string;
+  } | null;
+  profile_snapshot?: {
+    profile_completion_percent?: number;
+    snapshotted_at?: string;
+  } | null;
+  decision_history?: DecisionEntry[];
+  applicant_messages?: { at?: string; status?: string; message?: string }[];
   users?: {
     id: string;
     display_name?: string | null;
@@ -125,6 +155,29 @@ type Overview = {
   event_start?: string | null;
   event_end?: string | null;
   waitlist_definition?: string;
+  terms_version?: number;
+  schedule_timezone_note?: string;
+  next_scheduled_transition?: {
+    action?: string;
+    at?: string;
+    label?: string;
+  } | null;
+};
+
+type AuditRow = {
+  action?: string;
+  summary?: string;
+  created_at?: string;
+  admin_name?: string;
+  outcome?: string;
+};
+
+type ScheduleRun = {
+  action?: string;
+  summary?: string;
+  created_at?: string;
+  admin_name?: string;
+  metadata?: Record<string, unknown>;
 };
 
 function applicationTone(status: string): StatusTone {
@@ -183,6 +236,8 @@ export default function OpportunityDetailPage() {
   const [waitlist, setWaitlist] = useState<WaitlistRow[]>([]);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [revenue, setRevenue] = useState<OpportunityRevenue | null>(null);
+  const [audit, setAudit] = useState<AuditRow[]>([]);
+  const [lastScheduleRun, setLastScheduleRun] = useState<ScheduleRun | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -191,11 +246,21 @@ export default function OpportunityDetailPage() {
   const [busyAppId, setBusyAppId] = useState<string | null>(null);
   const [applicantFacing, setApplicantFacing] = useState("");
   const [internalNote, setInternalNote] = useState("");
+  const [listReturn, setListReturn] = useState("/admin/opportunities");
 
   const dirty = useMemo(
     () => baseline !== "" && JSON.stringify(draft) !== baseline,
     [draft, baseline],
   );
+
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem("opportunities-return");
+      if (stored) setListReturn(stored);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const writeParams = useCallback(
     (patch: Record<string, string | null | undefined>) => {
@@ -218,8 +283,11 @@ export default function OpportunityDetailPage() {
       waitlist?: WaitlistRow[];
       overview?: Overview;
       revenue?: OpportunityRevenue;
+      audit?: AuditRow[];
+      last_schedule_run?: ScheduleRun | null;
       error?: string;
     };
+    if (response.status === 403) throw new Error("Permission denied");
     if (!response.ok) throw new Error(payload.error || "Failed to load");
     if (!payload.data) throw new Error("Opportunity not found");
     setRow(payload.data);
@@ -231,6 +299,8 @@ export default function OpportunityDetailPage() {
     setWaitlist(payload.waitlist ?? []);
     setOverview(payload.overview ?? null);
     setRevenue(payload.revenue ?? null);
+    setAudit(payload.audit ?? []);
+    setLastScheduleRun(payload.last_schedule_run ?? null);
   }, [id]);
 
   useEffect(() => {
@@ -253,24 +323,42 @@ export default function OpportunityDetailPage() {
 
   const save = async (extras?: Record<string, unknown>) => {
     if (!canWrite) return;
+    const statusOnly =
+      !dirty &&
+      extras != null &&
+      Object.keys(extras).every((k) =>
+        ["status", "is_published", "notify_waitlist"].includes(k),
+      );
+    if (!statusOnly) {
+      const validation = validateOpportunityDraft(draft);
+      if (validation) {
+        setError(validation);
+        return;
+      }
+    }
     setSaving(true);
     setError(null);
     setNotice(null);
     try {
       const payload = (await patchAdmin(`/api/admin/opportunities/${id}`, {
-        ...draft,
+        ...(statusOnly ? {} : draft),
         ...extras,
+        expected_updated_at: row?.updated_at,
       } as unknown as Record<string, unknown>)) as {
         notify?: { waitlist?: number; sent?: number; skipped?: number };
+        terms_bumped?: boolean;
       };
       await load();
-      if (payload?.notify) {
-        setNotice(
-          `Saved. Waitlist notify: ${payload.notify.sent ?? 0} sent, ${payload.notify.skipped ?? 0} inbox-only of ${payload.notify.waitlist ?? 0}.`,
-        );
-      } else {
-        setNotice("Saved.");
+      const parts: string[] = ["Saved."];
+      if (payload?.terms_bumped) {
+        parts.push("Terms version bumped (existing applications keep their snapshot).");
       }
+      if (payload?.notify) {
+        parts.push(
+          `Waitlist notify: ${payload.notify.sent ?? 0} sent, ${payload.notify.skipped ?? 0} inbox-only of ${payload.notify.waitlist ?? 0}.`,
+        );
+      }
+      setNotice(parts.join(" "));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -289,16 +377,24 @@ export default function OpportunityDetailPage() {
 
   const openNotify = async () => {
     if (!canWrite) return;
+    const missing = overview?.config_missing ?? [];
+    const issues = overview?.scheduling_issues ?? [];
+    if (missing.length || issues.length) {
+      const proceed = window.confirm(
+        `Configuration warnings:\n${[...issues, ...missing.map((m) => `Missing: ${m}`)].join("\n")}\n\nOpen anyway?`,
+      );
+      if (!proceed) return;
+    }
     if (dirty) {
       const proceed = window.confirm(
-        "You have unsaved edits. Open + notify will save the form first, then open applications and notify the interest waitlist. Continue?",
+        "You have unsaved settings. Open + notify will include those unsaved changes, set status to Open, publish, then notify the interest waitlist. Continue?",
       );
       if (!proceed) return;
     }
     const audience = waitlist.filter((w) => !w.notified_at).length;
     if (
       !window.confirm(
-        `Open applications and notify ${audience} waitlisted user(s) who have not been notified yet? Deduplicated via notified_at.`,
+        `Intended change: status → Open, published → yes.\nNotify audience: ${audience} waitlisted user(s) not yet notified (deduped by notified_at).\nExisting applications/payments are unchanged.`,
       )
     ) {
       return;
@@ -370,7 +466,7 @@ export default function OpportunityDetailPage() {
   if (loading) {
     return (
       <>
-        <AdminPageHeader title="Opportunity" description="Loading…" backHref="/admin/opportunities" />
+        <AdminPageHeader title="Opportunity" description="Loading…" backHref={listReturn} />
         <AdminLoadingRow label="Loading opportunity…" />
       </>
     );
@@ -379,7 +475,11 @@ export default function OpportunityDetailPage() {
   if (!row) {
     return (
       <>
-        <AdminPageHeader title="Opportunity" description="Not found" backHref="/admin/opportunities" />
+        <AdminPageHeader
+          title="Opportunity"
+          description={error === "Permission denied" ? "Permission denied" : "Not found"}
+          backHref={listReturn}
+        />
         {error ? <AdminErrorAlert message={error} /> : null}
       </>
     );
@@ -395,9 +495,9 @@ export default function OpportunityDetailPage() {
       <AdminPageHeader
         title={row.title}
         description={`${row.category || "Opportunity"} · ${formatOpportunityFee(row.fee_type, row.fee_amount)}`}
-        backHref="/admin/opportunities"
+        backHref={listReturn}
         breadcrumbs={[
-          { label: "Opportunities", href: "/admin/opportunities" },
+          { label: "Opportunities", href: listReturn },
           { label: row.title },
         ]}
         actions={
@@ -565,11 +665,65 @@ export default function OpportunityDetailPage() {
               {overview?.waitlist_definition ||
                 "Waitlist = interest before applications open. Never auto-converts to applications."}
             </p>
+            {overview?.next_scheduled_transition ? (
+              <p className="mt-2 text-xs text-text-secondary">
+                Next transition: {overview.next_scheduled_transition.label}
+                {overview.next_scheduled_transition.at
+                  ? ` · ${formatDateTime(overview.next_scheduled_transition.at)}`
+                  : ""}
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-text-hint">No pending scheduled open/close.</p>
+            )}
+            {lastScheduleRun ? (
+              <p className="mt-1 text-[11px] text-text-hint">
+                Last Process schedules:{" "}
+                {lastScheduleRun.created_at
+                  ? formatDateTime(lastScheduleRun.created_at)
+                  : "—"}
+                {lastScheduleRun.summary ? ` — ${lastScheduleRun.summary}` : ""}
+                {lastScheduleRun.admin_name ? ` · ${lastScheduleRun.admin_name}` : ""}
+              </p>
+            ) : (
+              <p className="mt-1 text-[11px] text-text-hint">
+                No Process schedules audit entry yet (cron or admin button).
+              </p>
+            )}
             <p className="mt-1 text-[11px] text-text-hint">
-              Process schedules runs via cron (`process_opportunity_schedules`) and the admin button —
-              opens published coming_soon when opens_at passes; closes open when deadline passes.
-              Closing applications preserves applications and payments.
+              {overview?.schedule_timezone_note ||
+                "Timestamps stored in UTC; display uses Africa/Addis_Ababa."}{" "}
+              Terms version: {overview?.terms_version ?? 1}. Closing applications preserves
+              applications and payments (not the same as cancelling the listing).
             </p>
+          </section>
+
+          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <h3 className="mb-3 text-sm font-semibold">Recent activity</h3>
+            {audit.length === 0 ? (
+              <p className="text-sm text-text-hint">No audit events for this opportunity yet.</p>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {audit.slice(0, 20).map((entry, idx) => (
+                  <li
+                    key={`${entry.created_at}-${entry.action}-${idx}`}
+                    className="border-b border-border/60 pb-2 last:border-0"
+                  >
+                    <p className="font-medium text-text-primary">
+                      {entry.summary || entry.action || "Event"}
+                    </p>
+                    <p className="text-[11px] text-text-hint">
+                      {[
+                        entry.created_at ? formatDateTime(entry.created_at) : null,
+                        entry.admin_name,
+                        entry.outcome,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         </div>
       ) : null}
@@ -681,28 +835,89 @@ export default function OpportunityDetailPage() {
                   {selectedApp.amount_paid
                     ? ` · ETB ${Number(selectedApp.amount_paid).toLocaleString()}`
                     : ""}
+                  {selectedApp.provider_ref ? (
+                    <span className="block font-mono text-[11px] text-text-hint">
+                      Provider: {selectedApp.provider_ref}
+                    </span>
+                  ) : null}
                 </p>
+                {selectedApp.fee_snapshot ? (
+                  <div className="rounded-lg border border-border p-2 text-xs">
+                    <p className="font-medium text-text-hint">Quoted fee at submission</p>
+                    <p>
+                      {selectedApp.fee_snapshot.fee_type === "paid"
+                        ? `${selectedApp.fee_snapshot.currency || "ETB"} ${selectedApp.fee_snapshot.fee_amount}`
+                        : "Not required — free opportunity"}
+                      {selectedApp.fee_snapshot.quoted_at
+                        ? ` · ${formatDateTime(selectedApp.fee_snapshot.quoted_at)}`
+                        : ""}
+                    </p>
+                  </div>
+                ) : null}
+                {selectedApp.profile_snapshot ? (
+                  <p className="text-xs text-text-secondary">
+                    Profile at submission:{" "}
+                    {selectedApp.profile_snapshot.profile_completion_percent ?? "—"}%
+                    {selectedApp.users?.email ? ` · ${selectedApp.users.email}` : ""}
+                  </p>
+                ) : null}
                 <div>
                   <p className="text-xs font-medium text-text-hint">Message / answers</p>
                   <p className="mt-1 whitespace-pre-wrap rounded-lg bg-muted/40 p-2 text-xs">
                     {selectedApp.message || "—"}
                   </p>
                 </div>
-                {selectedApp.extra_answers &&
-                Object.keys(selectedApp.extra_answers).length > 0 ? (
-                  <div>
-                    <p className="text-xs font-medium text-text-hint">Extra answers</p>
-                    <pre className="mt-1 overflow-auto rounded-lg bg-muted/40 p-2 text-[11px]">
-                      {JSON.stringify(selectedApp.extra_answers, null, 2)}
-                    </pre>
-                  </div>
-                ) : null}
+                {(() => {
+                  const publicAnswers = Object.fromEntries(
+                    Object.entries(selectedApp.extra_answers || {}).filter(
+                      ([k]) => !k.startsWith("_"),
+                    ),
+                  );
+                  if (Object.keys(publicAnswers).length === 0) return null;
+                  return (
+                    <div>
+                      <p className="text-xs font-medium text-text-hint">Submitted answers</p>
+                      <pre className="mt-1 overflow-auto rounded-lg bg-muted/40 p-2 text-[11px]">
+                        {JSON.stringify(publicAnswers, null, 2)}
+                      </pre>
+                    </div>
+                  );
+                })()}
                 <div>
-                  <p className="text-xs font-medium text-text-hint">Required documents</p>
+                  <p className="text-xs font-medium text-text-hint">
+                    Required documents (terms v
+                    {selectedApp.terms_snapshot?.terms_version ?? overview?.terms_version ?? 1})
+                  </p>
                   <p className="mt-1 text-xs text-text-secondary">
-                    {row.required_documents || "None configured on this opportunity."}
+                    {selectedApp.terms_snapshot?.required_documents ||
+                      row.required_documents ||
+                      "None configured. Uploaded applicant files require authorized access (secure download not wired in this view)."}
                   </p>
                 </div>
+                {(selectedApp.decision_history?.length || 0) > 0 ? (
+                  <div>
+                    <p className="text-xs font-medium text-text-hint">Decision history</p>
+                    <ul className="mt-1 max-h-40 space-y-1 overflow-auto text-[11px]">
+                      {selectedApp.decision_history!.map((d, i) => (
+                        <li key={`${d.at}-${i}`} className="rounded bg-muted/40 p-1.5">
+                          <span className="font-medium">
+                            {d.from} → {d.to}
+                          </span>
+                          {d.at ? ` · ${formatDateTime(d.at)}` : ""}
+                          {d.reason ? <span className="block">Reason: {d.reason}</span> : null}
+                          {d.internal_note ? (
+                            <span className="block text-text-hint">
+                              Internal: {d.internal_note}
+                            </span>
+                          ) : null}
+                          {d.applicant_message ? (
+                            <span className="block">Applicant msg: {d.applicant_message}</span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
                 <p className="text-xs text-text-hint">
                   Internal notes (not shown as applicant-facing unless you notify):
                 </p>
@@ -1077,7 +1292,10 @@ export default function OpportunityDetailPage() {
                   placeholder="Unlimited"
                 />
               </Field>
-              <Field label="Allow multiple applications">
+              <Field
+                label="Allow multiple applications"
+                hint="When off, a user with a non-withdrawn application cannot apply again (enforced atomically with capacity)."
+              >
                 <label className="flex h-10 items-center gap-2 text-sm">
                   <input
                     type="checkbox"
@@ -1133,6 +1351,12 @@ export default function OpportunityDetailPage() {
 
           <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <h2 className="mb-4 font-heading text-sm font-semibold">Eligibility and required information</h2>
+            <p className="mb-3 text-xs text-text-hint">
+              Eligible roles gate who can apply in the app. Empty selection means all roles.
+              Profile-completion % is a soft gate at apply time — it does not auto-rank or reject
+              in admin review. Editing terms here bumps terms_version; already-submitted
+              applications keep their snapshot.
+            </p>
             <Field
               label="Eligible roles"
               hint="Empty = all roles. Profile-completeness % is separate from identity verification."

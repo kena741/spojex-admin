@@ -106,9 +106,41 @@ export function formatOpportunityFee(
   feeType: string,
   amount: number | string | null | undefined,
 ) {
-  if (feeType === "free" || !Number(amount)) return "Free";
-  const n = Number(amount);
+  if (feeType === "free" || feeType !== "paid") {
+    return "Not required — free opportunity";
+  }
+  const n = Number(amount || 0);
+  if (!(n > 0)) return "Paid (fee not set)";
   return `ETB ${Number.isInteger(n) ? n.toLocaleString() : n.toFixed(2)}`;
+}
+
+/** Client-side checks mirroring Python validate_opportunity_payload. */
+export function validateOpportunityDraft(draft: OpportunityDraft): string | null {
+  if (!draft.title.trim()) return "Title is required";
+  if (draft.fee_type === "paid" && !(Number(draft.fee_amount) > 0)) {
+    return "Paid opportunities need a fee greater than 0";
+  }
+  const ext = draft.external_link.trim();
+  if (ext && !/^https?:\/\//i.test(ext)) {
+    return "External URL must start with http:// or https://";
+  }
+  if (
+    draft.application_opens_at &&
+    draft.application_deadline &&
+    draft.application_opens_at > draft.application_deadline
+  ) {
+    return "Applications open time must be before the deadline";
+  }
+  if (draft.start_date && draft.end_date && draft.start_date > draft.end_date) {
+    return "Event start must be on or before event end";
+  }
+  if (
+    draft.max_applicants &&
+    (!Number.isFinite(Number(draft.max_applicants)) || Number(draft.max_applicants) < 1)
+  ) {
+    return "Capacity must be a positive number or empty (unlimited)";
+  }
+  return null;
 }
 
 export function emptyOpportunityDraft() {
