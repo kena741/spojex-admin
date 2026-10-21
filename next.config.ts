@@ -14,6 +14,7 @@ const nextConfig: NextConfig = {
       { source: "/admin/users", destination: "/admin/people", permanent: false },
       { source: "/admin/users/:id", destination: "/admin/people/:id", permanent: false },
       { source: "/admin/categories", destination: "/admin/people/settings", permanent: false },
+      { source: "/admin/gym-categories", destination: "/admin/gyms/settings", permanent: false },
     ];
   },
   images: {

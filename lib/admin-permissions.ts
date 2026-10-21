@@ -287,6 +287,16 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
     return can("coins:read") || can("donations:read");
   }
   if (pathname.startsWith("/admin/reviews")) return can("reviews:read");
+  if (pathname.startsWith("/admin/native-apps")) {
+    return (
+      can("stadiums:read") ||
+      can("gyms:read") ||
+      can("events:read") ||
+      can("donations:read") ||
+      can("streams:read") ||
+      can("events:read")
+    );
+  }
   if (pathname.startsWith("/admin/stadiums")) return can("stadiums:read");
   if (pathname.startsWith("/admin/gyms")) return can("gyms:read");
   if (pathname.startsWith("/admin/gym-categories")) return can("gyms:read");

@@ -195,6 +195,56 @@ export default function DonationsPage() {
         </div>
       </AdminFilterPanel>
       {loading ? <AdminLoadingRow label="Loading campaigns…" /> : null}
+
+      {!loading && filtered.length > 0 ? (
+        <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((row) => {
+            const currency = campaignIsCoin(row) ? "COIN" : row.currency;
+            const raised = campaignDisplayRaised(row);
+            const goal = campaignDisplayGoal(row);
+            const pct = goal > 0 ? Math.min(100, Math.round((raised / goal) * 100)) : 0;
+            const cover = row.cover_url || row.image_url;
+            return (
+              <Link
+                key={`card-${row.id}`}
+                href={`/admin/donations/${row.id}`}
+                className="overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-shadow hover:shadow-md"
+              >
+                <div className="aspect-[16/9] bg-muted">
+                  {cover ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={cover} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="grid h-full place-items-center text-xs text-text-hint">No image</div>
+                  )}
+                </div>
+                <div className="space-y-2 p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-medium leading-snug text-foreground">{row.title}</h3>
+                    <StatusBadge tone={requestTone(row.status)}>
+                      {donationStatusLabel(row.status)}
+                    </StatusBadge>
+                  </div>
+                  <p className="text-xs text-text-secondary">
+                    {campaignIsCoin(row) ? "Coin campaign" : "Money campaign"} ·{" "}
+                    {formatDonationAmount(raised, currency)}
+                    {goal > 0 ? ` / ${formatDonationAmount(goal, currency)}` : ""}
+                  </p>
+                  {goal > 0 ? (
+                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+                    </div>
+                  ) : null}
+                  <p className="text-[11px] text-text-hint">
+                    Updated {formatDate(row.updated_at || row.created_at)}
+                  </p>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      ) : null}
+
       <AdminTableShell>
         {filtered.length === 0 && !loading ? (
           <AdminEmpty title="No campaigns" description="Create a donation campaign for the home page." />

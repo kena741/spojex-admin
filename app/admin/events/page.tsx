@@ -289,9 +289,16 @@ export default function EventsPage() {
                 <tr>
                   <th className="px-4 py-3 font-semibold">Event</th>
                   <th className="px-4 py-3 font-semibold">When</th>
-                  <th className="px-4 py-3 font-semibold">Price</th>
+                  <th className="px-4 py-3 font-semibold" title="Legacy list price; ticket tiers override at checkout">
+                    List price
+                  </th>
                   <th className="px-4 py-3 font-semibold">Sold</th>
-                  <th className="px-4 py-3 font-semibold">Sales</th>
+                  <th
+                    className="px-4 py-3 font-semibold"
+                    title="Verified payment totals when available; otherwise sum of ticket amounts"
+                  >
+                    Revenue
+                  </th>
                   <th className="px-4 py-3 font-semibold">Upcoming</th>
                   <th className="px-4 py-3 font-semibold">Featured</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
@@ -345,7 +352,14 @@ export default function EventsPage() {
                         {sales?.sold ?? 0}
                         {row.capacity > 0 ? <span className="text-text-secondary"> / {row.capacity}</span> : null}
                       </td>
-                      <td className="px-4 py-3 font-medium">{formatEventPrice(sales?.sales ?? 0, sales?.currency || row.currency)}</td>
+                      <td className="px-4 py-3 font-medium">
+                        {formatEventPrice(sales?.sales ?? 0, sales?.currency || row.currency)}
+                        {sales && "revenue_source" in sales && sales.revenue_source === "event_payments" ? (
+                          <span className="mt-0.5 block text-[10px] font-normal text-text-hint">
+                            From payments
+                          </span>
+                        ) : null}
+                      </td>
                       <td className="px-4 py-3">
                         {canWrite ? (
                           <button

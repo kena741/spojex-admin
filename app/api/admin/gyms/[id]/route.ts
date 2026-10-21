@@ -256,6 +256,48 @@ export async function PATCH(
     }
     patch.monthly_payment = raw;
   }
+  if ("status" in patch || "verification_status" in patch || "feature_status" in patch || "is_featured" in patch) {
+    const current = await auth.context.client
+      .from("gyms")
+      .select("status, verification_status, feature_status, is_featured")
+      .eq("id", id)
+      .maybeSingle();
+    if (current.error) {
+      return NextResponse.json({ error: current.error.message }, { status: 400 });
+    }
+    if (!current.data) {
+      return NextResponse.json({ error: "Gym not found" }, { status: 404 });
+    }
+    const nextStatus = String(patch.status ?? current.data.status ?? "");
+    const nextVerification = String(
+      patch.verification_status ?? current.data.verification_status ?? "",
+    );
+    // Reject no-op "Approve" on already active+verified gyms.
+    if (
+      "status" in patch &&
+      "verification_status" in patch &&
+      current.data.status === "active" &&
+      current.data.verification_status === "verified" &&
+      nextStatus === "active" &&
+      nextVerification === "verified"
+    ) {
+      return NextResponse.json(
+        { error: "Gym is already active and verified; Approve is not applicable." },
+        { status: 400 },
+      );
+    }
+    // Suspension must set listing inactive and verification suspended together.
+    if (
+      nextVerification === "suspended" &&
+      nextStatus !== "inactive" &&
+      nextStatus !== "rejected"
+    ) {
+      return NextResponse.json(
+        { error: "Suspended verification requires inactive (or rejected) listing status." },
+        { status: 400 },
+      );
+    }
+  }
   if ("status" in patch) {
     const status = String(patch.status ?? "");
     if (!allowedStatuses.has(status as GymStatus)) {

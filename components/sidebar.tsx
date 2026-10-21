@@ -114,21 +114,10 @@ const marketplaceItems: NavItem[] = [
 ];
 
 const nativeAppItems: NavItem[] = [
-  { href: "/admin/stadiums", label: "Stadiums", icon: Landmark, visible: (can) => can("stadiums:read") },
-  { href: "/admin/gyms", label: "Gyms", icon: Dumbbell, visible: (can) => can("gyms:read") },
   {
-    href: "/admin/gym-categories",
-    label: "Gym categories",
-    icon: FolderTree,
-    visible: (can) => can("gyms:read"),
-  },
-  { href: "/admin/events", label: "Events", icon: Calendar, visible: (can) => can("events:read") },
-  {
-    href: "/admin/shops",
-    label: "Shops",
-    icon: Store,
-    comingSoon: true,
-    // Visible alongside other native apps when the admin can manage any of them.
+    href: "/admin/native-apps",
+    label: "Overview",
+    icon: LayoutDashboard,
     visible: (can) =>
       can("stadiums:read") ||
       can("gyms:read") ||
@@ -137,12 +126,28 @@ const nativeAppItems: NavItem[] = [
       can("streams:read") ||
       canManageLiveEvents(can),
   },
+  { href: "/admin/stadiums", label: "Stadiums", icon: Landmark, visible: (can) => can("stadiums:read") },
+  { href: "/admin/gyms", label: "Gyms", icon: Dumbbell, visible: (can) => can("gyms:read") },
+  { href: "/admin/events", label: "Events", icon: Calendar, visible: (can) => can("events:read") },
   { href: "/admin/donations", label: "Donations", icon: Heart, visible: (can) => can("donations:read") },
   {
     href: "/admin/streams",
-    label: "Stream",
+    label: "Streams",
     icon: Radio,
     visible: (can) => can("streams:read") || canManageLiveEvents(can),
+  },
+  {
+    href: "/admin/shops",
+    label: "Shops",
+    icon: Store,
+    comingSoon: true,
+    visible: (can) =>
+      can("stadiums:read") ||
+      can("gyms:read") ||
+      can("events:read") ||
+      can("donations:read") ||
+      can("streams:read") ||
+      canManageLiveEvents(can),
   },
 ];
 

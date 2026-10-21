@@ -48,14 +48,44 @@ export async function bootstrapFirstAdmin(user: {
 
 const bootstrapTried = new Set<string>();
 
+/** Shared cache so AuthGuard + page hooks don't flash empty permissions. */
+type PermissionsCache = {
+  staff: AdminRow | null;
+  permissions: string[];
+  bootstrapAvailable: boolean;
+  userId: string | null;
+};
+let permissionsCache: PermissionsCache | null = null;
+
+function applyCache(
+  next: PermissionsCache,
+  setters: {
+    setStaff: (v: AdminRow | null) => void;
+    setPermissions: (v: string[]) => void;
+    setBootstrapAvailable: (v: boolean) => void;
+    setLoading: (v: boolean) => void;
+  },
+) {
+  permissionsCache = next;
+  setters.setStaff(next.staff);
+  setters.setPermissions(next.permissions);
+  setters.setBootstrapAvailable(next.bootstrapAvailable);
+  setters.setLoading(false);
+}
+
 export function useAdminPermissions() {
-  const [loading, setLoading] = useState(true);
-  const [staff, setStaff] = useState<AdminRow | null>(null);
-  const [permissions, setPermissions] = useState<string[]>([]);
-  const [bootstrapAvailable, setBootstrapAvailable] = useState(false);
+  const [loading, setLoading] = useState(() => !permissionsCache);
+  const [staff, setStaff] = useState<AdminRow | null>(() => permissionsCache?.staff ?? null);
+  const [permissions, setPermissions] = useState<string[]>(
+    () => permissionsCache?.permissions ?? [],
+  );
+  const [bootstrapAvailable, setBootstrapAvailable] = useState(
+    () => permissionsCache?.bootstrapAvailable ?? false,
+  );
 
   useEffect(() => {
     let mounted = true;
+    const setters = { setStaff, setPermissions, setBootstrapAvailable, setLoading };
 
     const load = async () => {
       try {
@@ -63,9 +93,10 @@ export function useAdminPermissions() {
         const user = data.user;
         if (!user) {
           if (!mounted) return;
-          setStaff(null);
-          setPermissions([]);
-          setLoading(false);
+          applyCache(
+            { staff: null, permissions: [], bootstrapAvailable: false, userId: null },
+            setters,
+          );
           return;
         }
 
@@ -91,17 +122,24 @@ export function useAdminPermissions() {
                   staff?: AdminRow | null;
                 };
                 if (!mounted) return;
-                setBootstrapAvailable(Boolean(me.bootstrap_available));
                 if (me.is_admin && me.staff) {
-                  setStaff(me.staff);
-                  setPermissions(
+                  const perms =
                     Array.isArray(me.permissions) && me.permissions.length
                       ? me.permissions
-                      : permissionsForRole(me.staff.role),
+                      : permissionsForRole(me.staff.role);
+                  applyCache(
+                    {
+                      staff: me.staff,
+                      permissions: perms,
+                      bootstrapAvailable: Boolean(me.bootstrap_available),
+                      userId: user.id,
+                    },
+                    setters,
                   );
-                  setLoading(false);
                   return;
                 }
+                if (!mounted) return;
+                setBootstrapAvailable(Boolean(me.bootstrap_available));
               }
             }
           }
@@ -135,9 +173,15 @@ export function useAdminPermissions() {
 
         if (!row || !row.is_active) {
           if (!mounted) return;
-          setStaff(null);
-          setPermissions([]);
-          setLoading(false);
+          applyCache(
+            {
+              staff: null,
+              permissions: [],
+              bootstrapAvailable: false,
+              userId: user.id,
+            },
+            setters,
+          );
           return;
         }
 
@@ -148,16 +192,24 @@ export function useAdminPermissions() {
           .maybeSingle();
 
         if (!mounted) return;
-        setStaff(row);
-        setPermissions(
-          permissionsForRole(row.role, (roleRow as { permissions?: string[] } | null)?.permissions),
+        applyCache(
+          {
+            staff: row,
+            permissions: permissionsForRole(
+              row.role,
+              (roleRow as { permissions?: string[] } | null)?.permissions,
+            ),
+            bootstrapAvailable: false,
+            userId: user.id,
+          },
+          setters,
         );
-        setLoading(false);
       } catch {
         if (!mounted) return;
-        setStaff(null);
-        setPermissions([]);
-        setLoading(false);
+        applyCache(
+          { staff: null, permissions: [], bootstrapAvailable: false, userId: null },
+          setters,
+        );
       }
     };
 

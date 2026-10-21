@@ -3,7 +3,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { AdminCode, normalizeAdminCode } from "@/components/admin-code";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -64,9 +63,10 @@ export default function StadiumsPage() {
         .select("*, users:owner_user_id(id, display_name, email)")
         .order("created_at", { ascending: false })
         .limit(500),
+      // Pass codes intentionally omitted from list responses — reveal only on detail with audit.
       spojex
         .from("stadium_subscriptions")
-        .select("id, stadium_id, plan_type, status, pass_code, pass_number, created_at, users:user_id(id, display_name)")
+        .select("id, stadium_id, plan_type, status, created_at, users:user_id(id, display_name)")
         .neq("status", "cancelled")
         .order("created_at", { ascending: false })
         .limit(2000),
@@ -94,7 +94,6 @@ export default function StadiumsPage() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const codeQ = normalizeAdminCode(query);
     const weredaNum = wereda ? Number(wereda) : null;
     return rows.filter((row) => {
       if (status !== "all" && row.status !== status) return false;
@@ -118,9 +117,8 @@ export default function StadiumsPage() {
         .some((value) => String(value).toLowerCase().includes(q));
       if (textMatch) return true;
       return (subscribersByStadium[row.id] ?? []).some((sub) => {
-        const code = normalizeAdminCode(sub.pass_code ?? "");
         const name = (sub.users?.display_name ?? "").toLowerCase();
-        return (codeQ && code.includes(codeQ)) || name.includes(q);
+        return name.includes(q);
       });
     });
   }, [query, rows, sizeType, status, subcity, wereda, subscribersByStadium]);
@@ -373,42 +371,54 @@ export default function StadiumsPage() {
                     <tr className="border-b border-border last:border-0">
                       <td colSpan={colSpan} className="bg-muted/30 px-4 py-3">
                         {holders.length === 0 ? (
-                          <p className="text-sm text-text-secondary">No subscriber pass codes yet.</p>
+                          <p className="text-sm text-text-secondary">No active subscriptions yet.</p>
                         ) : (
-                          <table className="min-w-full text-left text-sm">
-                            <thead className="text-xs uppercase text-text-secondary">
-                              <tr>
-                                <th className="py-2 pr-4 font-semibold">#</th>
-                                <th className="py-2 pr-4 font-semibold">Code</th>
-                                <th className="py-2 pr-4 font-semibold">Subscriber</th>
-                                <th className="py-2 pr-4 font-semibold">Plan</th>
-                                <th className="py-2 font-semibold">Status</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {holders.map((sub) => (
-                                <tr key={sub.id}>
-                                  <td className="py-1.5 pr-4 tabular-nums">{sub.pass_number || "—"}</td>
-                                  <td className="py-1.5 pr-4">
-                                    <AdminCode value={sub.pass_code} />
-                                  </td>
-                                  <td className="py-1.5 pr-4">
-                                    {sub.users ? (
-                                      <Link href={`/admin/users/${sub.users.id}`} className="hover:text-primary">
-                                        {sub.users.display_name}
-                                      </Link>
-                                    ) : (
-                                      "User"
-                                    )}
-                                  </td>
-                                  <td className="py-1.5 pr-4 text-text-secondary">{planTypeLabel(sub.plan_type)}</td>
-                                  <td className="py-1.5">
-                                    <StatusBadge tone={requestTone(sub.status)}>{sub.status}</StatusBadge>
-                                  </td>
+                          <div className="space-y-2">
+                            <p className="text-sm text-text-secondary">
+                              {holders.length} active subscription{holders.length === 1 ? "" : "s"}. Pass
+                              codes are concealed on list views — open the stadium to reveal them
+                              (requires permission; access is audited).
+                            </p>
+                            <table className="min-w-full text-left text-sm">
+                              <thead className="text-xs uppercase text-text-secondary">
+                                <tr>
+                                  <th className="py-2 pr-4 font-semibold">Subscriber</th>
+                                  <th className="py-2 pr-4 font-semibold">Plan</th>
+                                  <th className="py-2 font-semibold">Status</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                              </thead>
+                              <tbody>
+                                {holders.slice(0, 8).map((sub) => (
+                                  <tr key={sub.id}>
+                                    <td className="py-1.5 pr-4">
+                                      {sub.users ? (
+                                        <Link
+                                          href={`/admin/people/${sub.users.id}`}
+                                          className="hover:text-primary"
+                                        >
+                                          {sub.users.display_name}
+                                        </Link>
+                                      ) : (
+                                        "User"
+                                      )}
+                                    </td>
+                                    <td className="py-1.5 pr-4 text-text-secondary">
+                                      {planTypeLabel(sub.plan_type)}
+                                    </td>
+                                    <td className="py-1.5">
+                                      <StatusBadge tone={requestTone(sub.status)}>{sub.status}</StatusBadge>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                            <Link
+                              href={`/admin/stadiums/${row.id}`}
+                              className="inline-flex text-xs font-medium text-primary hover:underline"
+                            >
+                              Open stadium workspace
+                            </Link>
+                          </div>
                         )}
                       </td>
                     </tr>

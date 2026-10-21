@@ -20,7 +20,7 @@ const TABS: { id: StreamsTab; label: string; icon: typeof Radio }[] = [
 function StreamsHub() {
   const router = useRouter();
   const search = useSearchParams();
-  const { can } = useAdminPermissions();
+  const { can, loading } = useAdminPermissions();
   const canRadio = can("streams:read");
   const canVideo = canManageLiveEvents(can);
 
@@ -40,6 +40,15 @@ function StreamsHub() {
   const setTab = (tab: StreamsTab) => {
     router.replace(`/admin/streams?tab=${tab}`, { scroll: false });
   };
+
+  if (loading) {
+    return (
+      <>
+        <AdminPageHeader title="Streams" description="Radio stations and live video" />
+        <p className="text-sm text-text-secondary">Checking permissions…</p>
+      </>
+    );
+  }
 
   if (availableTabs.length === 0) {
     return (

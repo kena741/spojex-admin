@@ -31,6 +31,7 @@ import {
   AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
+import { gymAllowedActions, type GymActionId } from "@/lib/gym-actions";
 import {
   gymCategories,
   gymCategoryLabel,
@@ -334,85 +335,114 @@ function GymCard({
       {/* Meta */}
       <div className="mb-3 flex items-center justify-between text-xs text-text-secondary">
         <span>{gymCategoryLabel(row.category, catalog)}</span>
-        <span className="tabular-nums font-medium text-text-primary">
-          {formatMoney(row.monthly_payment ?? 0)}/mo
+        <span
+          className="tabular-nums font-medium text-text-primary"
+          title="Monthly platform fee paid by the gym to Spojex (not member prices)"
+        >
+          Fee {formatMoney(row.monthly_payment ?? 0)}/mo
         </span>
       </div>
 
-      {/* Actions */}
-      {canWrite ? (
-        <div className="flex flex-wrap gap-1.5 border-t border-border pt-3">
-          <Link
-            href={`/admin/gyms/${row.id}`}
-            className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
-          >
-            <Eye className="h-3 w-3" /> Manage
-          </Link>
+      <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
+        <Link
+          href={`/admin/gyms/${row.id}`}
+          className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground"
+        >
+          <Eye className="h-3 w-3" /> Open gym
+        </Link>
+        {canWrite ? (
+          <GymActionsMenu
+            row={row}
+            busy={isBusy}
+            onEdit={onEdit}
+            onApprove={onApprove}
+            onReview={onReview}
+            onToggleFeature={onToggleFeature}
+            onApproveFeature={onApproveFeature}
+            onRejectFeature={onRejectFeature}
+            onSuspend={onSuspend}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function GymActionsMenu({
+  row,
+  busy,
+  onEdit,
+  onApprove,
+  onReview,
+  onToggleFeature,
+  onApproveFeature,
+  onRejectFeature,
+  onSuspend,
+}: {
+  row: GymRow;
+  busy: boolean;
+  onEdit: () => void;
+  onApprove: () => void;
+  onReview: () => void;
+  onToggleFeature: () => void;
+  onApproveFeature: () => void;
+  onRejectFeature: () => void;
+  onSuspend: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const actions = gymAllowedActions(row);
+
+  const run = (id: GymActionId) => {
+    setOpen(false);
+    if (id === "edit") return onEdit();
+    if (id === "approve_listing") return onApprove();
+    if (id === "mark_under_review") return onReview();
+    if (id === "feature_toggle") return onToggleFeature();
+    if (id === "feature_approve") return onApproveFeature();
+    if (id === "feature_reject") return onRejectFeature();
+    if (id === "suspend" || id === "reactivate") return onSuspend();
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
+      >
+        Actions <ChevronDown className="h-3 w-3" />
+      </button>
+      {open ? (
+        <>
           <button
             type="button"
-            disabled={isBusy}
-            onClick={onEdit}
-            className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
-          >
-            <Pencil className="h-3 w-3" /> Edit
-          </button>
-          <button
-            type="button"
-            disabled={isBusy}
-            onClick={onApprove}
-            className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
-          >
-            <CheckCircle2 className="h-3 w-3" /> Approve
-          </button>
-          {row.feature_status === "pending" ? (
-            <>
-              <button
-                type="button"
-                disabled={isBusy}
-                onClick={onApproveFeature}
-                className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
-              >
-                <Sparkles className="h-3 w-3" /> Feature
-              </button>
-              <button
-                type="button"
-                disabled={isBusy}
-                onClick={onRejectFeature}
-                className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
-              >
-                <XCircle className="h-3 w-3" /> Reject
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              disabled={isBusy}
-              onClick={onToggleFeature}
-              className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
-            >
-              <Sparkles className="h-3 w-3" />
-              {row.is_featured ? "Unfeature" : "Feature"}
-            </button>
-          )}
-          <button
-            type="button"
-            disabled={isBusy}
-            onClick={onSuspend}
-            className="inline-flex items-center gap-1 rounded-md border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-          >
-            <Ban className="h-3 w-3" /> Suspend
-          </button>
-        </div>
-      ) : (
-        <div className="border-t border-border pt-3">
-          <Link
-            href={`/admin/gyms/${row.id}`}
-            className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
-          >
-            <Eye className="h-3 w-3" /> Manage
-          </Link>
-        </div>
-      )}
+            className="fixed inset-0 z-10 cursor-default"
+            aria-label="Close menu"
+            onClick={() => setOpen(false)}
+          />
+          <ul className="absolute right-0 z-20 mt-1 min-w-[180px] rounded-lg border border-border bg-card py-1 shadow-lg">
+            {actions.map((action) => (
+              <li key={action.id}>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => run(action.id)}
+                  className={`block w-full px-3 py-2 text-left text-xs hover:bg-muted ${
+                    action.tone === "danger"
+                      ? "text-red-700"
+                      : action.tone === "success"
+                        ? "text-emerald-800"
+                        : ""
+                  }`}
+                >
+                  {action.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -832,19 +862,27 @@ export default function GymsAdminPage() {
     <>
       <AdminPageHeader
         title="Gyms"
-        description={`${filtered.length} of ${rows.length} · venues, fitness centers, and monthly fees`}
+        description={`${filtered.length} of ${rows.length} · venues and fitness centers`}
         actions={
-          canWrite ? (
-            <button
-              type="button"
-              onClick={openCreate}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/admin/gyms/settings"
+              className="inline-flex h-9 items-center rounded-md border border-border bg-card px-3 text-xs font-medium text-text-secondary hover:text-foreground"
             >
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Add gym</span>
-              <span className="sm:hidden">Add</span>
-            </button>
-          ) : null
+              Settings
+            </Link>
+            {canWrite ? (
+              <button
+                type="button"
+                onClick={openCreate}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Add gym</span>
+                <span className="sm:hidden">Add</span>
+              </button>
+            ) : null}
+          </div>
         }
       />
 
@@ -974,7 +1012,9 @@ export default function GymsAdminPage() {
                   <th className="px-4 py-3 font-semibold">Status</th>
                   <th className="px-4 py-3 font-semibold">Verification</th>
                   <th className="px-4 py-3 font-semibold">Featured</th>
-                  <th className="px-4 py-3 font-semibold">Monthly payment</th>
+                  <th className="px-4 py-3 font-semibold" title="Monthly platform fee to Spojex">
+                    Platform fee
+                  </th>
                   <th className="px-4 py-3 font-semibold">Created</th>
                   <th className="px-4 py-3 font-semibold">Actions</th>
                 </tr>
@@ -1054,105 +1094,66 @@ export default function GymsAdminPage() {
                         {formatDate(row.created_at)}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <Link
                             href={`/admin/gyms/${row.id}`}
-                            className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium hover:bg-muted"
+                            className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
                           >
-                            Manage
+                            Open gym
                           </Link>
                           {canWrite ? (
-                            <>
-                              <button
-                                type="button"
-                                disabled={busyId === row.id}
-                                className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50"
-                                onClick={() => openEdit(row)}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                disabled={busyId === row.id}
-                                className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50"
-                                onClick={() =>
+                            <GymActionsMenu
+                              row={row}
+                              busy={busyId === row.id}
+                              onEdit={() => openEdit(row)}
+                              onApprove={() =>
+                                updateGym(row.id, {
+                                  status: "active",
+                                  verification_status: "verified",
+                                })
+                              }
+                              onReview={() =>
+                                updateGym(row.id, { verification_status: "under_review" })
+                              }
+                              onToggleFeature={() =>
+                                updateGym(row.id, {
+                                  is_featured: !row.is_featured,
+                                  feature_status: row.is_featured ? "none" : "approved",
+                                })
+                              }
+                              onApproveFeature={() =>
+                                updateGym(row.id, {
+                                  action: "review_featured",
+                                  approve: true,
+                                })
+                              }
+                              onRejectFeature={() =>
+                                updateGym(row.id, {
+                                  action: "review_featured",
+                                  approve: false,
+                                })
+                              }
+                              onSuspend={() => {
+                                const suspended =
+                                  row.status === "inactive" ||
+                                  row.verification_status === "suspended";
+                                if (suspended) {
                                   updateGym(row.id, {
                                     status: "active",
                                     verification_status: "verified",
-                                  })
-                                }
-                              >
-                                Approve
-                              </button>
-                              <button
-                                type="button"
-                                disabled={busyId === row.id}
-                                className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50"
-                                onClick={() =>
-                                  updateGym(row.id, {
-                                    verification_status: "under_review",
-                                  })
-                                }
-                              >
-                                Review
-                              </button>
-                              {row.feature_status === "pending" ? (
-                                <>
-                                  <button
-                                    type="button"
-                                    disabled={busyId === row.id}
-                                    className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
-                                    onClick={() =>
-                                      updateGym(row.id, {
-                                        action: "review_featured",
-                                        approve: true,
-                                      })
-                                    }
-                                  >
-                                    Approve feature
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={busyId === row.id}
-                                    className="rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
-                                    onClick={() =>
-                                      updateGym(row.id, {
-                                        action: "review_featured",
-                                        approve: false,
-                                      })
-                                    }
-                                  >
-                                    Reject feature
-                                  </button>
-                                </>
-                              ) : (
-                                <button
-                                  type="button"
-                                  disabled={busyId === row.id}
-                                  className="rounded-md border border-border bg-card px-2.5 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50"
-                                  onClick={() =>
-                                    updateGym(row.id, {
-                                      is_featured: !row.is_featured,
-                                    })
-                                  }
-                                >
-                                  {row.is_featured ? "Unfeature" : "Feature"}
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                disabled={busyId === row.id}
-                                className="rounded-md border border-red-200 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-                                onClick={() =>
+                                  });
+                                } else {
+                                  const reason = window.prompt(
+                                    "Reason for suspension (required):",
+                                  );
+                                  if (!reason?.trim()) return;
                                   updateGym(row.id, {
                                     status: "inactive",
                                     verification_status: "suspended",
-                                  })
+                                  });
                                 }
-                              >
-                                Suspend
-                              </button>
-                            </>
+                              }}
+                            />
                           ) : null}
                         </div>
                       </td>
