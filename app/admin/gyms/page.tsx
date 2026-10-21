@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   MapPin,
   Star,
@@ -32,6 +33,7 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { gymAllowedActions, type GymActionId } from "@/lib/gym-actions";
+import { gymVerificationMatches } from "@/lib/native-apps-filters";
 import {
   gymCategories,
   gymCategoryLabel,
@@ -452,6 +454,9 @@ function GymActionsMenu({
 export default function GymsAdminPage() {
   const { can } = useAdminPermissions();
   const canWrite = can("gyms:write");
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
   const createLogoRef = useRef<HTMLInputElement>(null);
   const createCoverRef = useRef<HTMLInputElement>(null);
   const editLogoRef = useRef<HTMLInputElement>(null);
@@ -461,11 +466,15 @@ export default function GymsAdminPage() {
   const [catalog, setCatalog] = useState<GymCategoryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
-  const [verification, setVerification] = useState("all");
-  const [category, setCategory] = useState("all");
-  const [featuredFilter, setFeaturedFilter] = useState("all");
+  const [query, setQuery] = useState(searchParams.get("q") || "");
+  const [status, setStatus] = useState(searchParams.get("status") || "all");
+  const [verification, setVerification] = useState(
+    searchParams.get("verification") || "all",
+  );
+  const [category, setCategory] = useState(searchParams.get("category") || "all");
+  const [featuredFilter, setFeaturedFilter] = useState(
+    searchParams.get("featured") || "all",
+  );
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -568,11 +577,31 @@ export default function GymsAdminPage() {
     };
   }, [createLogoPreview, createCoverPreview]);
 
+  const writeFilters = (patch: Record<string, string | null>) => {
+    const next = new URLSearchParams(searchParams.toString());
+    for (const [k, v] of Object.entries(patch)) {
+      if (v == null || v === "" || v === "all") next.delete(k);
+      else next.set(k, v);
+    }
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+  };
+
+  useEffect(() => {
+    writeFilters({
+      q: query || null,
+      status,
+      verification,
+      category,
+      featured: featuredFilter,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync outward only when filters change
+  }, [query, status, verification, category, featuredFilter]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((row) => {
       if (status !== "all" && row.status !== status) return false;
-      if (verification !== "all" && row.verification_status !== verification) {
+      if (!gymVerificationMatches(row.verification_status, verification)) {
         return false;
       }
       if (category !== "all" && row.category !== category) return false;
@@ -915,6 +944,7 @@ export default function GymsAdminPage() {
           </AdminSelect>
           <AdminSelect value={verification} onChange={setVerification}>
             <option value="all">All verification</option>
+            <option value="queue">Verification queue (pending + under review)</option>
             {gymVerificationStatuses.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.label}

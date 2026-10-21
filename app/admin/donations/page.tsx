@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -42,11 +43,16 @@ type DonationDraft = {
 export default function DonationsPage() {
   const { can } = useAdminPermissions();
   const canWrite = can("donations:write");
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
   const [rows, setRows] = useState<DonationCampaignRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
+  const [query, setQuery] = useState(searchParams.get("q") || "");
+  const [status, setStatus] = useState(searchParams.get("status") || "all");
+  // closing_soon reserved for when campaigns gain an ends_at column
+  const closingSoon = searchParams.get("closing_soon") || "";
   const [title, setTitle] = useState("");
   const [goal, setGoal] = useState("");
   const [beneficiaryId, setBeneficiaryId] = useState("");
@@ -74,14 +80,25 @@ export default function DonationsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (query.trim()) next.set("q", query.trim());
+    if (status !== "all") next.set("status", status);
+    if (closingSoon) next.set("closing_soon", closingSoon);
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [query, status, closingSoon, pathname, router]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((row) => {
       if (status !== "all" && row.status !== status) return false;
+      // closing_soon ignored until donation_campaigns has ends_at
+      void closingSoon;
       if (!q) return true;
       return [row.title, row.slug, row.summary].filter(Boolean).some((v) => String(v).toLowerCase().includes(q));
     });
-  }, [query, rows, status]);
+  }, [query, rows, status, closingSoon]);
 
   const create = async () => {
     if (!canWrite || !title.trim()) return;

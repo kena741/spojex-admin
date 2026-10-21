@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   AdminEmpty,
   AdminErrorAlert,
@@ -33,6 +33,7 @@ const fieldClass = "h-10 w-full rounded-lg border border-border px-3 text-sm";
 /** Live video / events list used by the Streams hub Video tab. */
 export default function LiveEventsPanel() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { can } = useAdminPermissions();
   const canWrite = canWriteLiveEvents(can);
   const [rows, setRows] = useState<LiveEventRow[]>([]);
@@ -40,7 +41,7 @@ export default function LiveEventsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState("all");
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState(searchParams.get("status") || "all");
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({
@@ -70,6 +71,15 @@ export default function LiveEventsPanel() {
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.set("tab", "video");
+    if (status !== "all") next.set("status", status);
+    else next.delete("status");
+    router.replace(`/admin/streams?${next.toString()}`, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

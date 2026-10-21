@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   AdminEmpty,
   AdminErrorAlert,
@@ -59,12 +60,14 @@ const fieldClass = "h-10 w-full rounded-lg border border-border px-3 text-sm";
 export default function RadioStreamsPanel() {
   const { can } = useAdminPermissions();
   const canWrite = can("streams:write");
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [rows, setRows] = useState<RadioStreamRow[]>([]);
   const [orgs, setOrgs] = useState<Pick<OrganizationRow, "id" | "name" | "public_id">[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState(searchParams.get("status") || "all");
   const [name, setName] = useState("");
   const [streamUrl, setStreamUrl] = useState("");
   const [creating, setCreating] = useState(false);
@@ -99,6 +102,15 @@ export default function RadioStreamsPanel() {
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.set("tab", "radio");
+    if (status !== "all") next.set("status", status);
+    else next.delete("status");
+    router.replace(`/admin/streams?${next.toString()}`, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

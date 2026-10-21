@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { AdminCode, normalizeAdminCode } from "@/components/admin-code";
 import AdminPageHeader from "@/components/admin-header";
@@ -27,12 +27,14 @@ import {
   eventCategoryLabel,
   eventCoverUrl,
   eventLifecycleLabel,
+  eventLifecycles,
   eventStatusLabel,
   eventStatuses,
   eventVisibilityLabel,
   formatEventPrice,
   formatEventWhen,
 } from "@/lib/events";
+import { EVENT_UPCOMING_EXCLUDED_LIFECYCLES } from "@/lib/native-apps-filters";
 import { deleteAdmin, patchAdmin, postAdminResponse, adminFetch } from "@/lib/hooks";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { EventRow, EventTicketRow } from "@/lib/types";
@@ -44,6 +46,8 @@ type EventSalesMap = Record<string, { sold: number; sales: number; currency: str
 
 export default function EventsPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { can } = useAdminPermissions();
   const canWrite = can("events:write");
   const [rows, setRows] = useState<EventRow[]>([]);
@@ -52,8 +56,12 @@ export default function EventsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
+  const [query, setQuery] = useState(searchParams.get("q") || "");
+  const [status, setStatus] = useState(searchParams.get("status") || "all");
+  const [lifecycle, setLifecycle] = useState(searchParams.get("lifecycle") || "all");
+  const [startsFrom] = useState(searchParams.get("starts_from") || "");
+  const [startsTo] = useState(searchParams.get("starts_to") || "");
+  const windowFilter = searchParams.get("window") || "";
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -121,11 +129,37 @@ export default function EventsPage() {
     return map;
   }, [tickets]);
 
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams.toString());
+    if (query.trim()) next.set("q", query.trim());
+    else next.delete("q");
+    if (status !== "all") next.set("status", status);
+    else next.delete("status");
+    if (lifecycle !== "all") next.set("lifecycle", lifecycle);
+    else next.delete("lifecycle");
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, status, lifecycle]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const codeQ = normalizeAdminCode(query);
+    const fromMs = startsFrom ? Date.parse(startsFrom) : NaN;
+    const toMs = startsTo ? Date.parse(startsTo) : NaN;
+    const excluded = new Set(
+      EVENT_UPCOMING_EXCLUDED_LIFECYCLES.map((s) => s.toLowerCase()),
+    );
     return rows.filter((row) => {
       if (status !== "all" && row.status !== status) return false;
+      if (lifecycle !== "all" && (row.lifecycle || "") !== lifecycle) return false;
+      if (windowFilter === "upcoming_14d" || (Number.isFinite(fromMs) && Number.isFinite(toMs))) {
+        const startMs = row.starts_at ? Date.parse(row.starts_at) : NaN;
+        if (!Number.isFinite(startMs)) return false;
+        if (Number.isFinite(fromMs) && startMs < fromMs) return false;
+        if (Number.isFinite(toMs) && startMs > toMs) return false;
+        const life = String(row.lifecycle || row.status || "").toLowerCase();
+        if (excluded.has(life)) return false;
+      }
       if (!q) return true;
       const textMatch = [row.name, row.venue_name, row.location, row.slug]
         .filter(Boolean)
@@ -137,7 +171,16 @@ export default function EventsPage() {
         return (codeQ && code.includes(codeQ)) || name.includes(q);
       });
     });
-  }, [query, rows, status, ticketsByEvent]);
+  }, [
+    query,
+    rows,
+    status,
+    lifecycle,
+    startsFrom,
+    startsTo,
+    windowFilter,
+    ticketsByEvent,
+  ]);
 
   const totals = useMemo(() => {
     return filtered.reduce(
@@ -276,7 +319,22 @@ export default function EventsPage() {
               </option>
             ))}
           </AdminSelect>
+          <AdminSelect value={lifecycle} onChange={setLifecycle}>
+            <option value="all">All lifecycles</option>
+            {eventLifecycles.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </AdminSelect>
         </div>
+        {windowFilter === "upcoming_14d" || startsFrom ? (
+          <p className="mt-2 text-[11px] text-text-hint">
+            Upcoming window filter active
+            {startsFrom ? ` from ${startsFrom}` : ""}
+            {startsTo ? ` to ${startsTo}` : ""} — excludes cancelled/ended/completed.
+          </p>
+        ) : null}
       </AdminFilterPanel>
       {loading ? <AdminLoadingRow label="Loading events…" /> : null}
       <AdminTableShell>

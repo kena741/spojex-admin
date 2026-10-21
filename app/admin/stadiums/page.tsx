@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
 import {
@@ -40,16 +41,19 @@ import { formatDate } from "@/lib/utils";
 export default function StadiumsPage() {
   const { can } = useAdminPermissions();
   const canWrite = can("stadiums:write");
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
   const [rows, setRows] = useState<StadiumRow[]>([]);
   const [subscriptions, setSubscriptions] = useState<StadiumSubscriptionRow[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
-  const [sizeType, setSizeType] = useState("all");
-  const [subcity, setSubcity] = useState("");
-  const [wereda, setWereda] = useState("");
+  const [query, setQuery] = useState(searchParams.get("q") || "");
+  const [status, setStatus] = useState(searchParams.get("status") || "all");
+  const [sizeType, setSizeType] = useState(searchParams.get("size_type") || "all");
+  const [subcity, setSubcity] = useState(searchParams.get("subcity") || "");
+  const [wereda, setWereda] = useState(searchParams.get("wereda") || "");
   const [editing, setEditing] = useState<StadiumRow | null>(null);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -83,6 +87,17 @@ export default function StadiumsPage() {
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (query.trim()) next.set("q", query.trim());
+    if (status !== "all") next.set("status", status);
+    if (sizeType !== "all") next.set("size_type", sizeType);
+    if (subcity) next.set("subcity", subcity);
+    if (wereda) next.set("wereda", wereda);
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [query, status, sizeType, subcity, wereda, pathname, router]);
 
   const subscribersByStadium = useMemo(() => {
     const map: Record<string, StadiumSubscriptionRow[]> = {};
