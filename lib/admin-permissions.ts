@@ -272,6 +272,15 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
   ) {
     return can("profiles:read") || can("users:read");
   }
+  if (pathname === "/admin/marketplace" || pathname.startsWith("/admin/marketplace/")) {
+    return (
+      can("services:read") ||
+      can("requests:read") ||
+      can("opportunities:read") ||
+      can("miniapps:read") ||
+      can("catalog:read")
+    );
+  }
   if (pathname.startsWith("/admin/services")) return can("services:read");
   if (pathname.startsWith("/admin/service-categories")) return can("catalog:read");
   if (pathname.startsWith("/admin/categories")) return can("profiles:read");

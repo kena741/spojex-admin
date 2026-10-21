@@ -17,7 +17,6 @@ import {
 import { StatusBadge } from "@/components/status-badge";
 import { adminFetch, deleteAdmin, patchAdmin, postAdmin, uploadAdmin } from "@/lib/hooks";
 import { miniAppCategories, slugifyMiniApp } from "@/lib/miniapps";
-import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { MiniAppRow } from "@/lib/types";
 
@@ -70,15 +69,18 @@ export default function MiniAppsPage() {
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
+  const [notes, setNotes] = useState<string[]>([]);
+
   const load = async () => {
-    const { data, error: loadError } = await getSpojexClient()
-      .from("mini_apps")
-      .select("*")
-      .order("sort_order")
-      .order("name")
-      .limit(500);
-    if (loadError) throw loadError;
-    setRows((data ?? []) as MiniAppRow[]);
+    const response = await adminFetch("/api/admin/miniapps");
+    const payload = (await response.json()) as {
+      data?: MiniAppRow[];
+      error?: string;
+      notes?: string[];
+    };
+    if (!response.ok) throw new Error(payload.error || "Failed to load mini apps");
+    setRows(payload.data ?? []);
+    setNotes(payload.notes ?? []);
   };
 
   useEffect(() => {
@@ -218,9 +220,14 @@ export default function MiniAppsPage() {
     <>
       <AdminPageHeader
         title="Mini apps"
-        description="HTTPS partner sites that open inside the SpoJex WebView. Zemen Service is seeded and ready to publish."
+        description="HTTPS partner sites that open inside the Spojex WebView. Unpublished apps stay out of the public mobile catalog."
       />
       {error ? <AdminErrorAlert message={error} /> : null}
+      {notes.length > 0 && !error ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          {notes.join(" ")}
+        </p>
+      ) : null}
       {canWrite ? (
         <form
           onSubmit={create}

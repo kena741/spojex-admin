@@ -1,7 +1,36 @@
 import { NextResponse } from "next/server";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAdminPermission } from "@/lib/admin-auth";
+import { logAdminActivity } from "@/lib/admin-activity-log";
 import { normalizeHttpsUrl, slugifyMiniApp } from "@/lib/miniapps";
+
+export const dynamic = "force-dynamic";
+
+/** Admin list of mini apps (includes unpublished). */
+export async function GET() {
+  const auth = await requireAdminPermission("miniapps:read");
+  if (!auth.ok) return auth.error;
+
+  const { data, error } = await auth.context.client
+    .from("mini_apps")
+    .select("*")
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true })
+    .limit(500);
+
+  if (error) {
+    return NextResponse.json({ error: error.message, data: [] }, { status: 400 });
+  }
+
+  return NextResponse.json({
+    data: data ?? [],
+    notes: [
+      (data ?? []).length === 0
+        ? "No mini apps in this database. Create one below or apply migration 052 — nothing is auto-published."
+        : null,
+    ].filter(Boolean),
+  });
+}
 
 export async function POST(request: Request) {
   const auth = await requireAdminPermission("miniapps:write");
@@ -29,6 +58,12 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  if (/[?&](access_token|token|jwt|bearer)=/i.test(url)) {
+    return NextResponse.json(
+      { error: "Do not pass authentication tokens in the mini app URL" },
+      { status: 400 },
+    );
+  }
   const slug = (payload.slug?.trim() || slugifyMiniApp(name)).toLowerCase();
   const { data, error: insertError } = await auth.context.client
     .from("mini_apps")
@@ -41,7 +76,7 @@ export async function POST(request: Request) {
       icon: payload.icon?.trim() || "apps",
       logo_url: payload.logo_url?.trim() || "",
       url,
-      published: payload.published ?? true,
+      published: payload.published ?? false,
       sort_order: payload.sort_order ?? 0,
     })
     .select()
@@ -53,5 +88,13 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  await logAdminActivity({
+    context: auth.context,
+    request,
+    action: "create",
+    resource_type: "mini_app",
+    resource_id: data?.id ?? slug,
+    summary: `Created mini app ${name}`,
+  });
   return NextResponse.json({ data });
 }

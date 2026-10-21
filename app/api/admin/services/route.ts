@@ -42,15 +42,39 @@ export async function GET() {
 export async function POST(request: Request) {
   const auth = await requireAdminPermission("services:write");
   if (!auth.ok) return auth.error;
-  const body = (await request.json()) as { action?: string; provider_id?: string };
-  if (body.action !== "approve_all") {
+  const body = (await request.json()) as {
+    action?: string;
+    provider_id?: string;
+    ids?: string[];
+  };
+  if (body.action !== "approve_selected" && body.action !== "approve_all") {
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   }
-  let query = auth.context.client.from("services").update({ published: true }).eq("published", false);
-  if (body.provider_id) query = query.eq("provider_id", body.provider_id);
-  const { error } = await query;
+  // Broad approve_all is disabled — require explicit selection.
+  if (body.action === "approve_all") {
+    return NextResponse.json(
+      {
+        error:
+          "Approve-all is disabled. Select listings and approve them explicitly, or use action=approve_selected with ids.",
+      },
+      { status: 400 },
+    );
+  }
+  const ids = (body.ids ?? []).filter(Boolean);
+  if (!ids.length) {
+    return NextResponse.json({ error: "ids are required" }, { status: 400 });
+  }
+  const { data, error } = await auth.context.client
+    .from("services")
+    .update({ published: true })
+    .in("id", ids)
+    .eq("published", false)
+    .select("id");
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok: true,
+    approved: ((data ?? []) as Array<{ id: string }>).map((r) => r.id),
+  });
 }

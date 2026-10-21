@@ -173,7 +173,11 @@ export default function ServiceCategoriesPage() {
   return (
     <>
       <AdminPageHeader
-        title="Service categories"
+        title="Marketplace settings"
+        breadcrumbs={[
+          { label: "Marketplace", href: "/admin/marketplace" },
+          { label: "Settings" },
+        ]}
         description="Sport marketplace categories and subcategories. The app only shows sport-related items."
       />
       {error ? <AdminErrorAlert message={error} /> : null}

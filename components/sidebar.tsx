@@ -100,15 +100,31 @@ const identityItems: NavItem[] = [
 ];
 
 const marketplaceItems: NavItem[] = [
+  {
+    href: "/admin/marketplace",
+    label: "Overview",
+    icon: LayoutDashboard,
+    visible: (can) =>
+      can("services:read") ||
+      can("requests:read") ||
+      can("opportunities:read") ||
+      can("miniapps:read") ||
+      can("catalog:read"),
+  },
   { href: "/admin/services", label: "Services", icon: ShoppingBag, visible: (can) => can("services:read") },
   { href: "/admin/requests", label: "Bookings", icon: ClipboardList, visible: (can) => can("requests:read") },
-  { href: "/admin/service-categories", label: "Categories", icon: FolderTree, visible: (can) => can("catalog:read") },
-  { href: "/admin/miniapps", label: "Mini apps", icon: AppWindow, visible: (can) => can("miniapps:read") },
   {
     href: "/admin/opportunities",
     label: "Opportunities",
     icon: Briefcase,
     visible: (can) => can("opportunities:read"),
+  },
+  { href: "/admin/miniapps", label: "Mini Apps", icon: AppWindow, visible: (can) => can("miniapps:read") },
+  {
+    href: "/admin/marketplace/settings",
+    label: "Settings",
+    icon: FolderTree,
+    visible: (can) => can("catalog:read") || can("services:write"),
   },
 ];
 
