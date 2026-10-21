@@ -1,15 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { LogOut, Moon, Sun } from "lucide-react";
-import { getSpojexClient } from "@/lib/spojex/client";
+import { Moon, Sun } from "lucide-react";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { cn } from "@/lib/utils";
 
-/** Compact account + theme controls in the main content top bar (not the sidebar). */
+/** Compact account + theme controls in the main content top bar (logout lives in the sidebar). */
 export default function AdminTopBar() {
-  const router = useRouter();
   const { staff } = useAdminPermissions();
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
@@ -27,11 +24,6 @@ export default function AdminTopBar() {
       localStorage.setItem("theme", next);
       return next;
     });
-  };
-
-  const signOut = async () => {
-    await getSpojexClient().auth.signOut();
-    router.replace("/login");
   };
 
   const name = staff?.full_name || staff?.email || "Admin";
@@ -59,15 +51,6 @@ export default function AdminTopBar() {
         >
           {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
           <span className="hidden sm:inline">{theme === "dark" ? "Light" : "Dark"}</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => void signOut()}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-text-secondary hover:bg-muted hover:text-foreground"
-        >
-          <LogOut className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Sign out</span>
         </button>
       </div>
     </header>

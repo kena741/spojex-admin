@@ -40,12 +40,15 @@ import {
   ScrollText,
   Dumbbell,
   Images,
+  LogOut,
   Menu,
   Search,
   X,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { canReadRadioChat } from "@/lib/admin-permissions";
 import { canManageLiveEvents } from "@/lib/live-events";
+import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { cn } from "@/lib/utils";
 
@@ -422,6 +425,7 @@ function matchTrackedHref(pathname: string): string | null {
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
     const defaults: Record<string, boolean> = {};
     for (const section of NAV_SECTIONS) {
@@ -435,6 +439,11 @@ export default function Sidebar() {
   const [navQuery, setNavQuery] = useState("");
   const [frequentNav, setFrequentNav] = useState<FrequentNavEntry[]>([]);
   const { can } = useAdminPermissions();
+
+  const signOut = async () => {
+    await getSpojexClient().auth.signOut();
+    router.replace("/login");
+  };
 
   const visibleSections = NAV_SECTIONS.map((section) => ({
     ...section,
@@ -697,6 +706,17 @@ export default function Sidebar() {
         </nav>
       </div>
 
+      {/* Pinned footer: only its own height; nav above scrolls independently */}
+      <div className="mt-auto shrink-0 border-t border-sidebar-border px-3 py-2">
+        <button
+          type="button"
+          onClick={() => void signOut()}
+          className="group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[15px] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+        >
+          <LogOut className="h-4 w-4 shrink-0 text-text-hint group-hover:text-muted-foreground" />
+          <span>Sign out</span>
+        </button>
+      </div>
     </>
   );
 
