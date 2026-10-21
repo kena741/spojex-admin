@@ -158,6 +158,8 @@ export async function POST(
     is_active?: boolean;
     password?: string;
     create_if_missing?: boolean;
+    invite?: boolean;
+    permissions?: Record<string, boolean>;
   };
 
   let userId = body.user_id?.trim() || "";
@@ -168,9 +170,12 @@ export async function POST(
     "Staff";
   const staffRole = (body.staff_role?.trim() || "manager") as GymStaffRole;
   const isActive = body.is_active !== false;
-  const createIfMissing = body.create_if_missing !== false;
-  let createdPassword: string | null = null;
+  // Default: assign existing users only. Opt-in invite creates an account without
+  // returning passwords in the response (activation via Auth invite / reset).
+  const createIfMissing = body.create_if_missing === true;
+  const inviteNew = body.invite === true;
   let createdNewLogin = false;
+  let inviteSent = false;
 
   if (!allowedRoles.has(staffRole)) {
     return NextResponse.json({ error: "Invalid staff_role" }, { status: 400 });
@@ -179,7 +184,7 @@ export async function POST(
   if (!userId && userEmail) {
     const { data: user, error: userError } = await auth.context.client
       .from("users")
-      .select("id")
+      .select("id, role")
       .ilike("email", userEmail)
       .maybeSingle();
     if (userError) {
@@ -187,38 +192,70 @@ export async function POST(
     }
     if (user?.id) {
       userId = user.id;
-    } else if (createIfMissing) {
+    } else if (createIfMissing || inviteNew) {
       if (!canUseAdminClient()) {
         return NextResponse.json(
           {
             error:
               missingServiceRoleMessage() ||
-              "Service role required to create a Fan account for a new email.",
+              "Service role required to invite a new staff account.",
           },
           { status: 400 },
         );
       }
       try {
+        const admin = createAdminClient();
+        // Prefer Auth invite (no password in admin response). Fall back to createUser
+        // without echoing the password to the client.
         const password =
           (body.password ?? "").trim() || generateStadiumManagerPassword();
-        const ensured = await ensureFanUser(
-          createAdminClient(),
-          userEmail,
-          fullName,
-          password,
-        );
-        userId = ensured.publicUserId;
-        createdPassword = ensured.password;
-        createdNewLogin = ensured.createdNewLogin;
+        const invite = await admin.auth.admin.inviteUserByEmail(userEmail, {
+          data: {
+            display_name: fullName,
+            full_name: fullName,
+            // Do not force overwriting an existing profile role later.
+            role: "fan",
+          },
+        });
+        if (invite.data?.user?.id) {
+          createdNewLogin = true;
+          inviteSent = true;
+          await new Promise((r) => setTimeout(r, 400));
+          const { data: triggered } = await admin
+            .from("users")
+            .select("id")
+            .eq("user_id", invite.data.user.id)
+            .maybeSingle();
+          if (triggered?.id) {
+            userId = triggered.id;
+          } else {
+            const ensured = await ensureFanUser(admin, userEmail, fullName, password);
+            userId = ensured.publicUserId;
+            createdNewLogin = ensured.createdNewLogin;
+          }
+        } else {
+          const ensured = await ensureFanUser(admin, userEmail, fullName, password);
+          userId = ensured.publicUserId;
+          createdNewLogin = ensured.createdNewLogin;
+          inviteSent = true;
+        }
       } catch (err) {
         return NextResponse.json(
-          { error: err instanceof Error ? err.message : "Could not create Fan account" },
+          {
+            error:
+              err instanceof Error
+                ? err.message
+                : "Could not invite staff. Search and assign an existing user instead.",
+          },
           { status: 400 },
         );
       }
     } else {
       return NextResponse.json(
-        { error: "No SpoJex user found with that email." },
+        {
+          error:
+            "No SpoJex user found with that email. Search an existing user, or use Invite to send an activation email.",
+        },
         { status: 400 },
       );
     }
@@ -245,6 +282,20 @@ export async function POST(
   // Owners/staff should not also be members of the same gym.
   await client.from("gym_members").delete().eq("gym_id", gymId).eq("user_id", userId);
 
+  // Never overwrite the person's platform sports/profile role — only gym_staff.staff_role.
+  const defaultPermissions: Record<string, boolean> = {
+    members: ["owner", "manager", "receptionist"].includes(staffRole),
+    checkin: true,
+    plans: ["owner", "manager"].includes(staffRole),
+    content: ["owner", "manager", "trainer"].includes(staffRole),
+    finance: ["owner", "manager"].includes(staffRole),
+    staff: staffRole === "owner",
+  };
+  const permissions =
+    body.permissions && typeof body.permissions === "object"
+      ? { ...defaultPermissions, ...body.permissions }
+      : defaultPermissions;
+
   const { data, error } = await client
     .from("gym_staff")
     .upsert(
@@ -253,7 +304,9 @@ export async function POST(
         user_id: userId,
         staff_role: staffRole,
         is_active: isActive,
-        ...(createdPassword ? { login_password: createdPassword } : {}),
+        permissions,
+        // Do not store plaintext passwords on staff rows going forward.
+        login_password: "",
       },
       { onConflict: "gym_id,user_id" },
     )
@@ -307,10 +360,14 @@ export async function POST(
 
   return NextResponse.json({
     data,
-    password: createdPassword,
+    // Never return passwords in admin responses.
+    password: null,
     created_new_login: createdNewLogin,
-    message: createdNewLogin
-      ? `Fan account created. Share login ${userEmail} / ${createdPassword}`
-      : undefined,
+    invite_sent: inviteSent,
+    message: inviteSent
+      ? `Invitation sent to ${userEmail}. Gym staff role assigned without changing their platform profile role.`
+      : createdNewLogin
+        ? `Account linked for ${userEmail}. Share the Auth activation / password-reset link — passwords are not shown in admin.`
+        : "Existing user assigned as gym staff. Platform profile role was not changed.",
   });
 }

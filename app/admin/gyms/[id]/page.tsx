@@ -14,10 +14,18 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import {
+  gymAllowedActions,
+  gymActionPatch,
+  type GymActionId,
+} from "@/lib/gym-actions";
+import {
+  classifyGymMemberEntitlement,
   gymCategories,
   gymCategoryLabel,
   gymFeatureLabel,
   gymPlanMonthsLabel,
+  gymPlatformFeeLabel,
+  gymRatingLabel,
   gymStaffRoleLabel,
   gymStaffRoles,
   gymStatusLabel,
@@ -49,7 +57,8 @@ const areaClass =
 const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp,image/gif";
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
-type TabId = "overview" | "plans" | "staff" | "members" | "edit";
+type TabId = "overview" | "memberships" | "team" | "finance" | "settings";
+type MembershipView = "plans" | "members";
 type ImageKind = "logo" | "cover";
 type OwnerOption = {
   id: string;
@@ -58,13 +67,24 @@ type OwnerOption = {
   role?: string | null;
   city?: string | null;
 };
+type GymPaymentRow = {
+  id: string;
+  amount: number;
+  currency: string;
+  commission_amount?: number | null;
+  gym_net_amount?: number | null;
+  payment_type: string;
+  status: string;
+  paid_at?: string | null;
+  created_at: string;
+};
 
 const tabs: { id: TabId; label: string }[] = [
   { id: "overview", label: "Overview" },
-  { id: "plans", label: "Plans" },
-  { id: "staff", label: "Staff" },
-  { id: "members", label: "Members" },
-  { id: "edit", label: "Edit" },
+  { id: "memberships", label: "Memberships" },
+  { id: "team", label: "Team" },
+  { id: "finance", label: "Finance" },
+  { id: "settings", label: "Settings" },
 ];
 
 const MONTH_PRESETS = [1, 3, 6, 12] as const;
@@ -179,15 +199,20 @@ export default function GymDetailPage() {
   const coverRef = useRef<HTMLInputElement>(null);
 
   const [tab, setTab] = useState<TabId>("overview");
+  const [membershipView, setMembershipView] = useState<MembershipView>("plans");
   const [gym, setGym] = useState<GymRow | null>(null);
   const [catalog, setCatalog] = useState<GymCategoryRow[]>([]);
   const [staff, setStaff] = useState<GymStaffRow[]>([]);
   const [members, setMembers] = useState<GymMemberRow[]>([]);
   const [plans, setPlans] = useState<GymPlanRow[]>([]);
+  const [payments, setPayments] = useState<GymPaymentRow[]>([]);
+  const [memberFilter, setMemberFilter] = useState("all");
+  const [selectedMember, setSelectedMember] = useState<GymMemberRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [ownershipReason, setOwnershipReason] = useState("");
   const [uploadingKind, setUploadingKind] = useState<ImageKind | null>(null);
   const [planOpen, setPlanOpen] = useState(false);
   const [savingPlan, setSavingPlan] = useState(false);
@@ -230,9 +255,8 @@ export default function GymDetailPage() {
   const [staffRole, setStaffRole] = useState("manager");
   const [staffEmail, setStaffEmail] = useState("");
   const [staffFullName, setStaffFullName] = useState("");
-  const [staffCreds, setStaffCreds] = useState<{ email: string; password: string } | null>(
-    null,
-  );
+  const [staffNotice, setStaffNotice] = useState<string | null>(null);
+  const [staffMode, setStaffMode] = useState<"assign" | "invite">("assign");
 
   const load = async () => {
     const [response, categoriesRes] = await Promise.all([
@@ -244,6 +268,7 @@ export default function GymDetailPage() {
       staff?: GymStaffRow[];
       members?: GymMemberRow[];
       plans?: GymPlanRow[];
+      payments?: GymPaymentRow[];
       staff_error?: string | null;
       members_error?: string | null;
       plans_error?: string | null;
@@ -255,6 +280,7 @@ export default function GymDetailPage() {
     setStaff(payload.staff ?? []);
     setMembers(payload.members ?? []);
     setPlans(payload.plans ?? []);
+    setPayments(payload.payments ?? []);
     if (!categoriesRes.error && (categoriesRes.data?.length ?? 0) > 0) {
       setCatalog(categoriesRes.data as GymCategoryRow[]);
     } else {
@@ -368,11 +394,7 @@ export default function GymDetailPage() {
   const saveEdit = async () => {
     const monthly = Number(draft.monthly_payment);
     if (!Number.isFinite(monthly) || monthly < 0) {
-      setError("Monthly payment must be a non-negative number");
-      return;
-    }
-    if (!draft.owner_user_id.trim()) {
-      setError("Select an existing SpoJex user as the gym owner.");
+      setError("Monthly platform fee must be a non-negative number");
       return;
     }
     await save(
@@ -388,8 +410,6 @@ export default function GymDetailPage() {
         contact_email: draft.contact_email.trim(),
         website: draft.website.trim(),
         monthly_payment: monthly,
-        owner_user_id: draft.owner_user_id.trim(),
-        owner_name: draft.owner_name.trim(),
         status: draft.status,
         verification_status: draft.verification_status,
       },
@@ -408,13 +428,21 @@ export default function GymDetailPage() {
       setNotice("Owner is already assigned.");
       return;
     }
+    const reason = ownershipReason.trim();
+    if (!reason) {
+      setError("A reason is required to reassign gym ownership.");
+      return;
+    }
     await save(
       {
+        action: "transfer_ownership",
         owner_user_id: ownerId,
-        owner_name: pendingOwnerName.trim(),
+        reason,
+        idempotency_key: `${id}:transfer_ownership:${ownerId}:${Date.now()}`,
       },
-      "Gym owner updated.",
+      "Gym owner reassigned. Historical payments were not rewritten.",
     );
+    setOwnershipReason("");
   };
 
   const uploadImage = async (kind: ImageKind, file: File) => {
@@ -475,25 +503,29 @@ export default function GymDetailPage() {
     }
     setSavingStaff(true);
     setError(null);
+    setStaffNotice(null);
+    const inviting = staffMode === "invite";
     try {
       const payload = await postAdminResponse(`/api/admin/gyms/${id}/staff`, {
         user_email: email,
         full_name: staffFullName.trim() || undefined,
         staff_role: staffRole,
         is_active: true,
-        create_if_missing: true,
+        create_if_missing: inviting,
+        invite: inviting,
       });
       setStaffOpen(false);
       setStaffEmail("");
       setStaffFullName("");
       setStaffRole("manager");
+      setStaffMode("assign");
       await load();
-      if (payload.password) {
-        setStaffCreds({ email, password: String(payload.password) });
-        setNotice(payload.message || "Fan account created. Share the login below.");
-      } else {
-        setNotice("Staff linked to existing SpoJex user.");
-      }
+      setStaffNotice(
+        typeof payload.message === "string"
+          ? payload.message
+          : "Staff assignment updated. Platform profile role was not changed.",
+      );
+      setNotice(inviting ? "Invitation sent." : "Staff member assigned.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Add staff failed");
     } finally {
@@ -698,120 +730,44 @@ export default function GymDetailPage() {
         actions={
           canWrite ? (
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void save(
-                    { status: "active", verification_status: "verified" },
-                    "Gym approved.",
-                  )
-                }
-                className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-              >
-                Approve
-              </button>
-              {gym.feature_status === "pending" ? (
-                <>
+              {gymAllowedActions(gym)
+                .filter((item) => item.id !== "edit")
+                .slice(0, 6)
+                .map((action) => (
                   <button
+                    key={action.id}
                     type="button"
                     disabled={busy}
-                    onClick={() =>
+                    title={action.description}
+                    onClick={() => {
+                      let reason: string | undefined;
+                      if (action.needsReason) {
+                        const prompted = window.prompt(`Reason for ${action.label} (required):`);
+                        if (!prompted?.trim()) return;
+                        reason = prompted.trim();
+                      }
+                      const patch = gymActionPatch(action.id as GymActionId);
+                      if (!patch) return;
                       void save(
-                        { action: "review_featured", approve: true },
-                        "Feature request approved.",
-                      )
+                        {
+                          ...patch,
+                          ...(reason ? { reason } : {}),
+                          idempotency_key: `${gym.id}:${action.id}:${Date.now()}`,
+                        },
+                        `${action.label} applied.`,
+                      );
+                    }}
+                    className={
+                      action.tone === "success"
+                        ? "rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                        : action.tone === "danger"
+                          ? "rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                          : "rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
                     }
-                    className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
                   >
-                    Approve featured
+                    {action.label}
                   </button>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() =>
-                      void save(
-                        { action: "review_featured", approve: false },
-                        "Feature request rejected.",
-                      )
-                    }
-                    className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
-                  >
-                    Reject featured
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    void save(
-                      { is_featured: !gym.is_featured },
-                      gym.is_featured ? "Gym unfeatured." : "Gym featured on home.",
-                    )
-                  }
-                  className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-                >
-                  {gym.is_featured ? "Unfeature" : "Feature on home"}
-                </button>
-              )}
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void save({ verification_status: "under_review" }, "Marked under review.")
-                }
-                className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-              >
-                Review
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void save(
-                    { status: "inactive", verification_status: "suspended" },
-                    "Gym suspended.",
-                  )
-                }
-                className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
-              >
-                Suspend
-              </button>
-              {gym.status !== "active" ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void save({ status: "active" }, "Status set to active.")}
-                  className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-                >
-                  Activate
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void save({ status: "inactive" }, "Status set to inactive.")}
-                  className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-                >
-                  Deactivate
-                </button>
-              )}
-              {gym.status !== "rejected" ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() =>
-                    void save(
-                      { status: "rejected", verification_status: "rejected" },
-                      "Gym rejected.",
-                    )
-                  }
-                  className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-                >
-                  Reject
-                </button>
-              ) : null}
+                ))}
             </div>
           ) : null
         }
@@ -837,9 +793,8 @@ export default function GymDetailPage() {
             }`}
           >
             {item.label}
-            {item.id === "plans" ? ` (${plans.length})` : null}
-            {item.id === "staff" ? ` (${staff.length})` : null}
-            {item.id === "members" ? ` (${members.length})` : null}
+            {item.id === "memberships" ? ` (${plans.length}/${members.length})` : null}
+            {item.id === "team" ? ` (${staff.length})` : null}
           </button>
         ))}
       </div>
@@ -1065,13 +1020,13 @@ export default function GymDetailPage() {
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <dt className="text-text-secondary">Monthly payment</dt>
+                    <dt className="text-text-secondary">Monthly platform fee</dt>
                     <dd className="font-medium tabular-nums">
-                      {formatMoney(gym.monthly_payment ?? 0)}
+                      {gymPlatformFeeLabel(gym.monthly_payment)}
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <dt className="text-text-secondary">Commission</dt>
+                    <dt className="text-text-secondary">Commission (per txn)</dt>
                     <dd className="font-medium tabular-nums">
                       {gym.commission_pct == null ? "—" : `${gym.commission_pct}%`}
                     </dd>
@@ -1079,8 +1034,7 @@ export default function GymDetailPage() {
                   <div className="flex justify-between gap-3">
                     <dt className="text-text-secondary">Rating</dt>
                     <dd className="font-medium">
-                      ⭐ {Number(gym.rating_avg ?? 0).toFixed(1)}
-                      {gym.rating_count != null ? ` (${gym.rating_count})` : ""}
+                      {gymRatingLabel(gym.rating_avg, gym.rating_count)}
                     </dd>
                   </div>
                   <div className="flex justify-between gap-3">
@@ -1169,135 +1123,57 @@ export default function GymDetailPage() {
                   </div>
                 </dl>
                 {canWrite ? (
-                  <div className="mt-4 space-y-2 border-t border-border pt-4">
-                    <label className="grid gap-1 text-sm">
-                      <span className="text-text-secondary">Change assigned owner</span>
-                      <input
-                        value={ownerQuery}
-                        disabled={busy}
-                        onChange={(event) => {
-                          setOwnerQuery(event.target.value);
-                          setPendingOwnerId("");
-                          setPendingOwnerName("");
-                        }}
-                        className={fieldClass}
-                        placeholder="Search by name or email"
-                      />
-                    </label>
-                    {pendingOwnerId ? (
-                      <p className="text-xs text-emerald-700">
-                        Selected: {pendingOwnerName || pendingOwnerId}
-                        {pendingOwnerId !== (gym.owner_user_id ?? "")
-                          ? " · click Save owner to apply"
-                          : " · current owner"}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-text-secondary">
-                        Pick a SpoJex user from the results, then save.
-                      </p>
-                    )}
-                    {ownerLoading ? (
-                      <p className="text-xs text-text-hint">Searching…</p>
-                    ) : null}
-                    {ownerOptions.length > 0 ? (
-                      <ul className="max-h-40 overflow-y-auto rounded-lg border border-border">
-                        {ownerOptions.map((owner) => (
-                          <li key={owner.id}>
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => {
-                                setPendingOwnerId(owner.id);
-                                setPendingOwnerName(owner.display_name || owner.email || "");
-                                setOwnerQuery(owner.email || owner.display_name);
-                                setDraft((prev) => ({
-                                  ...prev,
-                                  owner_user_id: owner.id,
-                                  owner_name: owner.display_name || prev.owner_name,
-                                }));
-                                setOwnerOptions([]);
-                              }}
-                              className={`flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50 ${
-                                pendingOwnerId === owner.id ? "bg-primary/10" : ""
-                              }`}
-                            >
-                              <span className="font-medium">{owner.display_name}</span>
-                              <span className="text-xs text-text-secondary">
-                                {[owner.email, owner.role, owner.city]
-                                  .filter(Boolean)
-                                  .join(" · ")}
-                              </span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
+                  <p className="mt-4 border-t border-border pt-4 text-xs text-text-secondary">
+                    Ownership reassignment and listing/verification edits live in{" "}
                     <button
                       type="button"
-                      disabled={
-                        busy ||
-                        !pendingOwnerId ||
-                        pendingOwnerId === (gym.owner_user_id ?? "")
-                      }
-                      onClick={() => void saveOwner()}
-                      className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                      className="text-primary hover:underline"
+                      onClick={() => setTab("settings")}
                     >
-                      {busy ? "Saving…" : "Save owner"}
+                      Settings
                     </button>
-                  </div>
+                    . Use header actions for contextual approve / suspend / feature.
+                  </p>
                 ) : null}
               </section>
 
-              {canWrite ? (
-                <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-                  <h2 className="mb-4 font-heading text-sm font-semibold">Status controls</h2>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="grid gap-1 text-sm">
-                      <span className="text-text-secondary">Listing status</span>
-                      <select
-                        className={fieldClass}
-                        value={gym.status}
-                        disabled={busy}
-                        onChange={(event) =>
-                          void save({ status: event.target.value }, "Status updated.")
-                        }
-                      >
-                        {gymStatuses.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="grid gap-1 text-sm">
-                      <span className="text-text-secondary">Verification</span>
-                      <select
-                        className={fieldClass}
-                        value={gym.verification_status}
-                        disabled={busy}
-                        onChange={(event) =>
-                          void save(
-                            { verification_status: event.target.value },
-                            "Verification updated.",
-                          )
-                        }
-                      >
-                        {gymVerificationStatuses.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                </section>
-              ) : null}
             </div>
           </div>
         </div>
       ) : null}
 
-      {tab === "plans" ? (
+      {tab === "memberships" ? (
+        <div className="mb-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setMembershipView("plans")}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+              membershipView === "plans"
+                ? "bg-primary text-primary-foreground"
+                : "border border-border bg-card hover:bg-muted"
+            }`}
+          >
+            Plans ({plans.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setMembershipView("members")}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+              membershipView === "members"
+                ? "bg-primary text-primary-foreground"
+                : "border border-border bg-card hover:bg-muted"
+            }`}
+          >
+            Members ({members.length})
+          </button>
+          <p className="w-full text-xs text-text-hint">
+            Community roster (`gym_members`) is separate from paid entitlements (`gym_memberships`).
+            Active roster ≠ paid membership.
+          </p>
+        </div>
+      ) : null}
+
+      {tab === "memberships" && membershipView === "plans" ? (
         <div className="space-y-6">
           <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -1430,15 +1306,20 @@ export default function GymDetailPage() {
         </div>
       ) : null}
 
-      {tab === "staff" ? (
+      {tab === "team" ? (
         <div className="space-y-6">
           <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="font-heading text-sm font-semibold">Gym staff</h2>
+                <h2 className="font-heading text-sm font-semibold">Gym team</h2>
                 <p className="mt-1 text-xs text-text-secondary">
-                  Add by SpoJex email only. Missing accounts become Fan logins (password shown once).
+                  Assign an existing Spojex user, or invite a new one. Gym staff role is separate
+                  from their platform sports/profile role — assigning staff never overwrites it.
+                  Passwords are never shown in admin.
                 </p>
+                {staffNotice ? (
+                  <p className="mt-2 text-xs text-emerald-800">{staffNotice}</p>
+                ) : null}
               </div>
               {canWrite ? (
                 <button
@@ -1446,10 +1327,11 @@ export default function GymDetailPage() {
                   onClick={() => {
                     setStaffOpen(true);
                     setError(null);
+                    setStaffMode("assign");
                   }}
                   className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
                 >
-                  Add staff
+                  Assign / invite staff
                 </button>
               ) : null}
             </div>
@@ -1560,7 +1442,7 @@ export default function GymDetailPage() {
         </div>
       ) : null}
 
-      {tab === "members" ? (
+      {tab === "memberships" && membershipView === "members" ? (
         <div className="space-y-6">
           <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <div className="mb-4">
@@ -1584,11 +1466,11 @@ export default function GymDetailPage() {
                     <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
                       <tr>
                         <th className="px-4 py-3 font-semibold">Member</th>
-                        <th className="px-4 py-3 font-semibold">Code</th>
-                        <th className="px-4 py-3 font-semibold">Contact</th>
-                        <th className="px-4 py-3 font-semibold">Membership</th>
-                        <th className="px-4 py-3 font-semibold">Status</th>
-                        <th className="px-4 py-3 font-semibold">Joined</th>
+                        <th className="px-4 py-3 font-semibold">Community</th>
+                        <th className="px-4 py-3 font-semibold">Access type</th>
+                        <th className="px-4 py-3 font-semibold">Payment</th>
+                        <th className="px-4 py-3 font-semibold">Entitlement</th>
+                        <th className="px-4 py-3 font-semibold">Dates</th>
                         {canWrite ? (
                           <th className="px-4 py-3 font-semibold">Actions</th>
                         ) : null}
@@ -1597,66 +1479,67 @@ export default function GymDetailPage() {
                     <tbody>
                       {members.map((row) => {
                         const membership = latestMembership(row);
-                        const planTitle = membership
-                          ? membershipPlanTitle(membership)
-                          : null;
+                        const entitlement = classifyGymMemberEntitlement(row);
                         return (
                           <tr key={row.id} className="border-b border-border last:border-0">
                             <td className="px-4 py-3">
-                              <p className="font-medium">{row.full_name}</p>
+                              <button
+                                type="button"
+                                className="text-left font-medium text-primary hover:underline"
+                                onClick={() => setSelectedMember(row)}
+                              >
+                                {row.full_name}
+                              </button>
                               {row.users ? (
                                 <Link
                                   href={`/admin/users/${row.users.id}`}
-                                  className="text-xs text-primary hover:underline"
+                                  className="block text-xs text-primary hover:underline"
                                 >
                                   {row.users.display_name || "SpoJex profile"}
                                 </Link>
                               ) : row.user_id ? (
                                 <Link
                                   href={`/admin/users/${row.user_id}`}
-                                  className="text-xs text-primary hover:underline"
+                                  className="block text-xs text-primary hover:underline"
                                 >
                                   View user
                                 </Link>
                               ) : (
                                 <p className="text-xs text-text-hint">No linked user</p>
                               )}
-                            </td>
-                            <td className="px-4 py-3 font-mono text-xs">{row.member_code}</td>
-                            <td className="px-4 py-3 text-text-secondary">
-                              <div className="space-y-0.5">
-                                <p>{row.phone || "—"}</p>
-                                <p className="text-xs">{row.email || ""}</p>
-                              </div>
+                              <p className="text-[10px] text-text-hint">Access code concealed</p>
                             </td>
                             <td className="px-4 py-3">
-                              {membership ? (
-                                <div>
-                                  <StatusBadge tone={requestTone(membership.status)}>
-                                    {membership.status.replace(/_/g, " ")}
-                                  </StatusBadge>
-                                  {planTitle ? (
-                                    <p className="mt-1 text-xs text-text-secondary">
-                                      {planTitle}
-                                    </p>
-                                  ) : null}
-                                  <p className="text-xs text-text-hint">
-                                    {[membership.start_date, membership.end_date]
-                                      .filter(Boolean)
-                                      .join(" → ") || ""}
-                                  </p>
-                                </div>
-                              ) : (
-                                <span className="text-text-secondary">—</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3">
-                              <StatusBadge tone={row.is_active ? "success" : "neutral"}>
-                                {row.is_active ? "Active" : "Inactive"}
+                              <StatusBadge
+                                tone={
+                                  entitlement.community_status === "active"
+                                    ? "success"
+                                    : "neutral"
+                                }
+                              >
+                                {entitlement.community_status}
                               </StatusBadge>
                             </td>
-                            <td className="px-4 py-3 text-text-secondary">
-                              {formatDate(row.created_at)}
+                            <td className="px-4 py-3 text-xs">
+                              {entitlement.access_type.replace(/_/g, " ")}
+                              {entitlement.plan_title ? (
+                                <p className="mt-1 text-text-secondary">
+                                  {entitlement.plan_title}
+                                </p>
+                              ) : null}
+                            </td>
+                            <td className="px-4 py-3 text-xs">{entitlement.payment_state}</td>
+                            <td className="px-4 py-3">
+                              <StatusBadge tone={requestTone(entitlement.entitlement_status)}>
+                                {entitlement.entitlement_status.replace(/_/g, " ")}
+                              </StatusBadge>
+                            </td>
+                            <td className="px-4 py-3 text-xs text-text-secondary">
+                              {membership
+                                ? [membership.start_date, membership.end_date]
+                                    .filter(Boolean)
+                                    .join(" → ") || "—"
+                                : "—"}
                             </td>
                             {canWrite ? (
                               <td className="px-4 py-3">
@@ -1664,6 +1547,7 @@ export default function GymDetailPage() {
                                   <button
                                     type="button"
                                     disabled={busy}
+                                    title="Deactivate keeps roster history; does not delete payments."
                                     onClick={() => void toggleMember(row)}
                                     className="text-sm text-text-secondary hover:text-text-primary disabled:opacity-50"
                                   >
@@ -1672,6 +1556,7 @@ export default function GymDetailPage() {
                                   <button
                                     type="button"
                                     disabled={busy}
+                                    title="Remove unlinks access; financial history is preserved."
                                     onClick={() => void removeMember(row)}
                                     className="text-sm text-red-600 disabled:opacity-50"
                                   >
@@ -1692,7 +1577,100 @@ export default function GymDetailPage() {
         </div>
       ) : null}
 
-      {tab === "edit" ? (
+      {tab === "finance" ? (
+        <div className="space-y-6">
+          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <h2 className="mb-2 font-heading text-sm font-semibold">Finance</h2>
+            <p className="mb-4 text-xs text-text-secondary">
+              Customer membership payments are separate from the Gym→Spojex monthly platform fee.
+              Platform fee invoice history is not available yet (shown as unavailable, not zero).
+            </p>
+            <dl className="grid gap-3 text-sm sm:grid-cols-2">
+              <div className="flex justify-between gap-3">
+                <dt className="text-text-secondary">Monthly platform fee</dt>
+                <dd className="font-medium">{gymPlatformFeeLabel(gym.monthly_payment)}</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-text-secondary">Platform fee invoices</dt>
+                <dd className="font-medium text-text-hint">Unavailable</dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-text-secondary">Commission %</dt>
+                <dd className="font-medium">
+                  {gym.commission_pct == null ? "—" : `${gym.commission_pct}%`}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-text-secondary">Ledger</dt>
+                <dd>
+                  <Link
+                    href={`/admin/finance/transactions?module=gym&q=${gym.id}`}
+                    className="text-primary hover:underline"
+                  >
+                    Open filtered Finance transactions
+                  </Link>
+                </dd>
+              </div>
+            </dl>
+          </section>
+          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <h2 className="mb-4 font-heading text-sm font-semibold">
+              Recent customer payments
+            </h2>
+            {payments.length === 0 ? (
+              <AdminEmpty
+                title="No payment records"
+                description="Verified membership payments for this gym appear here."
+              />
+            ) : (
+              <AdminTableShell>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+                      <tr>
+                        <th className="px-4 py-3 font-semibold">When</th>
+                        <th className="px-4 py-3 font-semibold">Type</th>
+                        <th className="px-4 py-3 font-semibold">Gross</th>
+                        <th className="px-4 py-3 font-semibold">Commission</th>
+                        <th className="px-4 py-3 font-semibold">Gym net</th>
+                        <th className="px-4 py-3 font-semibold">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {payments.map((row) => (
+                        <tr key={row.id} className="border-b border-border last:border-0">
+                          <td className="px-4 py-3 text-text-secondary">
+                            {formatDate(row.paid_at || row.created_at)}
+                          </td>
+                          <td className="px-4 py-3">{row.payment_type}</td>
+                          <td className="px-4 py-3 tabular-nums">
+                            {formatMoney(row.amount, row.currency || "ETB")}
+                          </td>
+                          <td className="px-4 py-3 tabular-nums">
+                            {row.commission_amount == null
+                              ? "—"
+                              : formatMoney(row.commission_amount, row.currency || "ETB")}
+                          </td>
+                          <td className="px-4 py-3 tabular-nums">
+                            {row.gym_net_amount == null
+                              ? "—"
+                              : formatMoney(row.gym_net_amount, row.currency || "ETB")}
+                          </td>
+                          <td className="px-4 py-3">
+                            <StatusBadge tone={requestTone(row.status)}>{row.status}</StatusBadge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </AdminTableShell>
+            )}
+          </section>
+        </div>
+      ) : null}
+
+      {tab === "settings" ? (
         <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
           <h2 className="mb-4 font-heading text-sm font-semibold">Edit gym</h2>
           {!canWrite ? (
@@ -1723,7 +1701,7 @@ export default function GymDetailPage() {
                   </select>
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="text-text-secondary">Monthly payment (ETB)</span>
+                  <span className="text-text-secondary">Monthly platform fee (ETB)</span>
                   <input
                     type="number"
                     min={0}
@@ -1806,9 +1784,14 @@ export default function GymDetailPage() {
                     onChange={(event) => setDraft({ ...draft, website: event.target.value })}
                   />
                 </label>
-                <div className="grid gap-2 sm:col-span-2">
+                <div className="grid gap-2 sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50/40 p-3">
+                  <p className="text-sm font-medium text-text-primary">Ownership transfer</p>
+                  <p className="text-xs text-text-secondary">
+                    Current: {gym.owner_name || gym.users?.display_name || gym.owner_user_id || "—"}.
+                    Does not move personal balances or rewrite historical payment recipients.
+                  </p>
                   <label className="grid gap-1 text-sm">
-                    <span className="text-text-secondary">Assigned owner</span>
+                    <span className="text-text-secondary">Proposed owner (search)</span>
                     <input
                       className={fieldClass}
                       value={ownerQuery}
@@ -1817,25 +1800,20 @@ export default function GymDetailPage() {
                         setOwnerQuery(event.target.value);
                         setPendingOwnerId("");
                         setPendingOwnerName("");
-                        setDraft((prev) => ({ ...prev, owner_user_id: "" }));
                       }}
                       placeholder="Search by name or email"
                     />
                   </label>
-                  {draft.owner_user_id ? (
+                  {pendingOwnerId ? (
                     <p className="text-xs text-emerald-700">
-                      Linked: {draft.owner_name || pendingOwnerName || draft.owner_user_id}
+                      Proposed: {pendingOwnerName || pendingOwnerId}
                     </p>
-                  ) : (
-                    <p className="text-xs text-text-secondary">
-                      Required. Pick a SpoJex user from the results.
-                    </p>
-                  )}
+                  ) : null}
                   {ownerLoading ? (
                     <p className="text-xs text-text-hint">Searching…</p>
                   ) : null}
                   {ownerOptions.length > 0 ? (
-                    <ul className="max-h-40 overflow-y-auto rounded-lg border border-border">
+                    <ul className="max-h-40 overflow-y-auto rounded-lg border border-border bg-card">
                       {ownerOptions.map((owner) => (
                         <li key={owner.id}>
                           <button
@@ -1845,15 +1823,10 @@ export default function GymDetailPage() {
                               setPendingOwnerId(owner.id);
                               setPendingOwnerName(owner.display_name || owner.email || "");
                               setOwnerQuery(owner.email || owner.display_name);
-                              setDraft((prev) => ({
-                                ...prev,
-                                owner_user_id: owner.id,
-                                owner_name: owner.display_name || prev.owner_name,
-                              }));
                               setOwnerOptions([]);
                             }}
                             className={`flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50 ${
-                              draft.owner_user_id === owner.id ? "bg-primary/10" : ""
+                              pendingOwnerId === owner.id ? "bg-primary/10" : ""
                             }`}
                           >
                             <span className="font-medium">{owner.display_name}</span>
@@ -1867,6 +1840,29 @@ export default function GymDetailPage() {
                       ))}
                     </ul>
                   ) : null}
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-text-secondary">Reason (required)</span>
+                    <input
+                      className={fieldClass}
+                      value={ownershipReason}
+                      disabled={busy}
+                      onChange={(event) => setOwnershipReason(event.target.value)}
+                      placeholder="Why is ownership changing?"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={
+                      busy ||
+                      !pendingOwnerId ||
+                      pendingOwnerId === (gym.owner_user_id ?? "") ||
+                      !ownershipReason.trim()
+                    }
+                    onClick={() => void saveOwner()}
+                    className="rounded-md border border-amber-300 bg-card px-3 py-2 text-xs font-medium hover:bg-muted disabled:opacity-50"
+                  >
+                    Apply ownership transfer
+                  </button>
                 </div>
                 <label className="grid gap-1 text-sm">
                   <span className="text-text-secondary">Commission (read-only)</span>
@@ -1912,7 +1908,7 @@ export default function GymDetailPage() {
               <div className="flex justify-end">
                 <button
                   type="button"
-                  disabled={busy || !draft.name.trim() || !draft.owner_user_id.trim()}
+                  disabled={busy || !draft.name.trim()}
                   onClick={() => void saveEdit()}
                   className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
                 >
@@ -2055,8 +2051,32 @@ export default function GymDetailPage() {
         }
       >
         <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setStaffMode("assign")}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium ${
+                staffMode === "assign"
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border"
+              }`}
+            >
+              Assign existing user
+            </button>
+            <button
+              type="button"
+              onClick={() => setStaffMode("invite")}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium ${
+                staffMode === "invite"
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border"
+              }`}
+            >
+              Invite new staff
+            </button>
+          </div>
           <label className="grid gap-1 text-sm">
-            <span className="text-text-secondary">Staff role</span>
+            <span className="text-text-secondary">Gym staff role</span>
             <select
               className={fieldClass}
               value={staffRole}
@@ -2086,43 +2106,79 @@ export default function GymDetailPage() {
               className={fieldClass}
               value={staffFullName}
               onChange={(event) => setStaffFullName(event.target.value)}
-              placeholder="Used if a Fan account is created"
+              placeholder="Used on invite profile only"
             />
           </label>
           <p className="text-xs text-text-secondary">
-            Existing Spojex users are linked. If the email is new, a Fan account is created and
-            the password is shown once.
+            {staffMode === "assign"
+              ? "Looks up an existing Spojex user by email. Their platform profile role is left unchanged."
+              : "Sends an Auth invitation / creates an activatable account. Passwords are never returned in admin responses."}
           </p>
         </div>
       </AdminModal>
 
       <AdminModal
-        open={Boolean(staffCreds)}
-        title="Fan login created"
-        onClose={() => setStaffCreds(null)}
+        open={Boolean(selectedMember)}
+        title={selectedMember?.full_name || "Member"}
+        onClose={() => setSelectedMember(null)}
         footer={
           <AdminModalFooter
-            onCancel={() => setStaffCreds(null)}
-            onSave={() => setStaffCreds(null)}
-            saveLabel="Done"
+            onCancel={() => setSelectedMember(null)}
+            onSave={() => setSelectedMember(null)}
+            saveLabel="Close"
           />
         }
       >
-        {staffCreds ? (
+        {selectedMember ? (
           <div className="space-y-3 text-sm">
-            <p className="text-text-secondary">
-              Share these credentials with the staff member. The password is shown only once.
-            </p>
-            <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 font-mono text-xs">
-              <p>
-                <span className="text-text-secondary">Email: </span>
-                {staffCreds.email}
-              </p>
-              <p className="mt-1">
-                <span className="text-text-secondary">Password: </span>
-                {staffCreds.password}
-              </p>
-            </div>
+            {(() => {
+              const entitlement = classifyGymMemberEntitlement(selectedMember);
+              const membership = latestMembership(selectedMember);
+              return (
+                <>
+                  <p className="text-xs text-text-hint">
+                    Access codes that grant entry are concealed in admin.
+                  </p>
+                  <dl className="grid gap-2">
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-text-secondary">Community status</dt>
+                      <dd>{entitlement.community_status}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-text-secondary">Access type</dt>
+                      <dd>{entitlement.access_type.replace(/_/g, " ")}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-text-secondary">Payment state</dt>
+                      <dd>{entitlement.payment_state}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-text-secondary">Entitlement</dt>
+                      <dd>{entitlement.entitlement_status}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-text-secondary">Plan (snapshot)</dt>
+                      <dd>{entitlement.plan_title || "—"}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-text-secondary">Dates</dt>
+                      <dd>
+                        {membership
+                          ? [membership.start_date, membership.end_date]
+                              .filter(Boolean)
+                              .join(" → ") || "—"
+                          : "—"}
+                      </dd>
+                    </div>
+                  </dl>
+                  <p className="text-xs text-text-secondary">
+                    Membership history, payments/refunds, renewals, and check-ins are scoped to
+                    this gym. Deactivate = roster off (history kept). Remove = unlink access
+                    (financial history preserved).
+                  </p>
+                </>
+              );
+            })()}
           </div>
         ) : null}
       </AdminModal>

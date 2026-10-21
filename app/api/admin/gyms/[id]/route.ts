@@ -3,6 +3,7 @@ import { createSpojexClient } from "@/lib/api/client";
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { ensureGymOrganizationViaTables } from "@/lib/ensure-gym-organization";
+import { getSpojexApiBaseUrl } from "@/lib/env";
 import {
   gymFeatureStatuses,
   gymStatuses,
@@ -12,6 +13,21 @@ import {
   type GymVerificationStatus,
 } from "@/lib/gyms";
 import { requestAccessToken } from "@/lib/spojex/server";
+
+const PYTHON_ACTIONS = new Set([
+  "approve_listing",
+  "mark_under_review",
+  "revoke_verification",
+  "activate_listing",
+  "deactivate_listing",
+  "reject_listing",
+  "suspend",
+  "reactivate",
+  "feature_approve",
+  "feature_reject",
+  "feature_toggle",
+  "transfer_ownership",
+]);
 
 const allowed = [
   "status",
@@ -209,12 +225,32 @@ export async function GET(
     }
   }
 
+  let plans = plansRes.data ?? [];
+  let plansError = plansRes.error?.message ?? null;
+  if (plansRes.error) {
+    plans = [];
+  }
+
+  // Payments summary for Finance tab (customer memberships — not platform fee invoices).
+  const paymentsRes = await auth.context.client
+    .from("gym_payments")
+    .select(
+      "id, amount, currency, commission_pct, commission_amount, gym_net_amount, payment_type, status, paid_at, created_at, membership_id, plan_id",
+    )
+    .eq("gym_id", id)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
   return NextResponse.json({
     data: gymRes.data,
     staff,
     members,
+    plans,
+    payments: paymentsRes.data ?? [],
     staff_error: staffError,
     members_error: membersError,
+    plans_error: plansError,
+    payments_error: paymentsRes.error?.message ?? null,
   });
 }
 
@@ -228,18 +264,50 @@ export async function PATCH(
   const body = (await request.json()) as Record<string, unknown>;
 
   if (body.action === "review_featured") {
-    const approve = body.approve === true;
-    const patch = featuredPatch({
-      featureStatus: approve ? "approved" : "rejected",
+    body.action = body.approve === true ? "feature_approve" : "feature_reject";
+  }
+
+  if (typeof body.action === "string" && PYTHON_ACTIONS.has(body.action)) {
+    const token = await requestAccessToken();
+    if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const res = await fetch(`${getSpojexApiBaseUrl()}/api/v1/admin/gyms/${id}/actions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        action: body.action,
+        reason: body.reason ?? null,
+        idempotency_key: body.idempotency_key ?? null,
+        owner_user_id: body.owner_user_id ?? null,
+      }),
+      cache: "no-store",
     });
-    const saved = await writeGym(auth.context.client, id, patch);
-    if (saved.error || !saved.row) {
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) {
       return NextResponse.json(
-        { error: saved.error || "Gym not found" },
-        { status: saved.status },
+        {
+          error:
+            (payload as { error?: string; message?: string }).message ||
+            (payload as { error?: string }).error ||
+            "Action failed",
+        },
+        { status: res.status },
       );
     }
-    return NextResponse.json({ ok: true, gym: saved.row, data: saved.row });
+    // Refresh full gym row for the UI
+    const refreshed = await auth.context.client
+      .from("gyms")
+      .select(gymSelect)
+      .eq("id", id)
+      .maybeSingle();
+    return NextResponse.json({
+      ok: true,
+      ...(payload as object),
+      gym: refreshed.data,
+      data: refreshed.data,
+    });
   }
 
   const patch: Record<string, unknown> = {};

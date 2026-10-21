@@ -32,12 +32,13 @@ import {
   AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
-import { gymAllowedActions, type GymActionId } from "@/lib/gym-actions";
-import { gymVerificationMatches } from "@/lib/native-apps-filters";
+import { gymAllowedActions, gymActionPatch, type GymActionId } from "@/lib/gym-actions";
 import {
   gymCategories,
   gymCategoryLabel,
   gymFeatureLabel,
+  gymPlatformFeeLabel,
+  gymRatingLabel,
   gymStatuses,
   gymVerificationStatuses,
   type GymCategoryRow,
@@ -47,7 +48,7 @@ import { adminFetch, patchAdmin, postAdminResponse } from "@/lib/hooks";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { UserRow } from "@/lib/types";
-import { formatDate, formatMoney, locationLabel } from "@/lib/utils";
+import { formatDate, locationLabel } from "@/lib/utils";
 
 const fieldClass =
   "h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-text-primary shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60";
@@ -248,24 +249,14 @@ function GymCard({
   canWrite,
   busyId,
   onEdit,
-  onApprove,
-  onReview,
-  onToggleFeature,
-  onApproveFeature,
-  onRejectFeature,
-  onSuspend,
+  onAction,
 }: {
   row: GymRow;
   catalog: GymCategoryRow[];
   canWrite: boolean;
   busyId: string | null;
   onEdit: () => void;
-  onApprove: () => void;
-  onReview: () => void;
-  onToggleFeature: () => void;
-  onApproveFeature: () => void;
-  onRejectFeature: () => void;
-  onSuspend: () => void;
+  onAction: (id: GymActionId, needsReason?: boolean) => void;
 }) {
   const cover = row.cover_url || row.logo_url;
   const isBusy = busyId === row.id;
@@ -295,14 +286,13 @@ function GymCard({
           </Link>
           <p className="flex items-center gap-1 text-xs text-text-secondary">
             <MapPin className="h-3 w-3" />
-            {locationLabel(row.city, row.location) !== "—"
-              ? [row.city, row.location].filter(Boolean).join(" · ")
-              : locationLabel(row.city, row.country)}
+            {locationLabel(row.city, row.country)}
+            {row.location?.trim() ? ` · ${row.location.trim()}` : ""}
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-hint">
             <span className="flex items-center gap-1">
               <Star className="h-3 w-3" />
-              {Number(row.rating_avg ?? 0).toFixed(1)}
+              {gymRatingLabel(row.rating_avg, row.rating_count)}
             </span>
             <span className="flex items-center gap-1">
               <Users className="h-3 w-3" />
@@ -341,7 +331,7 @@ function GymCard({
           className="tabular-nums font-medium text-text-primary"
           title="Monthly platform fee paid by the gym to Spojex (not member prices)"
         >
-          Fee {formatMoney(row.monthly_payment ?? 0)}/mo
+          {gymPlatformFeeLabel(row.monthly_payment)}
         </span>
       </div>
 
@@ -353,17 +343,7 @@ function GymCard({
           <Eye className="h-3 w-3" /> Open gym
         </Link>
         {canWrite ? (
-          <GymActionsMenu
-            row={row}
-            busy={isBusy}
-            onEdit={onEdit}
-            onApprove={onApprove}
-            onReview={onReview}
-            onToggleFeature={onToggleFeature}
-            onApproveFeature={onApproveFeature}
-            onRejectFeature={onRejectFeature}
-            onSuspend={onSuspend}
-          />
+          <GymActionsMenu row={row} busy={isBusy} onEdit={onEdit} onAction={onAction} />
         ) : null}
       </div>
     </div>
@@ -374,35 +354,20 @@ function GymActionsMenu({
   row,
   busy,
   onEdit,
-  onApprove,
-  onReview,
-  onToggleFeature,
-  onApproveFeature,
-  onRejectFeature,
-  onSuspend,
+  onAction,
 }: {
   row: GymRow;
   busy: boolean;
   onEdit: () => void;
-  onApprove: () => void;
-  onReview: () => void;
-  onToggleFeature: () => void;
-  onApproveFeature: () => void;
-  onRejectFeature: () => void;
-  onSuspend: () => void;
+  onAction: (id: GymActionId, needsReason?: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const actions = gymAllowedActions(row);
 
-  const run = (id: GymActionId) => {
+  const run = (action: (typeof actions)[number]) => {
     setOpen(false);
-    if (id === "edit") return onEdit();
-    if (id === "approve_listing") return onApprove();
-    if (id === "mark_under_review") return onReview();
-    if (id === "feature_toggle") return onToggleFeature();
-    if (id === "feature_approve") return onApproveFeature();
-    if (id === "feature_reject") return onRejectFeature();
-    if (id === "suspend" || id === "reactivate") return onSuspend();
+    if (action.id === "edit") return onEdit();
+    onAction(action.id, action.needsReason);
   };
 
   return (
@@ -429,7 +394,7 @@ function GymActionsMenu({
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => run(action.id)}
+                  onClick={() => run(action)}
                   className={`block w-full px-3 py-2 text-left text-xs hover:bg-muted ${
                     action.tone === "danger"
                       ? "text-red-700"
@@ -472,10 +437,18 @@ export default function GymsAdminPage() {
     searchParams.get("verification") || "all",
   );
   const [category, setCategory] = useState(searchParams.get("category") || "all");
+  const [locationFilter, setLocationFilter] = useState(
+    searchParams.get("location") || "",
+  );
   const [featuredFilter, setFeaturedFilter] = useState(
     searchParams.get("featured") || "all",
   );
+  const [page, setPage] = useState(Number(searchParams.get("page") || "1") || 1);
+  const [pageSize] = useState(40);
+  const [total, setTotal] = useState(0);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [sort] = useState("created_at");
+  const [order] = useState("desc");
 
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -497,19 +470,30 @@ export default function GymsAdminPage() {
   const [uploadingKind, setUploadingKind] = useState<ImageKind | null>(null);
 
   const load = async () => {
-    const spojex = getSpojexClient();
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("q", query.trim());
+    if (status !== "all") params.set("status", status);
+    if (verification !== "all") params.set("verification", verification);
+    if (category !== "all") params.set("category", category);
+    if (locationFilter.trim()) params.set("location", locationFilter.trim());
+    if (featuredFilter !== "all") params.set("featured", featuredFilter);
+    params.set("page", String(page));
+    params.set("page_size", String(pageSize));
+    params.set("sort", sort);
+    params.set("order", order);
+
     const [gymsRes, categoriesRes] = await Promise.all([
-      spojex
-        .from("gyms")
-        .select(
-          "id, name, slug, logo_url, cover_url, description, location, address, city, country, category, status, verification_status, is_featured, feature_status, feature_requested_at, feature_reviewed_at, rating_avg, follower_count, monthly_payment, contact_phone, contact_email, website, owner_user_id, owner_name, created_at",
-        )
-        .order("created_at", { ascending: false })
-        .limit(500),
-      spojex.from("gym_categories").select("*").order("sort_order"),
+      fetch(`/api/admin/gyms?${params}`, { credentials: "same-origin", cache: "no-store" }),
+      getSpojexClient().from("gym_categories").select("*").order("sort_order"),
     ]);
-    if (gymsRes.error) throw gymsRes.error;
-    setRows((gymsRes.data ?? []) as GymRow[]);
+    const payload = (await gymsRes.json().catch(() => ({}))) as {
+      data?: GymRow[];
+      total?: number;
+      error?: string;
+    };
+    if (!gymsRes.ok) throw new Error(payload.error || "Failed to load gyms");
+    setRows((payload.data ?? []) as GymRow[]);
+    setTotal(Number(payload.total ?? 0));
     if (!categoriesRes.error && (categoriesRes.data?.length ?? 0) > 0) {
       setCatalog(categoriesRes.data as GymCategoryRow[]);
     } else {
@@ -526,10 +510,23 @@ export default function GymsAdminPage() {
   };
 
   useEffect(() => {
+    setLoading(true);
     load()
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
       .finally(() => setLoading(false));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload on filter/page change
+  }, [query, status, verification, category, locationFilter, featuredFilter, page, pageSize, sort, order]);
+
+  // Apply URL filters on browser back/forward and deep links (e.g. verification=queue).
+  useEffect(() => {
+    setQuery(searchParams.get("q") || "");
+    setStatus(searchParams.get("status") || "all");
+    setVerification(searchParams.get("verification") || "all");
+    setCategory(searchParams.get("category") || "all");
+    setLocationFilter(searchParams.get("location") || "");
+    setFeaturedFilter(searchParams.get("featured") || "all");
+    setPage(Number(searchParams.get("page") || "1") || 1);
+  }, [searchParams]);
 
   useEffect(() => {
     if (!createOpen && !editOpen) return;
@@ -577,53 +574,25 @@ export default function GymsAdminPage() {
     };
   }, [createLogoPreview, createCoverPreview]);
 
-  const writeFilters = (patch: Record<string, string | null>) => {
-    const next = new URLSearchParams(searchParams.toString());
-    for (const [k, v] of Object.entries(patch)) {
-      if (v == null || v === "" || v === "all") next.delete(k);
-      else next.set(k, v);
-    }
-    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
-  };
-
   useEffect(() => {
-    writeFilters({
-      q: query || null,
-      status,
-      verification,
-      category,
-      featured: featuredFilter,
-    });
+    const next = new URLSearchParams();
+    if (query.trim()) next.set("q", query.trim());
+    if (status !== "all") next.set("status", status);
+    if (verification !== "all") next.set("verification", verification);
+    if (category !== "all") next.set("category", category);
+    if (locationFilter.trim()) next.set("location", locationFilter.trim());
+    if (featuredFilter !== "all") next.set("featured", featuredFilter);
+    if (page > 1) next.set("page", String(page));
+    const qs = next.toString();
+    const current = searchParams.toString();
+    if (qs !== current) {
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync outward only when filters change
-  }, [query, status, verification, category, featuredFilter]);
+  }, [query, status, verification, category, locationFilter, featuredFilter, page]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return rows.filter((row) => {
-      if (status !== "all" && row.status !== status) return false;
-      if (!gymVerificationMatches(row.verification_status, verification)) {
-        return false;
-      }
-      if (category !== "all" && row.category !== category) return false;
-      if (featuredFilter === "featured" && !row.is_featured) return false;
-      if (featuredFilter === "pending" && row.feature_status !== "pending") return false;
-      if (featuredFilter === "not_featured" && (row.is_featured || row.feature_status === "pending")) {
-        return false;
-      }
-      if (!q) return true;
-      return [
-        row.name,
-        row.city,
-        row.location,
-        row.address,
-        row.contact_email,
-        row.category,
-        row.owner_name,
-      ]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(q));
-    });
-  }, [category, featuredFilter, query, rows, status, verification]);
+  // Server already filtered/paginated.
+  const filtered = rows;
 
   const totals = useMemo(() => {
     let active = 0;
@@ -640,6 +609,32 @@ export default function GymsAdminPage() {
     }
     return { active, pending, verified, featurePending, featured };
   }, [filtered]);
+
+  const runGymAction = async (id: string, actionId: GymActionId, needsReason?: boolean) => {
+    if (!canWrite || actionId === "edit") return;
+    let reason: string | undefined;
+    if (needsReason) {
+      const prompted = window.prompt("Reason (required):");
+      if (!prompted?.trim()) return;
+      reason = prompted.trim();
+    }
+    const patch = gymActionPatch(actionId);
+    if (!patch) return;
+    setBusyId(id);
+    setError(null);
+    try {
+      await patchAdmin(`/api/admin/gyms/${id}`, {
+        ...patch,
+        ...(reason ? { reason } : {}),
+        idempotency_key: `${id}:${actionId}:${Date.now()}`,
+      });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Action failed");
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const selectedOwner = ownerOptions.find((item) => item.id === form.owner_user_id);
   const selectedEditOwner = ownerOptions.find(
@@ -872,7 +867,7 @@ export default function GymsAdminPage() {
         GymRow,
         "status" | "verification_status" | "monthly_payment" | "is_featured" | "feature_status"
       >
-    > & { action?: string; approve?: boolean },
+    > & { action?: string; approve?: boolean; reason?: string; idempotency_key?: string },
   ) => {
     if (!canWrite) return;
     setBusyId(id);
@@ -919,30 +914,45 @@ export default function GymsAdminPage() {
 
       {/* Stat Cards */}
       <section className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <AdminStatCard title="Shown" value={`${filtered.length}`} />
-        <AdminStatCard title="Active" value={`${totals.active}`} />
-        <AdminStatCard title="Verified" value={`${totals.verified}`} />
-        <AdminStatCard title="Featured" value={`${totals.featured}`} />
+        <AdminStatCard title="Total" value={`${total}`} />
+        <AdminStatCard title="Active (page)" value={`${totals.active}`} />
+        <AdminStatCard title="Verified (page)" value={`${totals.verified}`} />
+        <AdminStatCard title="Featured (page)" value={`${totals.featured}`} />
         <AdminStatCard title="Feature pending" value={`${totals.featurePending}`} />
       </section>
 
       {/* Filters */}
       <AdminFilterPanel>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <AdminSearchInput
             value={query}
-            onChange={setQuery}
+            onChange={(value) => {
+              setPage(1);
+              setQuery(value);
+            }}
             placeholder="Search name, city, location, owner…"
           />
-          <AdminSelect value={status} onChange={setStatus}>
-            <option value="all">All statuses</option>
+          <AdminSelect
+            value={status}
+            onChange={(value) => {
+              setPage(1);
+              setStatus(value);
+            }}
+          >
+            <option value="all">All listing statuses</option>
             {gymStatuses.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.label}
               </option>
             ))}
           </AdminSelect>
-          <AdminSelect value={verification} onChange={setVerification}>
+          <AdminSelect
+            value={verification}
+            onChange={(value) => {
+              setPage(1);
+              setVerification(value);
+            }}
+          >
             <option value="all">All verification</option>
             <option value="queue">Verification queue (pending + under review)</option>
             {gymVerificationStatuses.map((item) => (
@@ -951,7 +961,13 @@ export default function GymsAdminPage() {
               </option>
             ))}
           </AdminSelect>
-          <AdminSelect value={category} onChange={setCategory}>
+          <AdminSelect
+            value={category}
+            onChange={(value) => {
+              setPage(1);
+              setCategory(value);
+            }}
+          >
             <option value="all">All categories</option>
             {catalog.map((item) => (
               <option key={item.slug} value={item.slug}>
@@ -959,7 +975,21 @@ export default function GymsAdminPage() {
               </option>
             ))}
           </AdminSelect>
-          <AdminSelect value={featuredFilter} onChange={setFeaturedFilter}>
+          <AdminSearchInput
+            value={locationFilter}
+            onChange={(value) => {
+              setPage(1);
+              setLocationFilter(value);
+            }}
+            placeholder="Location (city / area)"
+          />
+          <AdminSelect
+            value={featuredFilter}
+            onChange={(value) => {
+              setPage(1);
+              setFeaturedFilter(value);
+            }}
+          >
             <option value="all">All featuring</option>
             <option value="featured">Featured</option>
             <option value="pending">Feature pending</option>
@@ -981,39 +1011,8 @@ export default function GymsAdminPage() {
               canWrite={canWrite}
               busyId={busyId}
               onEdit={() => openEdit(row)}
-              onApprove={() =>
-                updateGym(row.id, {
-                  status: "active",
-                  verification_status: "verified",
-                })
-              }
-              onReview={() =>
-                updateGym(row.id, {
-                  verification_status: "under_review",
-                })
-              }
-              onToggleFeature={() =>
-                updateGym(row.id, {
-                  is_featured: !row.is_featured,
-                })
-              }
-              onApproveFeature={() =>
-                updateGym(row.id, {
-                  action: "review_featured",
-                  approve: true,
-                })
-              }
-              onRejectFeature={() =>
-                updateGym(row.id, {
-                  action: "review_featured",
-                  approve: false,
-                })
-              }
-              onSuspend={() =>
-                updateGym(row.id, {
-                  status: "inactive",
-                  verification_status: "suspended",
-                })
+              onAction={(actionId, needsReason) =>
+                void runGymAction(row.id, actionId, needsReason)
               }
             />
           ))}
@@ -1039,13 +1038,15 @@ export default function GymsAdminPage() {
                 <tr>
                   <th className="px-4 py-3 font-semibold">Gym</th>
                   <th className="px-4 py-3 font-semibold">Category</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold">Location</th>
+                  <th className="px-4 py-3 font-semibold">Owner</th>
+                  <th className="px-4 py-3 font-semibold">Listing</th>
                   <th className="px-4 py-3 font-semibold">Verification</th>
                   <th className="px-4 py-3 font-semibold">Featured</th>
-                  <th className="px-4 py-3 font-semibold" title="Monthly platform fee to Spojex">
-                    Platform fee
+                  <th className="px-4 py-3 font-semibold" title="Monthly Gym→Spojex platform fee">
+                    Monthly platform fee
                   </th>
-                  <th className="px-4 py-3 font-semibold">Created</th>
+                  <th className="px-4 py-3 font-semibold">Memberships</th>
                   <th className="px-4 py-3 font-semibold">Actions</th>
                 </tr>
               </thead>
@@ -1078,21 +1079,24 @@ export default function GymsAdminPage() {
                             >
                               {row.name}
                             </Link>
-                            <p className="text-xs text-text-secondary">
-                              {locationLabel(row.city, row.location) !== "—"
-                                ? [row.city, row.location].filter(Boolean).join(" · ")
-                                : locationLabel(row.city, row.country)}
-                            </p>
                             <p className="text-xs text-text-hint">
-                              ⭐ {Number(row.rating_avg ?? 0).toFixed(1)} · {row.follower_count ?? 0}{" "}
-                              followers
-                              {row.owner_name ? ` · ${row.owner_name}` : ""}
+                              {gymRatingLabel(row.rating_avg, row.rating_count)} ·{" "}
+                              {row.follower_count ?? 0} followers
                             </p>
                           </div>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-text-secondary">
                         {gymCategoryLabel(row.category, catalog)}
+                      </td>
+                      <td className="px-4 py-3 text-text-secondary">
+                        {locationLabel(row.city, row.country)}
+                        {row.location?.trim() ? (
+                          <span className="block text-xs text-text-hint">{row.location}</span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-text-secondary">
+                        {row.owner_name || "—"}
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge tone={requestTone(row.status)}>{row.status}</StatusBadge>
@@ -1117,11 +1121,13 @@ export default function GymsAdminPage() {
                           {gymFeatureLabel(row.feature_status, row.is_featured)}
                         </StatusBadge>
                       </td>
-                      <td className="px-4 py-3 tabular-nums">
-                        {formatMoney(row.monthly_payment ?? 0)}
+                      <td className="px-4 py-3 tabular-nums text-xs">
+                        {gymPlatformFeeLabel(row.monthly_payment)}
                       </td>
-                      <td className="px-4 py-3 text-text-secondary">
-                        {formatDate(row.created_at)}
+                      <td className="px-4 py-3 text-xs text-text-secondary">
+                        {row.membership_summary
+                          ? `${row.membership_summary.active_entitlements ?? 0} entitlements · ${row.membership_summary.active_roster ?? 0} roster`
+                          : "—"}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap items-center gap-2">
@@ -1136,53 +1142,9 @@ export default function GymsAdminPage() {
                               row={row}
                               busy={busyId === row.id}
                               onEdit={() => openEdit(row)}
-                              onApprove={() =>
-                                updateGym(row.id, {
-                                  status: "active",
-                                  verification_status: "verified",
-                                })
+                              onAction={(actionId, needsReason) =>
+                                void runGymAction(row.id, actionId, needsReason)
                               }
-                              onReview={() =>
-                                updateGym(row.id, { verification_status: "under_review" })
-                              }
-                              onToggleFeature={() =>
-                                updateGym(row.id, {
-                                  is_featured: !row.is_featured,
-                                  feature_status: row.is_featured ? "none" : "approved",
-                                })
-                              }
-                              onApproveFeature={() =>
-                                updateGym(row.id, {
-                                  action: "review_featured",
-                                  approve: true,
-                                })
-                              }
-                              onRejectFeature={() =>
-                                updateGym(row.id, {
-                                  action: "review_featured",
-                                  approve: false,
-                                })
-                              }
-                              onSuspend={() => {
-                                const suspended =
-                                  row.status === "inactive" ||
-                                  row.verification_status === "suspended";
-                                if (suspended) {
-                                  updateGym(row.id, {
-                                    status: "active",
-                                    verification_status: "verified",
-                                  });
-                                } else {
-                                  const reason = window.prompt(
-                                    "Reason for suspension (required):",
-                                  );
-                                  if (!reason?.trim()) return;
-                                  updateGym(row.id, {
-                                    status: "inactive",
-                                    verification_status: "suspended",
-                                  });
-                                }
-                              }}
                             />
                           ) : null}
                         </div>
@@ -1195,6 +1157,31 @@ export default function GymsAdminPage() {
           </div>
         ) : null}
       </AdminTableShell>
+      {!loading && total > pageSize ? (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-text-secondary">
+          <span>
+            Page {page} · {filtered.length} shown · {total} total
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="rounded-md border border-border px-3 py-1.5 text-xs disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              disabled={page * pageSize >= total}
+              onClick={() => setPage((p) => p + 1)}
+              className="rounded-md border border-border px-3 py-1.5 text-xs disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
       </div>
 
       {/* Mobile Empty State */}
@@ -1262,7 +1249,7 @@ export default function GymsAdminPage() {
                 </select>
               </label>
               <label className="grid gap-1 text-sm">
-                <span className="text-text-secondary">Monthly payment (ETB)</span>
+                <span className="text-text-secondary">Monthly platform fee (ETB)</span>
                 <input
                   type="number"
                   min={0}
@@ -1624,7 +1611,7 @@ export default function GymsAdminPage() {
                   </select>
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span className="text-text-secondary">Monthly payment (ETB)</span>
+                  <span className="text-text-secondary">Monthly platform fee (ETB)</span>
                   <input
                     type="number"
                     min={0}

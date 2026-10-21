@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { ensureGymOrganizationViaTables } from "@/lib/ensure-gym-organization";
+import { getSpojexApiBaseUrl } from "@/lib/env";
 import {
   gymCategories,
   gymStatuses,
@@ -10,9 +11,55 @@ import {
   type GymStatus,
   type GymVerificationStatus,
 } from "@/lib/gyms";
+import { requestAccessToken } from "@/lib/spojex/server";
+
+export const dynamic = "force-dynamic";
 
 const allowedStatuses = new Set(gymStatuses.map((item) => item.id));
 const allowedVerification = new Set(gymVerificationStatuses.map((item) => item.id));
+
+/** Server-side directory (filters, pagination, aggregates) via Python admin API. */
+export async function GET(request: Request) {
+  const auth = await requireAdminPermission("gyms:read");
+  if (!auth.ok) return auth.error;
+
+  const token = await requestAccessToken();
+  if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const incoming = new URL(request.url);
+  const params = new URLSearchParams();
+  for (const key of [
+    "q",
+    "status",
+    "verification",
+    "category",
+    "location",
+    "featured",
+    "page",
+    "page_size",
+    "sort",
+    "order",
+  ]) {
+    const value = incoming.searchParams.get(key);
+    if (value) params.set(key, value);
+  }
+
+  const res = await fetch(
+    `${getSpojexApiBaseUrl()}/api/v1/admin/gyms?${params}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    },
+  );
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return NextResponse.json(
+      { error: (payload as { error?: string }).error || "Failed to load gyms" },
+      { status: res.status },
+    );
+  }
+  return NextResponse.json(payload);
+}
 
 async function resolveCategorySlug(
   client: { from: (table: string) => any },

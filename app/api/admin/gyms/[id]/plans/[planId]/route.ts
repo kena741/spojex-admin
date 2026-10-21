@@ -109,38 +109,14 @@ export async function DELETE(
   if (!auth.ok) return auth.error;
   const { id: gymId, planId } = await params;
 
-  // Soft-deactivate when memberships reference the plan.
-  const linked = await auth.context.client
-    .from("gym_memberships")
-    .select("id")
-    .eq("plan_id", planId)
-    .limit(1);
-  if (!linked.error && (linked.data?.length ?? 0) > 0) {
-    const { data, error } = await auth.context.client
-      .from("gym_plans")
-      .update({ is_active: false })
-      .eq("id", planId)
-      .eq("gym_id", gymId)
-      .select()
-      .maybeSingle();
-    if (error) {
-      const hint = missingServiceRoleMessage();
-      return NextResponse.json(
-        { error: hint ? `${error.message}. ${hint}` : error.message },
-        { status: 400 },
-      );
-    }
-    if (!data) {
-      return NextResponse.json({ error: "Plan not found" }, { status: 404 });
-    }
-    return NextResponse.json({ ok: true, deactivated: true, data });
-  }
-
-  const { error } = await auth.context.client
+  // Never hard-delete plans — preserve history for past memberships / payments.
+  const { data, error } = await auth.context.client
     .from("gym_plans")
-    .delete()
+    .update({ is_active: false })
     .eq("id", planId)
-    .eq("gym_id", gymId);
+    .eq("gym_id", gymId)
+    .select()
+    .maybeSingle();
   if (error) {
     const hint = missingServiceRoleMessage();
     return NextResponse.json(
@@ -148,5 +124,13 @@ export async function DELETE(
       { status: 400 },
     );
   }
-  return NextResponse.json({ ok: true });
+  if (!data) {
+    return NextResponse.json({ error: "Plan not found" }, { status: 404 });
+  }
+  return NextResponse.json({
+    ok: true,
+    deactivated: true,
+    data,
+    message: "Plan deactivated. Past memberships keep their purchased price/duration snapshot.",
+  });
 }

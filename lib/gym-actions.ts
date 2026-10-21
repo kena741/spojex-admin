@@ -3,11 +3,16 @@ import type { GymRow } from "@/lib/gyms";
 export type GymActionId =
   | "approve_listing"
   | "mark_under_review"
+  | "revoke_verification"
+  | "activate_listing"
+  | "deactivate_listing"
+  | "reject_listing"
   | "suspend"
   | "reactivate"
   | "feature_approve"
   | "feature_reject"
   | "feature_toggle"
+  | "transfer_ownership"
   | "edit";
 
 export type GymAction = {
@@ -15,6 +20,7 @@ export type GymAction = {
   label: string;
   tone?: "default" | "success" | "danger";
   needsReason?: boolean;
+  description?: string;
 };
 
 /**
@@ -35,11 +41,40 @@ export function gymAllowedActions(row: GymRow): GymAction[] {
       id: "approve_listing",
       label: "Approve & verify",
       tone: "success",
+      description: "Sets listing to active and verification to verified.",
     });
   }
 
   if (verification === "pending") {
     actions.push({ id: "mark_under_review", label: "Mark under review" });
+  }
+
+  if (verification === "verified") {
+    actions.push({
+      id: "revoke_verification",
+      label: "Revoke verification",
+      tone: "danger",
+      needsReason: true,
+    });
+  }
+
+  if (listing === "active") {
+    actions.push({ id: "deactivate_listing", label: "Deactivate listing" });
+  } else if (listing === "inactive" || listing === "pending") {
+    actions.push({
+      id: "activate_listing",
+      label: "Activate listing",
+      tone: "success",
+    });
+  }
+
+  if (listing !== "rejected" && verification !== "rejected") {
+    actions.push({
+      id: "reject_listing",
+      label: "Reject",
+      tone: "danger",
+      needsReason: true,
+    });
   }
 
   if (feature === "pending") {
@@ -76,18 +111,35 @@ export function gymActionPatch(
 ): Record<string, unknown> | null {
   switch (action) {
     case "approve_listing":
-      return { status: "active", verification_status: "verified" };
+      return { action: "approve_listing" };
     case "mark_under_review":
-      return { verification_status: "under_review" };
+      return { action: "mark_under_review" };
+    case "revoke_verification":
+      return { action: "revoke_verification" };
+    case "activate_listing":
+      return { action: "activate_listing" };
+    case "deactivate_listing":
+      return { action: "deactivate_listing" };
+    case "reject_listing":
+      return { action: "reject_listing" };
     case "suspend":
-      return { status: "inactive", verification_status: "suspended" };
+      return { action: "suspend" };
     case "reactivate":
-      return { status: "active", verification_status: "verified" };
+      return { action: "reactivate" };
     case "feature_approve":
-      return { is_featured: true, feature_status: "approved" };
+      return { action: "feature_approve" };
     case "feature_reject":
-      return { is_featured: false, feature_status: "rejected" };
+      return { action: "feature_reject" };
+    case "feature_toggle":
+      return { action: "feature_toggle" };
     default:
       return null;
   }
 }
+
+export const GYM_SUSPENSION_POLICY = {
+  new_purchases: "blocked",
+  existing_member_access: "preserved until expiry or separate revocation",
+  public_visibility: "hidden",
+  provider_operations: "read-only until admin reactivates",
+} as const;
