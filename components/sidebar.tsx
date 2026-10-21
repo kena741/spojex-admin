@@ -16,6 +16,7 @@ import {
   Moon,
   Music,
   Newspaper,
+  Sparkles,
   Share2,
   Shield,
   ShieldCheck,
@@ -165,6 +166,12 @@ const financeItems: NavItem[] = [
 
 const contentItems: NavItem[] = [
   { href: "/admin/news", label: "Sport news", icon: Newspaper, visible: (can) => can("news:read") },
+  {
+    href: "/admin/feed-interests",
+    label: "Feed interests",
+    icon: Sparkles,
+    visible: (can) => can("news:read") || can("users:read"),
+  },
   {
     href: "/admin/sound-library",
     label: "Sound library",
@@ -439,24 +446,24 @@ export default function Sidebar() {
         <nav>
           <ul className="space-y-0.5">
             {showDashboard ? (
-              <li>
-                <Link
-                  href="/admin/dashboard"
-                  className={cn(
-                    "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] transition-colors",
-                    navClass(pathname === "/admin/dashboard"),
-                  )}
-                >
-                  <LayoutDashboard className={cn("h-4 w-4", iconClass(pathname === "/admin/dashboard"))} />
-                  <span>Dashboard</span>
-                </Link>
+            <li>
+              <Link
+                href="/admin/dashboard"
+                className={cn(
+                  "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] transition-colors",
+                  navClass(pathname === "/admin/dashboard"),
+                )}
+              >
+                <LayoutDashboard className={cn("h-4 w-4", iconClass(pathname === "/admin/dashboard"))} />
+                <span>Dashboard</span>
+              </Link>
               </li>
             ) : null}
 
             {filteredSections.map((section) => {
               const open = searching || (openSections[section.id] ?? false);
               const activeInSection = sectionHasActive(pathname, section.items);
-              return (
+                    return (
                 <li key={section.id} className="pt-4">
                   <button
                     type="button"
@@ -464,7 +471,7 @@ export default function Sidebar() {
                       if (!searching) toggleSection(section.id);
                     }}
                     aria-expanded={open}
-                    className={cn(
+                          className={cn(
                       "mb-1 flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left transition-colors hover:bg-sidebar-accent",
                       activeInSection ? "text-sidebar-foreground" : "text-text-hint",
                     )}
@@ -478,7 +485,7 @@ export default function Sidebar() {
                     />
                   </button>
                   {open ? (
-                    <ul className="space-y-0.5">
+                <ul className="space-y-0.5">
                       {section.items.map((item) => (
                         <li key={item.href}>
                           {item.comingSoon ? (
@@ -490,13 +497,13 @@ export default function Sidebar() {
                       ))}
                     </ul>
                   ) : null}
-                </li>
-              );
-            })}
-          </ul>
+                      </li>
+                    );
+                  })}
+                </ul>
           {searching && !hasNavMatches ? (
             <p className="px-3 py-6 text-center text-sm text-text-hint">No matching pages</p>
-          ) : null}
+            ) : null}
         </nav>
       </div>
 
@@ -568,7 +575,7 @@ export default function Sidebar() {
       {/* Desktop sidebar (fixed) */}
       <aside className="admin-shell fixed left-0 top-0 z-40 hidden h-screen w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex">
         {sidebarContent}
-      </aside>
+    </aside>
     </>
   );
 }

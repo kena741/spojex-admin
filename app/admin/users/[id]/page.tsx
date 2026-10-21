@@ -39,9 +39,20 @@ import {
   type WalletRow,
   type WithdrawalRow,
 } from "@/lib/types";
-import { formatCoins, formatDate, formatMoney, formatStatusLabel, locationLabel } from "@/lib/utils";
+import { formatCoins, formatDate, formatDateTime, formatMoney, formatStatusLabel, locationLabel } from "@/lib/utils";
 import { verificationStatusLabel } from "@/lib/verification";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+
+type FeedInterestDetail = {
+  preferences: {
+    interests: string[];
+    preferred_languages: string[];
+    updated_at: string | null;
+  } | null;
+  topics: { topic: string; score: number; recent_score: number; updated_at: string | null }[];
+  creators: { creator_key: string; score: number; recent_score: number; updated_at: string | null }[];
+  feedback: { id: string; content_key: string; action: string; created_at: string }[];
+};
 
 export default function UserDetailPage() {
   const params = useParams<{ id: string }>();
@@ -59,6 +70,7 @@ export default function UserDetailPage() {
   const [mediaItems, setMediaItems] = useState<ProfileMediaRow[]>([]);
   const [verificationId, setVerificationId] = useState<string | null>(null);
   const [verificationStatus, setVerificationStatus] = useState<string | null>(null);
+  const [feedInterest, setFeedInterest] = useState<FeedInterestDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [accountBusy, setAccountBusy] = useState(false);
@@ -72,8 +84,16 @@ export default function UserDetailPage() {
 
   const load = async () => {
     setError(null);
-    const [{ data, error: userError }, orgRes, serviceRes, verificationRes, mediaRes, marketRes, coinMap] =
-      await Promise.all([
+    const [
+      { data, error: userError },
+      orgRes,
+      serviceRes,
+      verificationRes,
+      mediaRes,
+      marketRes,
+      coinMap,
+      feedRes,
+    ] = await Promise.all([
       getSpojexClient().from("users").select(userProfileSelect).eq("id", id).maybeSingle(),
       getSpojexClient().from("organizations").select("*").eq("user_id", id),
       safeSelect(() =>
@@ -97,6 +117,7 @@ export default function UserDetailPage() {
         .order("created_at", { ascending: false }),
       fetch(`/api/admin/users/${id}/marketplace`, { credentials: "same-origin" }),
       loadCoinWalletsByUserIds([id]),
+      fetch(`/api/admin/users/${id}/feed-interests`, { credentials: "same-origin" }),
     ]);
     if (userError) throw userError;
     if (orgRes.error) throw orgRes.error;
@@ -128,6 +149,18 @@ export default function UserDetailPage() {
       setBookings(market.bookings ?? []);
     }
     setServices(nextServices);
+
+    if (feedRes.ok) {
+      const feed = (await feedRes.json()) as FeedInterestDetail;
+      setFeedInterest({
+        preferences: feed.preferences ?? null,
+        topics: feed.topics ?? [],
+        creators: feed.creators ?? [],
+        feedback: feed.feedback ?? [],
+      });
+    } else {
+      setFeedInterest(null);
+    }
   };
 
   useEffect(() => {
@@ -502,6 +535,116 @@ export default function UserDetailPage() {
               </ProfileCard>
             </>
           ) : null}
+
+          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="font-heading text-sm font-semibold">For You feed interests</h3>
+              <Link href="/admin/feed-interests" className="text-sm font-medium text-primary">
+                All feed interests
+              </Link>
+            </div>
+            {!feedInterest ||
+            (!feedInterest.preferences &&
+              feedInterest.topics.length === 0 &&
+              feedInterest.creators.length === 0 &&
+              feedInterest.feedback.length === 0) ? (
+              <p className="text-sm text-text-secondary">
+                No feed preferences or affinities collected yet.
+              </p>
+            ) : (
+              <div className="grid gap-5 md:grid-cols-2">
+                <div>
+                  <h4 className="mb-2 text-xs font-semibold uppercase text-text-secondary">
+                    Saved preferences
+                  </h4>
+                  {feedInterest.preferences ? (
+                    <dl className="space-y-2 text-sm">
+                      <Row
+                        label="Interests"
+                        value={
+                          feedInterest.preferences.interests.length
+                            ? feedInterest.preferences.interests.join(", ")
+                            : "None set"
+                        }
+                      />
+                      <Row
+                        label="Languages"
+                        value={
+                          feedInterest.preferences.preferred_languages.length
+                            ? feedInterest.preferences.preferred_languages.join(", ")
+                            : "—"
+                        }
+                      />
+                      <Row
+                        label="Updated"
+                        value={formatDateTime(feedInterest.preferences.updated_at)}
+                      />
+                    </dl>
+                  ) : (
+                    <p className="text-sm text-text-secondary">No explicit preferences saved.</p>
+                  )}
+                </div>
+                <div>
+                  <h4 className="mb-2 text-xs font-semibold uppercase text-text-secondary">
+                    Topic affinity ({feedInterest.topics.length})
+                  </h4>
+                  {feedInterest.topics.length === 0 ? (
+                    <p className="text-sm text-text-secondary">No topic scores yet.</p>
+                  ) : (
+                    <ul className="space-y-1 text-sm">
+                      {feedInterest.topics.slice(0, 12).map((item) => (
+                        <li key={item.topic} className="flex justify-between gap-3">
+                          <span>{item.topic}</span>
+                          <span className="text-text-secondary">
+                            {item.score.toFixed(1)}
+                            <span className="text-text-hint"> / r {item.recent_score.toFixed(1)}</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div>
+                  <h4 className="mb-2 text-xs font-semibold uppercase text-text-secondary">
+                    Creator affinity ({feedInterest.creators.length})
+                  </h4>
+                  {feedInterest.creators.length === 0 ? (
+                    <p className="text-sm text-text-secondary">No creator scores yet.</p>
+                  ) : (
+                    <ul className="space-y-1 text-sm">
+                      {feedInterest.creators.slice(0, 12).map((item) => (
+                        <li key={item.creator_key} className="flex justify-between gap-3">
+                          <span className="truncate">{item.creator_key}</span>
+                          <span className="shrink-0 text-text-secondary">
+                            {item.score.toFixed(1)}
+                            <span className="text-text-hint"> / r {item.recent_score.toFixed(1)}</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <div>
+                  <h4 className="mb-2 text-xs font-semibold uppercase text-text-secondary">
+                    Feedback ({feedInterest.feedback.length})
+                  </h4>
+                  {feedInterest.feedback.length === 0 ? (
+                    <p className="text-sm text-text-secondary">No not-interested / hide feedback.</p>
+                  ) : (
+                    <ul className="space-y-2 text-sm">
+                      {feedInterest.feedback.slice(0, 12).map((item) => (
+                        <li key={item.id} className="rounded-lg border border-border px-3 py-2">
+                          <p className="font-medium">{formatStatusLabel(item.action)}</p>
+                          <p className="truncate text-xs text-text-secondary">{item.content_key}</p>
+                          <p className="text-xs text-text-hint">{formatDateTime(item.created_at)}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
 
           <div className="grid gap-6 md:grid-cols-2">
             <section className="rounded-xl border border-border bg-card p-5 shadow-sm">

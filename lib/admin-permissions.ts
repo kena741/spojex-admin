@@ -286,6 +286,9 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
   }
   if (pathname.startsWith("/admin/donations")) return can("donations:read");
   if (pathname.startsWith("/admin/news")) return can("news:read");
+  if (pathname.startsWith("/admin/feed-interests")) {
+    return can("news:read") || can("users:read");
+  }
   if (pathname.startsWith("/admin/sound-library")) return can("news:read");
   if (pathname.startsWith("/admin/banners")) {
     return (
