@@ -452,7 +452,30 @@ export type StadiumBookingRow = {
   status: string;
   notes: string;
   created_at: string;
-  users?: Pick<UserRow, "id" | "display_name"> | null;
+  updated_at?: string;
+  checked_in_at?: string | null;
+  checked_out_at?: string | null;
+  users?: Pick<UserRow, "id" | "display_name" | "email" | "phone" | "role"> | null;
+  payment?: {
+    id: string;
+    status: string;
+    amount: number;
+    currency: string;
+    paid_at: string | null;
+  } | null;
+  allowed_transitions?: string[];
+};
+
+export type StadiumBookingAnalytics = {
+  today: number;
+  pending: number;
+  upcoming: number;
+  completed: number;
+  cancelled: number;
+  total: number;
+  total_earned: number;
+  earned_today: number;
+  currency: string;
 };
 
 export type StadiumSubscriptionRow = {

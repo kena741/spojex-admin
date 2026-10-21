@@ -37,13 +37,14 @@ import {
 import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type {
+  StadiumBookingAnalytics,
   StadiumBookingRow,
   StadiumManagerRow,
   StadiumPaymentRow,
   StadiumRow,
   StadiumSubscriptionRow,
 } from "@/lib/types";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatMoney } from "@/lib/utils";
 
 const tabs = [
   { id: "overview", label: "Overview" },
@@ -69,6 +70,8 @@ export default function StadiumDetailPage() {
     yearly: null,
   });
   const [bookings, setBookings] = useState<StadiumBookingRow[]>([]);
+  const [bookingAnalytics, setBookingAnalytics] = useState<StadiumBookingAnalytics | null>(null);
+  const [bookingBusyId, setBookingBusyId] = useState<string | null>(null);
   const [subscriptions, setSubscriptions] = useState<StadiumSubscriptionRow[]>([]);
   const [payments, setPayments] = useState<StadiumPaymentRow[]>([]);
   const [revenuePayments, setRevenuePayments] = useState<
@@ -112,12 +115,7 @@ export default function StadiumDetailPage() {
         .select("*, users:owner_user_id(id, display_name, email)")
         .eq("id", id)
         .maybeSingle(),
-      spojex
-        .from("stadium_bookings")
-        .select("*, users:user_id(id, display_name)")
-        .eq("stadium_id", id)
-        .order("booking_date", { ascending: false })
-        .limit(50),
+      fetch(`/api/admin/stadiums/${id}/bookings`, { credentials: "same-origin" }),
       spojex
         .from("stadium_subscriptions")
         .select("*, users:user_id(id, display_name)")
@@ -142,7 +140,19 @@ export default function StadiumDetailPage() {
     if (stadiumRes.error) throw stadiumRes.error;
     setStadium(stadiumRes.data as StadiumRow | null);
     setPricing(parseStadiumPricing((stadiumRes.data as StadiumRow | null)?.pricing));
-    setBookings((bookingsRes.data ?? []) as StadiumBookingRow[]);
+    const bookingsPayload = (await bookingsRes.json()) as {
+      data?: StadiumBookingRow[];
+      analytics?: StadiumBookingAnalytics;
+      error?: string;
+    };
+    if (bookingsRes.ok) {
+      setBookings(bookingsPayload.data ?? []);
+      setBookingAnalytics(bookingsPayload.analytics ?? null);
+    } else {
+      setBookings([]);
+      setBookingAnalytics(null);
+      if (bookingsPayload.error) setError(bookingsPayload.error);
+    }
     setSubscriptions((subsRes.data ?? []) as StadiumSubscriptionRow[]);
     setPayments((paymentsRes.data ?? []) as StadiumPaymentRow[]);
     setRevenuePayments(
@@ -440,6 +450,46 @@ export default function StadiumDetailPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Remove failed");
     }
+  };
+
+  const updateBookingStatus = async (row: StadiumBookingRow, next: string) => {
+    if (!canWrite) return;
+    let reason: string | undefined;
+    if (["cancelled", "canceled"].includes(next)) {
+      reason = window.prompt("Cancellation reason (required):") || undefined;
+      if (!reason?.trim()) return;
+    }
+    setBookingBusyId(row.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/stadiums/${id}/bookings/${row.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: next,
+          reason,
+          expected_updated_at: row.updated_at,
+        }),
+      });
+      const payload = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(payload.error || "Update failed");
+      setNotice(`Booking marked ${next}.`);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Booking update failed");
+    } finally {
+      setBookingBusyId(null);
+    }
+  };
+
+  const formatSlotTime = (value?: string | null) => {
+    if (!value) return "—";
+    return String(value).slice(0, 5);
+  };
+
+  const paymentPaid = (row: StadiumBookingRow) => {
+    const s = String(row.payment?.status || "").toLowerCase();
+    return ["completed", "paid", "success", "verified"].includes(s);
   };
 
   if (loading) return <AdminLoadingRow label="Loading stadium…" />;
@@ -980,27 +1030,176 @@ export default function StadiumDetailPage() {
 
       {tab === "booking" ? (
         <>
+          {bookingAnalytics ? (
+            <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              {[
+                { label: "Today’s bookings", value: String(bookingAnalytics.today) },
+                { label: "Pending", value: String(bookingAnalytics.pending) },
+                { label: "Upcoming", value: String(bookingAnalytics.upcoming) },
+                {
+                  label: "Earned today",
+                  value: formatMoney(bookingAnalytics.earned_today, bookingAnalytics.currency),
+                },
+                {
+                  label: "Total earned",
+                  value: formatMoney(bookingAnalytics.total_earned, bookingAnalytics.currency),
+                },
+              ].map((item) => (
+                <div key={item.label} className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
+                  <p className="text-xs text-text-secondary">{item.label}</p>
+                  <p className="mt-1 font-heading text-lg font-semibold tabular-nums">{item.value}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
           <div className="grid gap-6 lg:grid-cols-2">
-            <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-              <h2 className="mb-4 font-heading text-sm font-semibold">Bookings</h2>
+            <section className="rounded-xl border border-border bg-card p-5 shadow-sm lg:col-span-2">
+              <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <h2 className="font-heading text-sm font-semibold">
+                    Hourly bookings ({bookings.length})
+                  </h2>
+                  <p className="mt-1 text-xs text-text-hint">
+                    Booking status is separate from payment. Paid slots stuck in pending can be
+                    completed or cancelled here.
+                  </p>
+                </div>
+                {bookingAnalytics ? (
+                  <p className="text-xs text-text-secondary">
+                    {bookingAnalytics.completed} completed · {bookingAnalytics.cancelled} cancelled
+                  </p>
+                ) : null}
+              </div>
               {bookings.length === 0 ? (
                 <p className="text-sm text-text-secondary">No bookings yet.</p>
               ) : (
-                <ul className="space-y-2 text-sm">
-                  {bookings.map((row) => (
-                    <li key={row.id} className="flex items-center justify-between gap-3 border-b border-border pb-2 last:border-0">
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">
-                          {row.booking_date} · {row.start_time.slice(0, 5)}–{row.end_time.slice(0, 5)}
-                        </p>
-                        <p className="truncate text-text-secondary">
-                          {row.users?.display_name ?? "User"} · {row.status}
-                        </p>
-                      </div>
-                      <StatusBadge tone={requestTone(row.status)}>{row.status}</StatusBadge>
-                    </li>
-                  ))}
-                </ul>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-left text-sm">
+                    <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+                      <tr>
+                        <th className="px-3 py-2.5 font-semibold">Booked for</th>
+                        <th className="px-3 py-2.5 font-semibold">Booker</th>
+                        <th className="px-3 py-2.5 font-semibold">Payment</th>
+                        <th className="px-3 py-2.5 font-semibold">Status</th>
+                        <th className="px-3 py-2.5 font-semibold">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bookings.map((row) => {
+                        const transitions = row.allowed_transitions?.length
+                          ? row.allowed_transitions
+                          : [];
+                        const showComplete = transitions.includes("completed");
+                        const showCancel = transitions.some((t) =>
+                          ["cancelled", "canceled"].includes(t),
+                        );
+                        const showConfirm = transitions.includes("confirmed");
+                        const busy = bookingBusyId === row.id;
+                        return (
+                          <tr key={row.id} className="border-b border-border last:border-0 align-top">
+                            <td className="px-3 py-3">
+                              <p className="font-medium">{row.booking_date}</p>
+                              <p className="tabular-nums text-text-secondary">
+                                {formatSlotTime(row.start_time)}–{formatSlotTime(row.end_time)}
+                              </p>
+                              {row.plan_type ? (
+                                <p className="text-[11px] text-text-hint">
+                                  {planTypeLabel(row.plan_type)}
+                                </p>
+                              ) : null}
+                            </td>
+                            <td className="px-3 py-3">
+                              {row.users ? (
+                                <div className="min-w-0">
+                                  <Link
+                                    href={`/admin/people/${row.users.id}`}
+                                    className="font-medium text-primary hover:underline"
+                                  >
+                                    {row.users.display_name || "User"}
+                                  </Link>
+                                  {row.users.email ? (
+                                    <p className="truncate text-xs text-text-secondary">
+                                      {row.users.email}
+                                    </p>
+                                  ) : null}
+                                  {row.users.phone ? (
+                                    <p className="truncate text-xs text-text-secondary">
+                                      {row.users.phone}
+                                    </p>
+                                  ) : null}
+                                </div>
+                              ) : (
+                                <span className="text-text-hint">Unknown booker</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-3">
+                              {row.payment ? (
+                                <div>
+                                  <StatusBadge tone={requestTone(row.payment.status)}>
+                                    {row.payment.status}
+                                  </StatusBadge>
+                                  <p className="mt-1 text-xs tabular-nums text-text-secondary">
+                                    {formatMoney(row.payment.amount, row.payment.currency || "ETB")}
+                                  </p>
+                                  {paymentPaid(row) &&
+                                  String(row.status).toLowerCase() === "pending" ? (
+                                    <p className="mt-1 text-[11px] font-medium text-amber-700">
+                                      Paid — booking still pending
+                                    </p>
+                                  ) : null}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-text-hint">No payment</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-3">
+                              <StatusBadge tone={requestTone(row.status)}>{row.status}</StatusBadge>
+                            </td>
+                            <td className="px-3 py-3">
+                              {canWrite && (showComplete || showCancel || showConfirm) ? (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {showConfirm ? (
+                                    <button
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() => void updateBookingStatus(row, "confirmed")}
+                                      className="rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50"
+                                    >
+                                      Confirm
+                                    </button>
+                                  ) : null}
+                                  {showComplete ? (
+                                    <button
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() => void updateBookingStatus(row, "completed")}
+                                      className="rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                                    >
+                                      {busy ? "…" : "Complete"}
+                                    </button>
+                                  ) : null}
+                                  {showCancel ? (
+                                    <button
+                                      type="button"
+                                      disabled={busy}
+                                      onClick={() => void updateBookingStatus(row, "cancelled")}
+                                      className="rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                                    >
+                                      Cancel
+                                    </button>
+                                  ) : null}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-text-hint">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </section>
             <section className="rounded-xl border border-border bg-card p-5 shadow-sm lg:col-span-2">
