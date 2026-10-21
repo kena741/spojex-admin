@@ -39,6 +39,7 @@ import {
   Coins,
   CreditCard,
   ArrowLeftRight,
+  Receipt,
   Settings,
   ScrollText,
   Dumbbell,
@@ -147,6 +148,12 @@ const nativeAppItems: NavItem[] = [
 
 /** Wallet + coin + payment surfaces in one Finance group. */
 const financeItems: NavItem[] = [
+  {
+    href: "/admin/finance/transactions",
+    label: "Transactions",
+    icon: Receipt,
+    visible: (can) => can("finance:read") || can("wallets:read") || can("payments:read"),
+  },
   {
     href: "/admin/wallets",
     label: "Wallets",

@@ -53,6 +53,8 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { key: "coins:write", label: "Manage coins & redemptions", group: "Finance" },
   { key: "payments:read", label: "View payment settings", group: "Finance" },
   { key: "payments:write", label: "Edit payment settings", group: "Finance" },
+  { key: "finance:read", label: "View transaction history", group: "Finance" },
+  { key: "finance:export", label: "Export transaction history", group: "Finance" },
   { key: "network:read", label: "View connections", group: "Network" },
   { key: "network:write", label: "Manage connections", group: "Network" },
   { key: "reports:read", label: "View reports", group: "Network" },
@@ -93,7 +95,7 @@ export const DEFAULT_ADMIN_ROLES = [
   {
     slug: "finance_admin",
     name: "Finance Admin",
-    description: "Wallets, withdrawals, coins, and payment settings",
+    description: "Wallets, withdrawals, coins, payment settings, and transaction history",
     permissions: [
       "wallets:read",
       "wallets:write",
@@ -103,6 +105,8 @@ export const DEFAULT_ADMIN_ROLES = [
       "coins:write",
       "payments:read",
       "payments:write",
+      "finance:read",
+      "finance:export",
       "donations:read",
       "requests:read",
       "logs:read",
@@ -320,6 +324,9 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
   if (pathname.startsWith("/admin/admins")) return can("admins:read");
   if (pathname.startsWith("/admin/roles")) return can("roles:read");
   if (pathname.startsWith("/admin/settings")) return can("settings:read");
+  if (pathname.startsWith("/admin/finance/transactions")) {
+    return can("finance:read") || can("wallets:read") || can("payments:read");
+  }
   if (pathname.startsWith("/admin/finance/payment-settings")) {
     return can("payments:read") || can("settings:read");
   }
