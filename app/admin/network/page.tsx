@@ -191,29 +191,31 @@ export default function NetworkPage() {
   const removeConnection = (row: NetworkConnectionItem) => {
     if (!row.connection_id) return;
     if (!window.confirm("Remove this connection? Users will need to reconnect.")) return;
-    void runAction(row.id, () => deleteAdmin(`/api/admin/network/connections/${row.connection_id}`));
+    void runAction(row.id, async () => {
+      await deleteAdmin(`/api/admin/network/connections/${row.connection_id}`);
+    });
   };
 
   const removeFollow = (row: FollowRow) => {
     if (!window.confirm("Remove this follow?")) return;
     const key = `${row.follower_id}-${row.following_id}`;
-    void runAction(key, () =>
-      deleteAdmin("/api/admin/network/follows", {
+    void runAction(key, async () => {
+      await deleteAdmin("/api/admin/network/follows", {
         follower_id: row.follower_id,
         following_id: row.following_id,
-      }),
-    );
+      });
+    });
   };
 
   const removeBlock = (row: BlockRow) => {
     if (!window.confirm("Remove this block?")) return;
     const key = `${row.blocker_id}-${row.blocked_id}`;
-    void runAction(key, () =>
-      deleteAdmin("/api/admin/network/blocks", {
+    void runAction(key, async () => {
+      await deleteAdmin("/api/admin/network/blocks", {
         blocker_id: row.blocker_id,
         blocked_id: row.blocked_id,
-      }),
-    );
+      });
+    });
   };
 
   const tabs: { id: TabId; label: string; count: number }[] = [

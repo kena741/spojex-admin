@@ -1,11 +1,33 @@
 import { NextResponse } from "next/server";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAdminPermission } from "@/lib/admin-auth";
+import { getSpojexApiBaseUrl } from "@/lib/env";
 import { notifyOpportunityWaitlist } from "@/lib/opportunity-waitlist-notify";
 import { draftToPayload, type OpportunityDraft } from "@/lib/opportunities";
 import { toBackendMediaUrl } from "@/lib/spojex-media";
+import { requestAccessToken } from "@/lib/spojex/server";
 
 const select = "*";
+
+async function proxyPython(path: string, init?: RequestInit) {
+  const token = await requestAccessToken();
+  if (!token) return null;
+  try {
+    const res = await fetch(`${getSpojexApiBaseUrl()}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        ...(init?.headers || {}),
+      },
+      cache: "no-store",
+    });
+    const payload = await res.json().catch(() => ({}));
+    return { res, payload };
+  } catch {
+    return null;
+  }
+}
 
 export async function GET(
   _request: Request,
@@ -14,6 +36,11 @@ export async function GET(
   const auth = await requireAdminPermission("opportunities:read");
   if (!auth.ok) return auth.error;
   const { id } = await params;
+
+  const proxied = await proxyPython(`/api/v1/admin/opportunities/${id}`);
+  if (proxied?.res.ok) {
+    return NextResponse.json({ ...proxied.payload, source: "python" });
+  }
 
   const appCols =
     "id, opportunity_id, user_id, message, profile_completion_percent, status, payment_status, amount_paid, currency, provider_ref, extra_answers, admin_note, submitted_at, created_at";
@@ -219,13 +246,60 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const auth = await requireAdminPermission("opportunities:write");
   if (!auth.ok) return auth.error;
   const { id } = await params;
+  const url = new URL(request.url);
+  const force = url.searchParams.get("force") === "true";
 
+  const proxied = await proxyPython(`/api/v1/admin/opportunities/${id}/archive`, {
+    method: "POST",
+    body: JSON.stringify({ force }),
+  });
+  if (proxied?.res.ok) {
+    return NextResponse.json({ ...proxied.payload, source: "python" });
+  }
+
+  // Soft-archive locally: unpublish + close when dependencies exist
+  const [{ count: appCount }, { count: payCount }] = await Promise.all([
+    auth.context.client
+      .from("opportunity_applications")
+      .select("id", { count: "exact", head: true })
+      .eq("opportunity_id", id),
+    auth.context.client
+      .from("opportunity_application_payments")
+      .select("id", { count: "exact", head: true })
+      .eq("opportunity_id", id),
+  ]);
+
+  if ((appCount ?? 0) > 0 || (payCount ?? 0) > 0) {
+    const { data, error } = await auth.context.client
+      .from("opportunities")
+      .update({
+        is_published: false,
+        status: "closed",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .select("*")
+      .maybeSingle();
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    return NextResponse.json({
+      ok: true,
+      archived: true,
+      deleted: false,
+      data,
+      dependencies: { applications: appCount ?? 0, payments: payCount ?? 0 },
+      message: "Archived (unpublished + closed). Applications and payments preserved.",
+    });
+  }
+
+  await auth.context.client.from("opportunity_waitlist").delete().eq("opportunity_id", id);
   const { error } = await auth.context.client.from("opportunities").delete().eq("id", id);
   if (error) {
     const hint = missingServiceRoleMessage();
@@ -234,5 +308,5 @@ export async function DELETE(
       { status: 400 },
     );
   }
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, archived: false, deleted: true });
 }

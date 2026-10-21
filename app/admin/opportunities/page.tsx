@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -17,7 +17,7 @@ import {
   AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
-import { adminFetch, deleteAdmin, postAdmin, uploadAdmin } from "@/lib/hooks";
+import { adminFetch, deleteAdmin, postAdmin, postAdminResponse } from "@/lib/hooks";
 import { toBackendMediaUrl } from "@/lib/spojex-media";
 import {
   ELIGIBLE_ROLE_OPTIONS,
@@ -27,136 +27,176 @@ import {
   opportunityStatuses,
   opportunityStatusTone,
   type OpportunityDraft,
-  type OpportunityRevenue,
   type OpportunityRow,
 } from "@/lib/opportunities";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
-import { formatDate } from "@/lib/utils";
+import { formatDateTime } from "@/lib/utils";
 
 const fieldClass =
   "h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-text-primary shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60";
-const areaClass =
-  "w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-text-primary shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60";
+
+type ListRow = OpportunityRow & {
+  verified_collections?: string;
+  href_applications?: string;
+  href_waitlist?: string;
+};
+
+type SummaryScope = {
+  global?: {
+    opportunities?: number;
+    applicants?: number;
+    waitlist?: number;
+    verified_collections?: string;
+    label?: string;
+  };
+  filtered?: {
+    opportunities?: number;
+    applicants?: number;
+    waitlist?: number;
+    verified_collections?: string;
+    label?: string;
+  };
+};
 
 export default function OpportunitiesPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const { can } = useAdminPermissions();
   const canWrite = can("opportunities:write");
-  const [rows, setRows] = useState<OpportunityRow[]>([]);
-  const [revenue, setRevenue] = useState<Record<string, OpportunityRevenue>>({});
+
+  const q = searchParams.get("q") || "";
+  const status = searchParams.get("status") || "all";
+  const published = searchParams.get("published") || "all";
+  const category = searchParams.get("category") || "";
+  const organizer = searchParams.get("organizer") || "";
+  const country = searchParams.get("country") || "";
+  const deadline = searchParams.get("deadline") || "all";
+  const page = Math.max(1, Number(searchParams.get("page") || 1) || 1);
+  const summaryMode = searchParams.get("summary") === "filtered" ? "filtered" : "global";
+
+  const [rows, setRows] = useState<ListRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<SummaryScope>({});
+  const [definitions, setDefinitions] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [ok, setOk] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState(searchParams.get("status") || "all");
-  const [published, setPublished] = useState(searchParams.get("published") || "all");
   const [modalOpen, setModalOpen] = useState(false);
   const [draft, setDraft] = useState<OpportunityDraft>(emptyOpportunityDraft());
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const load = async () => {
-    const response = await adminFetch("/api/admin/opportunities");
-    const payload = (await response.json()) as {
-      data?: OpportunityRow[];
-      revenue?: Record<string, OpportunityRevenue>;
-      error?: string;
-    };
-    if (!response.ok) throw new Error(payload.error || "Failed to load");
-    setRows(payload.data ?? []);
-    setRevenue(payload.revenue ?? {});
-  };
+  const writeParams = useCallback(
+    (patch: Record<string, string | null | undefined>) => {
+      const next = new URLSearchParams(searchParams.toString());
+      for (const [k, v] of Object.entries(patch)) {
+        if (v == null || v === "" || v === "all") next.delete(k);
+        else next.set(k, v);
+      }
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setOk(false);
+    try {
+      const params = new URLSearchParams({
+        page: String(page),
+        page_size: "40",
+        sort: "updated_at",
+        order: "desc",
+      });
+      if (q) params.set("q", q);
+      if (status !== "all") params.set("status", status);
+      if (published !== "all") params.set("published", published);
+      if (category) params.set("category", category);
+      if (organizer) params.set("organizer", organizer);
+      if (country) params.set("country", country);
+      if (deadline !== "all") params.set("deadline", deadline);
+
+      const response = await adminFetch(`/api/admin/opportunities?${params}`);
+      const payload = (await response.json()) as {
+        data?: ListRow[];
+        total?: number;
+        summary_scope?: SummaryScope;
+        definitions?: Record<string, string>;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(payload.error || "Failed to load");
+      setRows(payload.data ?? []);
+      setTotal(payload.total ?? 0);
+      setSummary(payload.summary_scope ?? {});
+      setDefinitions(payload.definitions ?? {});
+      setOk(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load");
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, q, status, published, category, organizer, country, deadline]);
 
   useEffect(() => {
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return rows.filter((row) => {
-      if (status !== "all" && row.status !== status) return false;
-      if (published === "yes" && !row.is_published) return false;
-      if (published === "no" && row.is_published) return false;
-      if (!q) return true;
-      return [row.title, row.category, row.organizer, row.location, row.country]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(q));
-    });
-  }, [published, query, rows, status]);
-
-  const totals = useMemo(() => {
-    let applicants = 0;
-    let waitlist = 0;
-    let collected = 0;
-    for (const row of filtered) {
-      const stats = revenue[row.id];
-      applicants += stats?.total_applicants ?? row.applicant_count ?? 0;
-      waitlist += stats?.waitlist_count ?? row.waitlist_count ?? 0;
-      collected += stats?.total_collected ?? 0;
-    }
-    return { collected, applicants, waitlist };
-  }, [filtered, revenue]);
+    void load();
+  }, [load]);
 
   const openCreate = () => {
     setDraft(emptyOpportunityDraft());
     setModalOpen(true);
-    setError(null);
-  };
-
-  const uploadCover = async (file: File) => {
-    if (!canWrite) return;
-    setUploading(true);
-    setError(null);
-    try {
-      const payload = await uploadAdmin("/api/admin/opportunities/upload", file);
-      const url = toBackendMediaUrl(
-        typeof payload.image_url === "string" ? payload.image_url : "",
-      );
-      if (!url) throw new Error("Upload did not return an image URL");
-      setDraft((prev) => ({ ...prev, cover_image_url: url }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setUploading(false);
-    }
   };
 
   const save = async () => {
     if (!canWrite) return;
-    if (!draft.title.trim()) {
-      setError("Title is required");
-      return;
-    }
     setSaving(true);
     setError(null);
     try {
-      const created = (await postAdmin(
-        "/api/admin/opportunities",
-        draft as unknown as Record<string, unknown>,
-      )) as { id?: string } | null;
-      await load();
+      const response = await adminFetch("/api/admin/opportunities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Create failed");
       setModalOpen(false);
+      const created = payload.data;
       if (created?.id) router.push(`/admin/opportunities/${created.id}`);
+      else await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
+      setError(err instanceof Error ? err.message : "Create failed");
     } finally {
       setSaving(false);
     }
   };
 
   const remove = async (id: string, title: string) => {
-    if (!canWrite) return;
-    if (!window.confirm(`Delete “${title}” and its applications? This cannot be undone.`)) return;
+    if (
+      !window.confirm(
+        `Archive “${title}”? Opportunities with applications/payments are unpublished and closed (not hard-deleted).`,
+      )
+    ) {
+      return;
+    }
     setBusyId(id);
+    setError(null);
     try {
-      await deleteAdmin(`/api/admin/opportunities/${id}`);
+      const result = (await deleteAdmin(`/api/admin/opportunities/${id}`)) as {
+        archived?: boolean;
+        message?: string;
+      };
+      setNotice(
+        result?.archived
+          ? result.message || "Archived (applications and payments preserved)."
+          : "Deleted.",
+      );
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Delete failed");
+      setError(err instanceof Error ? err.message : "Archive failed");
     } finally {
       setBusyId(null);
     }
@@ -166,8 +206,20 @@ export default function OpportunitiesPage() {
     if (!canWrite) return;
     setProcessing(true);
     setError(null);
+    setNotice(null);
     try {
-      await postAdmin("/api/admin/opportunities/process-schedules", {});
+      const payload = await postAdminResponse<{
+        schedules?: { opened?: number; closed?: number; opened_ids?: string[] };
+        opened?: number;
+        closed?: number;
+        notifies?: unknown[];
+        behavior?: string;
+      }>("/api/admin/opportunities/process-schedules", {});
+      const opened = payload.schedules?.opened ?? payload.opened ?? 0;
+      const closed = payload.schedules?.closed ?? payload.closed ?? 0;
+      setNotice(
+        `Schedules processed: opened ${opened}, closed ${closed}. Waitlist notified for newly opened (deduped).`,
+      );
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Schedule processing failed");
@@ -176,28 +228,22 @@ export default function OpportunitiesPage() {
     }
   };
 
-  const toggleRole = (role: string) => {
-    setDraft((prev) => {
-      const set = new Set(prev.eligible_roles);
-      if (set.has(role)) set.delete(role);
-      else set.add(role);
-      return { ...prev, eligible_roles: [...set] };
-    });
-  };
+  const scope = summaryMode === "filtered" ? summary.filtered : summary.global;
 
   return (
     <>
       <AdminPageHeader
         title="Opportunities"
-        description={`${filtered.length} of ${rows.length} · ${totals.applicants} applicants · ${totals.waitlist} waitlisted`}
+        description="Trials, jobs, and scouting listings — publication, applications, and interest waitlists are separate"
         actions={
           canWrite ? (
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={processSchedules}
+                onClick={() => void processSchedules()}
                 disabled={processing}
                 className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+                title={definitions.waitlist}
               >
                 {processing ? "Processing…" : "Process schedules"}
               </button>
@@ -213,70 +259,148 @@ export default function OpportunitiesPage() {
         }
       />
 
-      {error ? <AdminErrorAlert message={error} /> : null}
-
-      <section className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <AdminStatCard title="Opportunities" value={`${filtered.length}`} />
-        <AdminStatCard title="Applicants" value={`${totals.applicants}`} />
-        <div className="col-span-2 lg:col-span-1">
-          <AdminStatCard
-            title="Fee revenue"
-            value={`ETB ${totals.collected.toLocaleString()}`}
-          />
+      {error ? (
+        <div className="mb-4 space-y-2">
+          <AdminErrorAlert message={error} />
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium"
+          >
+            Retry
+          </button>
         </div>
+      ) : null}
+      {notice ? (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          {notice}
+        </div>
+      ) : null}
+
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-text-hint">
+        <span>Summary:</span>
+        <button
+          type="button"
+          onClick={() => writeParams({ summary: null })}
+          className={summaryMode === "global" ? "font-medium text-primary" : "hover:underline"}
+        >
+          All opportunities
+        </button>
+        <span>·</span>
+        <button
+          type="button"
+          onClick={() => writeParams({ summary: "filtered" })}
+          className={summaryMode === "filtered" ? "font-medium text-primary" : "hover:underline"}
+        >
+          Filtered results
+        </button>
+        <span className="text-text-hint">({scope?.label})</span>
+      </div>
+
+      <section className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <AdminStatCard title="Opportunities" value={`${scope?.opportunities ?? 0}`} />
+        <AdminStatCard title="Applicants" value={`${scope?.applicants ?? 0}`} />
+        <AdminStatCard
+          title="Interest waitlist"
+          value={`${scope?.waitlist ?? 0}`}
+        />
+        <AdminStatCard
+          title="Verified fee collections"
+          value={`ETB ${Number(scope?.verified_collections || 0).toLocaleString()}`}
+        />
       </section>
+      <p className="mb-4 text-[11px] text-text-hint">
+        {definitions.verified_collections ||
+          "Verified fee collections are customer application fees, not platform commission."}{" "}
+        {definitions.waitlist ||
+          "Waitlist = interest before applications open (not capacity overflow)."}
+      </p>
 
       <AdminFilterPanel>
-        <div className="grid gap-3 md:grid-cols-[1fr_160px_160px]">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <AdminSearchInput
-            value={query}
-            onChange={setQuery}
+            value={q}
+            onChange={(value) => writeParams({ q: value || null, page: "1" })}
             placeholder="Search title, category, organizer, location"
           />
-          <AdminSelect value={status} onChange={setStatus}>
-            <option value="all">All statuses</option>
+          <AdminSelect
+            value={status}
+            onChange={(value) => writeParams({ status: value, page: "1" })}
+          >
+            <option value="all">All application statuses</option>
             {opportunityStatuses.map((item) => (
               <option key={item} value={item}>
                 {opportunityStatusLabel(item)}
               </option>
             ))}
           </AdminSelect>
-          <AdminSelect value={published} onChange={setPublished}>
+          <AdminSelect
+            value={published}
+            onChange={(value) => writeParams({ published: value, page: "1" })}
+          >
             <option value="all">All visibility</option>
             <option value="yes">Published</option>
             <option value="no">Drafts</option>
           </AdminSelect>
+          <AdminSelect
+            value={deadline}
+            onChange={(value) => writeParams({ deadline: value, page: "1" })}
+          >
+            <option value="all">Any deadline</option>
+            <option value="upcoming">Deadline upcoming</option>
+            <option value="past">Deadline past</option>
+            <option value="none">No deadline</option>
+          </AdminSelect>
+          <input
+            value={category}
+            onChange={(e) => writeParams({ category: e.target.value || null, page: "1" })}
+            placeholder="Category"
+            className="h-10 rounded-lg border border-border bg-card px-3 text-sm"
+          />
+          <input
+            value={organizer}
+            onChange={(e) => writeParams({ organizer: e.target.value || null, page: "1" })}
+            placeholder="Organizer"
+            className="h-10 rounded-lg border border-border bg-card px-3 text-sm"
+          />
+          <input
+            value={country}
+            onChange={(e) => writeParams({ country: e.target.value || null, page: "1" })}
+            placeholder="Country"
+            className="h-10 rounded-lg border border-border bg-card px-3 text-sm"
+          />
         </div>
       </AdminFilterPanel>
 
       {loading ? <AdminLoadingRow label="Loading opportunities…" /> : null}
 
       <AdminTableShell>
-        {!loading && filtered.length === 0 ? (
+        {!loading && ok && rows.length === 0 ? (
           <AdminEmpty
-            title={rows.length === 0 ? "No opportunities yet" : "No matching opportunities"}
+            title={total === 0 && !q ? "No opportunities yet" : "No matching opportunities"}
             description={
-              rows.length === 0
+              !q && status === "all"
                 ? "Create a trial, job, or scouting listing to get started."
                 : "Try a different search or filter."
             }
           />
-        ) : !loading ? (
+        ) : !loading && ok ? (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Opportunity</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold">Publication</th>
+                  <th className="px-4 py-3 font-semibold">Applications</th>
+                  <th className="px-4 py-3 font-semibold">Deadline</th>
                   <th className="px-4 py-3 font-semibold">Fee</th>
                   <th className="px-4 py-3 font-semibold">Applicants</th>
                   <th className="px-4 py-3 font-semibold">Waitlist</th>
-                  <th className="px-4 py-3 font-semibold">Updated</th>
                   <th className="px-4 py-3 font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((row) => {
+                {rows.map((row) => {
                   const cover = toBackendMediaUrl(row.cover_image_url);
                   return (
                     <tr
@@ -305,35 +429,49 @@ export default function OpportunitiesPage() {
                               {row.title}
                             </Link>
                             <p className="truncate text-xs text-text-secondary">
-                              {[row.category, row.organizer || row.location]
+                              {[row.category, row.organizer, row.location, row.country]
                                 .filter(Boolean)
                                 .join(" · ") || "—"}
-                              {row.is_published ? "" : " · Draft"}
                             </p>
                           </div>
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex flex-col gap-1">
-                          <StatusBadge tone={opportunityStatusTone(row.status)}>
-                            {opportunityStatusLabel(row.status)}
-                          </StatusBadge>
-                          {!row.is_published ? (
-                            <StatusBadge tone="warning">Draft</StatusBadge>
-                          ) : null}
-                        </div>
+                        <StatusBadge tone={row.is_published ? "success" : "warning"}>
+                          {row.is_published ? "Published" : "Draft"}
+                        </StatusBadge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge tone={opportunityStatusTone(row.status)}>
+                          {opportunityStatusLabel(row.status)}
+                        </StatusBadge>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-text-secondary">
+                        {row.application_deadline
+                          ? formatDateTime(row.application_deadline)
+                          : "—"}
                       </td>
                       <td className="px-4 py-3 text-text-secondary">
                         {formatOpportunityFee(row.fee_type, row.fee_amount)}
+                        {row.max_applicants != null ? (
+                          <p className="text-[10px] text-text-hint">Cap {row.max_applicants}</p>
+                        ) : null}
                       </td>
-                      <td className="px-4 py-3 tabular-nums">
-                        {revenue[row.id]?.total_applicants ?? row.applicant_count ?? 0}
+                      <td className="px-4 py-3">
+                        <Link
+                          href={row.href_applications || `/admin/opportunities/${row.id}?tab=applications`}
+                          className="tabular-nums font-medium text-primary hover:underline"
+                        >
+                          {row.applicant_count ?? 0}
+                        </Link>
                       </td>
-                      <td className="px-4 py-3 tabular-nums">
-                        {revenue[row.id]?.waitlist_count ?? row.waitlist_count ?? 0}
-                      </td>
-                      <td className="px-4 py-3 text-text-secondary">
-                        {formatDate(row.updated_at)}
+                      <td className="px-4 py-3">
+                        <Link
+                          href={row.href_waitlist || `/admin/opportunities/${row.id}?tab=waitlist`}
+                          className="tabular-nums font-medium text-primary hover:underline"
+                        >
+                          {row.waitlist_count ?? 0}
+                        </Link>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-3">
@@ -347,10 +485,10 @@ export default function OpportunitiesPage() {
                             <button
                               type="button"
                               disabled={busyId === row.id}
-                              onClick={() => remove(row.id, row.title)}
+                              onClick={() => void remove(row.id, row.title)}
                               className="text-sm text-red-600 hover:underline disabled:opacity-50"
                             >
-                              Delete
+                              Archive
                             </button>
                           ) : null}
                         </div>
@@ -364,6 +502,30 @@ export default function OpportunitiesPage() {
         ) : null}
       </AdminTableShell>
 
+      {total > 40 ? (
+        <div className="mt-3 flex items-center justify-between text-xs">
+          <button
+            type="button"
+            disabled={page <= 1}
+            onClick={() => writeParams({ page: String(page - 1) })}
+            className="rounded border border-border px-2 py-1 disabled:opacity-40"
+          >
+            Previous
+          </button>
+          <span>
+            Page {page} · {total} total
+          </span>
+          <button
+            type="button"
+            disabled={page * 40 >= total}
+            onClick={() => writeParams({ page: String(page + 1) })}
+            className="rounded border border-border px-2 py-1 disabled:opacity-40"
+          >
+            Next
+          </button>
+        </div>
+      ) : null}
+
       <AdminModal
         open={modalOpen}
         onClose={() => {
@@ -375,249 +537,105 @@ export default function OpportunitiesPage() {
         footer={
           <AdminModalFooter
             onCancel={() => setModalOpen(false)}
-            onSave={save}
+            onSave={() => void save()}
             saving={saving}
             saveLabel="Create"
           />
         }
       >
-        <div className="space-y-5">
-          <FormSection title="Basics">
-            <Field label="Title">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            <span className="text-text-secondary">Title</span>
+            <input
+              className={fieldClass}
+              value={draft.title}
+              onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+              required
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-text-secondary">Category</span>
+            <input
+              className={fieldClass}
+              value={draft.category}
+              onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-text-secondary">Organizer</span>
+            <input
+              className={fieldClass}
+              value={draft.organizer}
+              onChange={(e) => setDraft((d) => ({ ...d, organizer: e.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-text-secondary">Fee type</span>
+            <select
+              className={fieldClass}
+              value={draft.fee_type}
+              onChange={(e) =>
+                setDraft((d) => ({
+                  ...d,
+                  fee_type: e.target.value as OpportunityDraft["fee_type"],
+                }))
+              }
+            >
+              <option value="free">Free</option>
+              <option value="paid">Paid</option>
+            </select>
+          </label>
+          {draft.fee_type === "paid" ? (
+            <label className="grid gap-1 text-sm">
+              <span className="text-text-secondary">Fee amount (ETB)</span>
               <input
                 className={fieldClass}
-                value={draft.title}
-                onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-                placeholder="e.g. Under-17 academy trial"
+                value={draft.fee_amount}
+                onChange={(e) => setDraft((d) => ({ ...d, fee_amount: e.target.value }))}
               />
-            </Field>
-            <Field label="Cover image">
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                disabled={uploading}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void uploadCover(file);
-                }}
-                className="block w-full text-sm text-text-secondary file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-foreground"
-              />
-              {uploading ? (
-                <p className="mt-1 text-xs text-text-secondary">Uploading…</p>
-              ) : (
-                <p className="mt-1 text-xs text-text-secondary">JPG, PNG, WebP, or GIF</p>
-              )}
-              {draft.cover_image_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={toBackendMediaUrl(draft.cover_image_url)}
-                  alt=""
-                  className="mt-2 h-32 w-full rounded-xl object-cover"
-                />
-              ) : (
-                <div className="mt-2 flex h-28 items-center justify-center rounded-xl border border-dashed border-border bg-muted/40 text-sm text-text-secondary">
-                  No cover yet
-                </div>
-              )}
-            </Field>
-            <Field label="Description">
-              <textarea
-                className={areaClass}
-                rows={4}
-                value={draft.description}
-                onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
-              />
-            </Field>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Category / type">
-                <input
-                  className={fieldClass}
-                  value={draft.category}
-                  onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value }))}
-                  placeholder="Trial, Scholarship, Job…"
-                />
-              </Field>
-              <Field label="Organizer">
-                <input
-                  className={fieldClass}
-                  value={draft.organizer}
-                  onChange={(e) => setDraft((d) => ({ ...d, organizer: e.target.value }))}
-                />
-              </Field>
-              <Field label="Location">
-                <input
-                  className={fieldClass}
-                  value={draft.location}
-                  onChange={(e) => setDraft((d) => ({ ...d, location: e.target.value }))}
-                />
-              </Field>
-              <Field label="Country">
-                <input
-                  className={fieldClass}
-                  value={draft.country}
-                  onChange={(e) => setDraft((d) => ({ ...d, country: e.target.value }))}
-                />
-              </Field>
-            </div>
-          </FormSection>
-
-          <FormSection title="Status & schedule">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Status">
-                <select
-                  className={fieldClass}
-                  value={draft.status}
-                  onChange={(e) =>
-                    setDraft((d) => ({
-                      ...d,
-                      status: e.target.value as OpportunityDraft["status"],
-                    }))
-                  }
-                >
-                  {opportunityStatuses.map((item) => (
-                    <option key={item} value={item}>
-                      {opportunityStatusLabel(item)}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Min profile completion %">
-                <input
-                  className={fieldClass}
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={draft.min_profile_completion}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, min_profile_completion: e.target.value }))
-                  }
-                />
-              </Field>
-              <Field label="Application opens">
-                <input
-                  className={fieldClass}
-                  type="datetime-local"
-                  value={draft.application_opens_at}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, application_opens_at: e.target.value }))
-                  }
-                />
-              </Field>
-              <Field label="Application deadline">
-                <input
-                  className={fieldClass}
-                  type="datetime-local"
-                  value={draft.application_deadline}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, application_deadline: e.target.value }))
-                  }
-                />
-              </Field>
-            </div>
-          </FormSection>
-
-          <FormSection title="Fees">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Fee">
-                <select
-                  className={fieldClass}
-                  value={draft.fee_type}
-                  onChange={(e) =>
-                    setDraft((d) => ({
-                      ...d,
-                      fee_type: e.target.value as OpportunityDraft["fee_type"],
-                    }))
-                  }
-                >
-                  <option value="free">Free</option>
-                  <option value="paid">Paid</option>
-                </select>
-              </Field>
-              <Field label="Fee amount (ETB)">
-                <input
-                  className={fieldClass}
-                  type="number"
-                  min={0}
-                  disabled={draft.fee_type !== "paid"}
-                  value={draft.fee_amount}
-                  onChange={(e) => setDraft((d) => ({ ...d, fee_amount: e.target.value }))}
-                />
-              </Field>
-            </div>
-          </FormSection>
-
-          <FormSection title="Eligibility">
-            <Field label="Eligibility requirements">
-              <textarea
-                className={areaClass}
-                rows={3}
-                value={draft.eligibility_requirements}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, eligibility_requirements: e.target.value }))
-                }
-              />
-            </Field>
-            <Field label="Required information / documents">
-              <textarea
-                className={areaClass}
-                rows={2}
-                value={draft.required_documents}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, required_documents: e.target.value }))
-                }
-              />
-            </Field>
-            <Field label="Eligible roles (empty = all)">
-              <div className="flex flex-wrap gap-2">
-                {ELIGIBLE_ROLE_OPTIONS.map((role) => {
-                  const selected = draft.eligible_roles.includes(role.value);
-                  return (
-                    <button
-                      key={role.value}
-                      type="button"
-                      onClick={() => toggleRole(role.value)}
-                      className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                        selected
-                          ? "bg-primary text-primary-foreground"
-                          : "border border-border text-text-secondary hover:bg-muted"
-                      }`}
-                    >
-                      {role.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </Field>
-            <label className="flex items-center gap-2 text-sm text-text-primary">
-              <input
-                type="checkbox"
-                checked={draft.is_published}
-                onChange={(e) => setDraft((d) => ({ ...d, is_published: e.target.checked }))}
-                className="rounded border-border text-primary focus:ring-primary/20"
-              />
-              Publish immediately
             </label>
-          </FormSection>
+          ) : null}
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            <span className="text-text-secondary">
+              Eligible roles (empty = all roles)
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {ELIGIBLE_ROLE_OPTIONS.map((role) => {
+                const on = draft.eligible_roles.includes(role.value);
+                return (
+                  <button
+                    key={role.value}
+                    type="button"
+                    onClick={() =>
+                      setDraft((prev) => {
+                        const set = new Set(prev.eligible_roles);
+                        if (set.has(role.value)) set.delete(role.value);
+                        else set.add(role.value);
+                        return { ...prev, eligible_roles: [...set] };
+                      })
+                    }
+                    className={`rounded-md border px-2 py-1 text-xs ${
+                      on
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-card"
+                    }`}
+                  >
+                    {role.label}
+                  </button>
+                );
+              })}
+            </div>
+          </label>
+          <label className="flex items-center gap-2 text-sm sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={draft.is_published}
+              onChange={(e) => setDraft((d) => ({ ...d, is_published: e.target.checked }))}
+            />
+            Publish immediately
+          </label>
         </div>
       </AdminModal>
     </>
-  );
-}
-
-function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="space-y-3">
-      <h3 className="font-heading text-sm font-semibold text-text-primary">{title}</h3>
-      {children}
-    </section>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block space-y-1.5 text-sm">
-      <span className="font-medium text-text-primary">{label}</span>
-      {children}
-    </label>
   );
 }

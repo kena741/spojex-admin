@@ -118,8 +118,15 @@ export async function deleteAdmin(path: string, body?: Record<string, unknown>) 
     credentials: "same-origin",
     body: body ? JSON.stringify(body) : undefined,
   });
-  const payload = (await response.json()) as { error?: string };
+  const payload = (await response.json()) as {
+    error?: string;
+    ok?: boolean;
+    archived?: boolean;
+    deleted?: boolean;
+    data?: unknown;
+  };
   if (!response.ok) throw new Error(payload.error || "Delete failed");
+  return payload;
 }
 
 export async function uploadAdmin(path: string, file: File, fieldName = "file") {
