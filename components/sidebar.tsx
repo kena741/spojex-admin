@@ -226,6 +226,53 @@ const NAV_SECTIONS: NavSection[] = [
 ];
 
 const SIDEBAR_OPEN_KEY = "spojex-admin-sidebar-open";
+const FREQUENT_NAV_KEY = "spojex-admin-frequent-nav";
+const FREQUENT_NAV_LIMIT = 5;
+
+type FrequentNavEntry = {
+  href: string;
+  count: number;
+  lastAt: number;
+};
+
+function loadFrequentNav(): FrequentNavEntry[] {
+  try {
+    const raw = localStorage.getItem(FREQUENT_NAV_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as FrequentNavEntry[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (item) =>
+          item &&
+          typeof item.href === "string" &&
+          typeof item.count === "number" &&
+          typeof item.lastAt === "number",
+      )
+      .map((item) => ({
+        href: item.href,
+        count: Math.max(0, item.count),
+        lastAt: item.lastAt,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function saveFrequentNav(entries: FrequentNavEntry[]) {
+  try {
+    localStorage.setItem(FREQUENT_NAV_KEY, JSON.stringify(entries));
+  } catch {
+    /* ignore quota */
+  }
+}
+
+function rankFrequentNav(entries: FrequentNavEntry[]) {
+  return [...entries].sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count;
+    return b.lastAt - a.lastAt;
+  });
+}
 
 function itemIsActive(pathname: string, href: string) {
   if (href === "/admin/streams") {
@@ -286,6 +333,41 @@ function ComingSoonNavItem({ label, icon: Icon }: { label: string; icon: typeof 
   );
 }
 
+function resolveNavItem(
+  href: string,
+  can: (permission: string) => boolean,
+): { href: string; label: string; icon: typeof Users } | null {
+  if (href === "/admin/dashboard") {
+    return { href, label: "Dashboard", icon: LayoutDashboard };
+  }
+  for (const section of NAV_SECTIONS) {
+    for (const item of section.items) {
+      if (item.comingSoon || item.href !== href) continue;
+      if (!item.visible(can)) return null;
+      return { href: item.href, label: item.label, icon: item.icon };
+    }
+  }
+  return null;
+}
+
+function matchTrackedHref(pathname: string): string | null {
+  if (pathname === "/admin/dashboard" || pathname === "/admin") {
+    return "/admin/dashboard";
+  }
+  const candidates: string[] = [];
+  for (const section of NAV_SECTIONS) {
+    for (const item of section.items) {
+      if (item.comingSoon) continue;
+      candidates.push(item.href);
+    }
+  }
+  candidates.sort((a, b) => b.length - a.length);
+  for (const href of candidates) {
+    if (itemIsActive(pathname, href)) return href;
+  }
+  return null;
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -301,12 +383,18 @@ export default function Sidebar() {
   const [hydrated, setHydrated] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [navQuery, setNavQuery] = useState("");
+  const [frequentNav, setFrequentNav] = useState<FrequentNavEntry[]>([]);
   const { can, staff } = useAdminPermissions();
 
   const visibleSections = NAV_SECTIONS.map((section) => ({
     ...section,
     items: section.items.filter((item) => item.visible(can)),
   })).filter((section) => section.items.length > 0);
+
+  const frequentItems = rankFrequentNav(frequentNav)
+    .map((entry) => resolveNavItem(entry.href, can))
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .slice(0, FREQUENT_NAV_LIMIT);
 
   const normalizedQuery = navQuery.trim().toLowerCase();
   const searching = normalizedQuery.length > 0;
@@ -345,6 +433,7 @@ export default function Sidebar() {
       }
       return next;
     });
+    setFrequentNav(loadFrequentNav());
     setHydrated(true);
   }, []);
 
@@ -360,6 +449,26 @@ export default function Sidebar() {
         }
       }
       return changed ? next : prev;
+    });
+  }, [pathname, hydrated]);
+
+  // Track frequently used nav destinations (top-level admin pages).
+  useEffect(() => {
+    if (!hydrated) return;
+    const href = matchTrackedHref(pathname);
+    if (!href) return;
+    setFrequentNav((prev) => {
+      const now = Date.now();
+      const existing = prev.find((item) => item.href === href);
+      const next = existing
+        ? prev.map((item) =>
+            item.href === href
+              ? { ...item, count: item.count + 1, lastAt: now }
+              : item,
+          )
+        : [...prev, { href, count: 1, lastAt: now }];
+      saveFrequentNav(next);
+      return next;
     });
   }, [pathname, hydrated]);
 
@@ -388,6 +497,14 @@ export default function Sidebar() {
       } catch {
         /* ignore quota */
       }
+      return next;
+    });
+  };
+
+  const removeFrequent = (href: string) => {
+    setFrequentNav((prev) => {
+      const next = prev.filter((item) => item.href !== href);
+      saveFrequentNav(next);
       return next;
     });
   };
@@ -440,6 +557,48 @@ export default function Sidebar() {
             </button>
           ) : null}
         </div>
+        {!searching && frequentItems.length > 0 ? (
+          <div className="mt-2">
+            <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-text-hint">
+              Frequently used
+            </p>
+            <ul className="flex flex-wrap gap-1.5">
+              {frequentItems.map((item) => {
+                const Icon = item.icon;
+                const active = itemIsActive(pathname, item.href);
+                return (
+                  <li key={item.href}>
+                    <span
+                      className={cn(
+                        "inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-1 text-xs transition-colors",
+                        active
+                          ? "border-primary/30 bg-primary/10 text-primary"
+                          : "border-sidebar-border bg-sidebar-accent/60 text-muted-foreground hover:text-sidebar-foreground",
+                      )}
+                    >
+                      <Link
+                        href={item.href}
+                        className="inline-flex min-w-0 items-center gap-1"
+                        title={item.label}
+                      >
+                        <Icon className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{item.label}</span>
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => removeFrequent(item.href)}
+                        aria-label={`Remove ${item.label} from frequently used`}
+                        className="grid h-4 w-4 shrink-0 place-items-center rounded-full hover:bg-black/10 hover:text-sidebar-foreground dark:hover:bg-white/10"
+                      >
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-4">
