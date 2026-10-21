@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -40,6 +40,7 @@ const areaClass =
 
 export default function OpportunitiesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { can } = useAdminPermissions();
   const canWrite = can("opportunities:write");
   const [rows, setRows] = useState<OpportunityRow[]>([]);
@@ -47,8 +48,8 @@ export default function OpportunitiesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
-  const [published, setPublished] = useState("all");
+  const [status, setStatus] = useState(searchParams.get("status") || "all");
+  const [published, setPublished] = useState(searchParams.get("published") || "all");
   const [modalOpen, setModalOpen] = useState(false);
   const [draft, setDraft] = useState<OpportunityDraft>(emptyOpportunityDraft());
   const [saving, setSaving] = useState(false);

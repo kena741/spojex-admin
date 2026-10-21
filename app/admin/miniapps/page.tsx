@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -51,6 +52,7 @@ function draftFromRow(row: MiniAppRow): MiniAppDraft {
 }
 
 export default function MiniAppsPage() {
+  const searchParams = useSearchParams();
   const { can } = useAdminPermissions();
   const canWrite = can("miniapps:write");
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -58,7 +60,7 @@ export default function MiniAppsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState(searchParams.get("status") || "all");
   const [name, setName] = useState("");
   const [url, setUrl] = useState("https://www.zemenservice.com/");
   const [creating, setCreating] = useState(false);

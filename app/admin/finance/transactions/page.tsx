@@ -125,6 +125,8 @@ export default function FinanceTransactionsPage() {
   const canExport = can("finance:export") || can("finance:read");
 
   const range = searchParams.get("range") || "30d";
+  const rangeStart = searchParams.get("start") || "";
+  const rangeEnd = searchParams.get("end") || "";
   const assetClass = searchParams.get("asset") || "all";
   const module = searchParams.get("module") || "";
   const status = searchParams.get("status") || "";
@@ -160,8 +162,12 @@ export default function FinanceTransactionsPage() {
 
   const windowParams = useMemo(() => {
     const p = new URLSearchParams({ range });
+    if (range === "custom" && rangeStart && rangeEnd) {
+      p.set("start", rangeStart);
+      p.set("end", rangeEnd);
+    }
     return p;
-  }, [range]);
+  }, [range, rangeStart, rangeEnd]);
 
   const loadSummary = useCallback(async () => {
     setSummaryLoading(true);
@@ -193,6 +199,10 @@ export default function FinanceTransactionsPage() {
         sort: "occurred_at",
         order: "desc",
       });
+      if (range === "custom" && rangeStart && rangeEnd) {
+        params.set("start", rangeStart);
+        params.set("end", rangeEnd);
+      }
       if (assetClass && assetClass !== "all") params.set("asset_class", assetClass);
       if (module) params.set("module", module);
       if (status) params.set("status", status);
@@ -226,7 +236,7 @@ export default function FinanceTransactionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [assetClass, currency, module, page, provider, q, range, status, txType]);
+  }, [assetClass, currency, module, page, provider, q, range, rangeStart, rangeEnd, status, txType]);
 
   useEffect(() => {
     void loadSummary();

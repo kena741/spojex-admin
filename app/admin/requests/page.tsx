@@ -95,6 +95,10 @@ export default function RequestsPage() {
 
   const q = searchParams.get("q") || "";
   const status = searchParams.get("status") || "all";
+  const schedule = searchParams.get("schedule") || "";
+  const event = searchParams.get("event") || "";
+  const dateFrom = searchParams.get("from") || "";
+  const dateTo = searchParams.get("to") || "";
   const page = Number(searchParams.get("page") || 1) || 1;
 
   const [rows, setRows] = useState<BookingRow[]>([]);
@@ -127,6 +131,10 @@ export default function RequestsPage() {
         page_size: "40",
       });
       if (status !== "all") params.set("status", status);
+      if (schedule) params.set("schedule", schedule);
+      if (event) params.set("event", event);
+      if (dateFrom) params.set("from", dateFrom);
+      if (dateTo) params.set("to", dateTo);
       if (q) params.set("q", q);
       const res = await fetch(`/api/admin/marketplace/bookings?${params}`, { cache: "no-store" });
       const payload = (await res.json()) as {
@@ -144,7 +152,7 @@ export default function RequestsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, q, status]);
+  }, [page, q, status, schedule, event, dateFrom, dateTo]);
 
   useEffect(() => {
     void load();
@@ -206,17 +214,19 @@ export default function RequestsPage() {
       ) : null}
 
       <AdminFilterPanel>
-        <div className="grid gap-2 md:grid-cols-[1fr_180px]">
+        <div className="grid gap-2 md:grid-cols-[1fr_200px_180px]">
           <AdminSearchInput
             value={q}
             onChange={(value) => writeParams({ q: value || null, page: "1" })}
             placeholder="Search service, customer, provider, id…"
           />
           <AdminSelect
-            value={status}
+            value={status.includes(",") ? status : status}
             onChange={(value) => writeParams({ status: value, page: "1" })}
           >
             <option value="all">All booking statuses</option>
+            <option value="pending,awaiting_payment">Pending + awaiting payment</option>
+            <option value="cancelled,declined">Cancelled / declined</option>
             {["pending", "awaiting_payment", "accepted", "declined", "completed", "cancelled"].map(
               (s) => (
                 <option key={s} value={s}>
@@ -225,7 +235,33 @@ export default function RequestsPage() {
               ),
             )}
           </AdminSelect>
+          <AdminSelect
+            value={schedule || "all"}
+            onChange={(value) =>
+              writeParams({ schedule: value === "all" ? null : value, page: "1" })
+            }
+          >
+            <option value="all">Any schedule</option>
+            <option value="upcoming_14d">Upcoming (14d)</option>
+            <option value="unscheduled">Accepted, not scheduled</option>
+            <option value="overdue">Overdue appointments</option>
+          </AdminSelect>
         </div>
+        {(dateFrom || dateTo || event) && (
+          <p className="mt-2 text-xs text-text-hint">
+            Date filter: {event || "created"}{" "}
+            {dateFrom && dateTo ? `${dateFrom} → ${dateTo}` : ""}
+            <button
+              type="button"
+              className="ml-2 text-primary hover:underline"
+              onClick={() =>
+                writeParams({ from: null, to: null, event: null, page: "1" })
+              }
+            >
+              Clear
+            </button>
+          </p>
+        )}
       </AdminFilterPanel>
 
       {loading ? <AdminLoadingRow label="Loading bookings…" /> : null}

@@ -34,8 +34,36 @@ function paymentLabel(status: string | null, pricingType: string | null) {
   return status;
 }
 
+function matchesSchedule(
+  row: {
+    status?: string;
+    requested_at?: string | null;
+    requested_on?: string | null;
+  },
+  schedule?: string | null,
+) {
+  if (!schedule) return true;
+  const status = String(row.status || "").toLowerCase();
+  if (status !== "accepted") return false;
+  const now = Date.now();
+  const soon = now + 14 * 864e5;
+  const at = row.requested_at
+    ? new Date(row.requested_at).getTime()
+    : row.requested_on
+      ? new Date(`${row.requested_on}T12:00:00.000Z`).getTime()
+      : null;
+  if (schedule === "unscheduled") return at == null;
+  if (schedule === "upcoming_14d") return at != null && at >= now && at <= soon;
+  if (schedule === "overdue") return at != null && at < now;
+  return true;
+}
+
 async function localBookings(params: {
   status?: string | null;
+  schedule?: string | null;
+  event?: string | null;
+  from?: string | null;
+  to?: string | null;
   q?: string | null;
   page: number;
   page_size: number;
@@ -50,7 +78,15 @@ async function localBookings(params: {
     .order("created_at", { ascending: false });
 
   if (params.status && params.status !== "all") {
-    query = query.eq("status", params.status);
+    const statuses = params.status.split(",").map((s) => s.trim()).filter(Boolean);
+    if (statuses.length === 1) {
+      query = query.eq("status", statuses[0]);
+    } else if (statuses.length > 1) {
+      const expanded = statuses.flatMap((s) =>
+        s === "cancelled" ? ["cancelled", "canceled"] : [s],
+      );
+      query = query.in("status", expanded);
+    }
   }
 
   const from = (params.page - 1) * params.page_size;
@@ -153,6 +189,39 @@ async function localBookings(params: {
     };
   });
 
+  if (params.schedule) {
+    data = data.filter((row) =>
+      matchesSchedule(
+        row as {
+          status?: string;
+          requested_at?: string | null;
+          requested_on?: string | null;
+        },
+        params.schedule,
+      ),
+    );
+  }
+
+  if (params.from && params.to) {
+    const fromIso = `${params.from.slice(0, 10)}T00:00:00.000Z`;
+    const toIso = `${params.to.slice(0, 10)}T23:59:59.999Z`;
+    const event = params.event || "created";
+    data = data.filter((row) => {
+      const r = row as {
+        created_at?: string | null;
+        completed_at?: string | null;
+        updated_at?: string | null;
+      };
+      const ts =
+        event === "completed"
+          ? r.completed_at || r.updated_at
+          : event === "closed"
+            ? r.updated_at
+            : r.created_at;
+      return Boolean(ts && ts >= fromIso && ts <= toIso);
+    });
+  }
+
   if (params.q?.trim()) {
     const q = params.q.trim().toLowerCase();
     data = data.filter((row) =>
@@ -169,12 +238,22 @@ async function localBookings(params: {
     );
   }
 
+  const filteredTotal =
+    params.schedule || params.from || params.q ? data.length : (count ?? data.length);
+
   return {
     data,
-    total: count ?? data.length,
+    total: filteredTotal,
     page: params.page,
     page_size: params.page_size,
     source: "admin_local_fallback",
+    filters: {
+      status: params.status,
+      schedule: params.schedule,
+      event: params.event,
+      from: params.from,
+      to: params.to,
+    },
   };
 }
 
@@ -184,6 +263,10 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const status = url.searchParams.get("status");
+  const schedule = url.searchParams.get("schedule");
+  const event = url.searchParams.get("event");
+  const from = url.searchParams.get("from");
+  const to = url.searchParams.get("to");
   const q = url.searchParams.get("q");
   const page = Number(url.searchParams.get("page") || 1) || 1;
   const page_size = Number(url.searchParams.get("page_size") || 40) || 40;
@@ -210,7 +293,9 @@ export async function GET(request: Request) {
   }
 
   try {
-    return NextResponse.json(await localBookings({ status, q, page, page_size }));
+    return NextResponse.json(
+      await localBookings({ status, schedule, event, from, to, q, page, page_size }),
+    );
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Failed to load bookings" },
