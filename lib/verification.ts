@@ -1,5 +1,7 @@
 export const verificationStatuses = [
   { id: "pending", label: "Pending" },
+  { id: "in_review", label: "In Review" },
+  { id: "needs_info", label: "Needs info" },
   { id: "approved", label: "Approved" },
   { id: "rejected", label: "Rejected" },
 ] as const;

@@ -52,6 +52,8 @@ export function requestTone(status: string): StatusTone {
       return "warning";
     case "scheduled":
     case "pending":
+    case "in_review":
+    case "needs_info":
     case "awaiting_payment":
     case "expired":
       return "warning";

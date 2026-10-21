@@ -151,7 +151,10 @@ export default function VerificationDetailPage() {
         <div className="mb-6 rounded-xl border border-border bg-card p-5 shadow-sm">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold">Required for role · {person?.role || "—"}</h2>
-            <Link href="/admin/verification-docs" className="text-xs font-medium text-primary hover:underline">
+            <Link
+              href="/admin/verifications?tab=requirements"
+              className="text-xs font-medium text-primary hover:underline"
+            >
               Manage document types
             </Link>
           </div>

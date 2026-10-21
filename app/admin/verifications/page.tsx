@@ -12,26 +12,78 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { UserAvatar } from "@/components/user-avatar";
+import VerificationRequirementsEditor from "@/components/verification-requirements-editor";
 import { patchAdmin } from "@/lib/hooks";
-import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { IdentityVerificationRequestRow } from "@/lib/types";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import { verificationDocLabel, verificationStatusLabel } from "@/lib/verification";
 import { verificationStepLabel } from "@/lib/verification-docs";
 
-/** Map UI filters to backend statuses (no inventing states). */
 const QUEUE_FILTERS = [
-  { id: "pending", label: "Pending", status: "pending" },
-  { id: "in_review", label: "In Review", status: "pending" }, // same status; sorted by age / docs
-  { id: "approved", label: "Approved", status: "approved" },
-  { id: "rejected", label: "Rejected", status: "rejected" },
+  { id: "pending", label: "Pending" },
+  { id: "in_review", label: "In Review" },
+  { id: "needs_info", label: "Needs info" },
+  { id: "approved", label: "Approved" },
+  { id: "rejected", label: "Rejected" },
+  { id: "all", label: "All" },
 ] as const;
 
-function requestAgeHours(createdAt: string) {
+type QueueRow = IdentityVerificationRequestRow & {
+  verification_scope?: string;
+  missing_docs?: boolean;
+  missing_required_count?: number;
+  document_count?: number;
+  queue_facet?: string;
+  reviewer?: { id?: string | null; display_name?: string | null } | null;
+  users?: IdentityVerificationRequestRow["users"] & { email?: string | null };
+};
+
+type DetailRow = QueueRow & {
+  role_requirements?: IdentityVerificationRequestRow["role_requirements"];
+  identity_verification_documents?: IdentityVerificationRequestRow["identity_verification_documents"];
+  prior_submissions?: Array<{
+    id: string;
+    status: string;
+    review_note?: string;
+    reviewed_at?: string | null;
+    created_at: string;
+  }>;
+  timeline?: Array<{ at?: string; action?: string; label?: string }>;
+  internal_notes?: string;
+  applicant_feedback?: string;
+  missing_required?: Array<{ slug: string; label: string }>;
+  requirements_source?: string;
+};
+
+type QueueCounts = {
+  pending?: number;
+  pending_all?: number;
+  in_review?: number;
+  needs_info?: number;
+  approved?: number;
+  rejected?: number;
+  total?: number;
+  oldest_pending_at?: string | null;
+};
+
+function requestAgeLabel(createdAt: string) {
   const t = new Date(createdAt).getTime();
-  if (Number.isNaN(t)) return 0;
-  return Math.max(0, (Date.now() - t) / 36e5);
+  if (Number.isNaN(t)) return "—";
+  const hours = Math.max(0, (Date.now() - t) / 36e5);
+  if (hours < 24) return `${Math.round(hours)}h waiting`;
+  return `${Math.round(hours / 24)}d waiting`;
+}
+
+function docReviewState(
+  requestStatus: string,
+  hasApplicantNote: boolean,
+): "submitted" | "accepted" | "needs_replacement" | "rejected" {
+  const s = requestStatus.toLowerCase();
+  if (s === "approved") return "accepted";
+  if (s === "rejected") return "rejected";
+  if (hasApplicantNote) return "needs_replacement";
+  return "submitted";
 }
 
 export default function VerificationCenterPage() {
@@ -42,19 +94,27 @@ export default function VerificationCenterPage() {
   const canVerify = can("users:verify");
   const canReadDocs = can("profiles:read");
 
-  const tab = searchParams.get("tab") || "queue";
+  const tab = searchParams.get("tab") === "requirements" ? "requirements" : "requests";
   const statusFilter = searchParams.get("status") || "pending";
   const selectedId = searchParams.get("id") || "";
+  const roleFilter = searchParams.get("role") || "all";
+  const page = Math.max(1, Number(searchParams.get("page") || 1) || 1);
 
-  const [rows, setRows] = useState<IdentityVerificationRequestRow[]>([]);
-  const [selected, setSelected] = useState<IdentityVerificationRequestRow | null>(null);
+  const [rows, setRows] = useState<QueueRow[]>([]);
+  const [counts, setCounts] = useState<QueueCounts>({});
+  const [total, setTotal] = useState(0);
+  const [countsScope, setCountsScope] = useState("global");
+  const [selected, setSelected] = useState<DetailRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadState, setLoadState] = useState<"idle" | "ok" | "empty" | "denied" | "failed">("idle");
   const [notice, setNotice] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [note, setNote] = useState("");
+  const [query, setQuery] = useState(searchParams.get("q") || "");
+  const [applicantNote, setApplicantNote] = useState("");
+  const [internalNote, setInternalNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [mobileDetail, setMobileDetail] = useState(false);
 
   const writeParams = useCallback(
     (patch: Record<string, string | null | undefined>) => {
@@ -71,47 +131,60 @@ export default function VerificationCenterPage() {
   const loadQueue = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setLoadState("idle");
     try {
-      const { data, error: loadError } = await getSpojexClient()
-        .from("identity_verification_requests")
-        .select(
-          "*, users!identity_verification_requests_user_id_fkey(id, display_name, full_name, role, avatar_url, verified)",
-        )
-        .order("created_at", { ascending: false })
-        .limit(500);
-      if (loadError) throw loadError;
-      setRows((data ?? []) as IdentityVerificationRequestRow[]);
+      const params = new URLSearchParams();
+      params.set("status", statusFilter);
+      params.set("page", String(page));
+      params.set("page_size", "40");
+      if (query.trim()) params.set("q", query.trim());
+      if (roleFilter !== "all") params.set("role", roleFilter);
+
+      const response = await fetch(`/api/admin/verifications?${params}`, {
+        credentials: "same-origin",
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        code?: string;
+        data?: QueueRow[];
+        total?: number;
+        counts?: QueueCounts;
+        counts_scope?: string;
+      };
+
+      if (response.status === 401 || response.status === 403) {
+        setLoadState("denied");
+        setError(payload.error || "Permission denied");
+        setRows([]);
+        return;
+      }
+      if (!response.ok) {
+        setLoadState("failed");
+        setError(payload.error || "Failed to load verification queue");
+        setRows([]);
+        return;
+      }
+
+      const data = payload.data ?? [];
+      setRows(data);
+      setTotal(payload.total ?? data.length);
+      setCounts(payload.counts ?? {});
+      setCountsScope(payload.counts_scope || "global");
+      setLoadState(data.length === 0 ? "empty" : "ok");
     } catch (err) {
+      setLoadState("failed");
       setError(err instanceof Error ? err.message : "Failed to load");
+      setRows([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [statusFilter, page, query, roleFilter]);
 
   useEffect(() => {
-    void loadQueue();
-  }, [loadQueue]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const filter = QUEUE_FILTERS.find((f) => f.id === statusFilter) ?? QUEUE_FILTERS[0];
-    let list = rows.filter((row) => row.status === filter.status);
-    if (statusFilter === "in_review") {
-      // Pending requests older than 24h or already touched — still backend "pending"
-      list = list.filter((row) => requestAgeHours(row.created_at) >= 24 || Boolean(row.notes));
-    } else if (statusFilter === "pending") {
-      list = list.filter((row) => requestAgeHours(row.created_at) < 24 && !row.notes);
-    }
-    if (q) {
-      list = list.filter((row) => {
-        const person = row.users;
-        return [person?.display_name, person?.full_name, person?.role, row.user_id]
-          .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(q));
-      });
-    }
-    return list;
-  }, [query, rows, statusFilter]);
+    if (tab !== "requests") return;
+    const handle = window.setTimeout(() => void loadQueue(), query ? 250 : 0);
+    return () => window.clearTimeout(handle);
+  }, [loadQueue, tab, query]);
 
   const loadDetail = useCallback(async (id: string) => {
     setDetailLoading(true);
@@ -120,11 +193,15 @@ export default function VerificationCenterPage() {
       const response = await fetch(`/api/admin/verifications/${id}`, { credentials: "same-origin" });
       const payload = (await response.json()) as {
         error?: string;
-        data?: IdentityVerificationRequestRow;
+        data?: DetailRow;
       };
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(payload.error || "Permission denied");
+      }
       if (!response.ok) throw new Error(payload.error || "Failed to load request");
       setSelected(payload.data ?? null);
-      setNote(payload.data?.review_note ?? "");
+      setApplicantNote(payload.data?.applicant_feedback || payload.data?.review_note || "");
+      setInternalNote(payload.data?.internal_notes || payload.data?.notes || "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load request");
       setSelected(null);
@@ -134,30 +211,42 @@ export default function VerificationCenterPage() {
   }, []);
 
   useEffect(() => {
-    if (tab !== "queue") return;
+    if (tab !== "requests") return;
     if (selectedId) {
+      setMobileDetail(true);
       void loadDetail(selectedId);
       return;
     }
     setSelected(null);
+    setMobileDetail(false);
   }, [selectedId, tab, loadDetail]);
 
   const review = async (status: "approved" | "rejected" | "pending") => {
     if (!canVerify || !selected) return;
+    if ((status === "rejected" || status === "pending") && !applicantNote.trim()) {
+      setError(
+        status === "rejected"
+          ? "Applicant-facing reason is required to reject."
+          : "Applicant-facing feedback is required when requesting changes.",
+      );
+      return;
+    }
     setSaving(true);
     setError(null);
     setNotice(null);
     try {
       await patchAdmin(`/api/admin/verifications/${selected.id}`, {
         status,
-        review_note: note.trim(),
+        review_note: applicantNote.trim(),
+        internal_note: internalNote.trim(),
+        expected_updated_at: selected.updated_at,
       });
       setNotice(
         status === "approved"
-          ? "Approved."
+          ? "Identity verification approved (users.verified). Org/gym scopes unchanged."
           : status === "rejected"
-            ? "Rejected."
-            : "Additional information requested (note saved; status remains pending).",
+            ? "Request rejected."
+            : "Additional information requested. Status remains pending.",
       );
       await loadQueue();
       await loadDetail(selected.id);
@@ -168,32 +257,88 @@ export default function VerificationCenterPage() {
     }
   };
 
+  const claim = async () => {
+    if (!canVerify || !selected) return;
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await patchAdmin(`/api/admin/verifications/${selected.id}`, {
+        action: "claim",
+        expected_updated_at: selected.updated_at,
+      });
+      setNotice("Review claimed.");
+      await loadQueue();
+      await loadDetail(selected.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Claim failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const docs = selected?.identity_verification_documents ?? [];
   const uploadedKinds = useMemo(() => new Set(docs.map((doc) => doc.kind)), [docs]);
   const requirements = selected?.role_requirements ?? [];
-  const missingRequired = requirements.filter(
-    (item) => item.is_required && !uploadedKinds.has(item.slug),
-  );
+  const missingRequired = selected?.missing_required?.length
+    ? selected.missing_required
+    : requirements.filter((item) => item.is_required && !uploadedKinds.has(item.slug));
+
+  const oldestPendingLabel = counts.oldest_pending_at
+    ? requestAgeLabel(counts.oldest_pending_at)
+    : "—";
 
   return (
     <div className="space-y-4">
       <AdminPageHeader
         title="Verification Center"
-        description="Review identity requests and document requirements in one place"
+        description="Identity and role-document review. Org and gym verification stay in their own directories."
         actions={
-          canReadDocs ? (
+          <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
-              onClick={() => writeParams({ tab: tab === "requirements" ? "queue" : "requirements", id: null })}
-              className="rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-text-secondary hover:text-foreground"
+              onClick={() => writeParams({ tab: "requests", id: selectedId || null })}
+              className={cn(
+                "rounded-lg border px-3 py-2 text-xs font-medium",
+                tab === "requests"
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-card text-text-secondary hover:text-foreground",
+              )}
             >
-              {tab === "requirements" ? "Back to queue" : "Document requirements"}
+              Requests
             </button>
-          ) : null
+            {canReadDocs ? (
+              <button
+                type="button"
+                onClick={() => writeParams({ tab: "requirements", id: null })}
+                className={cn(
+                  "rounded-lg border px-3 py-2 text-xs font-medium",
+                  tab === "requirements"
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card text-text-secondary hover:text-foreground",
+                )}
+              >
+                Requirements
+              </button>
+            ) : null}
+          </div>
         }
       />
 
-      {error ? <AdminErrorAlert message={error} /> : null}
+      {error ? (
+        <div className="space-y-2">
+          <AdminErrorAlert message={error} />
+          {loadState === "failed" || loadState === "denied" ? (
+            <button
+              type="button"
+              onClick={() => void loadQueue()}
+              className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted"
+            >
+              Retry
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {notice ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
           {notice}
@@ -201,45 +346,121 @@ export default function VerificationCenterPage() {
       ) : null}
 
       {tab === "requirements" ? (
-        <RequirementsEmbed />
+        <VerificationRequirementsEditor embedded />
       ) : (
         <>
-          <div className="flex flex-wrap gap-1.5">
-            {QUEUE_FILTERS.map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => writeParams({ status: f.id, id: null })}
-                className={cn(
-                  "rounded-md border px-2.5 py-1.5 text-xs font-medium",
-                  statusFilter === f.id
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-card text-text-secondary hover:text-foreground",
-                )}
-              >
-                {f.label}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center gap-2 text-xs text-text-secondary">
+            <span>
+              Queue counts ({countsScope}): pending {counts.pending ?? 0} · in review{" "}
+              {counts.in_review ?? 0} · needs info {counts.needs_info ?? 0} · approved{" "}
+              {counts.approved ?? 0} · rejected {counts.rejected ?? 0}
+            </span>
+            <span className="text-text-hint">· Oldest pending: {oldestPendingLabel}</span>
+            <span className="text-text-hint">
+              · Other scopes:{" "}
+              <Link href="/admin/organizations" className="text-primary hover:underline">
+                Organizations
+              </Link>
+              {" · "}
+              <Link href="/admin/gyms" className="text-primary hover:underline">
+                Gyms
+              </Link>
+            </span>
           </div>
 
-          <div className="grid min-h-[70vh] gap-4 lg:grid-cols-[minmax(280px,360px)_1fr]">
-            {/* Queue */}
-            <section className="flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <div className="flex flex-wrap gap-1.5">
+            {QUEUE_FILTERS.map((f) => {
+              const countKey = f.id as keyof QueueCounts;
+              const n =
+                f.id === "all"
+                  ? counts.total
+                  : typeof counts[countKey] === "number"
+                    ? counts[countKey]
+                    : undefined;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => writeParams({ status: f.id, id: null, page: "1" })}
+                  className={cn(
+                    "rounded-md border px-2.5 py-1.5 text-xs font-medium",
+                    statusFilter === f.id
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card text-text-secondary hover:text-foreground",
+                  )}
+                >
+                  {f.label}
+                  {typeof n === "number" ? ` (${n})` : ""}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <label className="grid gap-1 text-xs">
+              <span className="text-text-secondary">Role / entity</span>
+              <select
+                value={roleFilter}
+                onChange={(e) => writeParams({ role: e.target.value === "all" ? null : e.target.value, page: "1" })}
+                className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm"
+              >
+                <option value="all">All roles</option>
+                <option value="player">Player</option>
+                <option value="coach">Coach</option>
+                <option value="scout">Scout</option>
+                <option value="agent">Agent</option>
+                <option value="referee">Referee</option>
+                <option value="fitness_coach">Fitness coach</option>
+              </select>
+            </label>
+          </div>
+
+          <div
+            className={cn(
+              "grid min-h-[70vh] gap-4",
+              mobileDetail && selectedId ? "lg:grid-cols-[minmax(280px,360px)_1fr]" : "lg:grid-cols-[minmax(280px,360px)_1fr]",
+            )}
+          >
+            <section
+              className={cn(
+                "flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm",
+                mobileDetail && selectedId ? "hidden lg:flex" : "flex",
+              )}
+            >
               <div className="border-b border-border p-3">
                 <AdminSearchInput
                   value={query}
-                  onChange={setQuery}
-                  placeholder="Search queue…"
+                  onChange={(value) => {
+                    setQuery(value);
+                    writeParams({ q: value || null, page: "1" });
+                  }}
+                  placeholder="Search applicants…"
                 />
+                <p className="mt-2 text-[11px] text-text-hint">
+                  Showing {rows.length} of {total} · server-side search · identity scope only
+                </p>
               </div>
               {loading ? <AdminLoadingRow label="Loading queue…" /> : null}
-              {!loading && filtered.length === 0 ? (
-                <AdminEmpty title="Empty queue" description="No requests in this filter." />
-              ) : (
+              {!loading && loadState === "failed" ? (
+                <AdminEmpty title="Could not load queue" description="Use Retry above after fixing the API error." />
+              ) : null}
+              {!loading && loadState === "denied" ? (
+                <AdminEmpty title="Permission denied" description="You need users:read or users:verify." />
+              ) : null}
+              {!loading && loadState === "empty" ? (
+                <AdminEmpty
+                  title={query.trim() ? "No matching requests" : "Empty queue"}
+                  description={
+                    query.trim()
+                      ? "No requests match this search and filter."
+                      : "No identity verification requests in this filter."
+                  }
+                />
+              ) : null}
+              {!loading && loadState === "ok" ? (
                 <ul className="flex-1 overflow-y-auto divide-y divide-border">
-                  {filtered.map((row) => {
+                  {rows.map((row) => {
                     const person = row.users;
-                    const age = requestAgeHours(row.created_at);
                     const active = selectedId === row.id;
                     return (
                       <li key={row.id}>
@@ -261,15 +482,25 @@ export default function VerificationCenterPage() {
                               {person?.display_name || person?.full_name || "Unknown"}
                             </p>
                             <p className="truncate text-[11px] text-text-secondary">
-                              {person?.role || "—"} · {formatDate(row.created_at)}
+                              {person?.role || "—"} · identity · {formatDate(row.created_at)}
                             </p>
-                            <div className="mt-1 flex items-center gap-2">
+                            <div className="mt-1 flex flex-wrap items-center gap-2">
                               <StatusBadge tone={requestTone(row.status)}>
-                                {verificationStatusLabel(row.status)}
+                                {verificationStatusLabel(row.queue_facet || row.status)}
                               </StatusBadge>
                               <span className="text-[10px] text-text-hint">
-                                {age < 24 ? `${Math.round(age)}h` : `${Math.round(age / 24)}d`} old
+                                {requestAgeLabel(row.created_at)}
                               </span>
+                              {row.missing_docs ? (
+                                <span className="text-[10px] font-medium text-amber-800">
+                                  Missing docs
+                                </span>
+                              ) : null}
+                              {row.reviewer?.display_name ? (
+                                <span className="text-[10px] text-text-hint">
+                                  · {row.reviewer.display_name}
+                                </span>
+                              ) : null}
                             </div>
                           </div>
                         </button>
@@ -277,11 +508,50 @@ export default function VerificationCenterPage() {
                     );
                   })}
                 </ul>
-              )}
+              ) : null}
+              {!loading && total > 40 ? (
+                <div className="flex items-center justify-between border-t border-border px-3 py-2 text-xs">
+                  <button
+                    type="button"
+                    disabled={page <= 1}
+                    onClick={() => writeParams({ page: String(page - 1) })}
+                    className="rounded border border-border px-2 py-1 disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  <span>
+                    Page {page}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={page * 40 >= total}
+                    onClick={() => writeParams({ page: String(page + 1) })}
+                    className="rounded border border-border px-2 py-1 disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              ) : null}
             </section>
 
-            {/* Detail */}
-            <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <section
+              className={cn(
+                "overflow-hidden rounded-xl border border-border bg-card shadow-sm",
+                !selectedId ? "hidden lg:block" : "block",
+                mobileDetail && selectedId ? "block" : "",
+              )}
+            >
+              {selectedId ? (
+                <div className="border-b border-border px-3 py-2 lg:hidden">
+                  <button
+                    type="button"
+                    onClick={() => writeParams({ id: null })}
+                    className="text-xs font-medium text-primary"
+                  >
+                    ← Back to queue
+                  </button>
+                </div>
+              ) : null}
               {detailLoading ? <AdminLoadingRow label="Loading request…" /> : null}
               {!detailLoading && !selected ? (
                 <div className="grid h-full place-items-center p-8 text-sm text-text-hint">
@@ -303,9 +573,14 @@ export default function VerificationCenterPage() {
                         <p className="font-heading text-base font-semibold">Unknown user</p>
                       )}
                       <p className="mt-1 text-xs text-text-secondary">
-                        {selected.users?.role || "No role"} · submitted{" "}
-                        {formatDate(selected.created_at)}
+                        Role: {selected.users?.role || "—"} · Scope: identity / role credentials ·
+                        submitted {formatDateTime(selected.created_at)}
                       </p>
+                      {selected.reviewer_id ? (
+                        <p className="mt-1 text-xs text-text-hint">
+                          Assigned reviewer: {selected.reviewer?.display_name || selected.reviewer_id}
+                        </p>
+                      ) : null}
                     </div>
                     <StatusBadge tone={requestTone(selected.status)}>
                       {verificationStatusLabel(selected.status)}
@@ -313,31 +588,51 @@ export default function VerificationCenterPage() {
                   </div>
 
                   {canVerify && selected.status === "pending" ? (
-                    <div className="mb-4 space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+                    <div className="mb-4 space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+                      {!selected.reviewer_id ? (
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => void claim()}
+                          className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
+                        >
+                          Start / claim review
+                        </button>
+                      ) : null}
                       <label className="grid gap-1 text-sm">
-                        <span className="text-text-secondary">Decision note</span>
+                        <span className="text-text-secondary">Applicant-facing feedback</span>
                         <textarea
-                          value={note}
-                          onChange={(e) => setNote(e.target.value)}
+                          value={applicantNote}
+                          onChange={(e) => setApplicantNote(e.target.value)}
                           rows={2}
                           className="rounded-lg border border-border bg-card px-3 py-2 text-sm"
-                          placeholder="Reason for approval, rejection, or follow-up"
+                          placeholder="Shown to the applicant on rejection or request for changes"
+                        />
+                      </label>
+                      <label className="grid gap-1 text-sm">
+                        <span className="text-text-secondary">Internal notes (staff only)</span>
+                        <textarea
+                          value={internalNote}
+                          onChange={(e) => setInternalNote(e.target.value)}
+                          rows={2}
+                          className="rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                          placeholder="Not shown to the applicant"
                         />
                       </label>
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
-                          disabled={saving || !note.trim()}
+                          disabled={saving || !applicantNote.trim()}
                           onClick={() => void review("pending")}
                           className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
                         >
-                          Request more info
+                          Request replacement / more info
                         </button>
                         <button
                           type="button"
-                          disabled={saving}
+                          disabled={saving || !applicantNote.trim()}
                           onClick={() => void review("rejected")}
-                          className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
+                          className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
                         >
                           Reject
                         </button>
@@ -347,32 +642,47 @@ export default function VerificationCenterPage() {
                           onClick={() => void review("approved")}
                           className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
                         >
-                          Approve
+                          Approve identity
                         </button>
                       </div>
                       <p className="text-[11px] text-text-hint">
-                        “Request more info” keeps status pending and stores your note for the
-                        applicant / In Review queue.
+                        Approval sets users.verified only. It does not verify organizations or gyms.
+                        Concurrent reviewers and stale pages are blocked via version checks.
                       </p>
                     </div>
                   ) : null}
 
-                  {selected.review_note && selected.status !== "pending" ? (
-                    <p className="mb-4 text-sm text-text-secondary">
-                      Decision note: {selected.review_note}
+                  {selected.applicant_feedback || selected.review_note ? (
+                    <p className="mb-3 text-sm text-text-secondary">
+                      Applicant feedback: {selected.applicant_feedback || selected.review_note}
                       {selected.reviewed_at ? ` · ${formatDate(selected.reviewed_at)}` : ""}
+                    </p>
+                  ) : null}
+                  {selected.internal_notes || selected.notes ? (
+                    <p className="mb-4 text-sm text-text-hint">
+                      Internal: {selected.internal_notes || selected.notes}
                     </p>
                   ) : null}
 
                   {requirements.length > 0 ? (
                     <div className="mb-4">
-                      <h3 className="mb-2 text-sm font-semibold">Checklist</h3>
+                      <h3 className="mb-2 text-sm font-semibold">
+                        Checklist
+                        {selected.requirements_source === "fallback" ? (
+                          <span className="ml-2 text-xs font-normal text-amber-800">
+                            (fallback — not live catalog)
+                          </span>
+                        ) : null}
+                      </h3>
                       {missingRequired.length > 0 ? (
                         <p className="mb-2 text-xs text-amber-800">
-                          Missing: {missingRequired.map((item) => item.label).join(", ")}
+                          Missing required:{" "}
+                          {missingRequired.map((item) => item.label || item.slug).join(", ")}
                         </p>
                       ) : (
-                        <p className="mb-2 text-xs text-emerald-800">All required types uploaded.</p>
+                        <p className="mb-2 text-xs text-emerald-800">
+                          All required types uploaded under applicable policy.
+                        </p>
                       )}
                       <ul className="grid gap-2 sm:grid-cols-2">
                         {requirements.map((item) => {
@@ -399,70 +709,107 @@ export default function VerificationCenterPage() {
                         })}
                       </ul>
                     </div>
-                  ) : null}
-
-                  <h3 className="mb-2 text-sm font-semibold">Documents</h3>
-                  {docs.length === 0 ? (
-                    <p className="text-sm text-text-hint">No documents on this request.</p>
                   ) : (
-                    <div className="grid gap-3 md:grid-cols-2">
-                      {docs.map((doc) => (
-                        <figure
-                          key={doc.id}
-                          className="overflow-hidden rounded-lg border border-border bg-muted/20"
-                        >
-                          <figcaption className="border-b border-border px-3 py-1.5 text-xs font-medium">
-                            {verificationDocLabel(doc.kind, doc.label)}
-                          </figcaption>
-                          {doc.mime_type?.startsWith("image/") && doc.signed_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={doc.signed_url}
-                              alt={verificationDocLabel(doc.kind, doc.label)}
-                              className="h-56 w-full object-contain bg-muted"
-                            />
-                          ) : doc.signed_url ? (
-                            <a
-                              href={doc.signed_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="block px-3 py-6 text-center text-sm text-primary hover:underline"
-                            >
-                              Open document
-                            </a>
-                          ) : (
-                            <p className="px-3 py-6 text-center text-xs text-text-hint">
-                              Preview unavailable
-                            </p>
-                          )}
-                        </figure>
-                      ))}
+                    <p className="mb-4 text-xs text-text-hint">
+                      No role document requirements configured for this applicant’s role.
+                    </p>
+                  )}
+
+                  <h3 className="mb-2 text-sm font-semibold">Submitted documents</h3>
+                  {docs.length === 0 ? (
+                    <p className="mb-4 text-sm text-text-hint">No documents on this request.</p>
+                  ) : (
+                    <div className="mb-4 grid gap-3 md:grid-cols-2">
+                      {docs.map((doc) => {
+                        const state = docReviewState(
+                          selected.status,
+                          Boolean(String(selected.review_note || "").trim() && selected.status === "pending"),
+                        );
+                        return (
+                          <figure
+                            key={doc.id}
+                            className="overflow-hidden rounded-lg border border-border bg-muted/20"
+                          >
+                            <figcaption className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5 text-xs font-medium">
+                              <span>{verificationDocLabel(doc.kind, doc.label)}</span>
+                              <StatusBadge
+                                tone={
+                                  state === "accepted"
+                                    ? "success"
+                                    : state === "rejected"
+                                      ? "danger"
+                                      : state === "needs_replacement"
+                                        ? "warning"
+                                        : "neutral"
+                                }
+                              >
+                                {state.replace(/_/g, " ")}
+                              </StatusBadge>
+                            </figcaption>
+                            {doc.mime_type?.startsWith("image/") && doc.signed_url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={doc.signed_url}
+                                alt={verificationDocLabel(doc.kind, doc.label)}
+                                className="h-56 w-full object-contain bg-muted"
+                              />
+                            ) : doc.signed_url ? (
+                              <a
+                                href={doc.signed_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="block px-3 py-6 text-center text-sm text-primary hover:underline"
+                              >
+                                Open document (short-lived URL)
+                              </a>
+                            ) : (
+                              <p className="px-3 py-6 text-center text-xs text-text-hint">
+                                Preview unavailable
+                              </p>
+                            )}
+                          </figure>
+                        );
+                      })}
                     </div>
                   )}
+
+                  {selected.timeline && selected.timeline.length > 0 ? (
+                    <div className="mb-4">
+                      <h3 className="mb-2 text-sm font-semibold">Review timeline</h3>
+                      <ul className="space-y-1 text-xs text-text-secondary">
+                        {selected.timeline.map((event, index) => (
+                          <li key={`${event.action}-${index}`}>
+                            {event.at ? formatDateTime(event.at) : "—"} · {event.label || event.action}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
+                  {selected.prior_submissions && selected.prior_submissions.length > 0 ? (
+                    <div>
+                      <h3 className="mb-2 text-sm font-semibold">Prior submissions</h3>
+                      <ul className="space-y-1 text-xs text-text-secondary">
+                        {selected.prior_submissions.map((prior) => (
+                          <li key={prior.id}>
+                            <button
+                              type="button"
+                              className="text-primary hover:underline"
+                              onClick={() => writeParams({ id: prior.id })}
+                            >
+                              {formatDate(prior.created_at)} · {verificationStatusLabel(prior.status)}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </section>
           </div>
         </>
       )}
-    </div>
-  );
-}
-
-function RequirementsEmbed() {
-  return (
-    <div className="rounded-xl border border-border bg-card p-6 shadow-sm">
-      <h2 className="font-heading text-sm font-semibold">Document requirements</h2>
-      <p className="mt-2 max-w-xl text-sm text-text-secondary">
-        Configure which identity documents each customer profile type must upload. This stays under
-        Verification Center but uses the existing requirements editor.
-      </p>
-      <Link
-        href="/admin/verification-docs"
-        className="mt-4 inline-flex rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
-      >
-        Open requirements editor
-      </Link>
     </div>
   );
 }
