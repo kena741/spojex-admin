@@ -22,6 +22,11 @@ const nextConfig: NextConfig = {
         permanent: false,
       },
       { source: "/admin/coin-catalog", destination: "/admin/finance/coins?tab=packs", permanent: false },
+      {
+        source: "/admin/feed-interests",
+        destination: "/admin/feed-insights",
+        permanent: false,
+      },
     ];
   },
   images: {

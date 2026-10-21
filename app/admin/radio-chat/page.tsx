@@ -27,8 +27,13 @@ function RadioChatPage() {
   const streamFilter = search.get("stream") ?? "";
   const { can } = useAdminPermissions();
   const canModerate = canModerateRadioChat(can);
+  const tabParam = search.get("tab");
   const [tab, setTab] = useState<"stations" | "messages" | "reports">(
-    streamFilter ? "messages" : "stations",
+    tabParam === "stations" || tabParam === "reports" || tabParam === "messages"
+      ? tabParam
+      : streamFilter
+        ? "messages"
+        : "messages",
   );
   const [stations, setStations] = useState<RadioStreamRow[]>([]);
   const [messages, setMessages] = useState<RadioChatMessageRow[]>([]);
@@ -117,7 +122,11 @@ function RadioChatPage() {
     <>
       <AdminPageHeader
         title="Radio chat"
-        description="Stations, live chat messages, and moderation reports"
+        description="Moderate listener chat and reports. Station configuration stays under Streams."
+        breadcrumbs={[
+          { label: "Content", href: "/admin/content" },
+          { label: "Radio Chat" },
+        ]}
       />
       {loading ? <AdminLoadingRow label="Loading radio chat…" /> : null}
       {error ? <AdminErrorAlert message={error} /> : null}
@@ -159,7 +168,7 @@ function RadioChatPage() {
           </button>
         </div>
         <Link href="/admin/streams?tab=radio" className="text-sm text-primary hover:underline">
-          Manage stations
+          Configure stations in Streams
         </Link>
       </div>
 

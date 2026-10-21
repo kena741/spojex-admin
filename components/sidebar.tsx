@@ -209,16 +209,22 @@ const financeItems: NavItem[] = [
 ];
 
 const contentItems: NavItem[] = [
-  { href: "/admin/news", label: "Sport news", icon: Newspaper, visible: (can) => can("news:read") },
   {
-    href: "/admin/feed-interests",
-    label: "Feed interests",
-    icon: Sparkles,
-    visible: (can) => can("news:read") || can("users:read"),
+    href: "/admin/content",
+    label: "Overview",
+    icon: LayoutDashboard,
+    visible: (can) =>
+      can("news:read") ||
+      can("sounds:read") ||
+      can("banners:read") ||
+      can("streams:read") ||
+      can("reports:read") ||
+      can("analytics:read"),
   },
+  { href: "/admin/news", label: "Sport News", icon: Newspaper, visible: (can) => can("news:read") },
   {
-    href: "/admin/sound-library",
-    label: "Sound library",
+    href: "/admin/media-library",
+    label: "Media Library",
     icon: Music,
     visible: (can) => can("sounds:read") || can("news:read"),
   },
@@ -232,7 +238,13 @@ const contentItems: NavItem[] = [
       can("services:read") ||
       can("services:write"),
   },
-  { href: "/admin/radio-chat", label: "Radio chat", icon: MessageCircle, visible: canReadRadioChat },
+  { href: "/admin/radio-chat", label: "Radio Chat", icon: MessageCircle, visible: canReadRadioChat },
+  {
+    href: "/admin/feed-insights",
+    label: "Feed Insights",
+    icon: Sparkles,
+    visible: (can) => can("news:read") || can("users:read"),
+  },
 ];
 
 const networkItems: NavItem[] = [

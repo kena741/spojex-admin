@@ -50,7 +50,10 @@ export default function BannersPage() {
 
   const [title, setTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
+  const [createFile, setCreateFile] = useState<File | null>(null);
+  const [createActive, setCreateActive] = useState(true);
   const [creating, setCreating] = useState(false);
+  const createImageRef = useRef<HTMLInputElement>(null);
 
   const [editOpen, setEditOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -84,20 +87,51 @@ export default function BannersPage() {
     });
   }, [query, rows, status]);
 
+  const validateLink = (value: string) => {
+    const v = value.trim();
+    if (!v) return null;
+    if (v.startsWith("/")) return null; // internal route
+    try {
+      const u = new URL(v);
+      if (!["https:", "http:"].includes(u.protocol)) {
+        return "Only http(s) or internal /routes are allowed";
+      }
+      if (/^(javascript|data|vbscript):/i.test(v)) return "Executable URL schemes are rejected";
+    } catch {
+      return "Invalid URL";
+    }
+    return null;
+  };
+
   const create = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!canWrite) return;
+    const linkErr = validateLink(linkUrl);
+    if (linkErr) {
+      setError(linkErr);
+      return;
+    }
+    if (!createFile) {
+      setError("Choose a banner image before creating.");
+      return;
+    }
     setCreating(true);
     setError(null);
     try {
-      await postAdmin("/api/admin/banners", {
-        title: title.trim(),
+      const created = (await postAdmin("/api/admin/banners", {
+        title: title.trim() || "Banner",
         link_url: linkUrl.trim(),
-        is_active: true,
+        is_active: createActive,
         sort_order: rows.length,
-      });
+      })) as BannerRow | undefined;
+      const id = created?.id;
+      if (!id) throw new Error("Banner created but no id returned");
+      await uploadAdmin(`/api/admin/banners/${id}/image`, createFile);
       setTitle("");
       setLinkUrl("");
+      setCreateFile(null);
+      setCreateActive(true);
+      if (createImageRef.current) createImageRef.current.value = "";
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
@@ -214,7 +248,11 @@ export default function BannersPage() {
     <>
       <AdminPageHeader
         title="Banners"
-        description="Ad / promo slides for Home, Services, and Gym. Upload an image and optional tap link."
+        description="Home / Services / Gym promo slides. Create with image, destination, and active state in one step."
+        breadcrumbs={[
+          { label: "Content", href: "/admin/content" },
+          { label: "Banners" },
+        ]}
       />
       {error ? <AdminErrorAlert message={error} /> : null}
 
@@ -223,29 +261,48 @@ export default function BannersPage() {
           onSubmit={create}
           className="mb-6 space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm"
         >
-          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+          <div className="grid gap-3 md:grid-cols-2">
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Title (optional)"
+              placeholder="Title"
               className={fieldClass}
             />
             <input
               value={linkUrl}
               onChange={(e) => setLinkUrl(e.target.value)}
-              placeholder="Link URL or /route (optional)"
+              placeholder="Destination: /route, https://…, or store listing"
               className={fieldClass}
             />
+          </div>
+          <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
+            <input
+              ref={createImageRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              onChange={(e) => setCreateFile(e.target.files?.[0] ?? null)}
+              className="text-sm"
+              required
+            />
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={createActive}
+                onChange={(e) => setCreateActive(e.target.checked)}
+              />
+              Active
+            </label>
             <button
               type="submit"
-              disabled={creating}
+              disabled={creating || !createFile}
               className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
             >
-              Add banner
+              {creating ? "Creating…" : "Create banner"}
             </button>
           </div>
           <p className="text-xs text-text-secondary">
-            After creating, open Edit to upload the banner image.
+            Prefer https:// landing pages for cross-platform store links. Internal destinations must
+            start with /. Image is required at create time.
           </p>
         </form>
       ) : null}

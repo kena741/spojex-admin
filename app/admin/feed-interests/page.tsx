@@ -60,8 +60,20 @@ function ChipList({ items, empty = "—" }: { items: string[]; empty?: string })
   );
 }
 
+/** Map raw category keys used in affinity rows to feed topics. */
+function normalizeTopic(topic: string) {
+  const t = topic.trim().toLowerCase().replace(/\s+/g, "_");
+  if (t === "general") return "football (from general)";
+  return topic;
+}
+
 function scoreLabel(score: number) {
-  return score.toFixed(1);
+  const n = Number(score);
+  if (!Number.isFinite(n)) return "—";
+  if (n <= -0.9) return `${n.toFixed(1)} · suppressed`;
+  if (n < 0) return `${n.toFixed(1)} · negative affinity`;
+  if (n > 0) return `${n.toFixed(1)} · positive affinity`;
+  return `${n.toFixed(1)} · neutral`;
 }
 
 export default function FeedInterestsPage() {
@@ -111,11 +123,29 @@ export default function FeedInterestsPage() {
   return (
     <>
       <AdminPageHeader
-        title="Feed interests"
-        description="Explicit preferences and learned topic/creator affinities from the For You feed"
+        title="Feed Insights"
+        description="Separate explicit preferences from learned affinities and negative feedback — ranking weights are not edited here"
+        breadcrumbs={[
+          { label: "Content", href: "/admin/content" },
+          { label: "Feed Insights" },
+        ]}
       />
-      {loading ? <AdminLoadingRow label="Loading feed interests…" /> : null}
+      {loading ? <AdminLoadingRow label="Loading feed insights…" /> : null}
       {error ? <AdminErrorAlert message={error} /> : null}
+
+      <details className="rounded-xl border border-border bg-card px-4 py-3 text-xs text-text-secondary">
+        <summary className="cursor-pointer font-medium text-foreground">Score legend</summary>
+        <ul className="mt-2 list-disc space-y-1 pl-4">
+          <li>Positive scores = stronger topic/creator affinity (learned from watch behavior).</li>
+          <li>Negative scores = reduced affinity (e.g. not interested) — not a moderation violation.</li>
+          <li>
+            Raw topic key <code>general</code> maps to football in ranking; shown with that note.
+          </li>
+          <li>
+            Missing interests means “No explicit preferences”, not missing behavioral data.
+          </li>
+        </ul>
+      </details>
 
       {summary ? (
         <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -182,7 +212,14 @@ export default function FeedInterestsPage() {
                         ) : null}
                       </td>
                       <td className="px-4 py-3">
-                        <ChipList items={row.interests} empty={row.has_preferences ? "None set" : "—"} />
+                        <ChipList
+                          items={row.interests}
+                          empty={
+                            row.has_preferences
+                              ? "No explicit preferences"
+                              : "No preference row"
+                          }
+                        />
                       </td>
                       <td className="px-4 py-3">
                         <ChipList items={row.preferred_languages} />
@@ -194,7 +231,7 @@ export default function FeedInterestsPage() {
                           <div className="space-y-1">
                             {row.top_topics.map((item) => (
                               <div key={item.topic} className="text-xs">
-                                <span className="font-medium">{item.topic}</span>{" "}
+                                <span className="font-medium">{normalizeTopic(item.topic)}</span>{" "}
                                 <span className="text-text-secondary">{scoreLabel(item.score)}</span>
                               </div>
                             ))}

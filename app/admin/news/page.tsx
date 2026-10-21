@@ -57,6 +57,7 @@ export default function NewsPage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
+  const [featuredFilter, setFeaturedFilter] = useState("all");
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("General");
   const [creating, setCreating] = useState(false);
@@ -99,13 +100,26 @@ export default function NewsPage() {
     return rows
       .filter((row) => {
         if (status !== "all" && row.status !== status) return false;
+        if (featuredFilter === "featured" && !row.is_featured) return false;
+        if (featuredFilter === "standard" && row.is_featured) return false;
         if (!q) return true;
-        return [row.title, row.slug, row.body, row.category, row.source]
+        return [row.title, row.slug, row.body, row.category, row.source, row.author]
           .filter(Boolean)
           .some((v) => String(v).toLowerCase().includes(q));
       })
       .sort((a, b) => newsRecency(b) - newsRecency(a));
-  }, [query, rows, status]);
+  }, [featuredFilter, query, rows, status]);
+
+  const mediaTypeOf = (row: SportNewsRow) => {
+    if ((row.video_url || "").trim()) return "Video";
+    if ((row.audio_url || "").trim() || row.sound_id) return "Audio";
+    const gallery = Array.isArray(row.image_urls) ? row.image_urls.length : 0;
+    if (gallery > 1 || (row.image_url || "").trim()) return gallery > 1 ? "Gallery" : "Image";
+    return "Text";
+  };
+
+  const thumbOf = (row: SportNewsRow) =>
+    (row.cover_url || row.image_url || (Array.isArray(row.image_urls) ? row.image_urls[0] : "") || "").trim();
 
   const resetCreate = () => {
     setTitle("");
@@ -313,8 +327,12 @@ export default function NewsPage() {
   return (
     <>
       <AdminPageHeader
-        title="Sport news"
-        description="Articles for the home feed"
+        title="Sport News"
+        description="Publish stories for the home feed. Open an article for the full editor and mobile preview."
+        breadcrumbs={[
+          { label: "Content", href: "/admin/content" },
+          { label: "Sport News" },
+        ]}
         actions={
           canWrite ? (
             <button
@@ -329,7 +347,7 @@ export default function NewsPage() {
       />
       {error ? <AdminErrorAlert message={error} /> : null}
       <AdminFilterPanel>
-        <div className="grid gap-3 md:grid-cols-[1fr_180px]">
+        <div className="grid gap-3 md:grid-cols-[1fr_160px_140px]">
           <AdminSearchInput value={query} onChange={setQuery} placeholder="Search headline, category, source" />
           <AdminSelect value={status} onChange={setStatus}>
             <option value="all">All statuses</option>
@@ -338,6 +356,14 @@ export default function NewsPage() {
                 {item.label}
               </option>
             ))}
+          </AdminSelect>
+          <AdminSelect
+            value={featuredFilter}
+            onChange={setFeaturedFilter}
+          >
+            <option value="all">All placement</option>
+            <option value="featured">Featured</option>
+            <option value="standard">Not featured</option>
           </AdminSelect>
         </div>
       </AdminFilterPanel>
@@ -351,99 +377,82 @@ export default function NewsPage() {
               <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Article</th>
+                  <th className="px-4 py-3 font-semibold">Media</th>
                   <th className="px-4 py-3 font-semibold">Category</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 font-semibold">Featured</th>
+                  <th className="px-4 py-3 font-semibold">Engagement</th>
                   <th className="px-4 py-3 font-semibold">Published</th>
-                  {canWrite ? <th className="px-4 py-3 font-semibold">Actions</th> : null}
+                  <th className="px-4 py-3 font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((row) => {
-                  const isEditing = editingId === row.id && draft;
+                  const thumb = thumbOf(row);
                   return (
                     <tr key={row.id} className="border-b border-border last:border-0 hover:bg-muted/30">
                       <td className="px-4 py-3">
-                        {isEditing ? (
-                          <input
-                            value={draft.title}
-                            onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                            className="h-9 w-full min-w-[180px] rounded-lg border border-border px-2 text-sm"
-                          />
-                        ) : (
-                          <>
-                            <Link href={`/admin/news/${row.id}`} className="font-medium text-text-primary hover:text-primary">
+                        <div className="flex items-center gap-3">
+                          {thumb ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={thumb}
+                              alt=""
+                              className="h-12 w-16 rounded-md object-cover bg-muted"
+                            />
+                          ) : (
+                            <div className="grid h-12 w-16 place-items-center rounded-md bg-muted text-[10px] text-text-hint">
+                              {mediaTypeOf(row)}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <Link
+                              href={`/admin/news/${row.id}`}
+                              className="font-medium text-text-primary hover:text-primary"
+                            >
                               {row.title}
                             </Link>
-                            <p className="mt-0.5 text-xs text-text-secondary">
-                              {row.source}
-                              {row.author ? ` · ${row.author}` : ""}
-                              {row.video_url?.trim()
-                                ? " · Video"
-                                : row.audio_url?.trim()
-                                  ? " · Audio"
-                                  : ""}
+                            <p className="mt-0.5 truncate text-xs text-text-secondary">
+                              {[row.source?.trim() || null, row.author?.trim() || null]
+                                .filter(Boolean)
+                                .join(" · ") || "No source credit"}
+                              {row.is_featured ? " · Featured" : ""}
                             </p>
-                          </>
-                        )}
+                          </div>
+                        </div>
                       </td>
+                      <td className="px-4 py-3 text-xs text-text-secondary">{mediaTypeOf(row)}</td>
+                      <td className="px-4 py-3 text-text-secondary">{row.category}</td>
                       <td className="px-4 py-3">
-                        {isEditing ? (
-                          <select
-                            value={draft.category}
-                            onChange={(e) => setDraft({ ...draft, category: e.target.value })}
-                            className="h-9 rounded-lg border border-border px-2 text-sm"
-                          >
-                            {newsCategories.map((item) => (
-                              <option key={item} value={item}>
-                                {item}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span className="text-text-secondary">{row.category}</span>
-                        )}
+                        <StatusBadge tone={requestTone(row.status)}>
+                          {newsStatusLabel(row.status)}
+                        </StatusBadge>
                       </td>
-                      <td className="px-4 py-3">
-                        {isEditing ? (
-                          <select
-                            value={draft.status}
-                            onChange={(e) => setDraft({ ...draft, status: e.target.value })}
-                            className="h-9 rounded-lg border border-border px-2 text-sm"
-                          >
-                            {newsStatuses.map((item) => (
-                              <option key={item.id} value={item.id}>
-                                {item.label}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <StatusBadge tone={requestTone(row.status)}>{newsStatusLabel(row.status)}</StatusBadge>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {row.is_featured ? (
-                          <StatusBadge tone="success">Featured</StatusBadge>
-                        ) : (
-                          <span className="text-text-secondary">—</span>
-                        )}
+                      <td className="px-4 py-3 text-xs text-text-secondary">
+                        ♥ {row.like_count ?? 0} · 💬 {row.comment_count ?? 0} · ☆{" "}
+                        {row.save_count ?? 0}
                       </td>
                       <td className="px-4 py-3 text-text-secondary">
                         {row.published_at ? formatDate(row.published_at) : "—"}
                       </td>
-                      {canWrite ? (
-                        <td className="px-4 py-3">
-                          <AdminTableActions
-                            canWrite
-                            editing={Boolean(isEditing)}
-                            saving={saving}
-                            onEdit={() => startEdit(row)}
-                            onSave={saveEdit}
-                            onCancel={cancelEdit}
-                            onDelete={() => remove(row)}
-                          />
-                        </td>
-                      ) : null}
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-2">
+                          <Link
+                            href={`/admin/news/${row.id}`}
+                            className="text-sm font-medium text-primary"
+                          >
+                            Open
+                          </Link>
+                          {canWrite ? (
+                            <button
+                              type="button"
+                              className="text-sm font-medium text-red-600"
+                              onClick={() => void remove(row)}
+                            >
+                              Delete
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}

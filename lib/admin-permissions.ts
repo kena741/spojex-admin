@@ -314,11 +314,21 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
     return can("events:read") || can("streams:read");
   }
   if (pathname.startsWith("/admin/donations")) return can("donations:read");
+  if (pathname === "/admin/content" || pathname.startsWith("/admin/content/")) {
+    return (
+      can("news:read") ||
+      can("sounds:read") ||
+      can("banners:read") ||
+      can("streams:read") ||
+      can("reports:read") ||
+      can("analytics:read")
+    );
+  }
   if (pathname.startsWith("/admin/news")) return can("news:read");
-  if (pathname.startsWith("/admin/feed-interests")) {
+  if (pathname.startsWith("/admin/feed-insights") || pathname.startsWith("/admin/feed-interests")) {
     return can("news:read") || can("users:read");
   }
-  if (pathname.startsWith("/admin/sound-library")) {
+  if (pathname.startsWith("/admin/media-library") || pathname.startsWith("/admin/sound-library")) {
     return can("sounds:read") || can("news:read");
   }
   if (pathname.startsWith("/admin/banners")) {

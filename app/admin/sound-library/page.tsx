@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
   AdminErrorAlert,
   AdminLoadingRow,
+  AdminModal,
+  AdminSearchInput,
   AdminTableShell,
 } from "@/components/admin-layout";
 import { SoundClipEditor } from "@/components/sound-clip-editor";
@@ -20,6 +22,7 @@ import {
 } from "@/lib/news-sounds";
 import { toBackendMediaUrl } from "@/lib/spojex-media";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { formatDate } from "@/lib/utils";
 
 async function uploadLibrarySound(file: File) {
   const invalid = validateLibrarySound(file.type, file.name, file.size);
@@ -58,6 +61,8 @@ export default function SoundLibraryPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [filterKind, setFilterKind] = useState("all");
+  const [query, setQuery] = useState("");
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [name, setName] = useState("");
   const [kind, setKind] = useState("stadium");
   const [audioUrl, setAudioUrl] = useState("");
@@ -68,6 +73,17 @@ export default function SoundLibraryPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [renaming, setRenaming] = useState(false);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
+
+  useEffect(() => {
+    return () => {
+      audioRefs.current.forEach((el) => {
+        el.pause();
+      });
+      audioRefs.current.clear();
+    };
+  }, []);
 
   const load = async () => {
     const libRes = await fetch("/api/admin/news-sounds", {
@@ -88,9 +104,15 @@ export default function SoundLibraryPage() {
   }, []);
 
   const filtered = useMemo(() => {
-    if (filterKind === "all") return rows;
-    return rows.filter((row) => row.kind === filterKind);
-  }, [filterKind, rows]);
+    const q = query.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (filterKind !== "all" && row.kind !== filterKind) return false;
+      if (!q) return true;
+      return [row.name, row.id, row.kind, row.audio_url]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q));
+    });
+  }, [filterKind, query, rows]);
 
   const resetForm = () => {
     setName("");
@@ -98,6 +120,13 @@ export default function SoundLibraryPage() {
     setAudioUrl("");
     setDurationSeconds(null);
     setExtractedFromVideo(false);
+  };
+
+  const playOnly = (id: string) => {
+    audioRefs.current.forEach((el, key) => {
+      if (key !== id) el.pause();
+    });
+    setPlayingId(id);
   };
 
   const onUpload = async (file: File) => {
@@ -144,9 +173,10 @@ export default function SoundLibraryPage() {
         sort_order: rows.length,
       });
       resetForm();
+      setUploadOpen(false);
       setNotice(
         result.created === false
-          ? "That audio is already in the library — reused existing track."
+          ? "That audio URL is already in the library — reused existing track (names are not merged)."
           : "Sound added to the library.",
       );
       await load();
@@ -219,7 +249,23 @@ export default function SoundLibraryPage() {
     <>
       <AdminPageHeader
         title="Sound library"
-        description="Upload audio, or a video to extract its soundtrack. Trim the clip, then add it once to the curated library."
+        description="Upload → process/extract → trim → preview → save. Same display names are allowed; assets stay distinct by ID."
+        breadcrumbs={[
+          { label: "Content", href: "/admin/content" },
+          { label: "Media Library", href: "/admin/media-library" },
+          { label: "Sounds" },
+        ]}
+        actions={
+          canWrite ? (
+            <button
+              type="button"
+              onClick={() => setUploadOpen(true)}
+              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+            >
+              Upload sound
+            </button>
+          ) : null
+        }
       />
       {error ? <AdminErrorAlert message={error} /> : null}
       {notice ? (
@@ -228,10 +274,35 @@ export default function SoundLibraryPage() {
         </p>
       ) : null}
 
-      {canWrite ? (
+      <div className="mb-4 grid gap-3 md:grid-cols-[1fr_180px]">
+        <AdminSearchInput value={query} onChange={setQuery} placeholder="Search name, id, kind…" />
+        <select
+          value={filterKind}
+          onChange={(e) => setFilterKind(e.target.value)}
+          className="h-10 rounded-lg border border-border bg-card px-3 text-sm"
+        >
+          <option value="all">All kinds</option>
+          {NEWS_SOUND_KINDS.map((k) => (
+            <option key={k.id} value={k.id}>
+              {k.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <AdminModal
+        open={uploadOpen}
+        onClose={() => {
+          if (!saving && !uploading) {
+            setUploadOpen(false);
+            resetForm();
+          }
+        }}
+        title="Upload to sound library"
+      >
         <form
           onSubmit={create}
-          className="mb-6 grid gap-3 rounded-xl border border-border bg-card p-4 md:grid-cols-2"
+          className="grid gap-3 md:grid-cols-2"
         >
           <label className="grid gap-1 text-sm md:col-span-2">
             <span className="text-text-secondary">Name</span>
@@ -305,53 +376,44 @@ export default function SoundLibraryPage() {
               duplicate library row.
             </p>
           )}
-          <div className="md:col-span-2">
+          <div className="md:col-span-2 flex flex-wrap justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setUploadOpen(false);
+                resetForm();
+              }}
+              className="rounded-md border border-border px-3 py-2 text-sm"
+            >
+              Cancel
+            </button>
             <button
               type="submit"
               disabled={!name.trim() || !audioUrl.trim() || saving || uploading}
-              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
             >
-              {uploading
-                ? "Uploading / extracting…"
-                : saving
-                  ? "Saving…"
-                  : "Add to library"}
+              {uploading ? "Uploading…" : saving ? "Saving…" : "Save to library"}
             </button>
           </div>
         </form>
-      ) : null}
-
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <label className="text-sm text-text-secondary">Filter</label>
-        <select
-          value={filterKind}
-          onChange={(e) => setFilterKind(e.target.value)}
-          className="h-9 rounded-lg border border-border px-2 text-sm"
-        >
-          <option value="all">All kinds</option>
-          {NEWS_SOUND_KINDS.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.label}
-            </option>
-          ))}
-        </select>
-      </div>
+      </AdminModal>
 
       <AdminTableShell>
         {loading ? <AdminLoadingRow label="Loading sounds…" /> : null}
         {!loading && filtered.length === 0 ? (
           <AdminEmpty
             title="No library sounds yet"
-            description="Upload a track above. Image posts will only offer sounds from this library."
+            description="Use Upload sound. Duplicate names stay separate — only exact audio URLs are reused."
           />
         ) : null}
         {!loading && filtered.length > 0 ? (
           <table className="min-w-full text-left text-sm">
             <thead className="border-b border-border text-text-secondary">
               <tr>
-                <th className="px-3 py-2 font-medium">Name</th>
+                <th className="px-3 py-2 font-medium">Name / ID</th>
                 <th className="px-3 py-2 font-medium">Kind</th>
                 <th className="px-3 py-2 font-medium">Preview</th>
+                <th className="px-3 py-2 font-medium">Created</th>
                 <th className="px-3 py-2 font-medium">Status</th>
                 <th className="px-3 py-2 font-medium">Actions</th>
               </tr>
@@ -387,29 +449,41 @@ export default function SoundLibraryPage() {
                         </button>
                       </div>
                     ) : (
-                      <span className="block max-w-[14rem] truncate" title={row.name}>
-                        {displaySoundTitle(row.name)}
-                      </span>
+                      <div>
+                        <span className="block max-w-[14rem] truncate" title={row.name}>
+                          {displaySoundTitle(row.name)}
+                        </span>
+                        <p className="mt-0.5 font-mono text-[10px] text-text-hint">{row.id}</p>
+                      </div>
                     )}
                   </td>
                   <td className="px-3 py-3 text-text-secondary">
                     {newsSoundKindLabel(row.kind)}
+                    {row.duration_seconds != null ? (
+                      <p className="text-[11px] text-text-hint">{row.duration_seconds}s</p>
+                    ) : null}
                   </td>
                   <td className="px-3 py-3">
                     {row.audio_url ? (
                       <audio
+                        ref={(el) => {
+                          if (el) audioRefs.current.set(row.id, el);
+                          else audioRefs.current.delete(row.id);
+                        }}
                         src={toBackendMediaUrl(row.audio_url)}
                         controls
                         preload="none"
                         className="h-8 max-w-[220px]"
+                        onPlay={() => playOnly(row.id)}
                       />
                     ) : (
                       "—"
                     )}
                   </td>
-                  <td className="px-3 py-3">
-                    {row.is_active ? "Active" : "Hidden"}
+                  <td className="px-3 py-3 text-xs text-text-secondary">
+                    {row.created_at ? formatDate(row.created_at) : "—"}
                   </td>
+                  <td className="px-3 py-3">{row.is_active ? "Active" : "Hidden"}</td>
                   <td className="px-3 py-3">
                     {canWrite ? (
                       <div className="flex flex-wrap gap-2">
