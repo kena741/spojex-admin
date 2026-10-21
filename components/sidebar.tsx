@@ -338,7 +338,7 @@ function resolveNavItem(
   can: (permission: string) => boolean,
 ): { href: string; label: string; icon: typeof Users } | null {
   if (href === "/admin/dashboard") {
-    return { href, label: "Dashboard", icon: LayoutDashboard };
+    return { href, label: "Analytics", icon: LayoutDashboard };
   }
   for (const section of NAV_SECTIONS) {
     for (const item of section.items) {
@@ -614,7 +614,7 @@ export default function Sidebar() {
                 )}
               >
                 <LayoutDashboard className={cn("h-4 w-4", iconClass(pathname === "/admin/dashboard"))} />
-                <span>Dashboard</span>
+                <span>Analytics</span>
               </Link>
               </li>
             ) : null}
