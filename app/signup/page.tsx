@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { SpojexLogo } from "@/components/spojex-logo";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { bootstrapFirstAdmin, resolveAdminStaff } from "@/lib/use-admin-permissions";
 
@@ -89,10 +90,8 @@ export default function SignupPage() {
     <div className="grid min-h-screen place-items-center bg-background px-6">
       <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-sm">
         <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-lg bg-primary text-primary-foreground">
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor" aria-hidden>
-              <path d="M12 2.2 14.7 8h6.3l-5.1 3.8 1.9 6-5.8-3.9-5.8 3.9 1.9-6L3 8h6.3L12 2.2Z" />
-            </svg>
+          <div className="mx-auto mb-3 flex justify-center">
+            <SpojexLogo size={48} className="h-12 w-12" priority />
           </div>
           <h1 className="font-heading text-lg font-semibold text-text-primary">Create account</h1>
           <p className="mt-1 text-sm text-text-secondary">

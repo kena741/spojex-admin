@@ -46,6 +46,7 @@ import {
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { SpojexLogo } from "@/components/spojex-logo";
 import { canReadRadioChat } from "@/lib/admin-permissions";
 import { canManageLiveEvents } from "@/lib/live-events";
 import { getSpojexClient } from "@/lib/spojex/client";
@@ -346,13 +347,7 @@ function sectionHasActive(pathname: string, items: NavItem[]) {
 }
 
 function LogoMark() {
-  return (
-    <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary text-primary-foreground">
-      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden>
-        <path d="M12 2.2 14.7 8h6.3l-5.1 3.8 1.9 6-5.8-3.9-5.8 3.9 1.9-6L3 8h6.3L12 2.2Z" />
-      </svg>
-    </span>
-  );
+  return <SpojexLogo size={32} className="h-8 w-8" priority />;
 }
 
 function NavLink({ href, label, icon: Icon }: { href: string; label: string; icon: typeof Users }) {

@@ -25,6 +25,14 @@ export const metadata: Metadata = {
     template: "%s · SpoJex Admin",
   },
   description: "Operate SpoJex identities, organizations, and the football services marketplace.",
+  icons: {
+    icon: [
+      { url: "/favicon.png", type: "image/png", sizes: "32x32" },
+      { url: "/images/logo-transparent.png", type: "image/png", sizes: "any" },
+    ],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
+    shortcut: "/favicon.png",
+  },
 };
 
 export const viewport: Viewport = {
