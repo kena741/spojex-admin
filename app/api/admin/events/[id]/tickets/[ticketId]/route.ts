@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
+import { getSpojexApiBaseUrl } from "@/lib/env";
+import { requestAccessToken } from "@/lib/spojex/server";
+
+export const dynamic = "force-dynamic";
 
 export async function PATCH(
   request: Request,
@@ -7,46 +11,52 @@ export async function PATCH(
 ) {
   const auth = await requireAdminPermission("events:write");
   if (!auth.ok) return auth.error;
-  const { id, ticketId } = await params;
-  const body = (await request.json()) as { action?: string };
-  const action = body.action;
+  const token = await requestAccessToken();
+  if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: current, error: loadError } = await auth.context.client
+  const { id, ticketId } = await params;
+  const body = (await request.json().catch(() => ({}))) as {
+    action?: string;
+    override_reason?: string;
+  };
+
+  const res = await fetch(`${getSpojexApiBaseUrl()}/api/v1/admin/events/${id}/scan`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      action: body.action,
+      ticket_id: ticketId,
+      override_reason: body.override_reason ?? null,
+    }),
+    cache: "no-store",
+  });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return NextResponse.json(
+      {
+        error:
+          (payload as { message?: string; error?: string }).message ||
+          (payload as { error?: string }).error ||
+          "Scan failed",
+      },
+      { status: res.status },
+    );
+  }
+
+  // Refresh full ticket row for UI (code still available server-side; UI conceals).
+  const refreshed = await auth.context.client
     .from("event_tickets")
-    .select("id, status, checked_in_at, checked_out_at")
+    .select("*, users:user_id(id, display_name, email, phone)")
     .eq("id", ticketId)
     .eq("event_id", id)
     .maybeSingle();
-  if (loadError || !current) {
-    return NextResponse.json({ error: loadError?.message || "Ticket not found" }, { status: 404 });
-  }
-  if (current.status !== "confirmed" && current.status !== "used") {
-    return NextResponse.json({ error: "Ticket is not paid" }, { status: 400 });
-  }
 
-  const inAt = `${current.checked_in_at ?? ""}`;
-  const outAt = `${current.checked_out_at ?? ""}`;
-  const inside = Boolean(inAt) && !outAt;
-  const stamp = new Date().toISOString();
-
-  let patch: Record<string, unknown>;
-  if (action === "checkin") {
-    if (inside) return NextResponse.json({ error: "Already checked in" }, { status: 400 });
-    patch = { checked_in_at: stamp, checked_out_at: null, status: "confirmed" };
-  } else if (action === "checkout") {
-    if (!inside) return NextResponse.json({ error: "Not checked in" }, { status: 400 });
-    patch = { checked_out_at: stamp };
-  } else {
-    return NextResponse.json({ error: "Unknown action" }, { status: 400 });
-  }
-
-  const { data, error } = await auth.context.client
-    .from("event_tickets")
-    .update(patch)
-    .eq("id", ticketId)
-    .eq("event_id", id)
-    .select("*, users:user_id(id, display_name, email, phone)")
-    .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-  return NextResponse.json({ data });
+  return NextResponse.json({
+    ok: true,
+    ...(payload as object),
+    data: refreshed.data,
+  });
 }

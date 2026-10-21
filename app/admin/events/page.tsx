@@ -1,10 +1,8 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, ChevronRight } from "lucide-react";
-import { AdminCode, normalizeAdminCode } from "@/components/admin-code";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -30,19 +28,30 @@ import {
   eventLifecycles,
   eventStatusLabel,
   eventStatuses,
+  eventVisibilities,
   eventVisibilityLabel,
   formatEventPrice,
-  formatEventWhen,
+  formatEventWhenWithTz,
 } from "@/lib/events";
-import { EVENT_UPCOMING_EXCLUDED_LIFECYCLES } from "@/lib/native-apps-filters";
 import { deleteAdmin, patchAdmin, postAdminResponse, adminFetch } from "@/lib/hooks";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
-import type { EventRow, EventTicketRow } from "@/lib/types";
+import type { EventRow } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 
 const fieldClass = "h-10 w-full rounded-lg border border-border px-3 text-sm";
 
-type EventSalesMap = Record<string, { sold: number; sales: number; currency: string }>;
+type DirectoryEvent = EventRow & {
+  pricing?: { label?: string; source?: string; legacy_fallback_used?: boolean };
+  inventory?: {
+    confirmed_sold?: number;
+    reserved?: number;
+    capacity?: number;
+    available?: number | null;
+    inside_now?: number;
+  };
+  verified_collections?: { amount?: string | number; currency?: string };
+  organizer_name?: string;
+};
 
 export default function EventsPage() {
   const router = useRouter();
@@ -50,18 +59,22 @@ export default function EventsPage() {
   const searchParams = useSearchParams();
   const { can } = useAdminPermissions();
   const canWrite = can("events:write");
-  const [rows, setRows] = useState<EventRow[]>([]);
-  const [salesByEvent, setSalesByEvent] = useState<EventSalesMap>({});
-  const [tickets, setTickets] = useState<Pick<EventTicketRow, "id" | "event_id" | "ticket_code" | "ticket_number" | "status" | "users">[]>([]);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [rows, setRows] = useState<DirectoryEvent[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(Number(searchParams.get("page") || "1") || 1);
+  const [pageSize] = useState(40);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState(searchParams.get("q") || "");
   const [status, setStatus] = useState(searchParams.get("status") || "all");
   const [lifecycle, setLifecycle] = useState(searchParams.get("lifecycle") || "all");
-  const [startsFrom] = useState(searchParams.get("starts_from") || "");
-  const [startsTo] = useState(searchParams.get("starts_to") || "");
-  const windowFilter = searchParams.get("window") || "";
+  const [visibility, setVisibility] = useState(searchParams.get("visibility") || "all");
+  const [salesFilter, setSalesFilter] = useState(searchParams.get("sales") || "all");
+  const [venueFilter, setVenueFilter] = useState(searchParams.get("venue") || "");
+  const [organizerFilter, setOrganizerFilter] = useState(searchParams.get("organizer") || "");
+  const [startsFrom, setStartsFrom] = useState(searchParams.get("starts_from") || "");
+  const [startsTo, setStartsTo] = useState(searchParams.get("starts_to") || "");
+  const [windowFilter, setWindowFilter] = useState(searchParams.get("window") || "");
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -102,97 +115,112 @@ export default function EventsPage() {
   };
 
   const load = async () => {
-    const response = await adminFetch("/api/admin/events");
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("q", query.trim());
+    if (status !== "all") params.set("status", status);
+    if (lifecycle !== "all") params.set("lifecycle", lifecycle);
+    if (visibility !== "all") params.set("visibility", visibility);
+    if (salesFilter !== "all") params.set("sales", salesFilter);
+    if (venueFilter.trim()) params.set("venue", venueFilter.trim());
+    if (organizerFilter.trim()) params.set("organizer", organizerFilter.trim());
+    if (windowFilter) params.set("window", windowFilter);
+    if (startsFrom) params.set("starts_from", startsFrom);
+    if (startsTo) params.set("starts_to", startsTo);
+    params.set("page", String(page));
+    params.set("page_size", String(pageSize));
+    params.set("sort", "starts_at");
+    params.set("order", "desc");
+
+    const response = await adminFetch(`/api/admin/events?${params}`);
     const payload = (await response.json()) as {
-      data?: EventRow[];
-      sales?: EventSalesMap;
-      tickets?: Pick<EventTicketRow, "id" | "event_id" | "ticket_code" | "ticket_number" | "status" | "users">[];
+      data?: DirectoryEvent[];
+      total?: number;
       error?: string;
     };
     if (!response.ok) throw new Error(payload.error || "Failed to load");
     setRows(payload.data ?? []);
-    setSalesByEvent(payload.sales ?? {});
-    setTickets(payload.tickets ?? []);
+    setTotal(Number(payload.total ?? 0));
   };
 
   useEffect(() => {
+    setLoading(true);
     load()
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
       .finally(() => setLoading(false));
-  }, []);
-
-  const ticketsByEvent = useMemo(() => {
-    const map: Record<string, typeof tickets> = {};
-    for (const ticket of tickets) {
-      (map[ticket.event_id] ??= []).push(ticket);
-    }
-    return map;
-  }, [tickets]);
-
-  useEffect(() => {
-    const next = new URLSearchParams(searchParams.toString());
-    if (query.trim()) next.set("q", query.trim());
-    else next.delete("q");
-    if (status !== "all") next.set("status", status);
-    else next.delete("status");
-    if (lifecycle !== "all") next.set("lifecycle", lifecycle);
-    else next.delete("lifecycle");
-    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, status, lifecycle]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const codeQ = normalizeAdminCode(query);
-    const fromMs = startsFrom ? Date.parse(startsFrom) : NaN;
-    const toMs = startsTo ? Date.parse(startsTo) : NaN;
-    const excluded = new Set(
-      EVENT_UPCOMING_EXCLUDED_LIFECYCLES.map((s) => s.toLowerCase()),
-    );
-    return rows.filter((row) => {
-      if (status !== "all" && row.status !== status) return false;
-      if (lifecycle !== "all" && (row.lifecycle || "") !== lifecycle) return false;
-      if (windowFilter === "upcoming_14d" || (Number.isFinite(fromMs) && Number.isFinite(toMs))) {
-        const startMs = row.starts_at ? Date.parse(row.starts_at) : NaN;
-        if (!Number.isFinite(startMs)) return false;
-        if (Number.isFinite(fromMs) && startMs < fromMs) return false;
-        if (Number.isFinite(toMs) && startMs > toMs) return false;
-        const life = String(row.lifecycle || row.status || "").toLowerCase();
-        if (excluded.has(life)) return false;
-      }
-      if (!q) return true;
-      const textMatch = [row.name, row.venue_name, row.location, row.slug]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(q));
-      if (textMatch) return true;
-      return (ticketsByEvent[row.id] ?? []).some((ticket) => {
-        const code = normalizeAdminCode(ticket.ticket_code);
-        const name = (ticket.users?.display_name ?? "").toLowerCase();
-        return (codeQ && code.includes(codeQ)) || name.includes(q);
-      });
-    });
   }, [
     query,
-    rows,
     status,
     lifecycle,
+    visibility,
+    salesFilter,
+    venueFilter,
+    organizerFilter,
+    windowFilter,
     startsFrom,
     startsTo,
-    windowFilter,
-    ticketsByEvent,
+    page,
+    pageSize,
   ]);
+
+  useEffect(() => {
+    setQuery(searchParams.get("q") || "");
+    setStatus(searchParams.get("status") || "all");
+    setLifecycle(searchParams.get("lifecycle") || "all");
+    setVisibility(searchParams.get("visibility") || "all");
+    setSalesFilter(searchParams.get("sales") || "all");
+    setVenueFilter(searchParams.get("venue") || "");
+    setOrganizerFilter(searchParams.get("organizer") || "");
+    setStartsFrom(searchParams.get("starts_from") || "");
+    setStartsTo(searchParams.get("starts_to") || "");
+    setWindowFilter(searchParams.get("window") || "");
+    setPage(Number(searchParams.get("page") || "1") || 1);
+  }, [searchParams]);
+
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (query.trim()) next.set("q", query.trim());
+    if (status !== "all") next.set("status", status);
+    if (lifecycle !== "all") next.set("lifecycle", lifecycle);
+    if (visibility !== "all") next.set("visibility", visibility);
+    if (salesFilter !== "all") next.set("sales", salesFilter);
+    if (venueFilter.trim()) next.set("venue", venueFilter.trim());
+    if (organizerFilter.trim()) next.set("organizer", organizerFilter.trim());
+    if (windowFilter) next.set("window", windowFilter);
+    if (startsFrom) next.set("starts_from", startsFrom);
+    if (startsTo) next.set("starts_to", startsTo);
+    if (page > 1) next.set("page", String(page));
+    const qs = next.toString();
+    if (qs !== searchParams.toString()) {
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    query,
+    status,
+    lifecycle,
+    visibility,
+    salesFilter,
+    venueFilter,
+    organizerFilter,
+    windowFilter,
+    startsFrom,
+    startsTo,
+    page,
+  ]);
+
+  const filtered = rows;
 
   const totals = useMemo(() => {
     return filtered.reduce(
       (acc, row) => {
-        const sales = salesByEvent[row.id];
-        acc.sold += sales?.sold ?? 0;
-        acc.sales += sales?.sales ?? 0;
+        acc.sold += row.inventory?.confirmed_sold ?? 0;
+        acc.sales += Number(row.verified_collections?.amount ?? 0);
         return acc;
       },
       { sold: 0, sales: 0 },
     );
-  }, [filtered, salesByEvent]);
+  }, [filtered]);
 
   const create = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -309,17 +337,36 @@ export default function EventsPage() {
         </div>
       </section>
       <AdminFilterPanel>
-        <div className="grid gap-3 md:grid-cols-[1fr_180px]">
-          <AdminSearchInput value={query} onChange={setQuery} placeholder="Search name, venue, buyer, or ticket code" />
-          <AdminSelect value={status} onChange={setStatus}>
-            <option value="all">All statuses</option>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <AdminSearchInput
+            value={query}
+            onChange={(v) => {
+              setPage(1);
+              setQuery(v);
+            }}
+            placeholder="Search name, venue, organizer…"
+          />
+          <AdminSelect
+            value={status}
+            onChange={(v) => {
+              setPage(1);
+              setStatus(v);
+            }}
+          >
+            <option value="all">All publication statuses</option>
             {eventStatuses.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.label}
               </option>
             ))}
           </AdminSelect>
-          <AdminSelect value={lifecycle} onChange={setLifecycle}>
+          <AdminSelect
+            value={lifecycle}
+            onChange={(v) => {
+              setPage(1);
+              setLifecycle(v);
+            }}
+          >
             <option value="all">All lifecycles</option>
             {eventLifecycles.map((item) => (
               <option key={item.id} value={item.id}>
@@ -327,12 +374,55 @@ export default function EventsPage() {
               </option>
             ))}
           </AdminSelect>
+          <AdminSelect
+            value={visibility}
+            onChange={(v) => {
+              setPage(1);
+              setVisibility(v);
+            }}
+          >
+            <option value="all">All visibility</option>
+            {eventVisibilities.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </AdminSelect>
+          <AdminSelect
+            value={salesFilter}
+            onChange={(v) => {
+              setPage(1);
+              setSalesFilter(v);
+            }}
+          >
+            <option value="all">All sales states</option>
+            <option value="open">Sales open</option>
+            <option value="closed">Sales closed</option>
+            <option value="sold_out">Sold out</option>
+          </AdminSelect>
+          <AdminSearchInput
+            value={venueFilter}
+            onChange={(v) => {
+              setPage(1);
+              setVenueFilter(v);
+            }}
+            placeholder="Venue / location"
+          />
+          <AdminSearchInput
+            value={organizerFilter}
+            onChange={(v) => {
+              setPage(1);
+              setOrganizerFilter(v);
+            }}
+            placeholder="Organizer"
+          />
         </div>
         {windowFilter === "upcoming_14d" || startsFrom ? (
           <p className="mt-2 text-[11px] text-text-hint">
-            Upcoming window filter active
+            Native Apps upcoming-14-day filter active
             {startsFrom ? ` from ${startsFrom}` : ""}
-            {startsTo ? ` to ${startsTo}` : ""} — excludes cancelled/ended/completed.
+            {startsTo ? ` to ${startsTo}` : ""} — excludes cancelled/ended/completed. Timezone
+            Africa/Addis_Ababa.
           </p>
         ) : null}
       </AdminFilterPanel>
@@ -346,44 +436,37 @@ export default function EventsPage() {
               <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Event</th>
-                  <th className="px-4 py-3 font-semibold">When</th>
-                  <th className="px-4 py-3 font-semibold" title="Legacy list price; ticket tiers override at checkout">
-                    List price
+                  <th className="px-4 py-3 font-semibold">When (Africa/Addis_Ababa)</th>
+                  <th className="px-4 py-3 font-semibold" title="Active tier prices; legacy ticket_price only if no active tiers">
+                    Ticket price
                   </th>
-                  <th className="px-4 py-3 font-semibold">Sold</th>
+                  <th className="px-4 py-3 font-semibold" title="Confirmed paid quantity (pending reservations excluded)">
+                    Sold / capacity
+                  </th>
                   <th
                     className="px-4 py-3 font-semibold"
-                    title="Verified payment totals when available; otherwise sum of ticket amounts"
+                    title="Verified payment collections only — pending checkouts excluded"
                   >
-                    Revenue
+                    Verified collections
                   </th>
-                  <th className="px-4 py-3 font-semibold">Upcoming</th>
+                  <th className="px-4 py-3 font-semibold">Upcoming promo</th>
                   <th className="px-4 py-3 font-semibold">Featured</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold">Publication</th>
                   <th className="px-4 py-3 font-semibold">Created</th>
+                  <th className="px-4 py-3 font-semibold">Open</th>
                   {canWrite ? <th className="px-4 py-3 font-semibold">Actions</th> : null}
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((row) => {
                   const cover = eventCoverUrl(row);
-                  const sales = salesByEvent[row.id];
-                  const holders = ticketsByEvent[row.id] ?? [];
-                  const open = expandedId === row.id;
-                  const colSpan = canWrite ? 10 : 9;
+                  const sold = row.inventory?.confirmed_sold ?? 0;
+                  const capacity = row.inventory?.capacity ?? row.capacity ?? 0;
+                  const reserved = row.inventory?.reserved ?? 0;
                   return (
-                    <Fragment key={row.id}>
-                    <tr className="border-b border-border last:border-0 hover:bg-muted/30">
+                    <tr key={row.id} className="border-b border-border last:border-0 hover:bg-muted/30">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <button
-                            type="button"
-                            onClick={() => setExpandedId(open ? null : row.id)}
-                            className="rounded p-1 text-text-secondary hover:bg-muted hover:text-text-primary"
-                            aria-label={open ? "Hide ticket codes" : "Show ticket codes"}
-                          >
-                            {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                          </button>
                           {cover ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={cover} alt="" className="h-11 w-16 shrink-0 rounded-md object-cover" />
@@ -397,26 +480,47 @@ export default function EventsPage() {
                               {row.name}
                             </Link>
                             <p className="text-xs text-text-secondary">
-                              {row.venue_name || row.location || "—"}
-                              {holders.length > 0 ? ` · ${holders.length} ticket code${holders.length === 1 ? "" : "s"}` : ""}
-                              {` · ${eventCategoryLabel(row.category)} · ${eventVisibilityLabel(row.visibility)} · ${eventLifecycleLabel(row.lifecycle)}`}
+                              {[
+                                row.organizer_name || null,
+                                row.venue_name || row.location || null,
+                                eventCategoryLabel(row.category),
+                                eventVisibilityLabel(row.visibility),
+                                eventLifecycleLabel(row.lifecycle),
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
                             </p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-text-secondary">{formatEventWhen(row.starts_at)}</td>
-                      <td className="px-4 py-3">{formatEventPrice(row.ticket_price, row.currency)}</td>
-                      <td className="px-4 py-3 tabular-nums">
-                        {sales?.sold ?? 0}
-                        {row.capacity > 0 ? <span className="text-text-secondary"> / {row.capacity}</span> : null}
+                      <td className="px-4 py-3 text-xs text-text-secondary">
+                        {formatEventWhenWithTz(row.starts_at)}
+                        {row.ends_at ? (
+                          <span className="mt-0.5 block">→ {formatEventWhenWithTz(row.ends_at)}</span>
+                        ) : null}
                       </td>
-                      <td className="px-4 py-3 font-medium">
-                        {formatEventPrice(sales?.sales ?? 0, sales?.currency || row.currency)}
-                        {sales && "revenue_source" in sales && sales.revenue_source === "event_payments" ? (
-                          <span className="mt-0.5 block text-[10px] font-normal text-text-hint">
-                            From payments
+                      <td className="px-4 py-3">
+                        <span className="font-medium">{row.pricing?.label || formatEventPrice(row.ticket_price, row.currency)}</span>
+                        {row.pricing?.legacy_fallback_used ? (
+                          <span className="mt-0.5 block text-[10px] text-amber-700">Legacy fallback</span>
+                        ) : (
+                          <span className="mt-0.5 block text-[10px] text-text-hint">Active tiers</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums text-xs">
+                        {sold}
+                        {capacity > 0 ? <span className="text-text-secondary"> / {capacity}</span> : null}
+                        {reserved > 0 ? (
+                          <span className="mt-0.5 block text-[10px] text-text-hint">
+                            +{reserved} reserved
                           </span>
                         ) : null}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-xs">
+                        {formatEventPrice(
+                          Number(row.verified_collections?.amount ?? 0),
+                          row.verified_collections?.currency || row.currency,
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         {canWrite ? (
@@ -460,55 +564,20 @@ export default function EventsPage() {
                         <StatusBadge tone={requestTone(row.status)}>{eventStatusLabel(row.status)}</StatusBadge>
                       </td>
                       <td className="px-4 py-3 text-text-secondary">{formatDate(row.created_at)}</td>
+                      <td className="px-4 py-3">
+                        <Link
+                          href={`/admin/events/${row.id}`}
+                          className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
+                        >
+                          Open event
+                        </Link>
+                      </td>
                       {canWrite ? (
                         <td className="px-4 py-3">
                           <AdminTableActions canWrite onDelete={() => remove(row)} />
                         </td>
                       ) : null}
                     </tr>
-                    {open ? (
-                      <tr className="border-b border-border last:border-0">
-                        <td colSpan={colSpan} className="bg-muted/30 px-4 py-3">
-                          {holders.length === 0 ? (
-                            <p className="text-sm text-text-secondary">No ticket codes yet.</p>
-                          ) : (
-                            <table className="min-w-full text-left text-sm">
-                              <thead className="text-xs uppercase text-text-secondary">
-                                <tr>
-                                  <th className="py-2 pr-4 font-semibold">#</th>
-                                  <th className="py-2 pr-4 font-semibold">Code</th>
-                                  <th className="py-2 pr-4 font-semibold">Buyer</th>
-                                  <th className="py-2 font-semibold">Status</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {holders.map((ticket) => (
-                                  <tr key={ticket.id}>
-                                    <td className="py-1.5 pr-4 tabular-nums">{ticket.ticket_number || "—"}</td>
-                                    <td className="py-1.5 pr-4">
-                                      <AdminCode value={ticket.ticket_code} />
-                                    </td>
-                                    <td className="py-1.5 pr-4">
-                                      {ticket.users ? (
-                                        <Link href={`/admin/users/${ticket.users.id}`} className="hover:text-primary">
-                                          {ticket.users.display_name}
-                                        </Link>
-                                      ) : (
-                                        "Buyer"
-                                      )}
-                                    </td>
-                                    <td className="py-1.5">
-                                      <StatusBadge tone={requestTone(ticket.status)}>{ticket.status}</StatusBadge>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          )}
-                        </td>
-                      </tr>
-                    ) : null}
-                    </Fragment>
                   );
                 })}
               </tbody>
@@ -516,6 +585,31 @@ export default function EventsPage() {
           </div>
         )}
       </AdminTableShell>
+      {!loading && total > pageSize ? (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-text-secondary">
+          <span>
+            Page {page} · {filtered.length} shown · {total} total
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="rounded-md border border-border px-3 py-1.5 text-xs disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              disabled={page * pageSize >= total}
+              onClick={() => setPage((p) => p + 1)}
+              className="rounded-md border border-border px-3 py-1.5 text-xs disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <AdminModal
         open={createOpen}

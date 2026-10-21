@@ -726,6 +726,10 @@ export type EventTicketTierRow = {
   created_at: string;
   updated_at: string;
   sold?: number;
+  /** Confirmed paid quantity (when provided by API). */
+  sold_confirmed?: number;
+  /** Pending/reserved quantity (when provided by API). */
+  reserved?: number;
   remaining?: number | null;
 };
 
@@ -767,6 +771,8 @@ export type EventManagerRow = {
   manager_role: string;
   is_active: boolean;
   login_password: string;
+  /** Event-scoped: gate, attendance, tickets, configure, finance */
+  permissions?: Record<string, boolean> | null;
   created_at: string;
   users?: Pick<UserRow, "id" | "display_name" | "email" | "phone" | "role"> | null;
 };

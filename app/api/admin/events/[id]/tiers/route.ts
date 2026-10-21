@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAdminPermission } from "@/lib/admin-auth";
 
-const paidStatuses = new Set(["confirmed", "used", "pending"]);
+const confirmedStatuses = new Set(["confirmed", "used"]);
+const reservedStatuses = new Set(["pending", "reserved", "hold"]);
+const complimentaryStatuses = new Set(["complimentary", "comp", "issued", "free"]);
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdminPermission("events:read");
@@ -19,8 +21,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     auth.context.client
       .from("event_tickets")
       .select("tier_id, quantity, status")
-      .eq("event_id", id)
-      .in("status", ["pending", "confirmed", "used"]),
+      .eq("event_id", id),
   ]);
 
   if (tiersRes.error) {
@@ -31,21 +32,34 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: tiersRes.error.message }, { status: 400 });
   }
 
-  const soldByTier: Record<string, number> = {};
+  type Inv = { reserved: number; confirmed: number; complimentary: number };
+  const byTier: Record<string, Inv> = {};
   for (const row of ticketsRes.data ?? []) {
     const tierId = `${row.tier_id ?? ""}`;
     if (!tierId) continue;
-    if (!paidStatuses.has(`${row.status ?? ""}`)) continue;
-    soldByTier[tierId] = (soldByTier[tierId] ?? 0) + Math.max(1, Number(row.quantity || 1));
+    const status = `${row.status ?? ""}`.toLowerCase();
+    const qty = Math.max(1, Number(row.quantity || 1));
+    const bucket = byTier[tierId] ?? { reserved: 0, confirmed: 0, complimentary: 0 };
+    if (reservedStatuses.has(status)) bucket.reserved += qty;
+    else if (confirmedStatuses.has(status)) bucket.confirmed += qty;
+    else if (complimentaryStatuses.has(status)) bucket.complimentary += qty;
+    byTier[tierId] = bucket;
   }
 
-  const data = (tiersRes.data ?? []).map((tier: any) => {
-    const sold = soldByTier[tier.id] ?? 0;
+  const data = (tiersRes.data ?? []).map((tier: Record<string, unknown>) => {
+    const inv = byTier[String(tier.id)] ?? { reserved: 0, confirmed: 0, complimentary: 0 };
+    const held = inv.reserved + inv.confirmed + inv.complimentary;
     const capacity = Number(tier.capacity || 0);
     return {
       ...tier,
-      sold,
-      remaining: capacity > 0 ? Math.max(0, capacity - sold) : null,
+      // Capacity held (includes pending reservations) — used for remaining seats.
+      sold: held,
+      sold_confirmed: inv.confirmed,
+      reserved: inv.reserved,
+      complimentary: inv.complimentary,
+      remaining: capacity > 0 ? Math.max(0, capacity - held) : null,
+      inventory_note:
+        "sold = capacity held (pending + confirmed + complimentary). sold_confirmed = paid only.",
     };
   });
 

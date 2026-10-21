@@ -93,7 +93,77 @@ export function normalizeTicketCode(value: string) {
 
 export function formatEventPrice(amount: number | null | undefined, currency = "ETB") {
   if (amount == null) return "—";
-  return `${Number(amount).toLocaleString()} ${currency}`;
+  return `${currency} ${Number(amount).toLocaleString()}`;
+}
+
+export type EventDisplayPricing = {
+  label: string;
+  min: number | null;
+  max: number | null;
+  currency: string;
+  source: "active_tiers" | "legacy_ticket_price";
+  legacy_fallback_used: boolean;
+  free: boolean;
+};
+
+/** Prefer active purchasable tiers; legacy ticket_price only when no active tier. */
+export function eventDisplayPricing(
+  tiers: { price?: number | null; currency?: string | null; is_active?: boolean | null }[] | null | undefined,
+  legacyPrice?: number | null,
+  currency = "ETB",
+): EventDisplayPricing {
+  const active = (tiers ?? []).filter((t) => t.is_active !== false);
+  const prices = active
+    .map((t) => Number(t.price))
+    .filter((n) => Number.isFinite(n));
+  const cur = active[0]?.currency || currency || "ETB";
+  if (prices.length > 0) {
+    const lo = Math.min(...prices);
+    const hi = Math.max(...prices);
+    const free = prices.every((p) => p <= 0);
+    let label: string;
+    if (free) label = "Free";
+    else if (lo === hi) label = formatEventPrice(lo, cur);
+    else label = `${formatEventPrice(lo, cur)} – ${formatEventPrice(hi, cur)}`;
+    return {
+      label,
+      min: lo,
+      max: hi,
+      currency: cur,
+      source: "active_tiers",
+      legacy_fallback_used: false,
+      free,
+    };
+  }
+  const legacy = Number(legacyPrice ?? 0);
+  const free = !Number.isFinite(legacy) || legacy <= 0;
+  return {
+    label: free ? "Free" : formatEventPrice(legacy, currency),
+    min: Number.isFinite(legacy) ? legacy : 0,
+    max: Number.isFinite(legacy) ? legacy : 0,
+    currency,
+    source: "legacy_ticket_price",
+    legacy_fallback_used: true,
+    free,
+  };
+}
+
+export function formatEventWhenWithTz(
+  value?: string | null,
+  timeZone = "Africa/Addis_Ababa",
+) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  try {
+    return `${date.toLocaleString("en-GB", {
+      timeZone,
+      dateStyle: "medium",
+      timeStyle: "short",
+    })} (${timeZone})`;
+  } catch {
+    return formatEventWhen(value);
+  }
 }
 
 export function eventPhotoUrls(photos: unknown): string[] {
@@ -110,15 +180,23 @@ export function eventCoverUrl(row: { image_url?: string | null; photos?: unknown
 }
 
 export type EventTicketSales = {
+  /** Confirmed paid quantity (not pending reservations). */
   sold: number;
+  /** @deprecated alias of sold — confirmed paid only */
   sales: number;
+  revenue: number;
   inside: number;
   pending: number;
+  reserved: number;
+  complimentary: number;
   cancelled: number;
+  capacityHeld: number;
   currency: string;
 };
 
 const paidTicketStatuses = new Set(["confirmed", "used"]);
+const reservedTicketStatuses = new Set(["pending", "reserved", "hold"]);
+const complimentaryTicketStatuses = new Set(["complimentary", "comp", "issued", "free"]);
 
 export function eventTicketSales(
   tickets: {
@@ -132,25 +210,41 @@ export function eventTicketSales(
   fallbackCurrency = "ETB",
 ): EventTicketSales {
   let sold = 0;
-  let sales = 0;
+  let revenue = 0;
   let inside = 0;
   let pending = 0;
+  let complimentary = 0;
   let cancelled = 0;
   let currency = fallbackCurrency;
   for (const row of tickets) {
     const quantity = Math.max(1, Number(row.quantity || 1));
-    if (paidTicketStatuses.has(row.status ?? "")) {
+    const status = (row.status ?? "").toLowerCase();
+    if (paidTicketStatuses.has(status)) {
       sold += quantity;
-      sales += Number(row.amount || 0);
+      // Pending checkout amounts must never count as verified revenue.
+      revenue += Number(row.amount || 0);
       if (row.currency) currency = row.currency;
-    } else if (row.status === "pending") {
+    } else if (reservedTicketStatuses.has(status)) {
       pending += quantity;
-    } else if (row.status === "cancelled") {
+    } else if (complimentaryTicketStatuses.has(status)) {
+      complimentary += quantity;
+    } else if (status === "cancelled" || status === "canceled" || status === "expired") {
       cancelled += quantity;
     }
-    if (row.checked_in_at && !row.checked_out_at) inside += 1;
+    if (row.checked_in_at && !row.checked_out_at) inside += quantity;
   }
-  return { sold, sales, inside, pending, cancelled, currency };
+  return {
+    sold,
+    sales: revenue,
+    revenue,
+    inside,
+    pending,
+    reserved: pending,
+    complimentary,
+    cancelled,
+    capacityHeld: sold + pending + complimentary,
+    currency,
+  };
 }
 
 export function ticketIsInside(row: { checked_in_at?: string | null; checked_out_at?: string | null }) {

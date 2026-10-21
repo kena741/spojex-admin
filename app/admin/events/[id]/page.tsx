@@ -13,7 +13,6 @@ import {
 } from "@/components/admin-layout";
 import { AdminCode } from "@/components/admin-code";
 import { StatusBadge, requestTone } from "@/components/status-badge";
-import { VisiblePassword } from "@/components/visible-password";
 import {
   clipboardImageFile,
   eventImageAccept,
@@ -24,11 +23,11 @@ import {
   eventCategoryLabel,
   eventCoverUrl,
   eventDateInput,
+  eventDisplayPricing,
   eventLifecycleLabel,
   eventLifecycles,
   eventPhotoUrls,
   eventRsvpStatusLabel,
-  eventRsvpStatuses,
   eventSalesByTier,
   eventStatusLabel,
   eventStatuses,
@@ -37,10 +36,10 @@ import {
   eventVisibilities,
   formatEventPrice,
   formatEventWhen,
+  formatEventWhenWithTz,
   normalizeTicketCode,
   ticketIsInside,
 } from "@/lib/events";
-import { generateStadiumManagerPassword } from "@/lib/stadiums";
 import { adminFetch, deleteAdmin, patchAdmin, postAdminResponse } from "@/lib/hooks";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
@@ -55,10 +54,10 @@ import { formatDateTime } from "@/lib/utils";
 
 const tabs = [
   { id: "overview", label: "Overview" },
-  { id: "tiers", label: "Ticket tiers" },
-  { id: "tickets", label: "Tickets" },
+  { id: "tickets", label: "Tickets & Attendance" },
   { id: "rsvps", label: "RSVPs" },
-  { id: "managers", label: "Managers" },
+  { id: "finance", label: "Finance" },
+  { id: "settings", label: "Settings" },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
@@ -82,7 +81,11 @@ export default function EventDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [code, setCode] = useState("");
+  const [ticketView, setTicketView] = useState<"tiers" | "orders">("orders");
+  const [ticketStatus, setTicketStatus] = useState<"all" | "confirmed" | "pending" | "cancelled" | "used">("all");
+  const [revealedCodes, setRevealedCodes] = useState<Set<string>>(() => new Set());
   const [saving, setSaving] = useState(false);
+  const [settingsDirty, setSettingsDirty] = useState(false);
   const [uploading, setUploading] = useState<"cover" | "gallery" | null>(null);
   const [coverDragOver, setCoverDragOver] = useState(false);
   const [coverPasteHint, setCoverPasteHint] = useState<string | null>(null);
@@ -107,10 +110,10 @@ export default function EventDetailPage() {
     full_name: "",
     email: "",
     phone: "",
-    password: generateStadiumManagerPassword(),
     manager_role: "manager",
+    invite: true,
   });
-  const [createdLogin, setCreatedLogin] = useState<{ email: string; password: string } | null>(null);
+  const [createdLogin, setCreatedLogin] = useState<{ email: string; message: string } | null>(null);
 
   const load = async () => {
     const spojex = getSpojexClient();
@@ -142,6 +145,16 @@ export default function EventDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  useEffect(() => {
+    if (!settingsDirty) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [settingsDirty]);
+
   const sales = useMemo(
     () => eventTicketSales(tickets, event?.currency || "ETB"),
     [event?.currency, tickets],
@@ -150,7 +163,8 @@ export default function EventDetailPage() {
     () => eventSalesByTier(tickets, tiers, event?.currency || "ETB"),
     [event?.currency, tickets, tiers],
   );
-  const remaining = event && event.capacity > 0 ? Math.max(0, event.capacity - sales.sold) : null;
+  const remaining =
+    event && event.capacity > 0 ? Math.max(0, event.capacity - sales.capacityHeld) : null;
   const cover = event ? eventCoverUrl(event) : "";
   const gallery = event ? eventPhotoUrls(event.photos).filter((url) => url !== cover) : [];
   const checkInPct =
@@ -158,9 +172,29 @@ export default function EventDetailPage() {
 
   const filteredTickets = useMemo(() => {
     const q = normalizeTicketCode(code);
-    if (!q) return tickets;
-    return tickets.filter((row) => row.ticket_code.toUpperCase().includes(q));
-  }, [code, tickets]);
+    return tickets.filter((row) => {
+      if (ticketStatus !== "all") {
+        const status = (row.status ?? "").toLowerCase();
+        const normalized = status === "canceled" || status === "expired" ? "cancelled" : status;
+        if (normalized !== ticketStatus) return false;
+      }
+      return !q || row.ticket_code.toUpperCase().includes(q);
+    });
+  }, [code, ticketStatus, tickets]);
+
+  const displayPricing = useMemo(
+    () => eventDisplayPricing(tiers, event?.ticket_price, event?.currency || "ETB"),
+    [event?.currency, event?.ticket_price, tiers],
+  );
+
+  const toggleReveal = (ticketId: string) => {
+    setRevealedCodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(ticketId)) next.delete(ticketId);
+      else next.add(ticketId);
+      return next;
+    });
+  };
 
   const openNewTier = () => {
     setEditingTierId(null);
@@ -287,6 +321,7 @@ export default function EventDetailPage() {
     try {
       await patchAdmin(`/api/admin/events/${id}`, patch);
       await load();
+      setSettingsDirty(false);
       setNotice("Saved.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -363,23 +398,32 @@ export default function EventDetailPage() {
       if (adminEmail && email === adminEmail) {
         throw new Error("Use a different email for the event manager.");
       }
-      const payload = await postAdminResponse(`/api/admin/events/${id}/managers`, {
-        ...managerForm,
+      const payload = await postAdminResponse<{
+        message?: string;
+        invite_sent?: boolean;
+        created_new_login?: boolean;
+      }>(`/api/admin/events/${id}/managers`, {
         full_name: managerForm.full_name.trim(),
         email,
-        password: managerForm.password.trim(),
+        phone: managerForm.phone.trim(),
+        manager_role: managerForm.manager_role,
+        invite: managerForm.invite,
       });
-      const password = `${payload.password ?? managerForm.password}`;
-      setCreatedLogin({ email, password });
+      const message =
+        payload.message ||
+        (payload.invite_sent
+          ? `Invitation sent to ${email}.`
+          : `Manager assigned for ${email}. Passwords are not shown.`);
+      setCreatedLogin({ email, message });
       setManagerForm({
         full_name: "",
         email: "",
         phone: "",
-        password: generateStadiumManagerPassword(),
         manager_role: "manager",
+        invite: true,
       });
       await load();
-      setNotice(`Manager login created. Email ${email} · Password ${password}`);
+      setNotice(message);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not add manager");
     } finally {
@@ -389,19 +433,20 @@ export default function EventDetailPage() {
 
   const resetManagerPassword = async (row: EventManagerRow) => {
     if (!canWrite) return;
-    const next = window.prompt("New password (leave empty to auto-generate)", row.login_password || "") ?? null;
-    if (next === null) return;
+    if (!window.confirm(`Send a password-reset email to ${row.users?.email || "this manager"}?`)) {
+      return;
+    }
     setError(null);
     try {
       const response = await adminFetch(`/api/admin/events/${id}/managers/${row.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reset_password: true, password: next.trim() }),
+        body: JSON.stringify({ send_password_reset: true }),
       });
-      const payload = (await response.json()) as { error?: string; password?: string };
+      const payload = (await response.json()) as { error?: string; message?: string };
       if (!response.ok) throw new Error(payload.error || "Reset failed");
       await load();
-      setNotice(`Password updated: ${payload.password ?? next}`);
+      setNotice(payload.message || "Password reset email sent. Passwords are not returned.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Reset failed");
     }
@@ -513,7 +558,15 @@ export default function EventDetailPage() {
           <button
             key={item.id}
             type="button"
-            onClick={() => setTab(item.id)}
+            onClick={() => {
+              if (settingsDirty && tab === "settings" && item.id !== "settings") {
+                if (!window.confirm("You have unsaved Settings changes. Leave without saving?")) {
+                  return;
+                }
+                setSettingsDirty(false);
+              }
+              setTab(item.id);
+            }}
             className={`px-4 py-2.5 text-sm font-medium ${
               tab === item.id
                 ? "border-b-2 border-primary text-primary"
@@ -521,10 +574,8 @@ export default function EventDetailPage() {
             }`}
           >
             {item.label}
-            {item.id === "tiers" ? ` (${tiers.length})` : null}
             {item.id === "tickets" ? ` (${tickets.length})` : null}
             {item.id === "rsvps" ? ` (${rsvps.length})` : null}
-            {item.id === "managers" ? ` (${managers.length})` : null}
           </button>
         ))}
       </div>
@@ -536,13 +587,14 @@ export default function EventDetailPage() {
               <h2 className="font-heading text-sm font-semibold">Ticket sales</h2>
               <p className="text-xs text-text-hint">Confirmed and used tickets</p>
             </div>
-            <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-5 sm:divide-x sm:divide-y-0">
+            <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-3 lg:grid-cols-6 sm:divide-x sm:divide-y-0">
               {[
-                { label: "Sold", hint: event.capacity > 0 ? `of ${event.capacity} capacity` : "Paid tickets", value: `${sales.sold}` },
-                { label: "Total sales", hint: sales.currency, value: formatEventPrice(sales.sales, sales.currency) },
-                { label: "Inside", hint: "Checked in now", value: `${sales.inside}` },
-                { label: "Check-in %", hint: "Of sold tickets", value: `${checkInPct}%` },
-                { label: "Remaining", hint: remaining == null ? "No cap" : "Seats left", value: remaining == null ? "—" : `${remaining}` },
+                { label: "Confirmed sold", hint: event.capacity > 0 ? `of ${event.capacity} capacity` : "Paid tickets", value: `${sales.sold}` },
+                { label: "Reserved", hint: "Pending checkout holds", value: `${sales.reserved}` },
+                { label: "Verified collections", hint: sales.currency, value: formatEventPrice(sales.revenue, sales.currency) },
+                { label: "Inside now", hint: "Valid entry without exit", value: `${sales.inside}` },
+                { label: "Attendance %", hint: "Inside ÷ confirmed sold", value: `${checkInPct}%` },
+                { label: "Available", hint: remaining == null ? "No cap" : "Capacity − held", value: remaining == null ? "—" : `${remaining}` },
               ].map((item) => (
                 <div key={item.label} className="py-4 first:pt-0 last:pb-0 sm:px-5 sm:py-1 sm:first:pl-0 sm:last:pr-0">
                   <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-text-hint">{item.label}</p>
@@ -570,8 +622,81 @@ export default function EventDetailPage() {
                 </div>
               </div>
             ) : null}
+            <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-4 text-xs">
+              <span className="text-text-secondary">
+                Reserved holds ({sales.reserved}) consume capacity but are not confirmed sold or verified revenue.
+                Complimentary ({sales.complimentary}) also holds capacity. Cancelled ({sales.cancelled}) does not.
+              </span>
+              <Link
+                href={`/admin/finance/transactions?module=event&q=${encodeURIComponent(event.id)}`}
+                className="font-medium text-primary hover:underline"
+              >
+                View verified transactions in Finance →
+              </Link>
+            </div>
           </section>
 
+          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="font-heading text-sm font-semibold">Event summary</h2>
+              <StatusBadge tone={requestTone(event.status)}>{eventStatusLabel(event.status)}</StatusBadge>
+            </div>
+            <dl className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-text-hint">Name</dt>
+                <dd className="mt-1 font-medium">{event.name}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-text-hint">Venue</dt>
+                <dd className="mt-1">{[event.venue_name, event.location].filter(Boolean).join(" · ") || "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-text-hint">Category / visibility</dt>
+                <dd className="mt-1">
+                  {eventCategoryLabel(event.category)} · {eventVisibilityLabel(event.visibility)} ·{" "}
+                  {eventLifecycleLabel(event.lifecycle)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-text-hint">Starts</dt>
+                <dd className="mt-1">{formatEventWhenWithTz(event.starts_at)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-text-hint">Ends</dt>
+                <dd className="mt-1">{event.ends_at ? formatEventWhenWithTz(event.ends_at) : "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-text-hint">Sales window</dt>
+                <dd className="mt-1">
+                  {event.sales_starts_at ? formatEventWhenWithTz(event.sales_starts_at) : "Open now"}
+                  {event.sales_ends_at ? ` → ${formatEventWhenWithTz(event.sales_ends_at)}` : ""}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-text-hint">Ticket price</dt>
+                <dd className="mt-1">
+                  {displayPricing.label}
+                  <span className="block text-xs text-text-secondary">
+                    {displayPricing.source === "active_tiers"
+                      ? "From active tiers"
+                      : "Legacy ticket_price fallback (no active tier)"}
+                  </span>
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-text-hint">Capacity</dt>
+                <dd className="mt-1">{event.capacity > 0 ? event.capacity : "No cap"}</dd>
+              </div>
+            </dl>
+            <p className="mt-4 text-xs text-text-hint">
+              Edit details, images, and managers in the Settings tab.
+            </p>
+          </section>
+        </div>
+      ) : null}
+
+      {tab === "settings" ? (
+        <div className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
             <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
               <div className="mb-4 flex items-center justify-between">
@@ -734,6 +859,7 @@ export default function EventDetailPage() {
               <form
                 key={event.updated_at}
                 className="grid gap-3"
+                onChange={() => setSettingsDirty(true)}
                 onSubmit={(formEvent) => {
                   formEvent.preventDefault();
                   const data = new FormData(formEvent.currentTarget);
@@ -876,7 +1002,7 @@ export default function EventDetailPage() {
                   </label>
                 </div>
                 <p className="text-xs text-text-hint">
-                  Prefer ticket tiers for pricing. Legacy price is used only when no tiers exist.
+                  Pricing source: active tiers preferred; this legacy ticket_price is fallback only when no active tier.
                 </p>
                 <label className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 px-3 py-3 text-sm">
                   <input
@@ -958,17 +1084,61 @@ export default function EventDetailPage() {
                   </span>
                 </div>
                 {canWrite ? (
-                  <button type="submit" disabled={saving} className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50">
-                    {saving ? "Saving…" : "Save event"}
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button type="submit" disabled={saving} className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50">
+                      {saving ? "Saving…" : "Save event"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving || !settingsDirty}
+                      onClick={() => {
+                        if (settingsDirty && !window.confirm("Discard unsaved changes?")) return;
+                        setSettingsDirty(false);
+                        void load();
+                      }}
+                      className="h-10 rounded-md border border-border bg-card px-4 text-sm font-medium hover:bg-muted disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    {settingsDirty ? (
+                      <span className="text-xs text-amber-700">Unsaved changes</span>
+                    ) : null}
+                  </div>
                 ) : null}
               </form>
             </section>
           </div>
+          <p className="text-xs text-text-secondary">
+            Event managers are listed below. Ticket tiers are managed in{" "}
+            <button type="button" onClick={() => { setTab("tickets"); setTicketView("tiers"); }} className="font-medium text-primary hover:underline">
+              Tickets &amp; Attendance → Tiers
+            </button>
+            .
+          </p>
         </div>
       ) : null}
 
-      {tab === "tiers" ? (
+      {tab === "tickets" ? (
+        <div className="flex gap-1 rounded-lg border border-border bg-muted/30 p-1 w-fit mb-6">
+          {([
+            { id: "orders", label: `Tickets / Orders (${tickets.length})` },
+            { id: "tiers", label: `Tiers (${tiers.length})` },
+          ] as const).map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setTicketView(item.id)}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                ticketView === item.id ? "bg-card text-primary shadow-sm" : "text-text-secondary hover:text-text-primary"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {tab === "tickets" && ticketView === "tiers" ? (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -1000,6 +1170,7 @@ export default function EventDetailPage() {
                     <th className="px-3 py-2">Tier</th>
                     <th className="px-3 py-2">Price</th>
                     <th className="px-3 py-2">Sold / Cap</th>
+                    <th className="px-3 py-2">Reserved</th>
                     <th className="px-3 py-2">Max / user</th>
                     <th className="px-3 py-2">Status</th>
                     <th className="px-3 py-2" />
@@ -1018,9 +1189,13 @@ export default function EventDetailPage() {
                         {formatEventPrice(tier.price, tier.currency)}
                       </td>
                       <td className="px-3 py-3 tabular-nums">
-                        {tier.sold ?? 0}
+                        {tier.sold_confirmed ?? tier.sold ?? 0}
                         {tier.capacity > 0 ? ` / ${tier.capacity}` : " / ∞"}
+                        {tier.sold_confirmed != null ? (
+                          <span className="block text-xs text-text-hint">confirmed</span>
+                        ) : null}
                       </td>
+                      <td className="px-3 py-3 tabular-nums">{tier.reserved ?? "—"}</td>
                       <td className="px-3 py-3 tabular-nums">{tier.max_per_user}</td>
                       <td className="px-3 py-3">
                         <StatusBadge tone={tier.is_active ? "success" : "neutral"}>
@@ -1056,12 +1231,12 @@ export default function EventDetailPage() {
         </div>
       ) : null}
 
-      {tab === "tickets" ? (
+      {tab === "tickets" && ticketView === "orders" ? (
         <div className="space-y-6">
           <section className="rounded-2xl border border-border bg-card p-5 sm:p-6">
             <div className="mb-5 flex items-baseline justify-between gap-3">
               <h2 className="font-heading text-sm font-semibold">Sales</h2>
-              <p className="text-xs text-text-hint">{formatEventPrice(event.ticket_price, event.currency)} per ticket</p>
+              <p className="text-xs text-text-hint">{displayPricing.label} per ticket</p>
             </div>
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
               <div className="rounded-xl bg-muted/40 px-4 py-3">
@@ -1077,7 +1252,7 @@ export default function EventDetailPage() {
                 <p className="mt-1 text-2xl font-semibold tabular-nums">{sales.inside}</p>
               </div>
               <div className="rounded-xl bg-muted/40 px-4 py-3">
-                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-text-hint">Pending</p>
+                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-text-hint">Pending (unpaid)</p>
                 <p className="mt-1 text-2xl font-semibold tabular-nums">{sales.pending}</p>
               </div>
             </div>
@@ -1086,18 +1261,37 @@ export default function EventDetailPage() {
           <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="font-heading text-sm font-semibold">Paid tickets</h2>
-                <p className="mt-1 text-sm text-text-secondary">Search the 6-character gate code, then check the buyer in or out.</p>
+                <h2 className="font-heading text-sm font-semibold">Tickets / Orders</h2>
+                <p className="mt-1 text-sm text-text-secondary">
+                  Search the gate code, then check the buyer in or out. New codes are 6 characters; legacy codes ≥4 are accepted.
+                </p>
               </div>
-              <input
-                value={code}
-                onChange={(changeEvent) => setCode(changeEvent.target.value)}
-                placeholder="Search code"
-                className="h-10 w-48 rounded-lg border border-border px-3 text-sm tracking-widest"
-              />
+              <div className="flex flex-wrap gap-2">
+                <select
+                  value={ticketStatus}
+                  onChange={(changeEvent) => setTicketStatus(changeEvent.target.value as typeof ticketStatus)}
+                  className={`${fieldClass} w-40`}
+                  aria-label="Filter by status"
+                >
+                  <option value="all">All statuses</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="pending">Pending</option>
+                  <option value="cancelled">Cancelled</option>
+                  <option value="used">Used</option>
+                </select>
+                <input
+                  value={code}
+                  onChange={(changeEvent) => setCode(changeEvent.target.value)}
+                  placeholder="Search code"
+                  className="h-10 w-48 rounded-lg border border-border px-3 text-sm tracking-widest"
+                />
+              </div>
             </div>
+            <p className="mb-3 text-xs text-text-hint">
+              Only confirmed or used tickets are verified paid. Pending amounts are due, not collected.
+            </p>
             {filteredTickets.length === 0 ? (
-              <AdminEmpty title="No tickets" description={code ? "No tickets match that code." : "Paid tickets will appear here."} />
+              <AdminEmpty title="No tickets" description={code || ticketStatus !== "all" ? "No tickets match the current filters." : "Tickets and orders will appear here."} />
             ) : (
               <AdminTableShell>
                 <div className="overflow-x-auto">
@@ -1108,7 +1302,8 @@ export default function EventDetailPage() {
                         <th className="px-4 py-3 font-semibold">Code</th>
                         <th className="px-4 py-3 font-semibold">Buyer</th>
                         <th className="px-4 py-3 font-semibold">Qty</th>
-                        <th className="px-4 py-3 font-semibold">Paid</th>
+                        <th className="px-4 py-3 font-semibold">Amount due</th>
+                        <th className="px-4 py-3 font-semibold">Verified paid</th>
                         <th className="px-4 py-3 font-semibold">Status</th>
                         <th className="px-4 py-3 font-semibold">Bought</th>
                         {canWrite ? <th className="px-4 py-3 font-semibold">Gate</th> : null}
@@ -1121,7 +1316,31 @@ export default function EventDetailPage() {
                           <tr key={row.id} className="border-b border-border last:border-0">
                             <td className="px-4 py-3 tabular-nums">{row.ticket_number || "—"}</td>
                             <td className="px-4 py-3">
-                              <AdminCode value={row.ticket_code} />
+                              {revealedCodes.has(row.id) && canWrite ? (
+                                <AdminCode value={row.ticket_code} />
+                              ) : (
+                                <span className="inline-flex items-center gap-2">
+                                  <span className="font-mono tracking-widest text-text-secondary">••••••</span>
+                                  {canWrite ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleReveal(row.id)}
+                                      className="text-xs font-medium text-primary"
+                                    >
+                                      Reveal
+                                    </button>
+                                  ) : null}
+                                </span>
+                              )}
+                              {revealedCodes.has(row.id) && canWrite ? (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleReveal(row.id)}
+                                  className="ml-2 text-xs font-medium text-text-secondary"
+                                >
+                                  Hide
+                                </button>
+                              ) : null}
                               {row.tier_name ? (
                                 <p className="mt-1 text-xs text-text-secondary">{row.tier_name}</p>
                               ) : null}
@@ -1137,7 +1356,22 @@ export default function EventDetailPage() {
                               <p className="text-xs text-text-secondary">{row.users?.email || row.guest_phone || "—"}</p>
                             </td>
                             <td className="px-4 py-3 tabular-nums">{row.quantity}</td>
-                            <td className="px-4 py-3 font-medium">{formatEventPrice(row.amount, row.currency)}</td>
+                            <td className="px-4 py-3 font-medium">
+                              {formatEventPrice(row.amount, row.currency)}
+                              <span className="block text-xs font-normal text-text-secondary">
+                                {row.status === "pending" ? "Checkout hold" : "Order total"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 font-medium">
+                              {row.status === "confirmed" || row.status === "used"
+                                ? formatEventPrice(row.amount, row.currency)
+                                : "—"}
+                              <span className="block text-xs font-normal text-text-secondary">
+                                {row.status === "confirmed" || row.status === "used"
+                                  ? "Collected"
+                                  : "Not verified"}
+                              </span>
+                            </td>
                             <td className="px-4 py-3">
                               <StatusBadge tone={inside ? "success" : requestTone(row.status)}>
                                 {inside ? "Inside" : row.status}
@@ -1177,9 +1411,16 @@ export default function EventDetailPage() {
         <div className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 className="font-heading text-sm font-semibold">Private event RSVPs</h2>
+              <h2 className="font-heading text-sm font-semibold">
+                {event.visibility === "private"
+                  ? "Private event invitations / RSVPs"
+                  : "RSVPs (optional — not a paid ticket)"}
+              </h2>
               <p className="text-xs text-text-secondary">
-                Invite Spojex users by email. Private events stay out of public discovery.
+                {event.visibility === "private"
+                  ? "Invite Spojex users by email. Private events stay out of public discovery."
+                  : "Optional guest responses. "}
+                An RSVP is not admission — entry requires a confirmed ticket.
               </p>
             </div>
             {canWrite ? (
@@ -1206,7 +1447,7 @@ export default function EventDetailPage() {
             ) : null}
           </div>
           {rsvps.length === 0 ? (
-            <AdminEmpty title="No RSVPs" description="Invite guests for private events here." />
+            <AdminEmpty title="No RSVPs" description={event.visibility === "private" ? "Invite guests for this private event here." : "No optional RSVPs yet."} />
           ) : (
             <AdminTableShell>
               <table className="min-w-full text-sm">
@@ -1233,21 +1474,12 @@ export default function EventDetailPage() {
                         <p className="text-xs text-text-secondary">{row.users?.email || "—"}</p>
                       </td>
                       <td className="px-3 py-3">
-                        {canWrite ? (
-                          <select
-                            value={row.status}
-                            onChange={(e) => updateRsvp(row.id, e.target.value)}
-                            className="h-9 rounded-md border border-border bg-card px-2 text-sm"
-                          >
-                            {eventRsvpStatuses.map((item) => (
-                              <option key={item.id} value={item.id}>
-                                {item.label}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          eventRsvpStatusLabel(row.status)
-                        )}
+                        <StatusBadge tone={requestTone(row.status)}>
+                          {eventRsvpStatusLabel(row.status)}
+                        </StatusBadge>
+                        <p className="mt-1 text-[11px] text-text-hint">
+                          User response is read-only; use admin actions only.
+                        </p>
                       </td>
                       <td className="px-3 py-3 text-text-secondary">{formatDateTime(row.invited_at)}</td>
                       <td className="px-3 py-3 text-text-secondary">
@@ -1255,13 +1487,33 @@ export default function EventDetailPage() {
                       </td>
                       <td className="px-3 py-3 text-right">
                         {canWrite ? (
-                          <button
-                            type="button"
-                            onClick={() => removeRsvp(row.id)}
-                            className="text-sm font-medium text-red-600"
-                          >
-                            Remove
-                          </button>
+                          <div className="flex flex-wrap justify-end gap-2">
+                            {row.status === "invited" || row.status === "viewed" ? (
+                              <button
+                                type="button"
+                                onClick={() => updateRsvp(row.id, "waitlisted")}
+                                className="text-sm font-medium text-primary"
+                              >
+                                Waitlist
+                              </button>
+                            ) : null}
+                            {row.status !== "cancelled" ? (
+                              <button
+                                type="button"
+                                onClick={() => updateRsvp(row.id, "cancelled")}
+                                className="text-sm font-medium text-text-secondary"
+                              >
+                                Cancel invite
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => removeRsvp(row.id)}
+                              className="text-sm font-medium text-red-600"
+                            >
+                              Remove
+                            </button>
+                          </div>
                         ) : null}
                       </td>
                     </tr>
@@ -1273,14 +1525,52 @@ export default function EventDetailPage() {
         </div>
       ) : null}
 
-      {tab === "managers" ? (
+      {tab === "finance" ? (
+        <div className="space-y-6">
+          <section className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+            <h2 className="mb-4 font-heading text-sm font-semibold">Verified collections</h2>
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+              <div className="rounded-xl bg-muted/40 px-4 py-3">
+                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-text-hint">Verified collected</p>
+                <p className="mt-1 text-2xl font-semibold tabular-nums">{formatEventPrice(sales.revenue, sales.currency)}</p>
+              </div>
+              <div className="rounded-xl bg-muted/40 px-4 py-3">
+                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-text-hint">Tickets paid</p>
+                <p className="mt-1 text-2xl font-semibold tabular-nums">{sales.sold}</p>
+              </div>
+              <div className="rounded-xl bg-muted/40 px-4 py-3">
+                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-text-hint">Pending (excluded)</p>
+                <p className="mt-1 text-2xl font-semibold tabular-nums">{sales.pending}</p>
+              </div>
+              <div className="rounded-xl bg-muted/40 px-4 py-3">
+                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-text-hint">Platform earnings</p>
+                <p className="mt-1 text-2xl font-semibold tabular-nums">—</p>
+                <p className="mt-1 text-xs text-text-secondary">Unavailable</p>
+              </div>
+            </div>
+            <p className="mt-4 text-xs text-text-secondary">
+              Verified collections count confirmed and used tickets only. Pending checkouts are excluded and are never
+              treated as paid. Platform earnings are not reported on this event record.
+            </p>
+            <Link
+              href={`/admin/finance/transactions?module=event&q=${encodeURIComponent(event.id)}`}
+              className="mt-4 inline-flex rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+            >
+              Open event transactions in Finance
+            </Link>
+          </section>
+        </div>
+      ) : null}
+
+      {tab === "settings" ? (
         <div className="space-y-6">
           <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="font-heading text-sm font-semibold">Assigned managers</h2>
                 <p className="mt-1 text-sm text-text-secondary">
-                  Managers sign in to the app, open Events → Manage, and search paying tickets by code.
+                  Assign an existing Spojex user or invite by email. Passwords are never shown here — use Auth
+                  reset. Event-scoped roles: gate, attendance, tickets, configure, finance.
                 </p>
               </div>
               {canWrite ? (
@@ -1293,13 +1583,13 @@ export default function EventDetailPage() {
                   }}
                   className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
                 >
-                  Create manager login
+                  Assign / invite manager
                 </button>
               ) : null}
             </div>
             {managers.length === 0 ? (
               <p className="text-sm text-text-secondary">
-                No managers assigned yet.{canWrite ? " Use Create manager login to add one." : ""}
+                No managers assigned yet.{canWrite ? " Use Assign / invite manager to add one." : ""}
               </p>
             ) : (
               <AdminTableShell>
@@ -1309,7 +1599,6 @@ export default function EventDetailPage() {
                       <tr>
                         <th className="px-4 py-3 font-semibold">Name</th>
                         <th className="px-4 py-3 font-semibold">Email</th>
-                        <th className="px-4 py-3 font-semibold">Password</th>
                         <th className="px-4 py-3 font-semibold">Role</th>
                         <th className="px-4 py-3 font-semibold">Status</th>
                         {canWrite ? <th className="px-4 py-3 font-semibold">Actions</th> : null}
@@ -1328,23 +1617,20 @@ export default function EventDetailPage() {
                             )}
                           </td>
                           <td className="px-4 py-3 font-mono text-xs">{row.users?.email || "—"}</td>
-                          <td className="px-4 py-3">
-                            <VisiblePassword value={row.login_password} />
-                          </td>
                           <td className="px-4 py-3 text-text-secondary">{row.manager_role}</td>
                           <td className="px-4 py-3">
                             <StatusBadge tone={row.is_active ? "success" : "neutral"}>
-                              {row.is_active ? "Active" : "Inactive"}
+                              {row.is_active ? "Active" : "Revoked"}
                             </StatusBadge>
                           </td>
                           {canWrite ? (
                             <td className="px-4 py-3">
                               <div className="flex flex-wrap gap-2">
                                 <button type="button" onClick={() => resetManagerPassword(row)} className="text-sm text-primary">
-                                  Reset password
+                                  Send password reset
                                 </button>
                                 <button type="button" onClick={() => toggleManager(row)} className="text-sm text-text-secondary">
-                                  {row.is_active ? "Deactivate" : "Activate"}
+                                  {row.is_active ? "Revoke" : "Restore"}
                                 </button>
                                 <button type="button" onClick={() => removeManager(row)} className="text-sm text-red-600">
                                   Remove
@@ -1365,7 +1651,7 @@ export default function EventDetailPage() {
 
       <AdminModal
         open={managerOpen}
-        title={createdLogin ? "Manager login created" : "Create manager login"}
+        title={createdLogin ? "Manager assigned" : "Assign / invite manager"}
         onClose={() => {
           if (savingManager) return;
           setManagerOpen(false);
@@ -1397,7 +1683,7 @@ export default function EventDetailPage() {
                 disabled={savingManager}
                 className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
               >
-                {savingManager ? "Creating…" : "Create manager"}
+                {savingManager ? "Saving…" : "Assign manager"}
               </button>
             </div>
           )
@@ -1405,21 +1691,19 @@ export default function EventDetailPage() {
       >
         {createdLogin ? (
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-            <p className="font-semibold">Share these login details with the manager</p>
+            <p className="font-semibold">Manager linked</p>
             <p className="mt-2">
               Email: <span className="font-mono">{createdLogin.email}</span>
             </p>
-            <p className="mt-1">
-              Password: <VisiblePassword value={createdLogin.password} />
-            </p>
+            <p className="mt-2 text-xs text-emerald-800">{createdLogin.message}</p>
             <p className="mt-2 text-xs text-emerald-800">
-              They sign in to the SpoJex app. The Manage tab appears only for this event.
+              Passwords are never displayed in admin. They sign in to the SpoJex app; Manage appears only for this event.
             </p>
           </div>
         ) : (
           <form id="create-event-manager-form" onSubmit={(formEvent) => void createManager(formEvent)} className="grid gap-3 md:grid-cols-2">
             <p className="text-sm text-text-secondary md:col-span-2">
-              Creates a SpoJex app login and assigns it to this event. Use a{" "}
+              Prefer an existing Spojex email (assigned without password reset). New emails get an invite — use a{" "}
               <span className="font-medium text-text-primary">different email than your admin account</span>.
             </p>
             <label className="text-sm">
@@ -1427,7 +1711,6 @@ export default function EventDetailPage() {
               <input
                 value={managerForm.full_name}
                 onChange={(changeEvent) => setManagerForm({ ...managerForm, full_name: changeEvent.target.value })}
-                required
                 className={fieldClass}
               />
             </label>
@@ -1450,36 +1733,26 @@ export default function EventDetailPage() {
               />
             </label>
             <label className="text-sm">
-              <span className="mb-1 block text-text-secondary">Password (visible)</span>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={managerForm.password}
-                  onChange={(changeEvent) => setManagerForm({ ...managerForm, password: changeEvent.target.value })}
-                  required
-                  minLength={6}
-                  autoComplete="off"
-                  className={`${fieldClass} font-mono`}
-                />
-                <button
-                  type="button"
-                  onClick={() => setManagerForm({ ...managerForm, password: generateStadiumManagerPassword() })}
-                  className="shrink-0 rounded-lg border border-border px-3 text-sm hover:bg-muted"
-                >
-                  Generate
-                </button>
-              </div>
-            </label>
-            <label className="text-sm">
               <span className="mb-1 block text-text-secondary">Role</span>
               <select
                 value={managerForm.manager_role}
                 onChange={(changeEvent) => setManagerForm({ ...managerForm, manager_role: changeEvent.target.value })}
                 className={fieldClass}
               >
+                <option value="scanner">Scanner (gate + attendance)</option>
                 <option value="manager">Manager</option>
-                <option value="owner">Owner</option>
+                <option value="owner">Owner (incl. finance)</option>
               </select>
+            </label>
+            <label className="flex items-center gap-2 text-sm md:col-span-2">
+              <input
+                type="checkbox"
+                checked={managerForm.invite}
+                onChange={(changeEvent) =>
+                  setManagerForm({ ...managerForm, invite: changeEvent.target.checked })
+                }
+              />
+              <span>Send invite email when the account does not already exist</span>
             </label>
           </form>
         )}
