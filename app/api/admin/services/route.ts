@@ -85,15 +85,29 @@ export async function GET(request: Request) {
 
   let rows: Record<string, unknown>[] = [];
   if (services.error) {
-    const fallback = await auth.context.client
+    const withCategory = await auth.context.client
       .from("services")
-      .select("*, users:provider_id(id, display_name, verified, avatar_url, role)")
+      .select(
+        "*, users:provider_id(id, display_name, verified, avatar_url, role), category:category_id(id, label, emoji)",
+      )
       .order("created_at", { ascending: false })
       .limit(500);
-    if (fallback.error) {
-      return NextResponse.json({ error: fallback.error.message }, { status: 400 });
+    if (!withCategory.error) {
+      rows = (withCategory.data ?? []) as Record<string, unknown>[];
+    } else {
+      const fallback = await auth.context.client
+        .from("services")
+        .select("*, users:provider_id(id, display_name, verified, avatar_url, role)")
+        .order("created_at", { ascending: false })
+        .limit(500);
+      if (fallback.error) {
+        const msg = services.error.message.includes("subcategory_id")
+          ? `${services.error.message} Migration a1spojex000062 (service_subcategories) may still be deploying.`
+          : fallback.error.message;
+        return NextResponse.json({ error: msg }, { status: 400 });
+      }
+      rows = (fallback.data ?? []) as Record<string, unknown>[];
     }
-    rows = (fallback.data ?? []) as Record<string, unknown>[];
   } else {
     rows = (services.data ?? []) as Record<string, unknown>[];
   }
