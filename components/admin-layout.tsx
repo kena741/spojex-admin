@@ -74,7 +74,8 @@ export function AdminSelect({
       value={value}
       onChange={(event) => onChange(event.target.value)}
       className={cn(
-        "h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-text-primary shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:w-auto",
+        "h-10 w-full appearance-none rounded-lg border border-border bg-card bg-[length:1rem] bg-[right_0.75rem_center] bg-no-repeat py-2 pl-3 pr-10 text-sm text-text-primary shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 sm:w-auto",
+        "bg-[url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 fill=%22none%22 viewBox=%220 0 24 24%22 stroke=%22%236b7280%22%3E%3Cpath stroke-linecap=%22round%22 stroke-linejoin=%22round%22 stroke-width=%222%22 d=%22M19 9l-7 7-7-7%22/%3E%3C/svg%3E')]",
         className,
       )}
     >
