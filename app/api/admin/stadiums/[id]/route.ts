@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAdminPermission } from "@/lib/admin-auth";
+import { getSpojexApiBaseUrl } from "@/lib/env";
+import { requestAccessToken } from "@/lib/spojex/server";
 
 const allowed = [
   "name",
@@ -24,46 +26,27 @@ const allowed = [
   "contact_email",
   "status",
   "pricing",
+  "location_review_needed",
 ] as const;
 
-/**
- * Child cleanup order matters: payments reference bookings + subscriptions.
- * Spojex API FK errors are friendly ("related item…") without "foreign key" text,
- * so we always clear dependents before deleting the stadium.
- */
-const STADIUM_CHILD_TABLES = [
-  "stadium_payments",
-  "stadium_bookings",
-  "stadium_subscriptions",
-  "stadium_availability",
-  "stadium_managers",
-  "stadium_issues",
-] as const;
-
-function isMissingTableError(message: string) {
-  const msg = message.toLowerCase();
-  return (
-    msg.includes("does not exist") ||
-    msg.includes("undefined_table") ||
-    msg.includes("not found") ||
-    msg.includes("couldn't find") ||
-    msg.includes("could not find") ||
-    msg.includes("unknown table") ||
-    msg.includes("could not find the table")
-  );
-}
-
-function isFkOrRelatedError(message: string, code?: string) {
-  const msg = message.toLowerCase();
-  if (code === "invalid_reference" || code === "db_error") return true;
-  return (
-    msg.includes("foreign key") ||
-    msg.includes("violates") ||
-    msg.includes("still referenced") ||
-    msg.includes("restrict") ||
-    msg.includes("related item") ||
-    msg.includes("invalid_reference")
-  );
+async function proxyPython(path: string, init?: RequestInit) {
+  const token = await requestAccessToken();
+  if (!token) return null;
+  try {
+    const res = await fetch(`${getSpojexApiBaseUrl()}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        ...(init?.headers || {}),
+      },
+      cache: "no-store",
+    });
+    const payload = await res.json().catch(() => ({}));
+    return { res, payload };
+  } catch {
+    return null;
+  }
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -75,7 +58,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   for (const key of allowed) {
     if (key in body) patch[key] = body[key];
   }
-  // Normalize location fields from the Addis Ababa sub-city / woreda pickers.
   if ("subcity" in patch) {
     patch.subcity = `${patch.subcity ?? ""}`.trim();
   }
@@ -120,47 +102,84 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   return NextResponse.json({ data });
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
   const auth = await requireAdminPermission("stadiums:write");
   if (!auth.ok) return auth.error;
   const { id } = await params;
-  const client = auth.context.client;
-  const hint = missingServiceRoleMessage();
+  const force = new URL(request.url).searchParams.get("force") === "true";
 
-  // Clear dependents first (API returns friendly FK text, not "foreign key").
-  for (const table of STADIUM_CHILD_TABLES) {
-    const { error } = await client.from(table).delete().eq("stadium_id", id);
-    if (error && !isMissingTableError(error.message || "")) {
-      return NextResponse.json(
-        {
-          error: hint
-            ? `Could not clear ${table}: ${error.message}. ${hint}`
-            : `Could not clear ${table}: ${error.message}`,
-        },
-        { status: 400 },
-      );
-    }
+  const proxied = await proxyPython(
+    `/api/v1/admin/stadiums/${id}/archive?force=${force ? "true" : "false"}`,
+    { method: "POST" },
+  );
+  if (proxied?.res.ok) {
+    return NextResponse.json({ ...proxied.payload, source: "python" });
   }
-
-  const { error: deleteError } = await client.from("stadiums").delete().eq("id", id);
-  if (!deleteError) {
-    return NextResponse.json({ ok: true });
-  }
-
-  // Rare: another FK we do not know about — report clearly.
-  const msg = deleteError.message || "Delete failed";
-  if (isFkOrRelatedError(msg, deleteError.code)) {
+  if (proxied && proxied.res.status >= 400 && proxied.res.status !== 404) {
     return NextResponse.json(
       {
-        error: hint
-          ? `Stadium still has related records. ${msg}. ${hint}`
-          : `Stadium still has related records. ${msg}`,
+        error:
+          (proxied.payload as { error?: string; message?: string }).error ||
+          (proxied.payload as { message?: string }).message ||
+          "Archive failed",
       },
-      { status: 400 },
+      { status: proxied.res.status },
     );
   }
-  return NextResponse.json(
-    { error: hint ? `${msg}. ${hint}` : msg },
-    { status: 400 },
-  );
+
+  // Local soft-archive fallback: deactivate when history exists.
+  const [{ count: bookingCount }, { count: payCount }, { count: subCount }] = await Promise.all([
+    auth.context.client
+      .from("stadium_bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("stadium_id", id),
+    auth.context.client
+      .from("stadium_payments")
+      .select("id", { count: "exact", head: true })
+      .eq("stadium_id", id),
+    auth.context.client
+      .from("stadium_subscriptions")
+      .select("id", { count: "exact", head: true })
+      .eq("stadium_id", id),
+  ]);
+  const deps = {
+    bookings: bookingCount ?? 0,
+    payments: payCount ?? 0,
+    subscriptions: subCount ?? 0,
+  };
+  if (deps.bookings > 0 || deps.payments > 0 || deps.subscriptions > 0) {
+    const { data, error } = await auth.context.client
+      .from("stadiums")
+      .update({ status: "inactive", updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .select("id, status")
+      .maybeSingle();
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    return NextResponse.json({
+      ok: true,
+      archived: true,
+      deleted: false,
+      data,
+      dependencies: deps,
+      message: "Deactivated. Bookings, subscriptions, and payments preserved.",
+      source: "admin_local_fallback",
+    });
+  }
+
+  const { error: deleteError } = await auth.context.client.from("stadiums").delete().eq("id", id);
+  if (deleteError) {
+    return NextResponse.json({ error: deleteError.message }, { status: 400 });
+  }
+  return NextResponse.json({
+    ok: true,
+    archived: false,
+    deleted: true,
+    dependencies: deps,
+    source: "admin_local_fallback",
+  });
 }

@@ -4,6 +4,11 @@ import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import {
+  addisSubcityByName,
+  normalizeWereda,
+} from "@/lib/addis-ababa-locations";
+import {
+  normalizeStadiumFacilities,
   normalizeStadiumSurface,
   slugifyStadium,
   stadiumPricingPayload,
@@ -12,15 +17,20 @@ import {
 } from "@/lib/stadiums";
 
 type FieldRow = {
+  external_id?: string | null;
   name?: string;
   slug?: string;
   location?: string;
   address?: string;
+  subcity?: string;
+  wereda?: number | null;
+  location_review_needed?: boolean;
+  location_review_reason?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   size_type?: string;
   surface?: string;
-  capacity?: number;
+  capacity?: number | null;
   description?: string;
   owner_name?: string;
   contact_phone?: string;
@@ -29,6 +39,7 @@ type FieldRow = {
   pricing?: StadiumPricing;
   status?: string;
   image_url?: string;
+  unmapped?: string[];
 };
 
 type ImportFile = {
@@ -47,6 +58,7 @@ type AddisSportField = {
   imageUrl?: string;
   translations?: {
     en?: { name?: string; wereda?: string; subCity?: string; description?: string };
+    am?: { name?: string; wereda?: string; subCity?: string; description?: string };
   };
   wereda?: {
     name?: string;
@@ -74,13 +86,13 @@ function facilitiesFromAddis(field: AddisSportField): string[] {
   if (surface) out.push(surface === "Artificial" ? "Artificial turf" : surface);
   const cat = (field.category || "").trim().toUpperCase();
   if (cat === "ALL_AMENITIES") {
-    out.push("Shower", "Toilet", "Grandstand", "Shade");
+    out.push("Showers", "Toilets", "Grandstand", "Shade");
   } else if (cat === "SHOWER_RESTROOM") {
-    out.push("Shower", "Toilet");
+    out.push("Showers", "Toilets");
   } else if (cat === "GRANDSTAND_SHADE") {
     out.push("Grandstand", "Shade");
   }
-  return [...new Set(out.filter(Boolean))];
+  return normalizeStadiumFacilities(out);
 }
 
 function pricingFromBookingItems(items: AddisSportField["bookingItems"]): StadiumPricing {
@@ -95,12 +107,54 @@ function pricingFromBookingItems(items: AddisSportField["bookingItems"]): Stadiu
     }
     if (hourly == null) hourly = price;
   }
+  // Only import hourly when present — do not invent daily/monthly/yearly multipliers.
   return {
     currency: "ETB",
     hourly,
-    daily: hourly != null ? Math.round(hourly * 8) : null,
-    monthly: hourly != null ? Math.round(hourly * 20) : null,
-    yearly: hourly != null ? Math.round(hourly * 20 * 10) : null,
+    daily: null,
+    monthly: null,
+    yearly: null,
+  };
+}
+
+function mapLocation(subCityRaw: string, weredaRaw: string): {
+  subcity: string;
+  wereda: number | null;
+  location_review_needed: boolean;
+  location_review_reason: string | null;
+  location: string;
+  address: string;
+} {
+  const sub = addisSubcityByName(subCityRaw);
+  const wereda = normalizeWereda(weredaRaw);
+  let location_review_needed = false;
+  let location_review_reason: string | null = null;
+
+  if (subCityRaw && !sub) {
+    location_review_needed = true;
+    location_review_reason = `Unmapped sub-city “${subCityRaw}”`;
+  } else if (sub && wereda != null && wereda > sub.weredaCount) {
+    location_review_needed = true;
+    location_review_reason = `Woreda ${wereda} exceeds ${sub.name} max (${sub.weredaCount})`;
+  } else if (weredaRaw && wereda == null) {
+    location_review_needed = true;
+    location_review_reason = `Could not parse woreda “${weredaRaw}”`;
+  }
+
+  const subcity = sub?.name || "";
+  const location = ["Addis Ababa", subcity || subCityRaw].filter(Boolean).join(" · ");
+  const addressParts = [
+    (subcity || subCityRaw) && `Subcity ${subcity || subCityRaw}`,
+    wereda != null ? `Wereda ${wereda}` : weredaRaw ? `Wereda ${weredaRaw}` : "",
+  ].filter(Boolean);
+
+  return {
+    subcity,
+    wereda: location_review_needed && !sub ? null : wereda,
+    location_review_needed,
+    location_review_reason,
+    location,
+    address: addressParts.join(", "),
   };
 }
 
@@ -108,42 +162,48 @@ function normalizeField(raw: unknown): FieldRow | null {
   if (!raw || typeof raw !== "object") return null;
   const row = raw as Record<string, unknown>;
 
-  // Already in Spojex admin seed shape.
   if (typeof row.name === "string" && (row.slug || row.location || row.pricing || row.size_type)) {
     return row as FieldRow;
   }
 
-  // AddisSport.gov.et API shape from addis-football-fields.json.
   const addis = raw as AddisSportField;
   const en = addis.translations?.en;
   const name = (en?.name || addis.name || "").trim();
   if (!name) return null;
 
   const subCity = (en?.subCity || addis.wereda?.subCity?.name || "").trim();
-  const wereda = (en?.wereda || addis.wereda?.name || "").trim();
-  const location = ["Addis Ababa", subCity].filter(Boolean).join(" · ");
-  const addressParts = [subCity && `Subcity ${subCity}`, wereda && `Wereda ${wereda}`].filter(
-    Boolean,
-  );
+  const weredaText = (en?.wereda || addis.wereda?.name || "").trim();
+  const loc = mapLocation(subCity, weredaText);
+  const unmapped: string[] = [];
+  if (loc.location_review_reason) unmapped.push(loc.location_review_reason);
+  if (addis.translations?.am?.name) unmapped.push("Amharic name preserved in import only (not stored)");
 
   return {
+    external_id: addis.id ? String(addis.id) : null,
     name,
     slug: slugifyStadium(name),
-    location,
-    address: addressParts.join(", "),
+    location: loc.location,
+    address: loc.address,
+    subcity: loc.subcity,
+    wereda: loc.wereda,
+    location_review_needed: loc.location_review_needed,
+    location_review_reason: loc.location_review_reason,
     latitude: numberOrNull(addis.latitude),
     longitude: numberOrNull(addis.longitude),
     size_type: sizeFromSurface(addis.surface),
     surface: normalizeStadiumSurface(addis.surface),
-    capacity: 50,
+    // Do not invent capacity — leave unset (null → omit on update / 0 only on create default).
+    capacity: null,
     description: (en?.description || "").trim(),
-    owner_name: "Addis Sport / Field Operator",
+    // Operator display label only — not an account owner.
+    owner_name: "",
     contact_phone: "",
     contact_email: "",
     facilities: facilitiesFromAddis(addis),
     pricing: pricingFromBookingItems(addis.bookingItems),
     status: addis.isActive === false ? "inactive" : "active",
     image_url: (addis.imageAbsoluteUrl || "").trim(),
+    unmapped,
   };
 }
 
@@ -155,9 +215,13 @@ async function loadFields(): Promise<FieldRow[]> {
   return list.map(normalizeField).filter((row): row is FieldRow => Boolean(row?.name));
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   const auth = await requireAdminPermission("stadiums:write");
   if (!auth.ok) return auth.error;
+
+  const url = new URL(request.url);
+  const preview = url.searchParams.get("preview") === "true";
+  const overwriteLocal = url.searchParams.get("overwrite_local") === "true";
 
   let fields: FieldRow[];
   try {
@@ -177,7 +241,9 @@ export async function POST() {
   const created: string[] = [];
   const updated: string[] = [];
   const skipped: string[] = [];
+  const conflicts: { name: string; reason: string }[] = [];
   const errors: { name: string; error: string }[] = [];
+  const previewRows: Record<string, unknown>[] = [];
 
   for (const field of fields) {
     const name = field.name?.trim() ?? "";
@@ -194,6 +260,7 @@ export async function POST() {
       ? stadiumPricingPayload(field.pricing)
       : ({ currency: "ETB" } satisfies Record<string, unknown>);
 
+    const nowIso = new Date().toISOString();
     const payload: Record<string, unknown> = {
       name,
       slug: slugBase,
@@ -202,38 +269,91 @@ export async function POST() {
       surface: normalizeStadiumSurface(field.surface),
       location: field.location?.trim() ?? "",
       address: field.address?.trim() ?? "",
-      capacity: Math.max(0, Math.floor(Number(field.capacity) || 0)),
+      subcity: field.subcity?.trim() ?? "",
+      wereda: field.wereda ?? null,
       description: field.description?.trim() ?? "",
-      owner_name: field.owner_name?.trim() ?? "",
-      contact_phone: field.contact_phone?.trim() ?? "",
-      contact_email: field.contact_email?.trim() ?? "",
       latitude: numberOrNull(field.latitude),
       longitude: numberOrNull(field.longitude),
-      facilities: Array.isArray(field.facilities)
-        ? field.facilities.map((item) => `${item}`.trim()).filter(Boolean)
-        : [],
+      facilities: normalizeStadiumFacilities(field.facilities ?? []),
       image_url: field.image_url?.trim() ?? "",
-      pricing,
+      external_id: field.external_id || null,
+      import_source: "addis_sport",
+      imported_at: nowIso,
+      location_review_needed: field.location_review_needed === true,
     };
+    if (field.capacity != null && field.capacity > 0) {
+      payload.capacity = Math.floor(field.capacity);
+    }
 
     try {
-      const existing = await client
-        .from("stadiums")
-        .select("id, slug, name")
-        .eq("slug", slugBase)
-        .maybeSingle();
+      let existing: { id: string; pricing?: unknown; owner_user_id?: string | null; status?: string } | null =
+        null;
 
-      if (existing.error) {
-        errors.push({ name, error: existing.error.message });
+      if (field.external_id) {
+        const byExt = await client
+          .from("stadiums")
+          .select("id, pricing, owner_user_id, status")
+          .eq("external_id", field.external_id)
+          .maybeSingle();
+        if (!byExt.error && byExt.data) existing = byExt.data as typeof existing;
+      }
+      if (!existing) {
+        const bySlug = await client
+          .from("stadiums")
+          .select("id, pricing, owner_user_id, status")
+          .eq("slug", slugBase)
+          .maybeSingle();
+        if (!bySlug.error && bySlug.data) existing = bySlug.data as typeof existing;
+      }
+
+      if (preview) {
+        previewRows.push({
+          name,
+          external_id: field.external_id,
+          action: existing ? "update" : "create",
+          location_review_needed: field.location_review_needed,
+          location_review_reason: field.location_review_reason,
+          unmapped: field.unmapped ?? [],
+          preserve_local_pricing: Boolean(existing && !overwriteLocal),
+          preserve_owner: Boolean(existing?.owner_user_id),
+        });
         continue;
       }
 
-      if (existing.data?.id) {
+      if (existing?.id) {
+        const updatePayload = { ...payload, updated_at: nowIso };
+        // Preserve local ownership, status, and pricing unless explicitly overwritten.
+        if (!overwriteLocal) {
+          delete updatePayload.status;
+          if (existing.owner_user_id) {
+            delete (updatePayload as { owner_name?: string }).owner_name;
+          }
+          // Keep existing pricing — never silently rewrite product prices on re-import.
+          delete (updatePayload as { pricing?: unknown }).pricing;
+        } else {
+          updatePayload.pricing = pricing;
+        }
+
         const { error } = await client
           .from("stadiums")
-          .update({ ...payload, updated_at: new Date().toISOString() })
-          .eq("id", existing.data.id);
+          .update(updatePayload)
+          .eq("id", existing.id);
         if (error) {
+          // Columns may be missing before migration — retry without new fields.
+          if (/external_id|import_source|imported_at|location_review/i.test(error.message)) {
+            const legacy = { ...updatePayload };
+            delete legacy.external_id;
+            delete legacy.import_source;
+            delete legacy.imported_at;
+            delete legacy.location_review_needed;
+            const retry = await client.from("stadiums").update(legacy).eq("id", existing.id);
+            if (retry.error) {
+              errors.push({ name, error: retry.error.message });
+              continue;
+            }
+            updated.push(name);
+            continue;
+          }
           errors.push({ name, error: error.message });
           continue;
         }
@@ -241,29 +361,44 @@ export async function POST() {
         continue;
       }
 
-      // Also match by exact name to avoid duplicates without slug.
-      const byName = await client
-        .from("stadiums")
-        .select("id")
-        .ilike("name", name)
-        .limit(1)
-        .maybeSingle();
-      if (byName.data?.id) {
-        const { error } = await client
-          .from("stadiums")
-          .update({ ...payload, updated_at: new Date().toISOString() })
-          .eq("id", byName.data.id);
-        if (error) {
-          skipped.push(name);
-          continue;
-        }
-        updated.push(name);
-        continue;
-      }
-
-      const { data, error } = await client.from("stadiums").insert(payload).select("id").single();
+      const insertPayload = {
+        ...payload,
+        pricing,
+        capacity: field.capacity != null && field.capacity > 0 ? Math.floor(field.capacity) : 0,
+        owner_name: "",
+        contact_phone: "",
+        contact_email: "",
+      };
+      const { data, error } = await client.from("stadiums").insert(insertPayload).select("id").single();
       if (error) {
         const hint = missingServiceRoleMessage();
+        // Retry without migration columns.
+        if (/external_id|import_source|imported_at|location_review/i.test(error.message)) {
+          const legacy = { ...insertPayload } as Record<string, unknown>;
+          delete legacy.external_id;
+          delete legacy.import_source;
+          delete legacy.imported_at;
+          delete legacy.location_review_needed;
+          const retry = await client.from("stadiums").insert(legacy).select("id").single();
+          if (retry.error) {
+            errors.push({
+              name,
+              error: hint ? `${retry.error.message}. ${hint}` : retry.error.message,
+            });
+            continue;
+          }
+          const hours = [1, 2, 3, 4, 5, 6, 0].map((day) => ({
+            stadium_id: retry.data.id,
+            day_of_week: day,
+            start_time: "06:00",
+            end_time: "22:00",
+            is_blocked: false,
+            notes: "",
+          }));
+          await client.from("stadium_availability").insert(hours);
+          created.push(name);
+          continue;
+        }
         errors.push({
           name,
           error: hint ? `${error.message}. ${hint}` : error.message,
@@ -289,14 +424,39 @@ export async function POST() {
     }
   }
 
+  if (preview) {
+    return NextResponse.json({
+      preview: true,
+      total: fields.length,
+      creates: previewRows.filter((r) => r.action === "create").length,
+      updates: previewRows.filter((r) => r.action === "update").length,
+      location_reviews: previewRows.filter((r) => r.location_review_needed).length,
+      rows: previewRows,
+      policy: {
+        overwrite_local: overwriteLocal,
+        preserves: [
+          "pricing (unless overwrite_local)",
+          "owner_user_id",
+          "status (unless overwrite_local)",
+        ],
+        does_not_invent: ["capacity", "contact details", "daily/monthly/yearly prices"],
+      },
+    });
+  }
+
   return NextResponse.json({
     ok: errors.length === 0,
     total: fields.length,
     created: created.length,
     updated: updated.length,
     skipped: skipped.length,
+    conflicts,
     errors,
     created_names: created,
     updated_names: updated,
+    policy: {
+      overwrite_local: overwriteLocal,
+      note: "Re-import preserves local pricing, ownership, and status unless overwrite_local=true.",
+    },
   });
 }

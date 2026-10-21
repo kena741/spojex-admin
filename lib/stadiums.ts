@@ -18,11 +18,67 @@ export const stadiumStatuses: { id: StadiumStatus; label: string }[] = [
 ];
 
 export const stadiumPlanTypes: { id: StadiumPlanType; label: string }[] = [
-  { id: "hourly", label: "Hourly" },
-  { id: "daily", label: "Daily" },
-  { id: "monthly", label: "Monthly" },
-  { id: "yearly", label: "Yearly" },
+  { id: "hourly", label: "Hourly reservation" },
+  { id: "daily", label: "Daily pass" },
+  { id: "monthly", label: "Monthly pass" },
+  { id: "yearly", label: "Yearly pass" },
 ];
+
+/** Explicit product semantics — keep UI/API/mobile labels aligned. */
+export const STADIUM_PRODUCT_DEFINITIONS: Record<
+  StadiumPlanType,
+  { label: string; grants: string; enforces: string; does_not: string }
+> = {
+  hourly: {
+    label: "Hourly reservation",
+    grants: "Exclusive pitch interval for a specific date and start/end time.",
+    enforces: "Availability windows, maintenance blocks, and collision rules.",
+    does_not: "Does not grant multi-day access.",
+  },
+  daily: {
+    label: "Daily pass",
+    grants: "Access on a specific calendar date under venue entry rules.",
+    enforces: "Valid on the pass date only.",
+    does_not:
+      "Does not imply exclusive pitch reservation unless inventory is configured as exclusive.",
+  },
+  monthly: {
+    label: "Monthly pass",
+    grants: "Access during the subscription validity period.",
+    enforces: "Activation, expiry, venue scope, and entry rules after verified payment.",
+    does_not: "Does not reserve exclusive hourly slots.",
+  },
+  yearly: {
+    label: "Yearly pass",
+    grants: "Access during the subscription validity period.",
+    enforces: "Activation, expiry, venue scope, and entry rules after verified payment.",
+    does_not: "Does not reserve exclusive hourly slots.",
+  },
+};
+
+/** Canonical facility ids → display labels. */
+export const STADIUM_FACILITY_CANON: Record<string, string> = {
+  shower: "Showers",
+  showers: "Showers",
+  toilet: "Toilets",
+  toilets: "Toilets",
+  restroom: "Toilets",
+  restrooms: "Toilets",
+  grandstand: "Grandstand",
+  shade: "Shade",
+  floodlights: "Floodlights",
+  lights: "Floodlights",
+  "changing rooms": "Changing rooms",
+  changing_rooms: "Changing rooms",
+  parking: "Parking",
+  seating: "Seating",
+  "first aid": "First aid",
+  first_aid: "First aid",
+  cafeteria: "Cafeteria",
+  "wi-fi": "Wi-Fi",
+  wifi: "Wi-Fi",
+  "artificial turf": "Artificial turf",
+};
 
 export type StadiumPricing = {
   currency: string;
@@ -168,18 +224,18 @@ export function generateStadiumManagerPassword() {
 }
 
 export const stadiumFacilityOptions = [
-  "SHOWER",
-  "TOILET",
-  "GRANDSTAND",
-  "SHADE",
+  "Showers",
+  "Toilets",
+  "Grandstand",
+  "Shade",
   "Floodlights",
   "Changing rooms",
   "Parking",
   "Seating",
-  "Showers",
   "First aid",
   "Cafeteria",
   "Wi-Fi",
+  "Artificial turf",
 ];
 
 export type StadiumSurface = "Artificial" | "Grass" | "Red Ash" | "Other";
@@ -202,9 +258,36 @@ export function normalizeStadiumSurface(value?: string | null) {
   return key || "Artificial";
 }
 
-/** Normalize facility labels for storage / comparison. */
+/** Normalize facility labels for storage / comparison (dedupe SHOWER vs Showers). */
 export function normalizeStadiumFacility(value: string) {
-  return value.trim().replace(/\s+/g, " ");
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  if (!trimmed) return "";
+  const key = trimmed.toLowerCase().replace(/_/g, " ");
+  return STADIUM_FACILITY_CANON[key] || STADIUM_FACILITY_CANON[key.replace(/\s+/g, "")] || trimmed;
+}
+
+export function normalizeStadiumFacilities(values: unknown): string[] {
+  if (!Array.isArray(values)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of values) {
+    const label = normalizeStadiumFacility(String(raw ?? ""));
+    if (!label) continue;
+    const dedupe = label.toLowerCase();
+    if (seen.has(dedupe)) continue;
+    seen.add(dedupe);
+    out.push(label);
+  }
+  return out;
+}
+
+export function formatStadiumPriceState(
+  amount: number | null | undefined,
+  currency = "ETB",
+): string {
+  if (amount == null) return "Not set";
+  if (amount === 0) return `Free (0 ${currency})`;
+  return `${Number(amount).toLocaleString()} ${currency}`;
 }
 
 export function stadiumPhotoUrls(photos: unknown): string[] {

@@ -256,7 +256,53 @@ export function StadiumLocationPicker({
           Pick on map
         </button>
       </div>
-      {mapsError ? <p className="text-sm text-destructive">{mapsError}</p> : null}
+      {mapsError ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+          <p className="font-medium">Map search unavailable</p>
+          <p className="mt-1 text-xs">
+            {mapsError} Existing pins are preserved. Enter latitude and longitude below if you need to
+            update the location.
+          </p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <label className="grid gap-1 text-xs">
+              Latitude
+              <input
+                type="number"
+                step="any"
+                className="h-9 rounded-md border border-border bg-card px-2 text-sm"
+                disabled={disabled}
+                value={latitude ?? ""}
+                onChange={(e) => {
+                  const lat = e.target.value === "" ? null : Number(e.target.value);
+                  onChange({
+                    address,
+                    latitude: lat != null && Number.isFinite(lat) ? lat : null,
+                    longitude,
+                  });
+                }}
+              />
+            </label>
+            <label className="grid gap-1 text-xs">
+              Longitude
+              <input
+                type="number"
+                step="any"
+                className="h-9 rounded-md border border-border bg-card px-2 text-sm"
+                disabled={disabled}
+                value={longitude ?? ""}
+                onChange={(e) => {
+                  const lng = e.target.value === "" ? null : Number(e.target.value);
+                  onChange({
+                    address,
+                    latitude,
+                    longitude: lng != null && Number.isFinite(lng) ? lng : null,
+                  });
+                }}
+              />
+            </label>
+          </div>
+        </div>
+      ) : null}
       {!mapsError && !mapsReady ? (
         <p className="text-sm text-text-secondary">Loading location picker…</p>
       ) : null}

@@ -58,6 +58,8 @@ export default function StadiumsPage() {
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [surface, setSurface] = useState(searchParams.get("surface") || "all");
 
   const load = async () => {
     const spojex = getSpojexClient();
@@ -93,11 +95,12 @@ export default function StadiumsPage() {
     if (query.trim()) next.set("q", query.trim());
     if (status !== "all") next.set("status", status);
     if (sizeType !== "all") next.set("size_type", sizeType);
+    if (surface !== "all") next.set("surface", surface);
     if (subcity) next.set("subcity", subcity);
     if (wereda) next.set("wereda", wereda);
     const qs = next.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [query, status, sizeType, subcity, wereda, pathname, router]);
+  }, [query, status, sizeType, surface, subcity, wereda, pathname, router]);
 
   const subscribersByStadium = useMemo(() => {
     const map: Record<string, StadiumSubscriptionRow[]> = {};
@@ -113,6 +116,9 @@ export default function StadiumsPage() {
     return rows.filter((row) => {
       if (status !== "all" && row.status !== status) return false;
       if (sizeType !== "all" && row.size_type !== sizeType) return false;
+      if (surface !== "all" && (row.surface || "").toLowerCase() !== surface.toLowerCase()) {
+        return false;
+      }
       if (subcity && (row.subcity || "").trim() !== subcity) return false;
       if (weredaNum != null && Number.isFinite(weredaNum) && row.wereda !== weredaNum) {
         return false;
@@ -136,7 +142,7 @@ export default function StadiumsPage() {
         return name.includes(q);
       });
     });
-  }, [query, rows, sizeType, status, subcity, wereda, subscribersByStadium]);
+  }, [query, rows, sizeType, surface, status, subcity, wereda, subscribersByStadium]);
 
   const subcityFilterOptions = ADDIS_ABABA_SUBCITIES.map((s) => ({
     value: s.name,
@@ -145,25 +151,44 @@ export default function StadiumsPage() {
   }));
   const weredaFilterOptions = weredaOptionsForSubcity(subcity);
 
+  const rememberReturn = () => {
+    try {
+      sessionStorage.setItem(
+        "stadiums-return",
+        `${pathname}?${searchParams.toString()}`,
+      );
+    } catch {
+      /* ignore */
+    }
+  };
+
   const remove = async (row: StadiumRow) => {
     const label = row.name || "this stadium";
-    if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) return;
+    if (
+      !window.confirm(
+        `Deactivate “${label}”? Venues with bookings or payments are set inactive (history preserved). Empty venues may be removed.`,
+      )
+    ) {
+      return;
+    }
     if (deletingId) return;
     setError(null);
     setDeletingId(row.id);
-    // Optimistic: drop from the list immediately so the UI doesn't wait on cascade deletes.
-    setRows((current) => current.filter((item) => item.id !== row.id));
-    setSubscriptions((current) => current.filter((item) => item.stadium_id !== row.id));
-    if (expandedId === row.id) setExpandedId(null);
-    if (editing?.id === row.id) setEditing(null);
     try {
-      await deleteAdmin(`/api/admin/stadiums/${row.id}`);
+      const result = (await deleteAdmin(`/api/admin/stadiums/${row.id}`)) as {
+        archived?: boolean;
+        message?: string;
+      };
+      setNotice(
+        result?.archived
+          ? result.message || "Deactivated — bookings and payments preserved."
+          : result?.message || "Removed.",
+      );
+      await load();
+      if (expandedId === row.id) setExpandedId(null);
+      if (editing?.id === row.id) setEditing(null);
     } catch (err) {
-      setRows((current) => {
-        if (current.some((item) => item.id === row.id)) return current;
-        return [row, ...current];
-      });
-      setError(err instanceof Error ? err.message : "Delete failed");
+      setError(err instanceof Error ? err.message : "Archive failed");
     } finally {
       setDeletingId(null);
     }
@@ -171,16 +196,19 @@ export default function StadiumsPage() {
 
   const importAddisFields = async () => {
     if (!canWrite || importing) return;
-    if (
-      !window.confirm(
-        "Import all 65 AddisSport football fields from the website JSON? Existing names/slugs will be updated.",
-      )
-    ) {
-      return;
-    }
     setImporting(true);
     setError(null);
     try {
+      const preview = await postAdminResponse<{
+        creates?: number;
+        updates?: number;
+        location_reviews?: number;
+        policy?: { note?: string };
+      }>("/api/admin/stadiums/import-addis?preview=true", {});
+      const proceed = window.confirm(
+        `AddisSport import preview\n\nCreates: ${preview.creates ?? 0}\nUpdates: ${preview.updates ?? 0}\nLocation reviews: ${preview.location_reviews ?? 0}\n\n${preview.policy?.note || "Local pricing, ownership, and status are preserved."}\n\nRun import?`,
+      );
+      if (!proceed) return;
       const result = await postAdminResponse<{
         created?: number;
         updated?: number;
@@ -189,8 +217,8 @@ export default function StadiumsPage() {
       }>("/api/admin/stadiums/import-addis", {});
       await load();
       const errCount = result.errors?.length ?? 0;
-      window.alert(
-        `Import done.\nCreated: ${result.created ?? 0}\nUpdated: ${result.updated ?? 0}\nSkipped: ${result.skipped ?? 0}\nErrors: ${errCount}`,
+      setNotice(
+        `Import done — created ${result.created ?? 0}, updated ${result.updated ?? 0}, errors ${errCount}.`,
       );
       if (errCount > 0) {
         setError(result.errors!.map((e) => `${e.name}: ${e.error}`).slice(0, 5).join(" · "));
@@ -206,7 +234,7 @@ export default function StadiumsPage() {
     <>
       <AdminPageHeader
         title="Stadiums"
-        description="Venues, subscribers, and pass codes"
+        description="Venues, hourly reservations, and access passes — pass codes stay on the detail workspace"
         actions={
           canWrite ? (
             <div className="flex flex-wrap gap-2">
@@ -233,12 +261,17 @@ export default function StadiumsPage() {
         }
       />
       {error ? <AdminErrorAlert message={error} /> : null}
+      {notice ? (
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          {notice}
+        </div>
+      ) : null}
       <AdminFilterPanel>
-        <div className="grid gap-3 md:grid-cols-[1fr_160px_160px]">
+        <div className="grid gap-3 md:grid-cols-[1fr_140px_140px_140px]">
           <AdminSearchInput
             value={query}
             onChange={setQuery}
-            placeholder="Search name, sub-city, woreda, owner, or pass code"
+            placeholder="Search name, sub-city, woreda, owner"
           />
           <AdminSelect value={status} onChange={setStatus}>
             <option value="all">All statuses</option>
@@ -255,6 +288,13 @@ export default function StadiumsPage() {
                 {item.label}
               </option>
             ))}
+          </AdminSelect>
+          <AdminSelect value={surface} onChange={setSurface}>
+            <option value="all">All surfaces</option>
+            <option value="Artificial">Artificial</option>
+            <option value="Grass">Grass</option>
+            <option value="Red Ash">Red Ash</option>
+            <option value="Other">Other</option>
           </AdminSelect>
         </div>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -289,12 +329,13 @@ export default function StadiumsPage() {
               <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Stadium</th>
-                  <th className="px-4 py-3 font-semibold">Size / Surface</th>
+                  <th className="px-4 py-3 font-semibold">Size / surface</th>
+                  <th className="px-4 py-3 font-semibold">Capacity</th>
                   <th className="px-4 py-3 font-semibold">Location</th>
-                  <th className="px-4 py-3 font-semibold">Owner</th>
+                  <th className="px-4 py-3 font-semibold">Owner / operator</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 font-semibold">Created</th>
-                  {canWrite ? <th className="px-4 py-3 font-semibold">Actions</th> : null}
+                  <th className="px-4 py-3 font-semibold">Open</th>
+                  {canWrite ? <th className="px-4 py-3 font-semibold">More</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -302,7 +343,7 @@ export default function StadiumsPage() {
                   const cover = stadiumCoverUrl(row);
                   const holders = subscribersByStadium[row.id] ?? [];
                   const open = expandedId === row.id;
-                  const colSpan = canWrite ? 7 : 6;
+                  const colSpan = canWrite ? 8 : 7;
                   return (
                     <Fragment key={row.id}>
                   <tr className="border-b border-border last:border-0 hover:bg-muted/30">
@@ -312,7 +353,7 @@ export default function StadiumsPage() {
                           type="button"
                           onClick={() => setExpandedId(open ? null : row.id)}
                           className="rounded p-1 text-text-secondary hover:bg-muted hover:text-text-primary"
-                          aria-label={open ? "Hide pass codes" : "Show pass codes"}
+                          aria-label={open ? "Hide subscribers" : "Show subscribers"}
                         >
                           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </button>
@@ -329,45 +370,72 @@ export default function StadiumsPage() {
                           </div>
                         )}
                         <div>
-                          <Link href={`/admin/stadiums/${row.id}`} className="font-medium text-text-primary hover:text-primary">
+                          <Link
+                            href={`/admin/stadiums/${row.id}`}
+                            onClick={rememberReturn}
+                            className="font-medium text-text-primary hover:text-primary"
+                          >
                             {row.name || "Unnamed"}
                           </Link>
                           <p className="mt-0.5 text-xs text-text-secondary">
-                            {row.contact_email || "—"}
-                            {holders.length > 0 ? ` · ${holders.length} pass code${holders.length === 1 ? "" : "s"}` : ""}
+                            {holders.length > 0
+                              ? `${holders.length} active pass${holders.length === 1 ? "" : "es"}`
+                              : "No active passes"}
                           </p>
                         </div>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-text-secondary">
                       {sizeTypeLabel(row.size_type)}
-                      {row.capacity > 0 ? ` · ${row.capacity}` : ""}
-                      <span className="block text-xs">
-                        {stadiumSurfaceLabel(row.surface)}
-                      </span>
+                      <span className="block text-xs">{stadiumSurfaceLabel(row.surface)}</span>
+                    </td>
+                    <td className="px-4 py-3 text-text-secondary tabular-nums">
+                      {row.capacity > 0 ? (
+                        <>
+                          <span className="font-medium text-text-primary">{row.capacity}</span>
+                          <span className="block text-[10px] uppercase text-text-hint">players</span>
+                        </>
+                      ) : (
+                        <span className="text-text-hint">Not set</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-text-secondary">
                       {formatStadiumArea(row.subcity, row.wereda) ||
                         row.location ||
                         row.address ||
                         "—"}
-                      {row.subcity && row.location && row.location !== formatStadiumArea(row.subcity, row.wereda) ? (
-                        <span className="mt-0.5 block text-xs text-text-hint">{row.location}</span>
+                      {!row.subcity && row.location ? (
+                        <span className="mt-0.5 block text-xs text-amber-800">
+                          Structured Sub-city/Woreda blank — review location
+                        </span>
                       ) : null}
                     </td>
                     <td className="px-4 py-3">
                       {row.users ? (
-                        <Link href={`/admin/users/${row.users.id}`} className="text-primary hover:underline">
+                        <Link href={`/admin/people/${row.users.id}`} className="text-primary hover:underline">
                           {row.users.display_name}
                         </Link>
                       ) : (
                         <span className="text-text-secondary">{row.owner_name || "—"}</span>
                       )}
+                      {row.users && row.owner_name && row.owner_name !== row.users.display_name ? (
+                        <span className="mt-0.5 block text-[11px] text-text-hint">
+                          Operator: {row.owner_name}
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge tone={requestTone(row.status)}>{stadiumStatusLabel(row.status)}</StatusBadge>
                     </td>
-                    <td className="px-4 py-3 text-text-secondary">{formatDate(row.created_at)}</td>
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/admin/stadiums/${row.id}`}
+                        onClick={rememberReturn}
+                        className="text-sm font-medium text-primary hover:underline"
+                      >
+                        Open venue
+                      </Link>
+                    </td>
                     {canWrite ? (
                       <td className="px-4 py-3">
                         <AdminTableActions

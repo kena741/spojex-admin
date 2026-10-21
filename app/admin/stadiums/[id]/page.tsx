@@ -13,6 +13,7 @@ import { formatStadiumArea } from "@/lib/addis-ababa-locations";
 import { deleteAdmin, patchAdmin, postAdmin, postAdminResponse } from "@/lib/hooks";
 import {
   formatPrice,
+  formatStadiumPriceState,
   generateStadiumManagerPassword,
   parseStadiumPricing,
   planTypeLabel,
@@ -29,6 +30,7 @@ import {
   overlappingStadiumSlotsError,
   stadiumSlotsOverlap,
   timeInputValue,
+  STADIUM_PRODUCT_DEFINITIONS,
   type StadiumAvailabilityBlock,
   type StadiumPricing,
   type StadiumTimeSlot,
@@ -48,10 +50,10 @@ import { formatDate, formatMoney } from "@/lib/utils";
 
 const tabs = [
   { id: "overview", label: "Overview" },
-  { id: "hours", label: "Hours" },
-  { id: "pricing", label: "Pricing" },
-  { id: "booking", label: "Booking" },
-  { id: "managers", label: "Managers" },
+  { id: "hours", label: "Availability" },
+  { id: "pricing", label: "Pricing & Passes" },
+  { id: "booking", label: "Bookings & Access" },
+  { id: "managers", label: "Team & Settings" },
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
@@ -60,7 +62,18 @@ export default function StadiumDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { can, staff } = useAdminPermissions();
   const canWrite = can("stadiums:write");
+  const [listReturn, setListReturn] = useState("/admin/stadiums");
   const [tab, setTab] = useState<TabId>("overview");
+  const [reconciling, setReconciling] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem("stadiums-return");
+      if (stored) setListReturn(stored);
+    } catch {
+      /* ignore */
+    }
+  }, []);
   const [stadium, setStadium] = useState<StadiumRow | null>(null);
   const [pricing, setPricing] = useState<StadiumPricing>({
     currency: "ETB",
@@ -506,10 +519,10 @@ export default function StadiumDetailPage() {
           stadium.slug ||
           ""
         }
-        backHref="/admin/stadiums"
+        backHref={listReturn}
         stackOnSmall
         breadcrumbs={[
-          { label: "Stadiums", href: "/admin/stadiums" },
+          { label: "Stadiums", href: listReturn },
           { label: stadium.name || "Detail" },
         ]}
         actions={
@@ -517,10 +530,40 @@ export default function StadiumDetailPage() {
             <div className="flex w-full flex-wrap gap-2">
               <button
                 type="button"
+                disabled={reconciling}
+                onClick={() => {
+                  void (async () => {
+                    setReconciling(true);
+                    setError(null);
+                    try {
+                      const result = await postAdminResponse<{
+                        confirmed?: number;
+                        behavior?: string;
+                      }>(
+                        `/api/admin/stadiums/reconcile-paid-pending?stadium_id=${id}`,
+                        {},
+                      );
+                      setNotice(
+                        `Reconciled ${result.confirmed ?? 0} paid-pending booking(s). ${result.behavior || ""}`,
+                      );
+                      await load();
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Reconcile failed");
+                    } finally {
+                      setReconciling(false);
+                    }
+                  })();
+                }}
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-card px-3 text-sm font-medium hover:bg-muted disabled:opacity-50"
+              >
+                {reconciling ? "Reconciling…" : "Confirm paid pendings"}
+              </button>
+              <button
+                type="button"
                 onClick={() => setEditOpen(true)}
                 className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground"
               >
-                Edit
+                Edit venue
               </button>
               {stadium.status !== "active" ? (
                 <button
@@ -982,14 +1025,30 @@ export default function StadiumDetailPage() {
 
       {tab === "pricing" ? (
         <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="mb-1 font-heading text-sm font-semibold">Pricing</h2>
-          <p className="mb-4 text-sm text-text-secondary">
-            One price each for daily/session, monthly, and yearly. Leave a field empty if that option is not offered.
+          <h2 className="mb-1 font-heading text-sm font-semibold">Pricing &amp; passes</h2>
+          <p className="mb-3 text-sm text-text-secondary">
+            Configure each product explicitly. Empty = not offered. Zero = free. Changing prices does not
+            rewrite existing purchases.
           </p>
+          <ul className="mb-4 space-y-2 text-xs text-text-secondary">
+            {stadiumPlanTypes.map((item) => {
+              const def = STADIUM_PRODUCT_DEFINITIONS[item.id];
+              return (
+                <li key={item.id} className="rounded-lg border border-border/70 bg-muted/30 p-2">
+                  <p className="font-medium text-text-primary">{def.label}</p>
+                  <p>{def.grants}</p>
+                  <p className="text-text-hint">{def.does_not}</p>
+                  <p className="mt-1 tabular-nums">
+                    Current: {formatStadiumPriceState(pricing[item.id], pricing.currency)}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
           <form onSubmit={savePricing} className="grid gap-3 md:grid-cols-2">
             {stadiumPlanTypes.map((item) => (
               <label key={item.id} className="text-sm">
-                <span className="mb-1 block text-text-secondary">{item.label} (ETB)</span>
+                <span className="mb-1 block text-text-secondary">{item.label} ({pricing.currency || "ETB"})</span>
                 <input
                   type="number"
                   min={0}
@@ -1000,7 +1059,7 @@ export default function StadiumDetailPage() {
                       [item.id]: event.target.value === "" ? null : Number(event.target.value),
                     })
                   }
-                  placeholder="Not offered"
+                  placeholder="Not set"
                   className="h-10 w-full rounded-lg border border-border px-3"
                 />
               </label>

@@ -21,7 +21,7 @@ export function loadGoogleMapsPlaces(): Promise<void> {
   const apiKey = getGoogleMapsApiKey();
   if (!apiKey) {
     return Promise.reject(
-      new Error("Missing NEXT_PUBLIC_GOOGLE_MAPS_API_KEY. Add it to .env.local and restart the dev server."),
+      new Error("Map search is unavailable. Enter the address and coordinates manually."),
     );
   }
 
