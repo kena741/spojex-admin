@@ -39,7 +39,19 @@ export function formatDateTime(value: string | null | undefined) {
 }
 
 export function locationLabel(city?: string | null, country?: string | null) {
-  return [city, country].filter((part) => part && part.trim()).join(", ") || "—";
+  const c = (city ?? "").trim();
+  const co = (country ?? "").trim();
+  if (!c && !co) return "—";
+  if (!c) return co;
+  if (!co) return c;
+  // Avoid "Ethiopia, Ethiopia" when city already includes the country.
+  const cityLower = c.toLowerCase();
+  const countryLower = co.toLowerCase();
+  if (cityLower === countryLower || cityLower.endsWith(`, ${countryLower}`)) return c;
+  if (cityLower.includes(countryLower) && !/[a-z]/.test(c.replace(new RegExp(co, "ig"), ""))) {
+    return c;
+  }
+  return `${c}, ${co}`;
 }
 
 export function formatMoney(amount: number | null | undefined, currency = "ETB") {

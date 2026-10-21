@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -15,12 +15,11 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge, verifiedTone } from "@/components/status-badge";
 import { organizationTypeLabel, organizationTypes } from "@/lib/catalog";
-import { loadCoinWalletsByUserIds, loadOrgLiveGiftTotals } from "@/lib/coin-wallets";
+import { loadOrgLiveGiftTotals } from "@/lib/coin-wallets";
 import { adminFetch, postAdminResponse, useIdentityCatalog } from "@/lib/hooks";
 import { generateStadiumManagerPassword } from "@/lib/stadiums";
-import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
-import type { CoinWalletRow, OrganizationRow, UserRow } from "@/lib/types";
+import type { OrganizationRow, UserRow } from "@/lib/types";
 import { formatCoins, formatDate, locationLabel } from "@/lib/utils";
 
 const fieldClass = "h-10 w-full rounded-lg border border-border px-3 text-sm";
@@ -36,20 +35,30 @@ const createTypeOptions = [
 
 export default function OrganizationsPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { can } = useAdminPermissions();
   const canWrite = can("organizations:write");
+  const canVerify = can("organizations:verify");
   const [rows, setRows] = useState<OrganizationRow[]>([]);
   const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
-  const [ownerCoins, setOwnerCoins] = useState<Record<string, CoinWalletRow>>({});
   const [liveGiftTotals, setLiveGiftTotals] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [type, setType] = useState("all");
-  const [verified, setVerified] = useState("all");
+  const [query, setQuery] = useState(searchParams.get("q") || "");
+  const [type, setType] = useState(searchParams.get("type") || "all");
+  const [verified, setVerified] = useState(searchParams.get("verified") || "all");
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [creatingPlatform, setCreatingPlatform] = useState(false);
+  const [listSummary, setListSummary] = useState<{
+    total: number;
+    verified: number;
+    unverified: number;
+    by_type: Record<string, number>;
+    missing_owner: number;
+  } | null>(null);
+  const [createIdempotencyKey, setCreateIdempotencyKey] = useState(() => crypto.randomUUID());
   const [ownerQuery, setOwnerQuery] = useState("");
   const [ownerOptions, setOwnerOptions] = useState<OwnerOption[]>([]);
   const [ownerLoading, setOwnerLoading] = useState(false);
@@ -74,49 +83,64 @@ export default function OrganizationsPage() {
     organization_type: "club",
     city: "",
     country: "Ethiopia",
+    website: "",
     description: "",
     owner_user_id: "",
     owner_email: "",
     verified: false,
+    verification_reason: "",
   });
 
   const load = async () => {
-    const { data, error: loadError } = await getSpojexClient()
-      .from("organizations")
-      .select("*, users:user_id(id, display_name, email, role)")
-      .order("created_at", { ascending: false })
-      .limit(500);
-    if (loadError) throw loadError;
-    const orgs = (data ?? []) as OrganizationRow[];
+    const params = new URLSearchParams({
+      page: "1",
+      page_size: "100",
+    });
+    if (query.trim()) params.set("q", query.trim());
+    if (type !== "all") params.set("type", type);
+    if (verified !== "all") params.set("verified", verified);
+    const response = await adminFetch(`/api/admin/organizations?${params}`);
+    const payload = (await response.json()) as {
+      data?: OrganizationRow[];
+      member_counts?: Record<string, number>;
+      live_gift_totals?: Record<string, number>;
+      summary?: {
+        total: number;
+        verified: number;
+        unverified: number;
+        by_type: Record<string, number>;
+        missing_owner: number;
+      };
+      error?: string;
+    };
+    if (!response.ok) throw new Error(payload.error || "Failed to load organizations");
+    const orgs = payload.data ?? [];
     setRows(orgs);
-    const orgIds = orgs.map((o) => o.id);
-    const [wallets, liveTotals, membersRes] = await Promise.all([
-      loadCoinWalletsByUserIds(orgs.map((o) => o.user_id)),
-      loadOrgLiveGiftTotals(orgIds),
-      orgIds.length
-        ? getSpojexClient()
-            .from("organization_members")
-            .select("organization_id")
-            .in("organization_id", orgIds)
-            .limit(5000)
-        : Promise.resolve({ data: [] as { organization_id: string }[] }),
-    ]);
-    setOwnerCoins(wallets);
-    setLiveGiftTotals(liveTotals);
-    const counts: Record<string, number> = {};
-    for (const id of orgIds) counts[id] = 1; // owner always counted
-    for (const m of membersRes.data ?? []) {
-      const oid = String(m.organization_id);
-      counts[oid] = (counts[oid] ?? 1) + 1;
+    setMemberCounts(payload.member_counts ?? {});
+    setListSummary(payload.summary ?? null);
+    if (payload.live_gift_totals) {
+      setLiveGiftTotals(payload.live_gift_totals);
+    } else {
+      setLiveGiftTotals(await loadOrgLiveGiftTotals(orgs.map((o) => o.id)));
     }
-    setMemberCounts(counts);
   };
 
   useEffect(() => {
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("q", query.trim());
+    if (type !== "all") params.set("type", type);
+    if (verified !== "all") params.set("verified", verified);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [query, type, verified, pathname, router]);
+
+  useEffect(() => {
+    setLoading(true);
     load()
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
       .finally(() => setLoading(false));
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type, verified]);
 
   useEffect(() => {
     if (!createOpen) return;
@@ -193,10 +217,12 @@ export default function OrganizationsPage() {
       organization_type: type === "academy" ? "academy" : "club",
       city: "",
       country: "Ethiopia",
+      website: "",
       description: "",
       owner_user_id: "",
       owner_email: "",
       verified: false,
+      verification_reason: "",
     });
     setOwnerQuery("");
     setOwnerOptions([]);
@@ -282,19 +308,27 @@ export default function OrganizationsPage() {
     setCreating(true);
     setError(null);
     try {
+      if (form.verified && canVerify && !form.verification_reason.trim()) {
+        throw new Error("Verification reason is required when marking verified.");
+      }
       const payload = await postAdminResponse("/api/admin/organizations", {
         name: form.name,
         organization_type: form.organization_type,
         city: form.city,
         country: form.country,
+        website: form.website || undefined,
         description: form.description,
         owner_user_id: form.owner_user_id || undefined,
         owner_email: form.owner_user_id ? undefined : ownerEmail,
-        verified: form.verified,
+        verified: Boolean(form.verified && canVerify),
+        verification_reason:
+          form.verified && canVerify ? form.verification_reason.trim() : undefined,
+        idempotency_key: createIdempotencyKey,
       });
       const created = payload.data as OrganizationRow | undefined;
       setCreateOpen(false);
       resetCreateForm();
+      setCreateIdempotencyKey(crypto.randomUUID());
       if (created?.id) {
         router.push(`/admin/organizations/${created.id}`);
         return;
@@ -336,37 +370,25 @@ export default function OrganizationsPage() {
     <>
       <AdminPageHeader
         title="Organizations"
-        description={`${filtered.length} of ${rows.length} · clubs, academies, and linked people`}
+        description={`${filtered.length} of ${rows.length} · clubs, academies, and other org types`}
         stackOnSmall
         actions={
           canWrite ? (
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={creatingPlatform}
-                onClick={() => void createSpojexPlatform()}
-                className="h-9 rounded-md border border-primary/30 bg-primary/10 px-3 text-sm font-medium text-primary hover:bg-primary/15 disabled:opacity-60"
-              >
-                {creatingPlatform
-                  ? "Creating…"
-                  : platformOrg
-                    ? "Open Spojex org"
-                    : "Create Spojex org"}
-              </button>
-              <button
-                type="button"
-                onClick={() => openCreate("club")}
-                className="h-9 rounded-md border border-border bg-card px-3 text-sm font-medium hover:bg-muted"
-              >
-                Add club
-              </button>
-              <button
-                type="button"
-                onClick={() => openCreate("academy")}
-                className="h-9 rounded-md border border-border bg-card px-3 text-sm font-medium hover:bg-muted"
-              >
-                Add academy
-              </button>
+              {!loading ? (
+                <button
+                  type="button"
+                  disabled={creatingPlatform}
+                  onClick={() => void createSpojexPlatform()}
+                  className="h-9 rounded-md border border-primary/30 bg-primary/10 px-3 text-sm font-medium text-primary hover:bg-primary/15 disabled:opacity-60"
+                >
+                  {creatingPlatform
+                    ? "Working…"
+                    : platformOrg
+                      ? "Open Spojex org"
+                      : "Create Spojex org"}
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => openCreate()}
@@ -378,6 +400,34 @@ export default function OrganizationsPage() {
           ) : null
         }
       />
+
+      {listSummary ? (
+        <div className="mb-4 space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { label: "Total", value: listSummary.total },
+              { label: "Verified", value: listSummary.verified },
+              { label: "Pending verification", value: listSummary.unverified },
+              { label: "Missing owner profile", value: listSummary.missing_owner },
+            ].map((item) => (
+              <div key={item.label} className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
+                <p className="text-xs text-text-secondary">{item.label}</p>
+                <p className="mt-1 font-heading text-xl font-semibold tabular-nums">{item.value}</p>
+              </div>
+            ))}
+          </div>
+          {listSummary.by_type && Object.keys(listSummary.by_type).length > 0 ? (
+            <p className="text-xs text-text-secondary">
+              By type:{" "}
+              {Object.entries(listSummary.by_type)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 8)
+                .map(([t, n]) => `${organizationTypeLabel(t)} ${n}`)
+                .join(" · ")}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <AdminFilterPanel>
         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-[1fr_200px_160px]">
@@ -417,8 +467,6 @@ export default function OrganizationsPage() {
           <ul className="divide-y divide-border">
             {filtered.map((row) => {
               const liveGifts = liveGiftTotals[row.id] ?? 0;
-              const ownerReceived = ownerCoins[row.user_id]?.lifetime_received ?? 0;
-              const shown = liveGifts > 0 ? liveGifts : ownerReceived;
               const members = memberCounts[row.id] ?? 1;
               return (
                 <li key={row.id}>
@@ -445,8 +493,11 @@ export default function OrganizationsPage() {
                         ) : null}
                       </div>
                       <p className="truncate text-xs text-text-secondary">
-                        {[row.public_id, locationLabel(row.city, row.country)].filter(Boolean).join(" · ")}
+                        {[locationLabel(row.city, row.country), row.users?.display_name]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </p>
+                      <p className="truncate font-mono text-[10px] text-text-hint">{row.public_id}</p>
                     </div>
                     <div className="hidden shrink-0 flex-col items-end gap-1 sm:flex">
                       <StatusBadge tone={verifiedTone(row.verified)}>
@@ -455,13 +506,16 @@ export default function OrganizationsPage() {
                       <span className="text-[10px] text-text-hint">{members} people</span>
                     </div>
                     <div className="hidden w-28 shrink-0 text-right text-xs text-text-secondary lg:block">
-                      <span className="font-medium tabular-nums text-foreground">{formatCoins(shown)}</span>
+                      <span className="font-medium tabular-nums text-foreground">
+                        {liveGifts > 0 ? formatCoins(liveGifts) : "—"}
+                      </span>
                       <span className="mt-0.5 block text-[10px] text-text-hint">
-                        {liveGifts > 0 ? "Live gifts" : "Activity"}
+                        Live gifts received
                       </span>
                     </div>
-                    <div className="hidden w-24 shrink-0 text-right text-[11px] text-text-hint xl:block">
-                      {formatDate(row.created_at)}
+                    <div className="hidden w-28 shrink-0 text-right text-[11px] text-text-hint xl:block">
+                      <span className="block">Updated</span>
+                      {formatDate(row.updated_at || row.created_at)}
                     </div>
                   </Link>
                 </li>
@@ -538,6 +592,15 @@ export default function OrganizationsPage() {
               value={form.country}
               onChange={(event) => setForm({ ...form, country: event.target.value })}
               className={fieldClass}
+            />
+          </label>
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            <span className="text-text-secondary">Website</span>
+            <input
+              value={form.website}
+              onChange={(event) => setForm({ ...form, website: event.target.value })}
+              className={fieldClass}
+              placeholder="https://"
             />
           </label>
           <div className="grid gap-1 text-sm sm:col-span-2">
@@ -628,14 +691,32 @@ export default function OrganizationsPage() {
               className="w-full rounded-lg border border-border px-3 py-2 text-sm"
             />
           </label>
-          <label className="flex items-center gap-2 text-sm sm:col-span-2">
-            <input
-              type="checkbox"
-              checked={form.verified}
-              onChange={(event) => setForm({ ...form, verified: event.target.checked })}
-            />
-            <span className="text-text-secondary">Mark as verified</span>
-          </label>
+          {canVerify ? (
+            <div className="grid gap-2 sm:col-span-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.verified}
+                  onChange={(event) => setForm({ ...form, verified: event.target.checked })}
+                />
+                <span className="text-text-secondary">Mark as verified</span>
+              </label>
+              {form.verified ? (
+                <label className="grid gap-1 text-sm">
+                  <span className="text-text-secondary">Verification reason (required)</span>
+                  <input
+                    required
+                    value={form.verification_reason}
+                    onChange={(event) =>
+                      setForm({ ...form, verification_reason: event.target.value })
+                    }
+                    className={fieldClass}
+                    placeholder="Evidence / reviewer notes"
+                  />
+                </label>
+              ) : null}
+            </div>
+          ) : null}
         </form>
       </AdminModal>
 
