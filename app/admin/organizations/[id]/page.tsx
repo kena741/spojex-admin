@@ -30,6 +30,31 @@ type MemberRow = {
   } | null;
 };
 
+type InviteRow = {
+  id: string;
+  user_id: string;
+  status: string;
+  kind: string;
+  message?: string | null;
+  created_at?: string | null;
+  users?: { id: string; display_name: string; email: string | null } | null;
+};
+
+type LinkedGym = {
+  id: string;
+  name: string;
+  verification_status?: string | null;
+};
+
+type AuditRow = {
+  id: string;
+  action: string;
+  summary: string;
+  created_at: string;
+  admin_email?: string | null;
+  admin_name?: string | null;
+};
+
 type Tab = "overview" | "people" | "activity" | "settings";
 
 export default function OrganizationDetailPage() {
@@ -48,16 +73,29 @@ export default function OrganizationDetailPage() {
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [ownerCoinWallet, setOwnerCoinWallet] = useState<CoinWalletRow | null>(null);
   const [liveGiftsReceived, setLiveGiftsReceived] = useState(0);
-  const [linkedGyms, setLinkedGyms] = useState<{ id: string; name: string }[]>([]);
+  const [linkedGyms, setLinkedGyms] = useState<LinkedGym[]>([]);
+  const [invites, setInvites] = useState<InviteRow[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditRow[]>([]);
+  const [newsCount, setNewsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [archiving, setArchiving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [reassignOpen, setReassignOpen] = useState(false);
+  const [reassignQuery, setReassignQuery] = useState("");
+  const [reassignOptions, setReassignOptions] = useState<
+    { id: string; display_name: string; email: string | null; role: string }[]
+  >([]);
+  const [reassignUserId, setReassignUserId] = useState("");
+  const [reassignReason, setReassignReason] = useState("");
+  const [reassignBusy, setReassignBusy] = useState(false);
   const [draft, setDraft] = useState({
     name: "",
+    name_am: "",
     organization_type: "club",
     city: "",
     country: "",
@@ -92,6 +130,7 @@ export default function OrganizationDetailPage() {
     }
     setDraft({
       name: next.name || "",
+      name_am: next.name_am || "",
       organization_type: next.organization_type || "club",
       city: next.city || "",
       country: next.country || "",
@@ -99,24 +138,50 @@ export default function OrganizationDetailPage() {
       website: next.website || "",
       description: next.description || "",
     });
-    const [wallets, liveTotals, membersRes, gymsRes] = await Promise.all([
-      loadCoinWalletsByUserIds([next.user_id]),
-      loadOrgLiveGiftTotals([next.id]),
-      getSpojexClient()
-        .from("organization_members")
-        .select("user_id, member_role, status, joined_at, users:user_id(id, display_name, email, role, avatar_url)")
-        .eq("organization_id", next.id)
-        .limit(500),
-      getSpojexClient()
-        .from("gyms")
-        .select("id, name")
-        .eq("organization_id", next.id)
-        .limit(50),
-    ]);
+    const client = getSpojexClient();
+    const [wallets, liveTotals, membersRes, gymsRes, invitesRes, newsRes, auditRes] =
+      await Promise.all([
+        loadCoinWalletsByUserIds([next.user_id]),
+        loadOrgLiveGiftTotals([next.id]),
+        client
+          .from("organization_members")
+          .select(
+            "user_id, member_role, status, joined_at, users:user_id(id, display_name, email, role, avatar_url)",
+          )
+          .eq("organization_id", next.id)
+          .limit(500),
+        client
+          .from("gyms")
+          .select("id, name, verification_status")
+          .eq("organization_id", next.id)
+          .limit(50),
+        client
+          .from("organization_chat_join_requests")
+          .select(
+            "id, user_id, status, kind, message, created_at, users:user_id(id, display_name, email)",
+          )
+          .eq("organization_id", next.id)
+          .eq("status", "pending")
+          .limit(100),
+        client
+          .from("sport_news")
+          .select("id", { count: "exact", head: true })
+          .eq("organization_id", next.id),
+        client
+          .from("admin_activity_log")
+          .select("id, action, summary, created_at, admin_email, admin_name")
+          .eq("resource_type", "organization")
+          .eq("resource_id", next.id)
+          .order("created_at", { ascending: false })
+          .limit(30),
+      ]);
     setOwnerCoinWallet(wallets[next.user_id] ?? null);
     setLiveGiftsReceived(liveTotals[next.id] ?? 0);
     setMembers((membersRes.data ?? []) as MemberRow[]);
-    setLinkedGyms((gymsRes.data ?? []) as { id: string; name: string }[]);
+    setLinkedGyms((gymsRes.data ?? []) as LinkedGym[]);
+    setInvites((invitesRes.data ?? []) as InviteRow[]);
+    setNewsCount(newsRes.count ?? 0);
+    setAuditLogs((auditRes.data ?? []) as AuditRow[]);
   };
 
   useEffect(() => {
@@ -165,6 +230,7 @@ export default function OrganizationDetailPage() {
     if (!org || !editing) return false;
     return (
       draft.name !== (org.name || "") ||
+      draft.name_am !== (org.name_am || "") ||
       draft.organization_type !== (org.organization_type || "club") ||
       draft.city !== (org.city || "") ||
       draft.country !== (org.country || "") ||
@@ -173,6 +239,32 @@ export default function OrganizationDetailPage() {
       draft.description !== (org.description || "")
     );
   }, [draft, editing, org]);
+
+  useEffect(() => {
+    if (!reassignOpen) return;
+    const q = reassignQuery.trim().replace(/[%(),]/g, " ");
+    if (q.length < 2) {
+      setReassignOptions([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void adminFetch(`/api/admin/users?q=${encodeURIComponent(q)}&limit=12`)
+        .then(async (res) => {
+          const json = (await res.json().catch(() => ({}))) as {
+            data?: { id: string; display_name: string; email: string | null; role: string }[];
+          };
+          if (!cancelled) setReassignOptions(json.data ?? []);
+        })
+        .catch(() => {
+          if (!cancelled) setReassignOptions([]);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [reassignOpen, reassignQuery]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -186,15 +278,24 @@ export default function OrganizationDetailPage() {
 
   const saveProfile = async () => {
     if (!org || !canWrite) return;
+    if (!draft.name.trim()) {
+      setError("Name is required.");
+      return;
+    }
+    if (draft.currency.trim() && !/^[A-Za-z]{3}$/.test(draft.currency.trim())) {
+      setError("Currency must be a 3-letter code (e.g. ETB).");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
       await patchAdmin(`/api/admin/organizations/${id}`, {
         name: draft.name.trim(),
+        name_am: draft.name_am.trim() || null,
         organization_type: draft.organization_type,
         city: draft.city.trim(),
         country: draft.country.trim(),
-        currency: draft.currency.trim() || "ETB",
+        currency: draft.currency.trim().toUpperCase() || "ETB",
         website: draft.website.trim() || null,
         description: draft.description.trim(),
         expected_updated_at: org.updated_at,
@@ -210,8 +311,7 @@ export default function OrganizationDetailPage() {
   };
 
   const toggleVerified = async () => {
-    if (!org) return;
-    if (!canVerify && !canWrite) return;
+    if (!org || !canVerify) return;
     let reason: string | undefined;
     if (!org.verified) {
       reason = window.prompt("Verification reason (required):") || undefined;
@@ -298,28 +398,59 @@ export default function OrganizationDetailPage() {
     }
   };
 
-  const reassignOwner = async () => {
+  const submitReassign = async () => {
     if (!org || !canWrite || org.is_platform) return;
-    const proposed = window.prompt("New owner user ID (UUID):");
-    if (!proposed?.trim()) return;
-    const reason = window.prompt("Reason for ownership transfer (required):");
-    if (!reason?.trim()) return;
+    if (!reassignUserId.trim() || !reassignReason.trim()) {
+      setError("Select a new owner and provide a reason.");
+      return;
+    }
+    setReassignBusy(true);
     setError(null);
     try {
       const res = await adminFetch(`/api/admin/organizations/${id}/reassign-owner`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          new_owner_user_id: proposed.trim(),
-          reason: reason.trim(),
+          new_owner_user_id: reassignUserId.trim(),
+          reason: reassignReason.trim(),
         }),
       });
       const payload = (await res.json()) as { error?: string; note?: string };
       if (!res.ok) throw new Error(payload.error || "Reassign failed");
       setNotice(payload.note || "Owner reassigned. Personal wallets were not moved.");
+      setReassignOpen(false);
+      setReassignQuery("");
+      setReassignUserId("");
+      setReassignReason("");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Reassign failed");
+    } finally {
+      setReassignBusy(false);
+    }
+  };
+
+  const archiveOrg = async () => {
+    if (!org || !canWrite || org.is_platform) return;
+    const reason = window.prompt("Archive reason (optional):") ?? "";
+    if (!window.confirm(`Archive “${org.name}”? Prefer this over delete when history exists.`))
+      return;
+    setArchiving(true);
+    setError(null);
+    try {
+      const res = await adminFetch(`/api/admin/organizations/${id}/archive`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason.trim() || null }),
+      });
+      const payload = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(payload.error || "Archive failed");
+      setNotice("Organization archived.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Archive failed");
+    } finally {
+      setArchiving(false);
     }
   };
 
@@ -349,7 +480,7 @@ export default function OrganizationDetailPage() {
         ]}
         actions={
           <div className="flex flex-wrap gap-2">
-            {(canVerify || canWrite) && !org.is_platform ? (
+            {canVerify && !org.is_platform ? (
               <button
                 type="button"
                 onClick={() => void toggleVerified()}
@@ -358,6 +489,12 @@ export default function OrganizationDetailPage() {
                 {org.verified ? "Unverify" : "Mark verified"}
               </button>
             ) : null}
+            <Link
+              href="/admin/verifications"
+              className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
+            >
+              Verification Center
+            </Link>
           </div>
         }
       />
@@ -408,8 +545,12 @@ export default function OrganizationDetailPage() {
               <StatusBadge tone={verifiedTone(org.verified)}>
                 {org.verified ? "Verified" : "Unverified"}
               </StatusBadge>
+              {org.archived_at ? (
+                <span className="text-xs font-medium text-amber-700">Archived</span>
+              ) : null}
             </div>
             <dl className="mt-5 space-y-2 text-sm">
+              {org.name_am ? <Row label="Amharic name">{org.name_am}</Row> : null}
               <Row label="Location">{locationLabel(org.city, org.country)}</Row>
               <Row label="Owner">
                 {org.users ? (
@@ -421,10 +562,21 @@ export default function OrganizationDetailPage() {
                 )}
               </Row>
               <Row label="Public ID">
-                <span className="font-mono text-xs">{org.public_id}</span>
+                <button
+                  type="button"
+                  className="font-mono text-xs hover:underline"
+                  title="Copy"
+                  onClick={() => void navigator.clipboard.writeText(org.public_id)}
+                >
+                  {org.public_id}
+                </button>
               </Row>
               <Row label="Updated">{formatDate(org.updated_at || org.created_at)}</Row>
             </dl>
+            <p className="mt-3 text-[11px] text-text-hint">
+              Org verification is a separate boolean scope from gym verification and from identity
+              Verification Center requests.
+            </p>
           </section>
 
           <div className="space-y-4">
@@ -455,7 +607,7 @@ export default function OrganizationDetailPage() {
                 {formatCoins(liveGiftsReceived)}
               </p>
               <p className="text-xs text-text-secondary">Live gifts received (coins)</p>
-              {canFinance ? (
+              {canFinance && liveGiftsReceived > 0 ? (
                 <Link
                   href={`/admin/finance/transactions?q=${encodeURIComponent(org.id)}`}
                   className="mt-3 inline-block text-xs font-medium text-primary hover:underline"
@@ -467,30 +619,44 @@ export default function OrganizationDetailPage() {
 
             <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
               <h2 className="font-heading text-sm font-semibold">Linked products</h2>
+              <p className="mt-1 text-xs text-text-hint">
+                Links use explicit foreign keys — not name matching. Gym verification is a separate
+                scope from organization verification.
+              </p>
               <ul className="mt-3 space-y-2 text-sm">
                 <li>
                   <span className="text-text-hint">Gyms: </span>
                   {linkedGyms.length === 0
                     ? "None"
                     : linkedGyms.map((g) => (
-                        <Link
-                          key={g.id}
-                          href={`/admin/gyms/${g.id}`}
-                          className="mr-2 text-primary hover:underline"
-                        >
-                          {g.name}
-                        </Link>
+                        <span key={g.id} className="mr-3 inline-flex items-center gap-1">
+                          <Link href={`/admin/gyms/${g.id}`} className="text-primary hover:underline">
+                            {g.name}
+                          </Link>
+                          {g.verification_status ? (
+                            <span className="text-[10px] text-text-hint">
+                              (gym: {g.verification_status})
+                            </span>
+                          ) : null}
+                        </span>
                       ))}
                 </li>
                 <li>
-                  <Link href="/admin/news" className="text-primary hover:underline">
-                    Sport News publishing
+                  <Link
+                    href={`/admin/news?org=${encodeURIComponent(org.id)}`}
+                    className="text-primary hover:underline"
+                  >
+                    Sport News ({newsCount})
                   </Link>
                 </li>
                 <li>
                   <Link href="/admin/streams" className="text-primary hover:underline">
                     Streams / radio
                   </Link>
+                </li>
+                <li>
+                  <span className="text-text-hint">Organization chat: </span>
+                  membership + owner roles drive chat access
                 </li>
               </ul>
             </section>
@@ -501,44 +667,93 @@ export default function OrganizationDetailPage() {
       {tab === "people" ? (
         <div className="space-y-4">
           <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-            <h2 className="mb-3 font-heading text-sm font-semibold">
-              Active members ({people.active.length} unique)
-            </h2>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-heading text-sm font-semibold">
+                Active members ({people.active.length} unique)
+              </h2>
+              {canWrite && !org.is_platform ? (
+                <button
+                  type="button"
+                  onClick={() => setReassignOpen(true)}
+                  className="rounded-md border border-border px-2.5 py-1 text-xs font-medium"
+                >
+                  Reassign owner…
+                </button>
+              ) : null}
+            </div>
             <ul className="divide-y divide-border">
-              {people.active.map((m) => (
-                <li key={m.user_id} className="flex items-center justify-between gap-3 py-2.5">
-                  <div className="min-w-0">
-                    {m.users ? (
-                      <Link
-                        href={`/admin/people/${m.users.id}`}
-                        className="text-sm font-medium text-primary hover:underline"
-                      >
-                        {m.users.display_name}
-                      </Link>
+              {people.active.map((m) => {
+                const isOwner = m.user_id === org.user_id || m.member_role === "owner";
+                return (
+                  <li key={m.user_id} className="flex items-center justify-between gap-3 py-2.5">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-xs font-semibold">
+                        {m.users?.avatar_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={m.users.avatar_url} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          (m.users?.display_name || "?").slice(0, 1).toUpperCase()
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        {m.users ? (
+                          <Link
+                            href={`/admin/people/${m.users.id}`}
+                            className="text-sm font-medium text-primary hover:underline"
+                          >
+                            {m.users.display_name}
+                          </Link>
+                        ) : (
+                          <span className="text-sm font-medium">{m.user_id.slice(0, 8)}</span>
+                        )}
+                        <p className="text-xs text-text-secondary">
+                          Profile role: {m.users?.role ? formatRole(m.users.role) : "—"} · Org
+                          access: {isOwner ? "owner" : m.member_role || "member"} ·{" "}
+                          {m.status || "active"}
+                          {m.joined_at ? ` · Joined ${formatDate(m.joined_at)}` : ""}
+                        </p>
+                      </div>
+                    </div>
+                    {isOwner ? (
+                      <span className="rounded bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase text-primary">
+                        Owner
+                      </span>
                     ) : (
-                      <span className="text-sm font-medium">{m.user_id.slice(0, 8)}</span>
+                      <span className="rounded border border-border px-2 py-0.5 text-[10px] font-medium uppercase text-text-secondary">
+                        {m.member_role || "Member"}
+                      </span>
                     )}
-                    <p className="text-xs text-text-secondary">
-                      Profile role: {m.users?.role ? formatRole(m.users.role) : "—"} · Org access:{" "}
-                      {m.member_role || "member"}
-                    </p>
-                  </div>
-                  {m.member_role === "owner" || m.user_id === org.user_id ? (
-                    <span className="rounded bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase text-primary">
-                      Owner
-                    </span>
-                  ) : (
-                    <span className="rounded border border-border px-2 py-0.5 text-[10px] font-medium uppercase text-text-secondary">
-                      {m.member_role || "Member"}
-                    </span>
-                  )}
-                </li>
-              ))}
+                  </li>
+                );
+              })}
               {people.active.length === 0 ? (
                 <li className="py-2 text-sm text-text-hint">No active members.</li>
               ) : null}
             </ul>
           </section>
+
+          {invites.length > 0 ? (
+            <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+              <h2 className="mb-3 font-heading text-sm font-semibold">
+                Pending invitations / join requests ({invites.length})
+              </h2>
+              <ul className="divide-y divide-border">
+                {invites.map((inv) => (
+                  <li key={inv.id} className="flex items-center justify-between gap-3 py-2.5">
+                    <div>
+                      <p className="text-sm font-medium">
+                        {inv.users?.display_name || inv.user_id.slice(0, 8)}
+                      </p>
+                      <p className="text-xs text-text-secondary">
+                        {inv.kind} · {inv.status}
+                        {inv.created_at ? ` · ${formatDate(inv.created_at)}` : ""}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
 
           {people.former.length > 0 ? (
             <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
@@ -552,7 +767,10 @@ export default function OrganizationDetailPage() {
                       <p className="text-sm font-medium">
                         {m.users?.display_name || m.user_id.slice(0, 8)}
                       </p>
-                      <p className="text-xs text-text-secondary">{m.status}</p>
+                      <p className="text-xs text-text-secondary">
+                        {m.status}
+                        {m.joined_at ? ` · Joined ${formatDate(m.joined_at)}` : ""}
+                      </p>
                     </div>
                   </li>
                 ))}
@@ -563,39 +781,62 @@ export default function OrganizationDetailPage() {
       ) : null}
 
       {tab === "activity" ? (
-        <section className="rounded-xl border border-border bg-card p-5 shadow-sm space-y-3">
-          <h2 className="font-heading text-sm font-semibold">Activity</h2>
-          <p className="text-sm text-text-secondary">
-            Live gifts received by events hosted under this org:{" "}
-            <strong className="tabular-nums">{formatCoins(liveGiftsReceived)}</strong> coins.
-          </p>
-          {canFinance ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-              <p className="font-medium">Owner personal wallet (not org balance)</p>
-              <p className="mt-1">
-                Lifetime gifts received by owner user:{" "}
-                {formatCoins(ownerCoinWallet?.lifetime_received ?? 0)} · Redeemable:{" "}
-                {formatCoins(ownerCoinWallet?.redeemable_balance ?? 0)}
-              </p>
-              <p className="mt-1">
-                Live gifts currently credit the owner user account. Do not sum this wallet across
-                multiple organizations.
-              </p>
-              {org.users ? (
-                <Link
-                  href={`/admin/people/${org.users.id}`}
-                  className="mt-2 inline-block font-medium text-primary hover:underline"
-                >
-                  Open owner profile
-                </Link>
-              ) : null}
-            </div>
-          ) : (
-            <p className="text-xs text-text-hint">
-              Personal owner wallet totals require finance/coins permission.
+        <div className="space-y-4">
+          <section className="rounded-xl border border-border bg-card p-5 shadow-sm space-y-3">
+            <h2 className="font-heading text-sm font-semibold">Publishing & gifts</h2>
+            <p className="text-sm text-text-secondary">
+              Sport news attributed to this org: <strong>{newsCount}</strong>
             </p>
-          )}
-        </section>
+            <p className="text-sm text-text-secondary">
+              Live gifts received by events hosted under this org:{" "}
+              <strong className="tabular-nums">{formatCoins(liveGiftsReceived)}</strong> coins.
+            </p>
+            {canFinance ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                <p className="font-medium">Owner personal wallet (not org balance)</p>
+                <p className="mt-1">
+                  Lifetime gifts received by owner user:{" "}
+                  {formatCoins(ownerCoinWallet?.lifetime_received ?? 0)} · Redeemable:{" "}
+                  {formatCoins(ownerCoinWallet?.redeemable_balance ?? 0)}
+                </p>
+                <p className="mt-1">
+                  Live gifts currently credit the owner user account. Do not sum this wallet across
+                  multiple organizations.
+                </p>
+                {org.users ? (
+                  <Link
+                    href={`/admin/people/${org.users.id}`}
+                    className="mt-2 inline-block font-medium text-primary hover:underline"
+                  >
+                    Open owner profile
+                  </Link>
+                ) : null}
+              </div>
+            ) : (
+              <p className="text-xs text-text-hint">
+                Personal owner wallet totals require finance/coins permission.
+              </p>
+            )}
+          </section>
+          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <h2 className="mb-3 font-heading text-sm font-semibold">Administrative audit</h2>
+            {auditLogs.length === 0 ? (
+              <p className="text-sm text-text-hint">No admin audit events for this organization yet.</p>
+            ) : (
+              <ul className="divide-y divide-border text-sm">
+                {auditLogs.map((log) => (
+                  <li key={log.id} className="py-2.5">
+                    <p className="font-medium">{log.summary || log.action}</p>
+                    <p className="text-xs text-text-secondary">
+                      {log.admin_name || log.admin_email || "Admin"} · {formatDate(log.created_at)} ·{" "}
+                      {log.action}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
       ) : null}
 
       {tab === "settings" ? (
@@ -613,6 +854,7 @@ export default function OrganizationDetailPage() {
                         setEditing(false);
                         setDraft({
                           name: org.name || "",
+                          name_am: org.name_am || "",
                           organization_type: org.organization_type || "club",
                           city: org.city || "",
                           country: org.country || "",
@@ -670,12 +912,21 @@ export default function OrganizationDetailPage() {
             </div>
 
             <fieldset disabled={!editing || !canWrite} className="grid gap-3 sm:grid-cols-2 disabled:opacity-90">
-              <label className="text-sm sm:col-span-2">
-                <span className="mb-1 block text-text-secondary">Name</span>
+              <label className="text-sm">
+                <span className="mb-1 block text-text-secondary">Name (English)</span>
                 <input
                   className={fieldClass}
                   value={draft.name}
                   onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+                />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block text-text-secondary">Name (Amharic)</span>
+                <input
+                  className={fieldClass}
+                  value={draft.name_am}
+                  onChange={(e) => setDraft((d) => ({ ...d, name_am: e.target.value }))}
+                  placeholder="Optional"
                 />
               </label>
               <label className="text-sm">
@@ -739,6 +990,27 @@ export default function OrganizationDetailPage() {
             ) : null}
           </section>
 
+          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <h2 className="font-heading text-sm font-semibold">Verification details</h2>
+            <p className="mt-2 text-sm text-text-secondary">
+              Status: {org.verified ? "Verified" : "Unverified / pending review"}. Org verification
+              is separate from gym listing verification and from identity Verification Center cases.
+            </p>
+            {canVerify ? (
+              <button
+                type="button"
+                onClick={() => void toggleVerified()}
+                className="mt-3 rounded-md border border-border px-3 py-2 text-sm font-medium"
+              >
+                {org.verified ? "Unverify…" : "Mark verified…"}
+              </button>
+            ) : (
+              <p className="mt-2 text-xs text-text-hint">
+                Requires organizations:verify to change verification.
+              </p>
+            )}
+          </section>
+
           {canWrite && !org.is_platform ? (
             <section className="rounded-xl border border-border bg-card p-5 shadow-sm space-y-4">
               <h2 className="font-heading text-sm font-semibold">Advanced</h2>
@@ -749,7 +1021,7 @@ export default function OrganizationDetailPage() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => void reassignOwner()}
+                  onClick={() => setReassignOpen(true)}
                   className="mt-2 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
                 >
                   Reassign owner…
@@ -757,17 +1029,27 @@ export default function OrganizationDetailPage() {
               </div>
               <div className="border-t border-border pt-4">
                 <p className="text-sm text-text-secondary">
-                  Prefer unlinking products over deletion. A dependency check runs first; memberships
-                  and follows are cleaned when safe.
+                  Prefer archive when historical relationships exist. Delete only when dependency
+                  check shows no blocking linked products.
                 </p>
-                <button
-                  type="button"
-                  disabled={deleting}
-                  onClick={() => void remove()}
-                  className="mt-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
-                >
-                  {deleting ? "Deleting…" : "Delete organization…"}
-                </button>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={archiving || Boolean(org.archived_at)}
+                    onClick={() => void archiveOrg()}
+                    className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+                  >
+                    {org.archived_at ? "Already archived" : archiving ? "Archiving…" : "Archive…"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deleting}
+                    onClick={() => void remove()}
+                    className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+                  >
+                    {deleting ? "Deleting…" : "Delete…"}
+                  </button>
+                </div>
                 {deps ? (
                   <ul className="mt-3 text-xs text-text-secondary">
                     {Object.entries(deps).map(([k, v]) => (
@@ -781,9 +1063,81 @@ export default function OrganizationDetailPage() {
             </section>
           ) : org.is_platform ? (
             <p className="text-sm text-text-secondary">
-              The Spojex platform organization cannot be deleted or reassigned.
+              The Spojex platform organization cannot be deleted, archived, or reassigned.
             </p>
           ) : null}
+        </div>
+      ) : null}
+
+      {reassignOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-5 shadow-lg">
+            <h3 className="font-heading text-sm font-semibold">Reassign owner</h3>
+            <p className="mt-1 text-xs text-text-secondary">
+              Current owner: {org.users?.display_name || org.user_id}. Wallets are not moved.
+            </p>
+            <label className="mt-3 block text-sm">
+              <span className="mb-1 block text-text-secondary">Search user</span>
+              <input
+                className={fieldClass}
+                value={reassignQuery}
+                onChange={(e) => {
+                  setReassignQuery(e.target.value);
+                  setReassignUserId("");
+                }}
+                placeholder="Name or email"
+              />
+            </label>
+            {reassignOptions.length > 0 ? (
+              <ul className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-border">
+                {reassignOptions.map((u) => (
+                  <li key={u.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReassignUserId(u.id);
+                        setReassignQuery(u.email || u.display_name);
+                      }}
+                      className={cn(
+                        "flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-muted",
+                        reassignUserId === u.id ? "bg-primary/10" : "",
+                      )}
+                    >
+                      <span className="font-medium">{u.display_name}</span>
+                      <span className="text-xs text-text-secondary">
+                        {[u.email, u.role].filter(Boolean).join(" · ")}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <label className="mt-3 block text-sm">
+              <span className="mb-1 block text-text-secondary">Reason (required)</span>
+              <input
+                className={fieldClass}
+                value={reassignReason}
+                onChange={(e) => setReassignReason(e.target.value)}
+              />
+            </label>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setReassignOpen(false)}
+                className="rounded-md border border-border px-3 py-2 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={reassignBusy || !reassignUserId || !reassignReason.trim()}
+                onClick={() => void submitReassign()}
+                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+              >
+                {reassignBusy ? "Saving…" : "Transfer ownership"}
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
     </div>

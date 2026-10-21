@@ -43,6 +43,8 @@ export async function GET(request: Request) {
   const type = url.searchParams.get("type") || "all";
   const verified = url.searchParams.get("verified") || "all";
   const ownerUserId = (url.searchParams.get("owner_user_id") || "").trim();
+  const city = (url.searchParams.get("city") || "").trim();
+  const country = (url.searchParams.get("country") || "").trim();
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get("page_size") || 40) || 40));
 
@@ -55,6 +57,8 @@ export async function GET(request: Request) {
   if (verified === "yes") query = query.eq("verified", true);
   if (verified === "no") query = query.eq("verified", false);
   if (ownerUserId) query = query.eq("user_id", ownerUserId);
+  if (city) query = query.ilike("city", `%${city}%`);
+  if (country) query = query.ilike("country", `%${country}%`);
   if (q) {
     query = query.or(
       `name.ilike.%${q}%,public_id.ilike.%${q}%,city.ilike.%${q}%,country.ilike.%${q}%`,

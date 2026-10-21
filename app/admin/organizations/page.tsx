@@ -46,8 +46,14 @@ export default function OrganizationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState(searchParams.get("q") || "");
+  const [debouncedQuery, setDebouncedQuery] = useState(searchParams.get("q") || "");
   const [type, setType] = useState(searchParams.get("type") || "all");
   const [verified, setVerified] = useState(searchParams.get("verified") || "all");
+  const [city, setCity] = useState(searchParams.get("city") || "");
+  const [country, setCountry] = useState(searchParams.get("country") || "");
+  const [page, setPage] = useState(Math.max(1, Number(searchParams.get("page") || 1) || 1));
+  const [total, setTotal] = useState(0);
+  const pageSize = 40;
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [creatingPlatform, setCreatingPlatform] = useState(false);
@@ -93,15 +99,20 @@ export default function OrganizationsPage() {
 
   const load = async () => {
     const params = new URLSearchParams({
-      page: "1",
-      page_size: "100",
+      page: String(page),
+      page_size: String(pageSize),
+      sort: "updated_at",
+      order: "desc",
     });
-    if (query.trim()) params.set("q", query.trim());
+    if (debouncedQuery.trim()) params.set("q", debouncedQuery.trim());
     if (type !== "all") params.set("type", type);
     if (verified !== "all") params.set("verified", verified);
+    if (city.trim()) params.set("city", city.trim());
+    if (country.trim()) params.set("country", country.trim());
     const response = await adminFetch(`/api/admin/organizations?${params}`);
     const payload = (await response.json()) as {
       data?: OrganizationRow[];
+      total?: number;
       member_counts?: Record<string, number>;
       live_gift_totals?: Record<string, number>;
       summary?: {
@@ -116,6 +127,7 @@ export default function OrganizationsPage() {
     if (!response.ok) throw new Error(payload.error || "Failed to load organizations");
     const orgs = payload.data ?? [];
     setRows(orgs);
+    setTotal(payload.total ?? orgs.length);
     setMemberCounts(payload.member_counts ?? {});
     setListSummary(payload.summary ?? null);
     if (payload.live_gift_totals) {
@@ -126,21 +138,30 @@ export default function OrganizationsPage() {
   };
 
   useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query), 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
     const params = new URLSearchParams();
-    if (query.trim()) params.set("q", query.trim());
+    if (debouncedQuery.trim()) params.set("q", debouncedQuery.trim());
     if (type !== "all") params.set("type", type);
     if (verified !== "all") params.set("verified", verified);
+    if (city.trim()) params.set("city", city.trim());
+    if (country.trim()) params.set("country", country.trim());
+    if (page > 1) params.set("page", String(page));
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [query, type, verified, pathname, router]);
+  }, [debouncedQuery, type, verified, city, country, page, pathname, router]);
 
   useEffect(() => {
     setLoading(true);
+    setError(null);
     load()
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type, verified]);
+  }, [debouncedQuery, type, verified, city, country, page]);
 
   useEffect(() => {
     if (!createOpen) return;
@@ -181,18 +202,7 @@ export default function OrganizationsPage() {
     };
   }, [createOpen, ownerQuery]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return rows.filter((row) => {
-      if (type !== "all" && row.organization_type !== type) return false;
-      if (verified === "yes" && !row.verified) return false;
-      if (verified === "no" && row.verified) return false;
-      if (!q) return true;
-      return [row.name, row.public_id, row.city, row.country, row.description]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(q));
-    });
-  }, [query, rows, type, verified]);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const selectedOwner =
     attachedOwner && attachedOwner.id === form.owner_user_id
@@ -370,7 +380,7 @@ export default function OrganizationsPage() {
     <>
       <AdminPageHeader
         title="Organizations"
-        description={`${filtered.length} of ${rows.length} · clubs, academies, and other org types`}
+        description={`${total} total · page ${page} of ${totalPages}`}
         stackOnSmall
         actions={
           canWrite ? (
@@ -430,9 +440,24 @@ export default function OrganizationsPage() {
       ) : null}
 
       <AdminFilterPanel>
-        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-[1fr_200px_160px]">
-          <AdminSearchInput value={query} onChange={setQuery} placeholder="Search name, public ID, city" />
-          <AdminSelect value={type} onChange={setType}>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="sm:col-span-2">
+            <AdminSearchInput
+              value={query}
+              onChange={(value) => {
+                setQuery(value);
+                setPage(1);
+              }}
+              placeholder="Search name, Amharic name, public ID, city"
+            />
+          </div>
+          <AdminSelect
+            value={type}
+            onChange={(value) => {
+              setType(value);
+              setPage(1);
+            }}
+          >
             <option value="all">All types</option>
             {organizationTypes.map((item) => (
               <option key={item.id} value={item.id}>
@@ -440,34 +465,58 @@ export default function OrganizationsPage() {
               </option>
             ))}
           </AdminSelect>
-          <AdminSelect value={verified} onChange={setVerified}>
+          <AdminSelect
+            value={verified}
+            onChange={(value) => {
+              setVerified(value);
+              setPage(1);
+            }}
+          >
             <option value="all">All verification</option>
             <option value="yes">Verified</option>
-            <option value="no">Unverified</option>
+            <option value="no">Unverified / pending</option>
           </AdminSelect>
+          <input
+            value={city}
+            onChange={(e) => {
+              setCity(e.target.value);
+              setPage(1);
+            }}
+            placeholder="City"
+            className="h-10 rounded-lg border border-border bg-card px-3 text-sm"
+          />
+          <input
+            value={country}
+            onChange={(e) => {
+              setCountry(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Country"
+            className="h-10 rounded-lg border border-border bg-card px-3 text-sm"
+          />
         </div>
       </AdminFilterPanel>
 
       {loading ? <AdminLoadingRow label="Loading organizations…" /> : null}
       {error ? <AdminErrorAlert message={error} /> : null}
 
-      {!loading && filtered.length === 0 ? (
+      {!loading && rows.length === 0 ? (
         <AdminEmpty
           title="No organizations"
           description={
             canWrite
-              ? "Add a club or academy, or wait for individuals to create them in the app."
+              ? "Add an organization, or wait for individuals to create them in the app."
               : "Organizations created in admin or the superapp appear here."
           }
         />
       ) : null}
 
-      {filtered.length > 0 ? (
+      {rows.length > 0 ? (
         <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
           <ul className="divide-y divide-border">
-            {filtered.map((row) => {
-              const liveGifts = liveGiftTotals[row.id] ?? 0;
-              const members = memberCounts[row.id] ?? 1;
+            {rows.map((row) => {
+              const liveGifts = liveGiftTotals[row.id] ?? row.live_gifts_received ?? 0;
+              const members = memberCounts[row.id] ?? row.active_people_count ?? 1;
               return (
                 <li key={row.id}>
                   <Link
@@ -493,11 +542,25 @@ export default function OrganizationsPage() {
                         ) : null}
                       </div>
                       <p className="truncate text-xs text-text-secondary">
-                        {[locationLabel(row.city, row.country), row.users?.display_name]
+                        {[
+                          locationLabel(row.city, row.country),
+                          row.users?.display_name ? `Owner: ${row.users.display_name}` : null,
+                        ]
                           .filter(Boolean)
                           .join(" · ")}
                       </p>
-                      <p className="truncate font-mono text-[10px] text-text-hint">{row.public_id}</p>
+                      <button
+                        type="button"
+                        title="Copy public ID"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          void navigator.clipboard.writeText(row.public_id);
+                        }}
+                        className="mt-0.5 truncate font-mono text-[10px] text-text-hint hover:text-text-secondary"
+                      >
+                        {row.public_id}
+                      </button>
                     </div>
                     <div className="hidden shrink-0 flex-col items-end gap-1 sm:flex">
                       <StatusBadge tone={verifiedTone(row.verified)}>
@@ -522,6 +585,32 @@ export default function OrganizationsPage() {
               );
             })}
           </ul>
+        </div>
+      ) : null}
+
+      {!loading && totalPages > 1 ? (
+        <div className="flex items-center justify-between gap-3 pt-2">
+          <p className="text-xs text-text-secondary">
+            Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {total}
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
         </div>
       ) : null}
 
