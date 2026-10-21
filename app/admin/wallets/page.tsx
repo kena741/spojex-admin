@@ -50,7 +50,7 @@ export default function WalletsPage() {
     <>
       <AdminPageHeader
         title="Provider wallets"
-        description="Earnings from completed Chapa bookings. Balance is available to withdraw."
+        description="Marketplace earnings balances. Open a wallet for ledger detail — available may exceed lifetime earned when adjustments or opening balances exist."
       />
       <AdminFilterPanel>
         <AdminSearchInput value={query} onChange={setQuery} placeholder="Search provider" />
@@ -78,7 +78,7 @@ export default function WalletsPage() {
                 {filtered.map((row) => (
                   <tr key={row.user_id} className="border-b border-border last:border-0">
                     <td className="px-4 py-3">
-                      <Link href={`/admin/users/${row.user_id}`} className="text-primary">
+                      <Link href={`/admin/wallets/${row.user_id}`} className="font-medium text-primary">
                         {row.users?.display_name || row.users?.full_name || row.user_id.slice(0, 8)}
                       </Link>
                       <p className="text-xs text-text-secondary">

@@ -95,8 +95,33 @@ export async function GET() {
   const etbPerCoin = Number(coinRes.data?.etb_per_coin);
   const coinsPerBirr =
     Number.isFinite(etbPerCoin) && etbPerCoin > 0 ? 1 / etbPerCoin : 10;
+
+  // Never return payment secrets to the browser — only readiness flags.
+  const appRows = (settingsRes.data ?? []).map((row: { id: string; data: unknown }) => {
+    if (row.id !== "payment") return row;
+    const data = parseObject(row.data);
+    const providers = ["chapa", "telebirr", "wallet"] as const;
+    const redacted: JsonObject = { ...data };
+    for (const key of providers) {
+      const provider = parseObject(data[key]);
+      if (!Object.keys(provider).length) continue;
+      const secretKeys = ["secretKey", "secret", "apiSecret", "privateKey", "password"];
+      let secretConfigured = false;
+      const cleaned: JsonObject = { ...provider };
+      for (const sk of secretKeys) {
+        if (cleaned[sk] != null && String(cleaned[sk]).trim()) {
+          secretConfigured = true;
+          cleaned[sk] = "";
+        }
+      }
+      cleaned.secretConfigured = secretConfigured;
+      redacted[key] = cleaned;
+    }
+    return { ...row, data: redacted };
+  });
+
   return NextResponse.json({
-    appRows: settingsRes.data ?? [],
+    appRows,
     languageRows: languagesRes.data ?? [],
     taxRows: taxRes.data ?? [],
     languagesError: languagesRes.error?.message ?? null,
@@ -140,8 +165,29 @@ export async function POST(request: Request) {
       await upsertSection(client, "constant", payload.constants);
     }
     if (payload.paymentSettings) {
-      await upsertSection(client, "payment", payload.paymentSettings);
-      const chapa = parseObject(payload.paymentSettings.chapa);
+      // Empty secret fields preserve existing secrets (write-only replacement).
+      const { data: existingPayment } = await client
+        .from("app_settings")
+        .select("data")
+        .eq("id", "payment")
+        .maybeSingle();
+      const existing = parseObject(existingPayment?.data);
+      const incoming = { ...payload.paymentSettings } as JsonObject;
+      for (const providerKey of ["chapa", "telebirr", "wallet"]) {
+        const nextProvider = parseObject(incoming[providerKey]);
+        const prevProvider = parseObject(existing[providerKey]);
+        if (!Object.keys(nextProvider).length) continue;
+        for (const sk of ["secretKey", "secret", "apiSecret", "privateKey", "password"]) {
+          const nextVal = String(nextProvider[sk] ?? "").trim();
+          if (!nextVal && prevProvider[sk] != null) {
+            nextProvider[sk] = prevProvider[sk];
+          }
+        }
+        delete nextProvider.secretConfigured;
+        incoming[providerKey] = nextProvider;
+      }
+      await upsertSection(client, "payment", incoming);
+      const chapa = parseObject(incoming.chapa);
       const secret = String(chapa.secretKey ?? "").trim();
       if (secret) {
         const { error: secretError } = await client.rpc(

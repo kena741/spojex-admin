@@ -15,6 +15,13 @@ const nextConfig: NextConfig = {
       { source: "/admin/users/:id", destination: "/admin/people/:id", permanent: false },
       { source: "/admin/categories", destination: "/admin/people/settings", permanent: false },
       { source: "/admin/gym-categories", destination: "/admin/gyms/settings", permanent: false },
+      { source: "/admin/withdrawals", destination: "/admin/finance/payouts?type=withdrawal", permanent: false },
+      {
+        source: "/admin/coin-redemptions",
+        destination: "/admin/finance/payouts?type=coin_redemption",
+        permanent: false,
+      },
+      { source: "/admin/coin-catalog", destination: "/admin/finance/coins?tab=packs", permanent: false },
     ];
   },
   images: {

@@ -334,8 +334,21 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
   if (pathname.startsWith("/admin/admins")) return can("admins:read");
   if (pathname.startsWith("/admin/roles")) return can("roles:read");
   if (pathname.startsWith("/admin/settings")) return can("settings:read");
+  if (pathname === "/admin/finance" || pathname.startsWith("/admin/finance/overview")) {
+    return (
+      can("finance:read") || can("wallets:read") || can("payments:read") || can("withdrawals:read")
+    );
+  }
   if (pathname.startsWith("/admin/finance/transactions")) {
     return can("finance:read") || can("wallets:read") || can("payments:read");
+  }
+  if (pathname.startsWith("/admin/finance/payouts")) {
+    return (
+      can("withdrawals:read") || can("coins:read") || can("requests:read") || can("donations:read")
+    );
+  }
+  if (pathname.startsWith("/admin/finance/coins")) {
+    return can("coins:read") || can("donations:read");
   }
   if (pathname.startsWith("/admin/finance/payment-settings")) {
     return can("payments:read") || can("settings:read");

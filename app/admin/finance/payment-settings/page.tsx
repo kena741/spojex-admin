@@ -133,10 +133,9 @@ export default function PaymentSettingsPage() {
 
       <AdminPageHeader
         title="Payment Settings"
-        description="Chapa, Telebirr, and wallet gateway configuration (same as Lolelink)."
+        description="Chapa, Telebirr, and wallet gateway configuration for Spojex"
         breadcrumbs={[
-          { label: "Dashboard", href: "/admin/dashboard" },
-          { label: "Global settings", href: "/admin/settings" },
+          { label: "Finance", href: "/admin/finance" },
           { label: "Payment Settings" },
         ]}
         actions={
@@ -177,9 +176,19 @@ export default function PaymentSettingsPage() {
         <AdminLoadingRow label="Loading payment settings…" />
       ) : (
         <fieldset disabled={!canWrite} className="space-y-6 disabled:opacity-90">
-          {/* Chapa — same fields as Lolelink */}
           <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-            <h3 className="mb-4 text-lg font-bold text-foreground">Chapa</h3>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-lg font-bold text-foreground">Chapa</h3>
+              <p className="text-xs text-text-secondary">
+                {chapaValues.enable && chapaValues.isActive ? "Enabled" : "Disabled"}
+                {" · "}
+                {chapaValues.isSandbox ? "Test mode" : "Live mode"}
+                {" · "}
+                {Boolean(paymentSettings.chapa?.secretConfigured)
+                  ? "Secret configured"
+                  : "Secret missing"}
+              </p>
+            </div>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div>
                 <label className="mb-2 block text-sm font-medium text-foreground">Name</label>
@@ -230,13 +239,25 @@ export default function PaymentSettingsPage() {
                 />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-foreground">Secret Key</label>
+                <label className="mb-2 block text-sm font-medium text-foreground">
+                  Secret Key
+                  <span className="ml-2 font-normal text-text-hint">
+                    {Boolean(paymentSettings.chapa?.secretConfigured)
+                      ? "(configured — leave blank to keep)"
+                      : "(not configured)"}
+                  </span>
+                </label>
                 <div className="relative">
                   <input
                     type={isSecretVisible ? "text" : "password"}
                     value={chapaValues.secretKey}
                     onChange={(e) => updateChapaField("secretKey", e.target.value)}
-                    placeholder="CHASECK-..."
+                    placeholder={
+                      Boolean(paymentSettings.chapa?.secretConfigured)
+                        ? "••••••••  (enter new value to replace)"
+                        : "CHASECK-..."
+                    }
+                    autoComplete="new-password"
                     className="w-full rounded-lg border border-border bg-background px-4 py-2 pr-10 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                   />
                   <button

@@ -152,10 +152,14 @@ export default function CoinCatalogPage() {
       paymentData.chapa && typeof paymentData.chapa === "object"
         ? (paymentData.chapa as Record<string, unknown>)
         : {};
+    // Prefer secretConfigured when present; otherwise check secretKey.
+    // Server-managed secrets may live outside app_settings.secretKey.
     setChapa({
       enabled: Boolean(chapaCfg.enable || chapaCfg.isActive),
       hasPublicKey: Boolean(String(chapaCfg.publicKey || "").trim()),
-      hasSecretKey: Boolean(String(chapaCfg.secretKey || "").trim()),
+      hasSecretKey: Boolean(
+        chapaCfg.secretConfigured === true || String(chapaCfg.secretKey || "").trim(),
+      ),
     });
   };
 
@@ -331,14 +335,25 @@ export default function CoinCatalogPage() {
     <>
       <AdminPageHeader
         title="Coin catalog"
-        description="Chapa buy packs, gift stickers, ETB rate, and withdraw/redeem limits"
+        description="Coin packs, gift catalog, and redemption rates. Purchase history is under Finance → Transactions."
+        breadcrumbs={[
+          { label: "Finance", href: "/admin/finance" },
+          { label: "Coins & Gifts", href: "/admin/finance/coins" },
+          { label: "Catalog" },
+        ]}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/admin/finance/transactions?module=coins&type=customer_payment&asset=money"
+              className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
+            >
+              View coin purchases
+            </Link>
             <Link
               href="/admin/finance/payment-settings"
               className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
             >
-              Chapa payment settings
+              Payment settings
             </Link>
             {canWrite && (packages.length === 0 || gifts.length === 0) ? (
               <button

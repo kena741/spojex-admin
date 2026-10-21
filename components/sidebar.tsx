@@ -38,7 +38,6 @@ import {
   Banknote,
   Coins,
   CreditCard,
-  ArrowLeftRight,
   Receipt,
   Settings,
   ScrollText,
@@ -154,6 +153,13 @@ const nativeAppItems: NavItem[] = [
 /** Wallet + coin + payment surfaces in one Finance group. */
 const financeItems: NavItem[] = [
   {
+    href: "/admin/finance",
+    label: "Overview",
+    icon: LayoutDashboard,
+    visible: (can) =>
+      can("finance:read") || can("wallets:read") || can("payments:read") || can("withdrawals:read"),
+  },
+  {
     href: "/admin/finance/transactions",
     label: "Transactions",
     icon: Receipt,
@@ -166,26 +172,21 @@ const financeItems: NavItem[] = [
     visible: (can) => can("wallets:read") || can("requests:read"),
   },
   {
-    href: "/admin/withdrawals",
-    label: "Withdrawals",
+    href: "/admin/finance/payouts",
+    label: "Payouts",
     icon: Banknote,
-    visible: (can) => can("withdrawals:read") || can("requests:read"),
+    visible: (can) =>
+      can("withdrawals:read") || can("coins:read") || can("requests:read") || can("donations:read"),
   },
   {
-    href: "/admin/coin-catalog",
-    label: "Coin catalog",
+    href: "/admin/finance/coins",
+    label: "Coins & Gifts",
     icon: Coins,
     visible: (can) => can("coins:read") || can("donations:read"),
   },
   {
-    href: "/admin/coin-redemptions",
-    label: "Coin redemptions",
-    icon: ArrowLeftRight,
-    visible: (can) => can("coins:read") || can("donations:read") || can("requests:read"),
-  },
-  {
     href: "/admin/finance/payment-settings",
-    label: "Payment settings",
+    label: "Payment Settings",
     icon: CreditCard,
     visible: (can) => can("payments:read") || can("settings:read"),
   },

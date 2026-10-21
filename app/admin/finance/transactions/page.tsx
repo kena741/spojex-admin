@@ -141,6 +141,8 @@ export default function FinanceTransactionsPage() {
   const [loading, setLoading] = useState(true);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [listOk, setListOk] = useState(false);
+  const [dataSource, setDataSource] = useState<string | null>(null);
   const [detail, setDetail] = useState<DetailPayload | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
@@ -167,11 +169,13 @@ export default function FinanceTransactionsPage() {
       const res = await fetch(`/api/admin/finance/transactions/summary?${windowParams}`, {
         cache: "no-store",
       });
-      const payload = (await res.json()) as SummaryPayload & { error?: string };
+      const payload = (await res.json()) as SummaryPayload & { error?: string; source?: string };
       if (!res.ok) throw new Error(payload.error || "Summary failed");
       setSummary(payload);
+      if (payload.source) setDataSource(payload.source);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Summary failed");
+      // Summary failure is soft — list error is the primary signal.
+      console.warn(err);
     } finally {
       setSummaryLoading(false);
     }
@@ -180,6 +184,7 @@ export default function FinanceTransactionsPage() {
   const loadList = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setListOk(false);
     try {
       const params = new URLSearchParams({
         range,
@@ -200,13 +205,24 @@ export default function FinanceTransactionsPage() {
         data?: TxRow[];
         total?: number;
         error?: string;
+        source?: string;
+        code?: string;
       };
-      if (!res.ok) throw new Error(payload.error || "Failed to load transactions");
+      if (!res.ok) {
+        const err = new Error(payload.error || "Failed to load transactions") as Error & {
+          code?: string;
+        };
+        err.code = payload.code || (res.status === 403 ? "permission_denied" : "api_error");
+        throw err;
+      }
       setRows(payload.data ?? []);
       setTotal(payload.total ?? 0);
+      setListOk(true);
+      if (payload.source) setDataSource(payload.source);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
       setRows([]);
+      setListOk(false);
     } finally {
       setLoading(false);
     }
@@ -274,20 +290,55 @@ export default function FinanceTransactionsPage() {
         title="Transactions"
         description="Unified money and coin history across Spojex products"
         actions={
-          canExport ? (
-            <a
-              href={exportHref}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-medium text-text-secondary hover:text-foreground"
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                writeParams({
+                  module: "coins",
+                  type: "customer_payment",
+                  asset: "money",
+                  page: "1",
+                })
+              }
+              className="inline-flex h-9 items-center rounded-lg border border-border bg-card px-3 text-xs font-medium text-text-secondary hover:text-foreground"
             >
-              <Download className="h-3.5 w-3.5" />
-              Export CSV
-            </a>
-          ) : null
+              View coin purchases
+            </button>
+            {canExport ? (
+              <a
+                href={exportHref}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-medium text-text-secondary hover:text-foreground"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Export CSV
+              </a>
+            ) : null}
+          </div>
         }
       />
 
       {error ? (
-        <AdminErrorAlert message={error} />
+        <div className="space-y-2">
+          <AdminErrorAlert message={error} />
+          <button
+            type="button"
+            onClick={() => {
+              void loadSummary();
+              void loadList();
+            }}
+            className="rounded-md border border-border bg-card px-3 py-2 text-xs font-medium hover:bg-muted"
+          >
+            Retry
+          </button>
+        </div>
+      ) : null}
+
+      {dataSource === "admin_local_fallback" && !error ? (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          Showing admin local aggregation — Python finance API was unavailable. Coin purchases and
+          other payment tables are included from the database directly.
+        </p>
       ) : null}
 
       <div className="flex flex-wrap gap-1.5">
@@ -483,10 +534,10 @@ export default function FinanceTransactionsPage() {
 
       {loading ? <AdminLoadingRow label="Loading transactions…" /> : null}
 
-      {!loading && rows.length === 0 ? (
+      {!loading && listOk && rows.length === 0 && !error ? (
         <AdminEmpty
           title="No transactions in this window"
-          description="Try expanding the date range or clearing filters."
+          description="Try expanding the date range or clearing filters. This empty state only appears after a successful API response."
         />
       ) : null}
 
