@@ -588,8 +588,11 @@ export default function Sidebar() {
             </button>
           ) : null}
         </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-3 py-4">
         {!searching && frequentItems.length > 0 ? (
-          <div className="mt-2">
+          <div className="mb-3">
             <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-text-hint">
               Frequently used
             </p>
@@ -630,9 +633,6 @@ export default function Sidebar() {
             </ul>
           </div>
         ) : null}
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-3 py-4">
         <nav>
           <ul className="space-y-0.5">
             {showDashboard ? (
