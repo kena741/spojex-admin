@@ -2,24 +2,59 @@ import { NextResponse } from "next/server";
 import { DEFAULT_ADMIN_ROLES } from "@/lib/admin-permissions";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import type { createAdminClient } from "@/lib/spojex/admin";
+import { getSpojexApiBaseUrl } from "@/lib/env";
+import { requestAccessToken } from "@/lib/spojex/server";
 
+/** Upsert missing system roles (never skip when only super_admin exists). */
 async function ensureDefaultRoles(client: ReturnType<typeof createAdminClient>) {
-  const { count } = await client.from("admin_role").select("id", { count: "exact", head: true });
-  if ((count ?? 0) > 0) return;
-  await client.from("admin_role").insert(
-    DEFAULT_ADMIN_ROLES.map((role) => ({
-      slug: role.slug,
-      name: role.name,
-      description: role.description,
-      permissions: [...role.permissions],
-      is_system: role.is_system,
-    })),
-  );
+  const { data: existing } = await client.from("admin_role").select("slug");
+  const have = new Set((existing ?? []).map((r: { slug: string }) => r.slug));
+  const missing = DEFAULT_ADMIN_ROLES.filter((role) => !have.has(role.slug));
+  if (missing.length) {
+    await client.from("admin_role").insert(
+      missing.map((role) => ({
+        slug: role.slug,
+        name: role.name,
+        description: role.description,
+        permissions: [...role.permissions],
+        is_system: role.is_system,
+      })),
+    );
+  }
+  // Sync system role permissions for known slugs
+  for (const role of DEFAULT_ADMIN_ROLES) {
+    if (!have.has(role.slug) && !missing.find((m) => m.slug === role.slug)) continue;
+    await client
+      .from("admin_role")
+      .update({
+        name: role.name,
+        description: role.description,
+        permissions: [...role.permissions],
+        is_system: true,
+      })
+      .eq("slug", role.slug)
+      .eq("is_system", true);
+  }
 }
 
 export async function GET() {
   const auth = await requireAdminPermission("roles:read");
   if (!auth.ok) return auth.error;
+
+  // Prefer backend catalog (includes staff_count)
+  const token = await requestAccessToken();
+  if (token) {
+    const base = getSpojexApiBaseUrl();
+    const res = await fetch(`${base}/api/v1/admin/roles`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const payload = await res.json();
+      return NextResponse.json(payload);
+    }
+  }
+
   await ensureDefaultRoles(auth.context.client);
   const { data, error } = await auth.context.client.from("admin_role").select("*").order("name");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -39,6 +74,9 @@ export async function POST(request: Request) {
   const name = (body.name ?? "").trim();
   if (!slug || !name) {
     return NextResponse.json({ error: "slug and name are required" }, { status: 400 });
+  }
+  if (slug === "super_admin") {
+    return NextResponse.json({ error: "Cannot recreate the Super Admin role" }, { status: 400 });
   }
   const { data, error } = await auth.context.client
     .from("admin_role")

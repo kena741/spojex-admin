@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdminPermission } from "@/lib/admin-auth";
+import { requireAnyAdminPermission } from "@/lib/admin-auth";
 import { getSpojexApiBaseUrl } from "@/lib/env";
 import { toBackendMediaUrl } from "@/lib/spojex-media";
 import { requestAccessToken } from "@/lib/spojex/server";
@@ -44,7 +44,7 @@ function asLibraryItem(row: Record<string, unknown>): SoundtrackCatalogItem | nu
  * Curated sound library only — no news/video scrape (avoids duplicate tracks).
  */
 export async function GET(request: Request) {
-  const auth = await requireAdminPermission("news:read");
+  const auth = await requireAnyAdminPermission(["sounds:read", "news:read"]);
   if (!auth.ok) return auth.error;
 
   const url = new URL(request.url);

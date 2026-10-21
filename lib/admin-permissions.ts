@@ -4,15 +4,18 @@ export interface PermissionDefinition {
   group: string;
 }
 
+/** Keep in sync with backend admin_rbac.PERMISSION_CATALOG */
 export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { key: "users:read", label: "View users", group: "Identity" },
   { key: "users:write", label: "Edit users", group: "Identity" },
   { key: "users:verify", label: "Verify users", group: "Identity" },
+  { key: "users:reset_password", label: "Reset user passwords", group: "Identity" },
+  { key: "users:delete", label: "Delete users", group: "Identity" },
   { key: "organizations:read", label: "View organizations", group: "Identity" },
   { key: "organizations:write", label: "Edit organizations", group: "Identity" },
   { key: "organizations:verify", label: "Verify organizations", group: "Identity" },
   { key: "profiles:read", label: "View role profiles", group: "Identity" },
-  { key: "profiles:write", label: "Manage account roles & profiles", group: "Identity" },
+  { key: "profiles:write", label: "Manage profiles & media", group: "Identity" },
   { key: "services:read", label: "View services", group: "Marketplace" },
   { key: "services:write", label: "Manage services", group: "Marketplace" },
   { key: "catalog:read", label: "View categories", group: "Marketplace" },
@@ -20,24 +23,36 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { key: "requests:read", label: "View bookings", group: "Marketplace" },
   { key: "requests:write", label: "Manage bookings", group: "Marketplace" },
   { key: "reviews:read", label: "View reviews", group: "Marketplace" },
-  { key: "stadiums:read", label: "View stadiums", group: "Marketplace" },
-  { key: "stadiums:write", label: "Manage stadiums", group: "Marketplace" },
-  { key: "gyms:read", label: "View gyms", group: "Marketplace" },
-  { key: "gyms:write", label: "Manage gyms", group: "Marketplace" },
-  { key: "events:read", label: "View events", group: "Marketplace" },
-  { key: "events:write", label: "Manage events", group: "Marketplace" },
-  { key: "donations:read", label: "View donations", group: "Marketplace" },
-  { key: "donations:write", label: "Manage donations", group: "Marketplace" },
-  { key: "news:read", label: "View sport news", group: "Marketplace" },
-  { key: "news:write", label: "Manage sport news", group: "Marketplace" },
-  { key: "banners:read", label: "View banners", group: "Content" },
-  { key: "banners:write", label: "Manage banners", group: "Content" },
-  { key: "streams:read", label: "View FM streams", group: "Marketplace" },
-  { key: "streams:write", label: "Manage FM streams", group: "Marketplace" },
+  { key: "reviews:write", label: "Moderate reviews", group: "Marketplace" },
   { key: "miniapps:read", label: "View mini apps", group: "Marketplace" },
   { key: "miniapps:write", label: "Manage mini apps", group: "Marketplace" },
   { key: "opportunities:read", label: "View opportunities", group: "Marketplace" },
   { key: "opportunities:write", label: "Manage opportunities", group: "Marketplace" },
+  { key: "stadiums:read", label: "View stadiums", group: "Native apps" },
+  { key: "stadiums:write", label: "Manage stadiums", group: "Native apps" },
+  { key: "gyms:read", label: "View gyms", group: "Native apps" },
+  { key: "gyms:write", label: "Manage gyms", group: "Native apps" },
+  { key: "events:read", label: "View events", group: "Native apps" },
+  { key: "events:write", label: "Manage events", group: "Native apps" },
+  { key: "donations:read", label: "View donations", group: "Native apps" },
+  { key: "donations:write", label: "Manage donations", group: "Native apps" },
+  { key: "streams:read", label: "View FM / live streams", group: "Native apps" },
+  { key: "streams:write", label: "Manage FM / live streams", group: "Native apps" },
+  { key: "news:read", label: "View sport news", group: "Content" },
+  { key: "news:write", label: "Manage sport news", group: "Content" },
+  { key: "sounds:read", label: "View sound library", group: "Content" },
+  { key: "sounds:write", label: "Manage sound library", group: "Content" },
+  { key: "banners:read", label: "View banners", group: "Content" },
+  { key: "banners:write", label: "Manage banners", group: "Content" },
+  { key: "analytics:read", label: "View analytics dashboard", group: "Content" },
+  { key: "wallets:read", label: "View wallets", group: "Finance" },
+  { key: "wallets:write", label: "Adjust wallets", group: "Finance" },
+  { key: "withdrawals:read", label: "View withdrawals", group: "Finance" },
+  { key: "withdrawals:write", label: "Resolve withdrawals", group: "Finance" },
+  { key: "coins:read", label: "View coin catalog", group: "Finance" },
+  { key: "coins:write", label: "Manage coins & redemptions", group: "Finance" },
+  { key: "payments:read", label: "View payment settings", group: "Finance" },
+  { key: "payments:write", label: "Edit payment settings", group: "Finance" },
   { key: "network:read", label: "View connections", group: "Network" },
   { key: "network:write", label: "Manage connections", group: "Network" },
   { key: "reports:read", label: "View reports", group: "Network" },
@@ -46,13 +61,17 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { key: "notifications:read", label: "View notifications", group: "Network" },
   { key: "notifications:write", label: "Send push notifications", group: "Network" },
   { key: "admins:read", label: "View admins", group: "Administration" },
-  { key: "admins:write", label: "Manage admins", group: "Administration" },
+  { key: "admins:write", label: "Manage admins & invitations", group: "Administration" },
+  { key: "admins:invite", label: "Invite staff", group: "Administration" },
   { key: "roles:read", label: "View roles", group: "Administration" },
   { key: "roles:write", label: "Manage roles", group: "Administration" },
   { key: "settings:read", label: "View global settings", group: "Administration" },
   { key: "settings:write", label: "Edit global settings", group: "Administration" },
   { key: "logs:read", label: "View activity logs", group: "Administration" },
+  { key: "logs:export", label: "Export activity logs", group: "Administration" },
 ];
+
+const READ_KEYS = PERMISSION_DEFINITIONS.filter((p) => p.key.endsWith(":read")).map((p) => p.key);
 
 export const DEFAULT_ADMIN_ROLES = [
   {
@@ -65,49 +84,45 @@ export const DEFAULT_ADMIN_ROLES = [
   {
     slug: "operations_admin",
     name: "Operations Admin",
-    description: "Identities, organizations, marketplace, and network operations",
+    description: "Identities, marketplace, native apps, content, and network",
+    permissions: PERMISSION_DEFINITIONS.map((p) => p.key).filter(
+      (k) => !k.startsWith("admins:") && !k.startsWith("roles:") && k !== "logs:export",
+    ),
+    is_system: true,
+  },
+  {
+    slug: "finance_admin",
+    name: "Finance Admin",
+    description: "Wallets, withdrawals, coins, and payment settings",
     permissions: [
-      "users:read",
-      "users:write",
-      "users:verify",
-      "organizations:read",
-      "organizations:write",
-      "organizations:verify",
-      "profiles:read",
-      "profiles:write",
-      "services:read",
-      "services:write",
-      "catalog:read",
-      "catalog:write",
-      "requests:read",
-      "requests:write",
-      "reviews:read",
-      "stadiums:read",
-      "stadiums:write",
-      "events:read",
-      "events:write",
+      "wallets:read",
+      "wallets:write",
+      "withdrawals:read",
+      "withdrawals:write",
+      "coins:read",
+      "coins:write",
+      "payments:read",
+      "payments:write",
       "donations:read",
-      "donations:write",
+      "requests:read",
+      "logs:read",
+    ],
+    is_system: true,
+  },
+  {
+    slug: "content_admin",
+    name: "Content Admin",
+    description: "News, sound library, banners, and analytics",
+    permissions: [
       "news:read",
       "news:write",
+      "sounds:read",
+      "sounds:write",
       "banners:read",
       "banners:write",
+      "analytics:read",
       "streams:read",
-      "streams:write",
-      "miniapps:read",
-      "miniapps:write",
-      "opportunities:read",
-      "opportunities:write",
-      "network:read",
-      "network:write",
-      "reports:read",
-      "reports:write",
-      "messages:read",
-      "notifications:read",
-      "notifications:write",
-      "settings:read",
-      "settings:write",
-      "logs:read",
+      "donations:read",
     ],
     is_system: true,
   },
@@ -130,7 +145,7 @@ export const DEFAULT_ADMIN_ROLES = [
   {
     slug: "marketplace_admin",
     name: "Marketplace Admin",
-    description: "Services, categories, requests, and reviews",
+    description: "Services, bookings, stadiums, gyms, events, and apps",
     permissions: [
       "services:read",
       "services:write",
@@ -139,16 +154,15 @@ export const DEFAULT_ADMIN_ROLES = [
       "requests:read",
       "requests:write",
       "reviews:read",
+      "reviews:write",
       "stadiums:read",
       "stadiums:write",
+      "gyms:read",
+      "gyms:write",
       "events:read",
       "events:write",
       "donations:read",
       "donations:write",
-      "news:read",
-      "news:write",
-      "banners:read",
-      "banners:write",
       "streams:read",
       "streams:write",
       "miniapps:read",
@@ -178,27 +192,7 @@ export const DEFAULT_ADMIN_ROLES = [
     slug: "viewer",
     name: "Viewer",
     description: "Read-only access across modules",
-    permissions: [
-      "users:read",
-      "organizations:read",
-      "profiles:read",
-      "services:read",
-      "catalog:read",
-      "requests:read",
-      "reviews:read",
-      "stadiums:read",
-      "events:read",
-      "donations:read",
-      "news:read",
-      "banners:read",
-      "streams:read",
-      "miniapps:read",
-      "opportunities:read",
-      "network:read",
-      "reports:read",
-      "messages:read",
-      "notifications:read",
-    ],
+    permissions: READ_KEYS,
     is_system: true,
   },
 ] as const;
@@ -221,6 +215,7 @@ export type AdminRoleRow = {
   description: string;
   permissions: string[];
   is_system: boolean;
+  staff_count?: number;
   created_at: string;
   updated_at: string;
 };
@@ -254,7 +249,9 @@ export function permissionsForRole(slug: string, stored?: string[] | null) {
 }
 
 export function canAccessAdminRoute(pathname: string, can: (permission: string) => boolean) {
-  if (pathname === "/admin/dashboard" || pathname === "/admin") return true;
+  if (pathname === "/admin/dashboard" || pathname === "/admin") {
+    return can("analytics:read") || can("admins:read") || can("users:read");
+  }
   if (pathname.startsWith("/admin/users")) return can("users:read");
   if (pathname.startsWith("/admin/verifications")) return can("users:read");
   if (pathname.startsWith("/admin/verification-docs")) return can("profiles:read");
@@ -270,12 +267,16 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
   if (pathname.startsWith("/admin/service-categories")) return can("catalog:read");
   if (pathname.startsWith("/admin/categories")) return can("profiles:read");
   if (pathname.startsWith("/admin/requests")) return can("requests:read");
-  if (pathname.startsWith("/admin/wallets")) return can("requests:read");
-  if (pathname.startsWith("/admin/withdrawals")) return can("requests:read");
-  if (pathname.startsWith("/admin/coin-redemptions")) {
-    return can("requests:read") || can("donations:read");
+  if (pathname.startsWith("/admin/wallets")) return can("wallets:read") || can("requests:read");
+  if (pathname.startsWith("/admin/withdrawals")) {
+    return can("withdrawals:read") || can("requests:read");
   }
-  if (pathname.startsWith("/admin/coin-catalog")) return can("donations:read");
+  if (pathname.startsWith("/admin/coin-redemptions")) {
+    return can("coins:read") || can("requests:read") || can("donations:read");
+  }
+  if (pathname.startsWith("/admin/coin-catalog")) {
+    return can("coins:read") || can("donations:read");
+  }
   if (pathname.startsWith("/admin/reviews")) return can("reviews:read");
   if (pathname.startsWith("/admin/stadiums")) return can("stadiums:read");
   if (pathname.startsWith("/admin/gyms")) return can("gyms:read");
@@ -289,16 +290,12 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
   if (pathname.startsWith("/admin/feed-interests")) {
     return can("news:read") || can("users:read");
   }
-  if (pathname.startsWith("/admin/sound-library")) return can("news:read");
-  if (pathname.startsWith("/admin/banners")) {
-    return (
-      can("banners:read") ||
-      can("banners:write") ||
-      can("services:read") ||
-      can("services:write")
-    );
+  if (pathname.startsWith("/admin/sound-library")) {
+    return can("sounds:read") || can("news:read");
   }
-  // Hub lists radio + video; station detail stays streams-only.
+  if (pathname.startsWith("/admin/banners")) {
+    return can("banners:read") || can("banners:write") || can("services:read");
+  }
   if (pathname.match(/^\/admin\/streams\/[^/]+/)) return can("streams:read");
   if (pathname.startsWith("/admin/streams")) {
     return can("streams:read") || can("events:read");
@@ -319,7 +316,7 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
   if (pathname.startsWith("/admin/roles")) return can("roles:read");
   if (pathname.startsWith("/admin/settings")) return can("settings:read");
   if (pathname.startsWith("/admin/finance/payment-settings")) {
-    return can("settings:read");
+    return can("payments:read") || can("settings:read");
   }
   if (pathname.startsWith("/admin/activity-logs")) return can("logs:read");
   return false;
@@ -332,10 +329,10 @@ export function writePermissionForPatch(path: string) {
   if (path.includes("/organizations")) return "organizations:write";
   if (path.includes("/services/")) return "services:write";
   if (path.includes("/requests/")) return "requests:write";
-  if (path.includes("/withdrawals/")) return "requests:write";
-  if (path.includes("/coin-redemptions/")) return "requests:write";
+  if (path.includes("/withdrawals/")) return "withdrawals:write";
+  if (path.includes("/coin-redemptions/")) return "coins:write";
   if (path.includes("/coin-packages") || path.includes("/coin-gifts") || path.includes("/coin-settings")) {
-    return "donations:write";
+    return "coins:write";
   }
   if (path.includes("/gym-categories")) return "gyms:write";
   if (path.includes("/gyms")) return "gyms:write";
@@ -345,7 +342,7 @@ export function writePermissionForPatch(path: string) {
   if (path.includes("/live-events/")) return "events:write";
   if (path.includes("/donations/")) return "donations:write";
   if (path.includes("/news/")) return "news:write";
-  if (path.includes("/news-sounds")) return "news:write";
+  if (path.includes("/news-sounds")) return "sounds:write";
   if (path.includes("/banners")) return "banners:write";
   if (path.includes("/streams/")) return "streams:write";
   if (path.includes("/radio-chat/")) return "streams:write";
@@ -355,6 +352,7 @@ export function writePermissionForPatch(path: string) {
   if (path.includes("/reports/")) return "reports:write";
   if (path.includes("/network")) return "network:write";
   if (path.includes("/settings")) return "settings:write";
+  if (path.includes("/payment-settings")) return "payments:write";
   return null;
 }
 

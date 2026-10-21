@@ -14,22 +14,20 @@ import {
   AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
-import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
+import { deleteAdmin, patchAdmin } from "@/lib/hooks";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { AdminRoleRow, AdminRow } from "@/lib/admin-permissions";
 import { formatDate, formatStatusLabel } from "@/lib/utils";
 
 const emptyForm = {
   email: "",
-  password: "",
   full_name: "",
   role: "viewer",
-  is_active: true,
 };
 
 export default function AdminsPage() {
   const { can, staff } = useAdminPermissions();
-  const canWrite = can("admins:write");
+  const canWrite = can("admins:write") || can("admins:invite");
   const [rows, setRows] = useState<AdminRow[]>([]);
   const [roles, setRoles] = useState<AdminRoleRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,6 +36,7 @@ export default function AdminsPage() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
 
   const load = async () => {
     const [adminsRes, rolesRes] = await Promise.all([
@@ -68,13 +67,23 @@ export default function AdminsPage() {
   const create = async () => {
     setSaving(true);
     setError(null);
+    setInviteToken(null);
     try {
-      await postAdmin("/api/admin/admins", form);
+      const res = await fetch("/api/admin/admins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, mode: "invite" }),
+      });
+      const payload = (await res.json()) as {
+        data?: { token?: string; email?: string; expires_at?: string };
+        error?: string;
+      };
+      if (!res.ok) throw new Error(payload.error || "Invite failed");
+      if (payload.data?.token) setInviteToken(payload.data.token);
       setForm(emptyForm);
-      setCreateOpen(false);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Create failed");
+      setError(err instanceof Error ? err.message : "Invite failed");
     } finally {
       setSaving(false);
     }
@@ -116,10 +125,14 @@ export default function AdminsPage() {
           canWrite ? (
             <button
               type="button"
-              onClick={() => setCreateOpen(true)}
+              onClick={() => {
+                setInviteToken(null);
+                setForm(emptyForm);
+                setCreateOpen(true);
+              }}
               className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
             >
-              Add admin
+              Invite staff
             </button>
           ) : null
         }
@@ -131,7 +144,10 @@ export default function AdminsPage() {
       {loading ? <AdminLoadingRow label="Loading admins…" /> : null}
       <AdminTableShell>
         {filtered.length === 0 && !loading ? (
-          <AdminEmpty title="No admins" description="The first successful login becomes Super Admin." />
+          <AdminEmpty
+            title="No admins"
+            description="Invite staff with an explicit role. Access is invitation-based."
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
@@ -206,61 +222,86 @@ export default function AdminsPage() {
 
       <AdminModal
         open={createOpen}
-        title="Add admin"
+        title="Invite staff"
         onClose={() => {
           if (saving) return;
           setCreateOpen(false);
+          setInviteToken(null);
         }}
         sheet
         footer={
-          <AdminModalFooter
-            onCancel={() => setCreateOpen(false)}
-            onSave={() => void create()}
-            saving={saving}
-            saveLabel="Add admin"
-          />
+          inviteToken ? (
+            <AdminModalFooter
+              onCancel={() => {
+                setCreateOpen(false);
+                setInviteToken(null);
+              }}
+              onSave={() => {
+                setCreateOpen(false);
+                setInviteToken(null);
+              }}
+              saving={false}
+              saveLabel="Done"
+            />
+          ) : (
+            <AdminModalFooter
+              onCancel={() => setCreateOpen(false)}
+              onSave={() => void create()}
+              saving={saving}
+              saveLabel="Send invitation"
+            />
+          )
         }
       >
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void create();
-          }}
-          className="grid gap-3"
-        >
-          <input
-            value={form.full_name}
-            onChange={(event) => setForm((current) => ({ ...current, full_name: event.target.value }))}
-            placeholder="Full name"
-            className="h-10 rounded-lg border border-border px-3 text-sm"
-            required
-          />
-          <input
-            type="email"
-            value={form.email}
-            onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
-            placeholder="Email"
-            className="h-10 rounded-lg border border-border px-3 text-sm"
-            required
-          />
-          <AdminSelect
-            value={form.role}
-            onChange={(value) => setForm((current) => ({ ...current, role: value }))}
+        {inviteToken ? (
+          <div className="space-y-3 text-sm">
+            <p className="text-text-secondary">
+              Single-use invitation created. Share this link once — it expires in 72 hours and cannot be reused.
+            </p>
+            <code className="block break-all rounded-lg border border-border bg-muted/50 p-3 text-xs">
+              {typeof window !== "undefined"
+                ? `${window.location.origin}/login?invite=${inviteToken}`
+                : inviteToken}
+            </code>
+          </div>
+        ) : (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void create();
+            }}
+            className="grid gap-3"
           >
-            {(roles.length ? roles : [{ slug: "viewer", name: "Viewer" }]).map((role) => (
-              <option key={role.slug} value={role.slug}>
-                {role.name}
-              </option>
-            ))}
-          </AdminSelect>
-          <input
-            type="password"
-            value={form.password}
-            onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-            placeholder="Password (optional)"
-            className="h-10 rounded-lg border border-border px-3 text-sm"
-          />
-        </form>
+            <p className="text-xs text-text-secondary">
+              Role is required. Super Admin is never the default.
+            </p>
+            <input
+              value={form.full_name}
+              onChange={(event) => setForm((current) => ({ ...current, full_name: event.target.value }))}
+              placeholder="Full name"
+              className="h-10 rounded-lg border border-border px-3 text-sm"
+              required
+            />
+            <input
+              type="email"
+              value={form.email}
+              onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+              placeholder="Email"
+              className="h-10 rounded-lg border border-border px-3 text-sm"
+              required
+            />
+            <AdminSelect
+              value={form.role}
+              onChange={(value) => setForm((current) => ({ ...current, role: value }))}
+            >
+              {(roles.length ? roles : [{ slug: "viewer", name: "Viewer" }]).map((role) => (
+                <option key={role.slug} value={role.slug}>
+                  {role.name}
+                </option>
+              ))}
+            </AdminSelect>
+          </form>
+        )}
       </AdminModal>
     </>
   );

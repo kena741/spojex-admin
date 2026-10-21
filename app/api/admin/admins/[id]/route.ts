@@ -1,40 +1,74 @@
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
+import { logAdminActivity } from "@/lib/admin-activity-log";
+import { getSpojexApiBaseUrl } from "@/lib/env";
+import { requestAccessToken } from "@/lib/spojex/server";
+
+async function proxyStaff(method: "PATCH" | "DELETE", id: string, body?: unknown) {
+  const token = await requestAccessToken();
+  if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const base = getSpojexApiBaseUrl();
+  const res = await fetch(`${base}/api/v1/admin/staff/${id}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(body != null ? { "Content-Type": "application/json" } : {}),
+    },
+    body: body != null ? JSON.stringify(body) : undefined,
+  });
+  const payload = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    const detail = payload.detail;
+    const message =
+      typeof detail === "string"
+        ? detail
+        : typeof (detail as { message?: string })?.message === "string"
+          ? (detail as { message: string }).message
+          : typeof payload.error === "string"
+            ? payload.error
+            : "Request failed";
+    return NextResponse.json({ error: message }, { status: res.status });
+  }
+  return NextResponse.json(payload);
+}
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdminPermission("admins:write");
   if (!auth.ok) return auth.error;
   const { id } = await params;
-  const body = (await request.json()) as {
-    full_name?: string;
-    role?: string;
-    is_active?: boolean;
-    email?: string;
-  };
-  const patch: Record<string, unknown> = {};
-  if (typeof body.full_name === "string") patch.full_name = body.full_name.trim();
-  if (typeof body.role === "string") patch.role = body.role.trim();
-  if (typeof body.is_active === "boolean") patch.is_active = body.is_active;
-  if (typeof body.email === "string") patch.email = body.email.trim().toLowerCase();
-
-  const { data, error } = await auth.context.client
-    .from("admin")
-    .update(patch)
-    .eq("id", id)
-    .select()
-    .maybeSingle();
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-  return NextResponse.json({ data });
+  const body = await request.json();
+  const result = await proxyStaff("PATCH", id, body);
+  if (result.status < 400) {
+    await logAdminActivity({
+      context: auth.context,
+      request,
+      action: "update",
+      resource_type: "admin",
+      resource_id: id,
+      summary: `Updated admin ${id}`,
+      metadata: { after: body },
+    });
+  }
+  return result;
 }
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdminPermission("admins:write");
   if (!auth.ok) return auth.error;
   const { id } = await params;
   if (id === auth.context.staff.id) {
     return NextResponse.json({ error: "You cannot delete your own admin row" }, { status: 400 });
   }
-  const { error } = await auth.context.client.from("admin").delete().eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-  return NextResponse.json({ ok: true });
+  const result = await proxyStaff("DELETE", id);
+  if (result.status < 400) {
+    await logAdminActivity({
+      context: auth.context,
+      request,
+      action: "delete",
+      resource_type: "admin",
+      resource_id: id,
+      summary: `Deactivated admin ${id}`,
+    });
+  }
+  return result;
 }

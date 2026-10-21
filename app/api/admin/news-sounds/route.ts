@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
-import { requireAdminPermission } from "@/lib/admin-auth";
+import { requireAnyAdminPermission } from "@/lib/admin-auth";
 import { getSpojexApiBaseUrl } from "@/lib/env";
 import { NEWS_SOUND_KINDS, shortSoundTitle } from "@/lib/news-sounds";
 import { toBackendMediaUrl } from "@/lib/spojex-media";
@@ -17,7 +17,7 @@ function normalizeAudioUrl(raw: string) {
 }
 
 export async function GET() {
-  const auth = await requireAdminPermission("news:read");
+  const auth = await requireAnyAdminPermission(["sounds:read", "news:read"]);
   if (!auth.ok) return auth.error;
   const { data, error } = await auth.context.client
     .from("sport_news_sounds")
@@ -35,7 +35,7 @@ export async function GET() {
  * (dedupes by audio_url). Falls back to local insert with the same dedupe.
  */
 export async function POST(request: Request) {
-  const auth = await requireAdminPermission("news:write");
+  const auth = await requireAnyAdminPermission(["sounds:write", "news:write"]);
   if (!auth.ok) return auth.error;
   const body = (await request.json()) as {
     name?: string;

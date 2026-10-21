@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
-import { requireAdminPermission } from "@/lib/admin-auth";
+import { requireAnyAdminPermission } from "@/lib/admin-auth";
 import { NEWS_SOUND_KINDS, shortSoundTitle } from "@/lib/news-sounds";
 
 const KIND_IDS = new Set(NEWS_SOUND_KINDS.map((item) => item.id));
@@ -17,7 +17,7 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireAdminPermission("news:write");
+  const auth = await requireAnyAdminPermission(["sounds:write", "news:write"]);
   if (!auth.ok) return auth.error;
   const { id } = await params;
   const body = (await request.json()) as Record<string, unknown>;
@@ -74,7 +74,7 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireAdminPermission("news:write");
+  const auth = await requireAnyAdminPermission(["sounds:write", "news:write"]);
   if (!auth.ok) return auth.error;
   const { id } = await params;
   const { error } = await auth.context.client.from("sport_news_sounds").delete().eq("id", id);

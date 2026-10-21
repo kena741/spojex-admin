@@ -48,21 +48,33 @@ export default function SignupPage() {
       const user = data.session?.user;
       if (!user?.id) throw new Error("Sign up failed. No account was returned.");
 
-      await bootstrapFirstAdmin({
-        id: user.id,
-        email: trimmed,
-        user_metadata: { full_name: name, display_name: name },
-      });
-      const staff = await resolveAdminStaff(user.id);
-      if (!staff?.is_active) {
-        throw new Error("The account was created, but the admin record was not saved.");
+      const { count } = await getSpojexClient()
+        .from("admin")
+        .select("id", { count: "exact", head: true });
+      if ((count ?? 0) === 0) {
+        await bootstrapFirstAdmin({
+          id: user.id,
+          email: trimmed,
+          user_metadata: { full_name: name, display_name: name },
+        });
+        const staff = await resolveAdminStaff(user.id);
+        if (!staff?.is_active) {
+          throw new Error("The account was created, but the admin record was not saved.");
+        }
+        router.replace("/admin/dashboard");
+        return;
       }
-      router.replace("/admin/dashboard");
+      await getSpojexClient().auth.signOut();
+      throw new Error(
+        "Admin accounts are invitation-only. Ask a Super Admin to invite you, then sign in.",
+      );
     } catch (err: unknown) {
       await getSpojexClient().auth.signOut();
       const message = errorText(err);
-      if (/forbidden|writes for this resource require admin/i.test(message)) {
-        setError("The admin API refused to create this account. An admin may already exist.");
+      if (/forbidden|invite|writes for this resource require admin/i.test(message)) {
+        setError(
+          "Admin access is invitation-only. Ask a Super Admin to invite this email.",
+        );
       } else if (/already exists|duplicate/i.test(message)) {
         setError("An account with this email already exists. Sign in instead.");
       } else {
@@ -82,9 +94,9 @@ export default function SignupPage() {
               <path d="M12 2.2 14.7 8h6.3l-5.1 3.8 1.9 6-5.8-3.9-5.8 3.9 1.9-6L3 8h6.3L12 2.2Z" />
             </svg>
           </div>
-          <h1 className="font-heading text-lg font-semibold text-text-primary">Create admin</h1>
+          <h1 className="font-heading text-lg font-semibold text-text-primary">Create account</h1>
           <p className="mt-1 text-sm text-text-secondary">
-            The first account is saved as Super Admin through the admin API.
+            After the first Super Admin exists, new staff must be invited. Prefer Sign in with an invitation.
           </p>
         </div>
         <form onSubmit={onSubmit} className="space-y-4">

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdminPermission } from "@/lib/admin-auth";
+import { requireAnyAdminPermission } from "@/lib/admin-auth";
 import { getSpojexApiBaseUrl } from "@/lib/env";
 import { toBackendMediaUrl, trimAudioViaSpojexMediaApi } from "@/lib/spojex-media";
 import { requestAccessToken } from "@/lib/spojex/server";
@@ -11,7 +11,7 @@ export const maxDuration = 180;
  * Accepts multipart: start_seconds, end_seconds, and either `file` or `audio_url`.
  */
 export async function POST(request: Request) {
-  const auth = await requireAdminPermission("news:write");
+  const auth = await requireAnyAdminPermission(["sounds:write", "news:write"]);
   if (!auth.ok) return auth.error;
 
   let form: FormData;

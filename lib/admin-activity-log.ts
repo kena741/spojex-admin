@@ -17,8 +17,23 @@ export async function logAdminActivity(input: LogAdminActivityInput): Promise<vo
     const route =
       input.route ??
       (input.request ? new URL(input.request.url).pathname : null);
+    const raw = (
+      process.env.NEXT_PUBLIC_SPOJEX_ENV ||
+      process.env.SPOJEX_ENV ||
+      process.env.VERCEL_ENV ||
+      process.env.NODE_ENV ||
+      ""
+    )
+      .trim()
+      .toLowerCase();
     const env =
-      process.env.NODE_ENV === "production" ? "production" : "development";
+      raw === "production" || raw === "prod"
+        ? "production"
+        : raw === "preview" || raw === "staging"
+          ? "staging"
+          : raw === "development" || raw === "dev" || raw === "local"
+            ? "development"
+            : raw || "production";
 
     const { error } = await input.context.client.from("admin_activity_log").insert({
       admin_id: input.context.staff.id,

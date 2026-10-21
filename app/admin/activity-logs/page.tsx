@@ -51,8 +51,9 @@ const RESOURCE_OPTIONS = [
 ];
 
 export default function ActivityLogsPage() {
-  const { can } = useAdminPermissions();
+  const { can, loading: permsLoading } = useAdminPermissions();
   const canRead = can("logs:read");
+  const canExport = can("logs:export");
 
   const [logs, setLogs] = useState<AdminActivityLog[]>([]);
   const [total, setTotal] = useState(0);
@@ -61,10 +62,12 @@ export default function ActivityLogsPage() {
   const [query, setQuery] = useState("");
   const [actionFilter, setActionFilter] = useState("");
   const [resourceFilter, setResourceFilter] = useState("");
+  const [outcomeFilter, setOutcomeFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (permsLoading) return;
     if (!canRead) {
       setLoading(false);
       setError("You need logs:read permission to view activity logs.");
@@ -80,6 +83,7 @@ export default function ActivityLogsPage() {
       });
       if (actionFilter) params.set("action", actionFilter);
       if (resourceFilter) params.set("resource_type", resourceFilter);
+      if (outcomeFilter) params.set("outcome", outcomeFilter);
 
       const res = await adminFetch(`/api/admin/activity-logs?${params}`);
       const payload = (await res.json()) as {
@@ -97,7 +101,7 @@ export default function ActivityLogsPage() {
     } finally {
       setLoading(false);
     }
-  }, [actionFilter, canRead, currentPage, resourceFilter]);
+  }, [actionFilter, canRead, currentPage, outcomeFilter, permsLoading, resourceFilter]);
 
   useEffect(() => {
     void load();
@@ -105,7 +109,7 @@ export default function ActivityLogsPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [actionFilter, resourceFilter, query]);
+  }, [actionFilter, resourceFilter, outcomeFilter, query]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return logs;
@@ -125,20 +129,48 @@ export default function ActivityLogsPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  if (permsLoading) {
+    return (
+      <div>
+        <AdminPageHeader title="Activity Logs" description="Track actions performed by admin users" />
+        <AdminLoadingRow label="Checking permissions…" />
+      </div>
+    );
+  }
+
+  if (!canRead) {
+    return (
+      <div>
+        <AdminPageHeader title="Activity Logs" description="Track actions performed by admin users" />
+        <AdminErrorAlert message="You need logs:read permission to view activity logs." />
+      </div>
+    );
+  }
+
   return (
     <div>
       <AdminPageHeader
         title="Activity Logs"
         description="Track actions performed by admin users"
         actions={
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted"
-          >
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </button>
+          <div className="flex gap-2">
+            {canExport ? (
+              <a
+                href="/api/admin/activity-logs/export"
+                className="inline-flex h-9 items-center rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted"
+              >
+                Export
+              </a>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </button>
+          </div>
         }
       />
 
@@ -164,6 +196,12 @@ export default function ActivityLogsPage() {
                 {resource}
               </option>
             ))}
+          </AdminSelect>
+          <AdminSelect value={outcomeFilter} onChange={setOutcomeFilter}>
+            <option value="">All outcomes</option>
+            <option value="success">success</option>
+            <option value="denied">denied</option>
+            <option value="error">error</option>
           </AdminSelect>
         </div>
       </AdminFilterPanel>

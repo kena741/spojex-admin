@@ -142,25 +142,35 @@ const nativeAppItems: NavItem[] = [
 
 /** Wallet + coin + payment surfaces in one Finance group. */
 const financeItems: NavItem[] = [
-  { href: "/admin/wallets", label: "Wallets", icon: Wallet, visible: (can) => can("requests:read") },
-  { href: "/admin/withdrawals", label: "Withdrawals", icon: Banknote, visible: (can) => can("requests:read") },
+  {
+    href: "/admin/wallets",
+    label: "Wallets",
+    icon: Wallet,
+    visible: (can) => can("wallets:read") || can("requests:read"),
+  },
+  {
+    href: "/admin/withdrawals",
+    label: "Withdrawals",
+    icon: Banknote,
+    visible: (can) => can("withdrawals:read") || can("requests:read"),
+  },
   {
     href: "/admin/coin-catalog",
     label: "Coin catalog",
     icon: Coins,
-    visible: (can) => can("donations:read"),
+    visible: (can) => can("coins:read") || can("donations:read"),
   },
   {
     href: "/admin/coin-redemptions",
     label: "Coin redemptions",
     icon: ArrowLeftRight,
-    visible: (can) => can("donations:read") || can("requests:read"),
+    visible: (can) => can("coins:read") || can("donations:read") || can("requests:read"),
   },
   {
     href: "/admin/finance/payment-settings",
     label: "Payment settings",
     icon: CreditCard,
-    visible: (can) => can("settings:read"),
+    visible: (can) => can("payments:read") || can("settings:read"),
   },
 ];
 
@@ -176,7 +186,7 @@ const contentItems: NavItem[] = [
     href: "/admin/sound-library",
     label: "Sound library",
     icon: Music,
-    visible: (can) => can("news:read"),
+    visible: (can) => can("sounds:read") || can("news:read"),
   },
   {
     href: "/admin/banners",

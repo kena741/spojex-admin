@@ -10,7 +10,9 @@ import {
 } from "@/lib/admin-permissions";
 
 export async function resolveAdminStaff(userId: string) {
-  const { data, error } = await getSpojexClient()
+  const client = getSpojexClient();
+  // Prefer users.id match; also try via /admin/me when available
+  const { data, error } = await client
     .from("admin")
     .select("id, user_id, full_name, email, role, is_active, created_at, updated_at")
     .eq("user_id", userId)
@@ -20,6 +22,7 @@ export async function resolveAdminStaff(userId: string) {
   return data as AdminRow | null;
 }
 
+/** Only when the admin table is empty — never advertise as normal onboarding. */
 export async function bootstrapFirstAdmin(user: {
   id: string;
   email?: string | null;
@@ -49,6 +52,7 @@ export function useAdminPermissions() {
   const [loading, setLoading] = useState(true);
   const [staff, setStaff] = useState<AdminRow | null>(null);
   const [permissions, setPermissions] = useState<string[]>([]);
+  const [bootstrapAvailable, setBootstrapAvailable] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -59,10 +63,50 @@ export function useAdminPermissions() {
         const user = data.user;
         if (!user) {
           if (!mounted) return;
-          setStaff((current) => (current === null ? current : null));
-          setPermissions((current) => (current.length === 0 ? current : []));
+          setStaff(null);
+          setPermissions([]);
           setLoading(false);
           return;
+        }
+
+        // Prefer enriched /admin/me when the API is reachable
+        try {
+          const session = await getSpojexClient().auth.getSession();
+          const access = session.data.session?.access_token;
+          if (access) {
+            const base =
+              process.env.NEXT_PUBLIC_SPOJEX_API_BASE_URL ||
+              process.env.SPOJEX_API_BASE_URL ||
+              "";
+            if (base) {
+              const res = await fetch(`${base.replace(/\/$/, "")}/api/v1/admin/me`, {
+                headers: { Authorization: `Bearer ${access}` },
+                cache: "no-store",
+              });
+              if (res.ok) {
+                const me = (await res.json()) as {
+                  is_admin?: boolean;
+                  bootstrap_available?: boolean;
+                  permissions?: string[];
+                  staff?: AdminRow | null;
+                };
+                if (!mounted) return;
+                setBootstrapAvailable(Boolean(me.bootstrap_available));
+                if (me.is_admin && me.staff) {
+                  setStaff(me.staff);
+                  setPermissions(
+                    Array.isArray(me.permissions) && me.permissions.length
+                      ? me.permissions
+                      : permissionsForRole(me.staff.role),
+                  );
+                  setLoading(false);
+                  return;
+                }
+              }
+            }
+          }
+        } catch {
+          // fall through to table lookup
         }
 
         let row: AdminRow | null = null;
@@ -71,19 +115,28 @@ export function useAdminPermissions() {
         } catch {
           row = null;
         }
+
+        // Bootstrap only when the table is empty (checked via count)
         if (!row && !bootstrapTried.has(user.id)) {
           bootstrapTried.add(user.id);
-          try {
-            await bootstrapFirstAdmin(user);
-            row = await resolveAdminStaff(user.id);
-          } catch {
-            row = null;
+          const { count } = await getSpojexClient()
+            .from("admin")
+            .select("id", { count: "exact", head: true });
+          if ((count ?? 0) === 0) {
+            setBootstrapAvailable(true);
+            try {
+              await bootstrapFirstAdmin(user);
+              row = await resolveAdminStaff(user.id);
+            } catch {
+              row = null;
+            }
           }
         }
+
         if (!row || !row.is_active) {
           if (!mounted) return;
-          setStaff((current) => (current === null ? current : null));
-          setPermissions((current) => (current.length === 0 ? current : []));
+          setStaff(null);
+          setPermissions([]);
           setLoading(false);
           return;
         }
@@ -102,8 +155,8 @@ export function useAdminPermissions() {
         setLoading(false);
       } catch {
         if (!mounted) return;
-        setStaff((current) => (current === null ? current : null));
-        setPermissions((current) => (current.length === 0 ? current : []));
+        setStaff(null);
+        setPermissions([]);
         setLoading(false);
       }
     };
@@ -127,6 +180,7 @@ export function useAdminPermissions() {
     loading,
     staff,
     permissions,
+    bootstrapAvailable,
     can,
     canAccess: (pathname: string) => canAccessAdminRoute(pathname, can),
   };

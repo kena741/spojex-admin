@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { requireAdminPermission } from "@/lib/admin-auth";
+import { requireAnyAdminPermission } from "@/lib/admin-auth";
 import { uploadNewsMediaFromForm } from "@/lib/news-media-upload";
 
 export const maxDuration = 180;
 
 /** Upload a library sound: audio as-is, or video → extract audio only. */
 export async function POST(request: Request) {
-  const auth = await requireAdminPermission("news:write");
+  const auth = await requireAnyAdminPermission(["sounds:write", "news:write"]);
   if (!auth.ok) return auth.error;
 
   let form: FormData;

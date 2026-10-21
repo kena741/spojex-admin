@@ -88,7 +88,10 @@ export default function RolesPage() {
 
   return (
     <>
-      <AdminPageHeader title="Roles" description="Permission sets assigned to admin staff" />
+      <AdminPageHeader
+        title="Roles & permissions"
+        description="Searchable permission matrix with role descriptions and assigned staff counts"
+      />
       {error ? <AdminErrorAlert message={error} /> : null}
 
       {canWrite ? (
@@ -156,6 +159,9 @@ export default function RolesPage() {
                     <h2 className="font-heading text-sm font-semibold">{role.name}</h2>
                     <p className="text-xs text-text-secondary">
                       {role.slug} {role.is_system ? "· system" : ""}
+                      {typeof role.staff_count === "number"
+                        ? ` · ${role.staff_count} active staff`
+                        : ""}
                     </p>
                     <p className="mt-1 text-sm text-text-secondary">{role.description}</p>
                   </div>

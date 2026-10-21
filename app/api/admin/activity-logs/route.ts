@@ -30,6 +30,9 @@ export async function GET(request: Request) {
     const adminId = (searchParams.get("admin_id") || "").trim();
     const action = (searchParams.get("action") || "").trim();
     const resourceType = (searchParams.get("resource_type") || "").trim();
+    const outcome = (searchParams.get("outcome") || "").trim();
+    const start = (searchParams.get("start") || "").trim();
+    const end = (searchParams.get("end") || "").trim();
     const limit = Math.min(Math.max(Number(searchParams.get("limit") || 50), 1), 200);
     const offset = Math.max(Number(searchParams.get("offset") || 0), 0);
 
@@ -42,6 +45,9 @@ export async function GET(request: Request) {
     if (adminId) query = query.eq("admin_id", adminId);
     if (action) query = query.eq("action", action);
     if (resourceType) query = query.eq("resource_type", resourceType);
+    if (outcome) query = query.eq("outcome", outcome);
+    if (start) query = query.gte("created_at", start);
+    if (end) query = query.lte("created_at", end);
 
     const { data, error, count } = await query;
     if (error) {

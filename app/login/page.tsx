@@ -63,24 +63,64 @@ function LoginContent() {
         staff = null;
       }
       if (!staff) {
-        try {
-          await bootstrapFirstAdmin(data.session.user);
-          staff = await resolveAdminStaff(data.session.user.id);
-        } catch (bootstrapError) {
-          await getSpojexClient().auth.signOut();
-          throw new Error(errorText(bootstrapError));
+        // Bootstrap only when no admin rows exist yet (empty install).
+        const { count } = await getSpojexClient()
+          .from("admin")
+          .select("id", { count: "exact", head: true });
+        if ((count ?? 0) === 0) {
+          try {
+            await bootstrapFirstAdmin(data.session.user);
+            staff = await resolveAdminStaff(data.session.user.id);
+          } catch (bootstrapError) {
+            await getSpojexClient().auth.signOut();
+            throw new Error(errorText(bootstrapError));
+          }
         }
       }
+      const inviteToken = params.get("invite");
+      if ((!staff || !staff.is_active) && inviteToken) {
+        const base =
+          process.env.NEXT_PUBLIC_SPOJEX_API_BASE_URL ||
+          process.env.SPOJEX_API_BASE_URL ||
+          "";
+        const access = data.session.access_token;
+        const res = await fetch(`${base.replace(/\/$/, "")}/api/v1/admin/invitations/accept`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${access}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ token: inviteToken }),
+        });
+        const payload = (await res.json().catch(() => ({}))) as { detail?: unknown; error?: string };
+        if (!res.ok) {
+          await getSpojexClient().auth.signOut();
+          const detail = payload.detail;
+          const msg =
+            typeof detail === "string"
+              ? detail
+              : typeof (detail as { message?: string })?.message === "string"
+                ? (detail as { message: string }).message
+                : "Invitation could not be accepted.";
+          throw new Error(msg);
+        }
+        staff = await resolveAdminStaff(data.session.user.id);
+      }
+
       if (!staff?.is_active) {
         await getSpojexClient().auth.signOut();
-        throw new Error("This account is not an admin. Ask a Super Admin to grant access.");
+        throw new Error(
+          "This account is not an admin. Ask a Super Admin to send you an invitation.",
+        );
       }
 
       router.replace(params.get("next") || "/admin/dashboard");
     } catch (err: unknown) {
       const message = errorText(err);
-      if (/forbidden|writes for this resource require admin/i.test(message)) {
-        setError("Signed in, but this account could not be saved as Super Admin. The API refused to create the admin row.");
+      if (/forbidden|invite_required|writes for this resource require admin/i.test(message)) {
+        setError(
+          "Signed in, but this account is not an admin. Ask a Super Admin for an invitation.",
+        );
       } else if (/could not find the table|schema cache|relation .*admin|Not authenticated|401/i.test(message)) {
         setError("Admin sign-in failed. Confirm SPOJEX_API_BASE_URL points at the API and this account has an active admin row.");
       } else {
@@ -102,7 +142,7 @@ function LoginContent() {
           </div>
           <h1 className="font-heading text-lg font-semibold text-text-primary">SpoJex Admin</h1>
           <p className="mt-1 text-sm text-text-secondary">
-            Sign in with an admin account. The first login becomes Super Admin.
+            Sign in with an invited admin account. Access is granted by a Super Admin.
           </p>
         </div>
         <form onSubmit={onSubmit} className="space-y-4">
