@@ -123,6 +123,7 @@ export async function deleteAdmin(path: string, body?: Record<string, unknown>) 
     ok?: boolean;
     archived?: boolean;
     deleted?: boolean;
+    message?: string;
     data?: unknown;
   };
   if (!response.ok) throw new Error(payload.error || "Delete failed");

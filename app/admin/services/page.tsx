@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { MoreHorizontal } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -11,19 +12,42 @@ import {
   AdminLoadingRow,
   AdminSearchInput,
   AdminSelect,
+  AdminStatCard,
   AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
-import { deleteAdmin, patchAdmin } from "@/lib/hooks";
+import { deleteAdmin, postAdminResponse } from "@/lib/hooks";
 import {
+  DELIVERY_MODES,
+  PRICING_TYPES,
+  PROVIDER_VERIFICATION_NOTE,
   formatDelivery,
   formatDuration,
+  formatPublicationStatus,
   formatRating,
   formatServicePrice,
+  publicationTone,
+  providerVerificationLabel,
 } from "@/lib/service-pricing";
 import { serviceCoverUrl } from "@/lib/services-media";
 import type { ServiceCategory, ServiceRow, ServiceSubcategory } from "@/lib/types";
-import { formatDate, formatStatusLabel } from "@/lib/utils";
+import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { cn } from "@/lib/utils";
+
+type ListRow = ServiceRow & {
+  href?: string;
+  publication_label?: string;
+  delivery_label?: string;
+  price_label?: string;
+  provider_verification_label?: string;
+  rating_label?: string;
+  booking_count?: number;
+};
+
+type SummaryScope = {
+  global?: { services?: number; published?: number; pending?: number; label?: string };
+  filtered?: { services?: number; pending?: number; label?: string };
+};
 
 function catalogLabel(
   id: string | null | undefined,
@@ -39,93 +63,142 @@ export default function ServicesPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { can } = useAdminPermissions();
+  const canWrite = can("services:write");
+
   const query = searchParams.get("q") || "";
   const category = searchParams.get("category") || "all";
+  const subcategory = searchParams.get("subcategory") || "all";
   const published = searchParams.get("published") || "all";
+  const delivery = searchParams.get("delivery") || "all";
+  const pricingType = searchParams.get("pricing_type") || "all";
+  const page = Math.max(1, Number(searchParams.get("page") || 1) || 1);
+  const summaryMode = searchParams.get("summary") === "filtered" ? "filtered" : "global";
+  const view = searchParams.get("view") === "table" ? "table" : "list";
 
-  const [rows, setRows] = useState<ServiceRow[]>([]);
+  const [rows, setRows] = useState<ListRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<SummaryScope>({});
+  const [definitions, setDefinitions] = useState<Record<string, string>>({});
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
   const [subcategories, setSubcategories] = useState<ServiceSubcategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [listOk, setListOk] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [menuId, setMenuId] = useState<string | null>(null);
+  const loadGen = useRef(0);
 
-  const writeParams = (patch: Record<string, string | null | undefined>) => {
-    const next = new URLSearchParams(searchParams.toString());
-    for (const [k, v] of Object.entries(patch)) {
-      if (v == null || v === "" || v === "all") next.delete(k);
-      else next.set(k, v);
-    }
-    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
-  };
+  const writeParams = useCallback(
+    (patch: Record<string, string | null | undefined>) => {
+      const next = new URLSearchParams(searchParams.toString());
+      for (const [k, v] of Object.entries(patch)) {
+        if (v == null || v === "" || v === "all") next.delete(k);
+        else next.set(k, v);
+      }
+      if (!("page" in patch)) next.delete("page");
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    const gen = ++loadGen.current;
     setListOk(false);
-    const response = await fetch("/api/admin/services", { credentials: "same-origin" });
+    setError(null);
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    if (category !== "all") params.set("category", category);
+    if (subcategory !== "all") params.set("subcategory", subcategory);
+    if (published !== "all") params.set("published", published);
+    if (delivery !== "all") params.set("delivery", delivery);
+    if (pricingType !== "all") params.set("pricing_type", pricingType);
+    params.set("page", String(page));
+    params.set("page_size", "40");
+
+    const response = await fetch(`/api/admin/services?${params}`, {
+      credentials: "same-origin",
+    });
     const payload = (await response.json()) as {
-      data?: ServiceRow[];
+      data?: ListRow[];
+      total?: number;
       categories?: ServiceCategory[];
       subcategories?: ServiceSubcategory[];
+      summary_scope?: SummaryScope;
+      definitions?: Record<string, string>;
       error?: string;
     };
+    if (gen !== loadGen.current) return;
     if (!response.ok) throw new Error(payload.error || "Failed to load services");
     setRows(payload.data ?? []);
+    setTotal(payload.total ?? payload.data?.length ?? 0);
     setCategories(payload.categories ?? []);
     setSubcategories(payload.subcategories ?? []);
+    setSummary(payload.summary_scope ?? {});
+    setDefinitions(payload.definitions ?? {});
     setListOk(true);
-  };
+  }, [category, delivery, page, pricingType, published, query, subcategory]);
 
   useEffect(() => {
+    setLoading(true);
     load()
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
       .finally(() => setLoading(false));
+  }, [load]);
+
+  useEffect(() => {
+    const onDoc = () => setMenuId(null);
+    document.addEventListener("click", onDoc);
+    return () => document.removeEventListener("click", onDoc);
   }, []);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return rows.filter((row) => {
-      if (category !== "all" && row.category_id !== category) return false;
-      if (published === "yes" && !row.published) return false;
-      if (published === "pending" && row.published) return false;
-      if (!q) return true;
-      return [
-        row.title,
-        row.description,
-        row.city,
-        row.users?.display_name,
-        row.category?.label,
-        row.subcategory?.label,
-      ]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(q));
-    });
-  }, [category, published, query, rows]);
+  const categorySubs = subcategories.filter((s) =>
+    category === "all" ? true : s.category_id === category,
+  );
+  const selectedPending = rows.filter((r) => selected.has(r.id) && !r.published);
+  const scope = summaryMode === "filtered" ? summary.filtered : summary.global;
+  const pageCount = Math.max(1, Math.ceil(total / 40));
 
-  const pendingCount = rows.filter((row) => !row.published).length;
-  const selectedPending = filtered.filter((r) => selected.has(r.id) && !r.published);
+  const openDetail = (id: string) => {
+    const returnTo = `${pathname}?${searchParams.toString()}`;
+    sessionStorage.setItem("services-return", returnTo);
+    router.push(`/admin/services/${id}`);
+  };
 
-  const approve = async (id: string, next: boolean) => {
+  const moderate = async (id: string, action: string) => {
     let reason: string | undefined;
-    if (!next) {
-      reason = window.prompt("Reason for unpublishing (required):") || undefined;
+    if (["unpublish", "reject", "request_changes"].includes(action)) {
+      reason = window.prompt(`Reason for ${action.replace(/_/g, " ")} (required):`) || undefined;
       if (!reason?.trim()) return;
     }
+    if (action === "approve") {
+      if (
+        !window.confirm(
+          "Approve and publish this listing immediately? It will become visible in the marketplace.",
+        )
+      ) {
+        return;
+      }
+    }
     setBusy(id);
+    setError(null);
+    setNotice(null);
     try {
-      await patchAdmin(`/api/admin/services/${id}`, {
-        published: next,
-        moderation_reason: reason,
+      await postAdminResponse(`/api/admin/services/${id}/moderate`, {
+        action,
+        reason,
       });
+      setNotice(
+        action === "approve"
+          ? "Approved and published."
+          : `Action “${action.replace(/_/g, " ")}” applied.`,
+      );
+      setMenuId(null);
       await load();
-      setSelected((prev) => {
-        const n = new Set(prev);
-        n.delete(id);
-        return n;
-      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Update failed");
+      setError(err instanceof Error ? err.message : "Action failed");
     } finally {
       setBusy(null);
     }
@@ -135,19 +208,32 @@ export default function ServicesPage() {
     if (!selectedPending.length) return;
     if (
       !window.confirm(
-        `Approve ${selectedPending.length} selected listing(s)? Review summary:\n\n${selectedPending
+        `Approve & publish ${selectedPending.length} selected listing(s)?\n\n${selectedPending
           .slice(0, 8)
           .map((r) => `• ${r.title}`)
-          .join("\n")}${selectedPending.length > 8 ? "\n…" : ""}`,
+          .join("\n")}${selectedPending.length > 8 ? "\n…" : ""}\n\nEach listing is revalidated individually.`,
       )
     ) {
       return;
     }
     setBusy("selected");
+    setError(null);
     try {
-      for (const row of selectedPending) {
-        await patchAdmin(`/api/admin/services/${row.id}`, { published: true });
-      }
+      const result = await postAdminResponse<{
+        outcomes?: Array<{ id: string; ok: boolean; message?: string }>;
+        approved?: string[];
+        failed?: unknown[];
+      }>("/api/admin/services", {
+        action: "approve_selected",
+        ids: selectedPending.map((r) => r.id),
+      });
+      const failed = result.failed?.length ?? 0;
+      const ok = (result.approved ?? []).length;
+      setNotice(
+        failed
+          ? `Approved ${ok}; ${failed} failed. Check outcomes and retry.`
+          : `Approved and published ${ok} listing(s).`,
+      );
       setSelected(new Set());
       await load();
     } catch (err) {
@@ -157,20 +243,26 @@ export default function ServicesPage() {
     }
   };
 
-  const remove = async (row: ServiceRow) => {
+  const archive = async (row: ListRow) => {
     if (
       !window.confirm(
-        `Archive/delete “${row.title}”? Prefer unpublish if the listing has booking history.`,
+        `Archive “${row.title}”? Listings with bookings/payments are unpublished (not hard-deleted).`,
       )
     ) {
       return;
     }
     setBusy(row.id);
     try {
-      await deleteAdmin(`/api/admin/services/${row.id}`);
+      const result = await deleteAdmin(`/api/admin/services/${row.id}`);
+      setNotice(
+        result?.archived
+          ? result.message || "Archived (bookings and payments preserved)."
+          : "Deleted.",
+      );
+      setMenuId(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Delete failed");
+      setError(err instanceof Error ? err.message : "Archive failed");
     } finally {
       setBusy(null);
     }
@@ -185,38 +277,84 @@ export default function ServicesPage() {
     });
   };
 
+  const headerCount = loading
+    ? "Loading…"
+    : listOk
+      ? `${scope?.services ?? total} ${summaryMode === "filtered" ? "matching" : "total"} · ${scope?.pending ?? "—"} pending`
+      : "—";
+
   return (
     <>
       <AdminPageHeader
         title="Services"
-        description={`${filtered.length} of ${rows.length} · ${pendingCount} pending approval`}
+        description={headerCount}
         stackOnSmall
         actions={
-          selectedPending.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              disabled={busy === "selected"}
-              onClick={() => void approveSelected()}
-              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+              onClick={() =>
+                writeParams({ view: view === "table" ? "list" : "table", page: null })
+              }
+              className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
             >
-              {busy === "selected"
-                ? "Approving…"
-                : `Approve selected (${selectedPending.length})`}
+              {view === "table" ? "List view" : "Compact table"}
             </button>
-          ) : null
+            {canWrite && selectedPending.length > 0 ? (
+              <button
+                type="button"
+                disabled={busy === "selected"}
+                onClick={() => void approveSelected()}
+                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+              >
+                {busy === "selected"
+                  ? "Approving…"
+                  : `Approve selected (${selectedPending.length})`}
+              </button>
+            ) : null}
+          </div>
         }
       />
+
+      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+        <AdminStatCard
+          title={summaryMode === "filtered" ? "Matching" : "All services"}
+          value={loading ? "…" : String(scope?.services ?? "—")}
+        />
+        <AdminStatCard
+          title="Pending review"
+          value={loading ? "…" : String(scope?.pending ?? "—")}
+        />
+        <div className="min-w-0 rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
+          <p className="mb-1 text-sm font-semibold text-text-secondary">Summary scope</p>
+          <p className="truncate text-2xl font-bold tabular-nums text-text-primary">
+            {summaryMode === "filtered" ? "Filtered" : "All"}
+          </p>
+          <button
+            type="button"
+            className="mt-2 text-xs font-medium text-primary"
+            onClick={() =>
+              writeParams({
+                summary: summaryMode === "filtered" ? null : "filtered",
+              })
+            }
+          >
+            Switch to {summaryMode === "filtered" ? "all" : "filtered"}
+          </button>
+        </div>
+      </div>
+      {definitions.publication ? (
+        <p className="mb-4 text-xs text-text-hint">{definitions.publication}</p>
+      ) : null}
+
       <AdminFilterPanel>
-        <div className="grid gap-3 md:grid-cols-[1fr_180px_160px]">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <AdminSearchInput
             value={query}
             onChange={(value) => writeParams({ q: value || null })}
-            placeholder="Search title, city, provider"
+            placeholder="Search title, provider, location"
           />
-          <AdminSelect
-            value={category}
-            onChange={(value) => writeParams({ category: value })}
-          >
+          <AdminSelect value={category} onChange={(value) => writeParams({ category: value, subcategory: null })}>
             <option value="all">All categories</option>
             {categories.map((item) => (
               <option key={item.id} value={item.id}>
@@ -224,16 +362,47 @@ export default function ServicesPage() {
               </option>
             ))}
           </AdminSelect>
+          <AdminSelect value={subcategory} onChange={(value) => writeParams({ subcategory: value })}>
+            <option value="all">All subcategories</option>
+            {categorySubs.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.emoji} {item.label}
+              </option>
+            ))}
+          </AdminSelect>
+          <AdminSelect value={published} onChange={(value) => writeParams({ published: value })}>
+            <option value="all">All review states</option>
+            <option value="pending">Pending review</option>
+            <option value="yes">Published</option>
+          </AdminSelect>
+          <AdminSelect value={delivery} onChange={(value) => writeParams({ delivery: value })}>
+            <option value="all">All delivery modes</option>
+            {DELIVERY_MODES.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+            <option value="on_request">On request (legacy)</option>
+          </AdminSelect>
           <AdminSelect
-            value={published}
-            onChange={(value) => writeParams({ published: value })}
+            value={pricingType}
+            onChange={(value) => writeParams({ pricing_type: value })}
           >
-            <option value="all">All listings</option>
-            <option value="pending">Pending approval</option>
-            <option value="yes">Approved</option>
+            <option value="all">All pricing</option>
+            {PRICING_TYPES.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
           </AdminSelect>
         </div>
       </AdminFilterPanel>
+
+      {notice ? (
+        <p className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          {notice}
+        </p>
+      ) : null}
       {loading ? <AdminLoadingRow label="Loading services…" /> : null}
       {error ? (
         <div className="space-y-2">
@@ -252,8 +421,9 @@ export default function ServicesPage() {
           </button>
         </div>
       ) : null}
+
       <AdminTableShell>
-        {!loading && listOk && filtered.length === 0 && !error ? (
+        {!loading && listOk && rows.length === 0 && !error ? (
           <AdminEmpty
             title={published === "pending" ? "No pending listings" : "No services"}
             description={
@@ -263,171 +433,285 @@ export default function ServicesPage() {
             }
           />
         ) : null}
-        {filtered.length > 0 ? (
+
+        {rows.length > 0 && view === "list" ? (
+          <ul className="divide-y divide-border">
+            {rows.map((row) => {
+              const cover = serviceCoverUrl(row);
+              const href = row.href || `/admin/services/${row.id}`;
+              return (
+                <li key={row.id} className="relative flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+                  <div className="flex min-w-0 flex-1 gap-3">
+                    {!row.published && canWrite ? (
+                      <input
+                        type="checkbox"
+                        className="mt-2 shrink-0"
+                        checked={selected.has(row.id)}
+                        onChange={() => toggleSelect(row.id)}
+                        aria-label={`Select ${row.title}`}
+                      />
+                    ) : (
+                      <span className="w-4 shrink-0" />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => openDetail(row.id)}
+                      className="flex min-w-0 flex-1 gap-3 text-left"
+                    >
+                      {cover ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={cover}
+                          alt=""
+                          className="aspect-[4/3] w-24 shrink-0 rounded-md object-cover bg-muted"
+                        />
+                      ) : (
+                        <div className="grid aspect-[4/3] w-24 shrink-0 place-items-center rounded-md bg-muted text-[10px] text-text-hint">
+                          No photo
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="font-medium text-text-primary">{row.title}</p>
+                        <p className="text-xs text-text-secondary">
+                          {[
+                            [row.city, row.country].filter(Boolean).join(", "),
+                            formatDuration(row.duration_minutes),
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                        <p className="mt-1 text-xs text-text-secondary">
+                          {catalogLabel(row.category_id, categories, row.category)}
+                          {row.subcategory || row.subcategory_id
+                            ? ` · ${catalogLabel(row.subcategory_id, subcategories, row.subcategory)}`
+                            : ""}
+                        </p>
+                        <p className="mt-1 text-xs text-text-hint">
+                          {row.delivery_label || formatDelivery(row.availability_mode)} ·{" "}
+                          {row.price_label || formatServicePrice(row)}
+                        </p>
+                      </div>
+                    </button>
+                  </div>
+
+                  <div className="flex shrink-0 flex-wrap items-center gap-3 sm:justify-end">
+                    {row.users ? (
+                      <Link
+                        href={`/admin/people/${row.users.id}`}
+                        className="flex items-center gap-2"
+                        title={PROVIDER_VERIFICATION_NOTE}
+                      >
+                        {row.users.avatar_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={row.users.avatar_url}
+                            alt=""
+                            className="h-8 w-8 rounded-full object-cover"
+                          />
+                        ) : (
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-[10px] font-semibold text-primary">
+                            {(row.users.display_name || "?").slice(0, 1).toUpperCase()}
+                          </span>
+                        )}
+                        <span className="hidden max-w-[8rem] truncate text-sm lg:inline">
+                          {row.users.display_name}
+                          <span className="block text-[10px] text-text-hint">
+                            {row.provider_verification_label ||
+                              providerVerificationLabel(row.users.verified)}
+                          </span>
+                        </span>
+                      </Link>
+                    ) : null}
+
+                    <div className="text-right text-xs text-text-secondary">
+                      <p>{row.rating_label || formatRating(row.rating_avg, row.review_count)}</p>
+                      {row.is_featured ? (
+                        <p className="font-medium text-amber-700">Featured</p>
+                      ) : null}
+                    </div>
+
+                    <StatusBadge tone={requestTone(publicationTone(row.published))}>
+                      {row.publication_label || formatPublicationStatus(row.published)}
+                    </StatusBadge>
+
+                    <Link
+                      href={href}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        openDetail(row.id);
+                      }}
+                      className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+                    >
+                      Open
+                    </Link>
+
+                    {canWrite ? (
+                      <div className="relative">
+                        <button
+                          type="button"
+                          aria-label="More actions"
+                          className="grid h-8 w-8 place-items-center rounded-md border border-border hover:bg-muted"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMenuId((cur) => (cur === row.id ? null : row.id));
+                          }}
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </button>
+                        {menuId === row.id ? (
+                          <div
+                            className="absolute right-0 z-20 mt-1 w-48 rounded-lg border border-border bg-card py-1 shadow-lg"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {!row.published ? (
+                              <MenuItem
+                                disabled={busy === row.id}
+                                onClick={() => void moderate(row.id, "approve")}
+                              >
+                                Approve & publish
+                              </MenuItem>
+                            ) : (
+                              <MenuItem
+                                disabled={busy === row.id}
+                                onClick={() => void moderate(row.id, "unpublish")}
+                              >
+                                Unpublish
+                              </MenuItem>
+                            )}
+                            <MenuItem
+                              disabled={busy === row.id}
+                              onClick={() =>
+                                void moderate(row.id, row.is_featured ? "unfeature" : "feature")
+                              }
+                            >
+                              {row.is_featured ? "Unfeature" : "Feature"}
+                            </MenuItem>
+                            {!row.published ? (
+                              <MenuItem
+                                disabled={busy === row.id}
+                                onClick={() => void moderate(row.id, "request_changes")}
+                              >
+                                Request changes
+                              </MenuItem>
+                            ) : null}
+                            <MenuItem
+                              disabled={busy === row.id}
+                              danger
+                              onClick={() => void archive(row)}
+                            >
+                              Archive
+                            </MenuItem>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+
+        {rows.length > 0 && view === "table" ? (
           <div className="overflow-x-auto">
-            <table className="min-w-[1100px] w-full text-left text-sm">
+            <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
                 <tr>
-                  <th className="px-3 py-3 font-semibold"> </th>
-                  <th className="whitespace-nowrap px-4 py-3 font-semibold">Service</th>
-                  <th className="whitespace-nowrap px-4 py-3 font-semibold">Provider</th>
-                  <th className="whitespace-nowrap px-4 py-3 font-semibold">Category</th>
-                  <th className="whitespace-nowrap px-4 py-3 font-semibold">Delivery</th>
-                  <th className="whitespace-nowrap px-4 py-3 font-semibold">Price</th>
-                  <th className="whitespace-nowrap px-4 py-3 font-semibold">Rating</th>
-                  <th className="whitespace-nowrap px-4 py-3 font-semibold">Status</th>
-                  <th className="whitespace-nowrap px-4 py-3 font-semibold">Actions</th>
+                  <th className="px-3 py-3">Service</th>
+                  <th className="px-3 py-3">Provider</th>
+                  <th className="px-3 py-3">Price</th>
+                  <th className="px-3 py-3">Status</th>
+                  <th className="px-3 py-3"> </th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((row) => {
-                  const cover = serviceCoverUrl(row);
-                  return (
-                    <tr key={row.id} className="border-b border-border last:border-0 hover:bg-muted/40">
-                      <td className="px-3 py-3">
-                        {!row.published ? (
-                          <input
-                            type="checkbox"
-                            checked={selected.has(row.id)}
-                            onChange={() => toggleSelect(row.id)}
-                            aria-label={`Select ${row.title}`}
-                          />
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          {cover ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={cover}
-                              alt=""
-                              className="aspect-[4/3] w-20 rounded-md object-cover bg-muted"
-                            />
-                          ) : (
-                            <div className="grid aspect-[4/3] w-20 place-items-center rounded-md bg-muted text-[10px] text-text-hint">
-                              No photo
-                            </div>
-                          )}
-                          <div>
-                            <Link
-                              href={`/admin/services/${row.id}`}
-                              className="font-medium text-text-primary"
-                            >
-                              {row.title}
-                            </Link>
-                            <p className="text-xs text-text-secondary">
-                              {[
-                                [row.city, row.country].filter(Boolean).join(", "),
-                                formatDuration(row.duration_minutes),
-                              ]
-                                .filter(Boolean)
-                                .join(" · ")}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        {row.users ? (
-                          <div className="flex items-center gap-2">
-                            {row.users.avatar_url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={row.users.avatar_url}
-                                alt=""
-                                className="h-7 w-7 rounded-full object-cover"
-                              />
-                            ) : (
-                              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary text-[10px] font-semibold text-primary">
-                                {(row.users.display_name || "?").slice(0, 1).toUpperCase()}
-                              </span>
-                            )}
-                            <div>
-                              <Link
-                                href={`/admin/people/${row.users.id}`}
-                                className="text-primary"
-                              >
-                                {row.users.display_name}
-                              </Link>
-                              {row.users.role ? (
-                                <p className="text-xs capitalize text-text-secondary">
-                                  {formatStatusLabel(row.users.role)}
-                                  {row.users.verified ? " · verified profile" : ""}
-                                </p>
-                              ) : null}
-                            </div>
-                          </div>
-                        ) : (
-                          row.provider_id.slice(0, 8)
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-text-secondary">
-                        <p>{catalogLabel(row.category_id, categories, row.category)}</p>
-                        <p className="text-xs">
-                          {catalogLabel(row.subcategory_id, subcategories, row.subcategory)}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-text-secondary">
+                {rows.map((row) => (
+                  <tr key={row.id} className="border-b border-border last:border-0">
+                    <td className="px-3 py-3">
+                      <button
+                        type="button"
+                        className="text-left font-medium text-primary"
+                        onClick={() => openDetail(row.id)}
+                      >
+                        {row.title}
+                      </button>
+                      <p className="text-xs text-text-secondary">
                         {formatDelivery(row.availability_mode)}
-                      </td>
-                      <td className="px-4 py-3 text-text-secondary">
-                        {formatServicePrice(row)}
-                      </td>
-                      <td className="px-4 py-3 text-text-secondary">
-                        {formatRating(row.rating_avg, row.review_count)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge tone={requestTone(row.published ? "approved" : "pending")}>
-                          {row.published ? "Published" : "Pending approval"}
-                        </StatusBadge>
-                        {row.is_featured ? (
-                          <p className="mt-1 text-[10px] font-medium text-amber-700">Featured</p>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          {row.published ? (
-                            <button
-                              type="button"
-                              disabled={busy === row.id}
-                              className="text-sm font-medium text-text-secondary disabled:opacity-50"
-                              onClick={() => void approve(row.id, false)}
-                            >
-                              Unpublish
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              disabled={busy === row.id}
-                              className="text-sm font-medium text-primary disabled:opacity-50"
-                              onClick={() => void approve(row.id, true)}
-                            >
-                              Approve
-                            </button>
-                          )}
-                          <Link
-                            href={`/admin/services/${row.id}`}
-                            className="text-sm font-medium text-primary"
-                          >
-                            Open
-                          </Link>
-                          <button
-                            type="button"
-                            disabled={busy === row.id}
-                            className="text-sm font-medium text-red-600 disabled:opacity-50"
-                            onClick={() => void remove(row)}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                      </p>
+                    </td>
+                    <td className="px-3 py-3 text-text-secondary">
+                      {row.users?.display_name || "—"}
+                    </td>
+                    <td className="px-3 py-3">{formatServicePrice(row)}</td>
+                    <td className="px-3 py-3">
+                      <StatusBadge tone={requestTone(publicationTone(row.published))}>
+                        {formatPublicationStatus(row.published)}
+                      </StatusBadge>
+                    </td>
+                    <td className="px-3 py-3">
+                      <Link href={`/admin/services/${row.id}`} className="text-sm font-medium text-primary">
+                        Open
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         ) : null}
+
+        {listOk && total > 40 ? (
+          <div className="flex items-center justify-between border-t border-border px-4 py-3 text-sm">
+            <span className="text-text-secondary">
+              Page {page} of {pageCount} · {total} matching
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() => writeParams({ page: String(page - 1) })}
+                className="rounded-md border border-border px-3 py-1.5 disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                disabled={page >= pageCount}
+                onClick={() => writeParams({ page: String(page + 1) })}
+                className="rounded-md border border-border px-3 py-1.5 disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        ) : null}
       </AdminTableShell>
     </>
+  );
+}
+
+function MenuItem({
+  children,
+  onClick,
+  disabled,
+  danger,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "block w-full px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50",
+        danger ? "text-red-600" : "text-text-primary",
+      )}
+    >
+      {children}
+    </button>
   );
 }
