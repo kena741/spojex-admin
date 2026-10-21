@@ -107,14 +107,47 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const { id } = await params;
   const body = (await request.json()) as { status?: string; review_note?: string };
   const status = body.status?.trim();
+  const note = body.review_note?.trim() ?? "";
+
+  // Request more info: keep pending, persist reviewer note (surfaces in In Review queue).
+  if (status === "pending") {
+    if (!note) {
+      return NextResponse.json({ error: "review_note is required when requesting more info" }, { status: 400 });
+    }
+    const reviewerId = auth.context.staff.user_id || auth.context.user.id;
+    const { data, error } = await auth.context.client
+      .from("identity_verification_requests")
+      .update({
+        review_note: note,
+        notes: note,
+        reviewer_id: reviewerId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("status", "pending")
+      .select("*")
+      .maybeSingle();
+    if (error) {
+      const hint = missingServiceRoleMessage();
+      return NextResponse.json(
+        { error: hint ? `${error.message}. ${hint}` : error.message },
+        { status: 400 },
+      );
+    }
+    if (!data) {
+      return NextResponse.json({ error: "Pending request not found" }, { status: 404 });
+    }
+    return NextResponse.json({ data });
+  }
+
   if (status !== "approved" && status !== "rejected") {
-    return NextResponse.json({ error: "status must be approved or rejected" }, { status: 400 });
+    return NextResponse.json({ error: "status must be approved, rejected, or pending" }, { status: 400 });
   }
 
   const { data, error } = await auth.context.client.rpc("review_identity_verification", {
     p_request_id: id,
     p_status: status,
-    p_note: body.review_note?.trim() ?? "",
+    p_note: note,
   });
   if (error) {
     const hint = missingServiceRoleMessage();

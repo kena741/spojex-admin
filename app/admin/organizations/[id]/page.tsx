@@ -23,6 +23,9 @@ export default function OrganizationDetailPage() {
   const canWrite = can("organizations:write");
   const fileRef = useRef<HTMLInputElement>(null);
   const [org, setOrg] = useState<OrganizationRow | null>(null);
+  const [members, setMembers] = useState<
+    { user_id: string; member_role: string | null; status: string | null; users?: { id: string; display_name: string; email: string | null; role: string } | null }[]
+  >([]);
   const [ownerCoinWallet, setOwnerCoinWallet] = useState<CoinWalletRow | null>(null);
   const [liveGiftsReceived, setLiveGiftsReceived] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -43,14 +46,21 @@ export default function OrganizationDetailPage() {
     if (!next) {
       setOwnerCoinWallet(null);
       setLiveGiftsReceived(0);
+      setMembers([]);
       return;
     }
-    const [wallets, liveTotals] = await Promise.all([
+    const [wallets, liveTotals, membersRes] = await Promise.all([
       loadCoinWalletsByUserIds([next.user_id]),
       loadOrgLiveGiftTotals([next.id]),
+      getSpojexClient()
+        .from("organization_members")
+        .select("user_id, member_role, status, users:user_id(id, display_name, email, role)")
+        .eq("organization_id", next.id)
+        .limit(200),
     ]);
     setOwnerCoinWallet(wallets[next.user_id] ?? null);
     setLiveGiftsReceived(liveTotals[next.id] ?? 0);
+    setMembers((membersRes.data ?? []) as typeof members);
   };
 
   useEffect(() => {
@@ -234,7 +244,7 @@ export default function OrganizationDetailPage() {
               <dt className="text-text-secondary">Owner user</dt>
               <dd>
                 {org.users ? (
-                  <Link href={`/admin/users/${org.users.id}`} className="font-medium text-primary">
+                  <Link href={`/admin/people/${org.users.id}`} className="font-medium text-primary">
                     {org.users.display_name}
                   </Link>
                 ) : (
@@ -360,6 +370,49 @@ export default function OrganizationDetailPage() {
           </div>
         </section>
       </div>
+
+      <section className="mt-6 rounded-xl border border-border bg-card p-5 shadow-sm">
+        <h2 className="mb-4 font-heading text-sm font-semibold">
+          Linked people ({1 + members.length})
+        </h2>
+        <ul className="divide-y divide-border">
+          {org.users ? (
+            <li className="flex items-center justify-between gap-3 py-2.5 first:pt-0">
+              <div>
+                <Link href={`/admin/people/${org.users.id}`} className="text-sm font-medium text-primary">
+                  {org.users.display_name}
+                </Link>
+                <p className="text-xs text-text-secondary">{org.users.email || org.users.role}</p>
+              </div>
+              <span className="rounded bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase text-primary">
+                Owner
+              </span>
+            </li>
+          ) : null}
+          {members.map((m) => (
+            <li key={m.user_id} className="flex items-center justify-between gap-3 py-2.5">
+              <div>
+                {m.users ? (
+                  <Link href={`/admin/people/${m.users.id}`} className="text-sm font-medium text-primary">
+                    {m.users.display_name}
+                  </Link>
+                ) : (
+                  <span className="text-sm font-medium">{m.user_id}</span>
+                )}
+                <p className="text-xs text-text-secondary">
+                  {[m.users?.role, m.status].filter(Boolean).join(" · ") || "—"}
+                </p>
+              </div>
+              <span className="rounded border border-border px-2 py-0.5 text-[10px] font-medium uppercase text-text-secondary">
+                {m.member_role || "Member"}
+              </span>
+            </li>
+          ))}
+          {!org.users && members.length === 0 ? (
+            <li className="py-2 text-sm text-text-hint">No linked people recorded.</li>
+          ) : null}
+        </ul>
+      </section>
 
       {canWrite ? (
         <section className="mt-6 rounded-xl border border-red-200 bg-red-50/40 p-5">

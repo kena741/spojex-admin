@@ -252,8 +252,13 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
   if (pathname === "/admin/dashboard" || pathname === "/admin") {
     return can("analytics:read") || can("admins:read") || can("users:read");
   }
-  if (pathname.startsWith("/admin/users")) return can("users:read");
-  if (pathname.startsWith("/admin/verifications")) return can("users:read");
+  if (pathname.startsWith("/admin/people")) {
+    return can("users:read") || can("profiles:read");
+  }
+  if (pathname.startsWith("/admin/users")) return can("users:read") || can("profiles:read");
+  if (pathname.startsWith("/admin/verifications")) {
+    return can("users:read") || can("profiles:read") || can("users:verify");
+  }
   if (pathname.startsWith("/admin/verification-docs")) return can("profiles:read");
   if (pathname.startsWith("/admin/organizations")) return can("organizations:read");
   if (
@@ -261,7 +266,7 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
     pathname.startsWith("/admin/professionals") ||
     pathname.startsWith("/admin/media")
   ) {
-    return can("profiles:read");
+    return can("profiles:read") || can("users:read");
   }
   if (pathname.startsWith("/admin/services")) return can("services:read");
   if (pathname.startsWith("/admin/service-categories")) return can("catalog:read");

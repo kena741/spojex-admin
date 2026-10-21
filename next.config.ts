@@ -6,6 +6,16 @@ const nextConfig: NextConfig = {
   experimental: {
     proxyClientMaxBodySize: "55mb",
   },
+  async redirects() {
+    return [
+      { source: "/admin/athletes", destination: "/admin/people?profile=athlete", permanent: false },
+      { source: "/admin/professionals", destination: "/admin/people?profile=professional", permanent: false },
+      { source: "/admin/media", destination: "/admin/people?profile=media", permanent: false },
+      { source: "/admin/users", destination: "/admin/people", permanent: false },
+      { source: "/admin/users/:id", destination: "/admin/people/:id", permanent: false },
+      { source: "/admin/categories", destination: "/admin/people/settings", permanent: false },
+    ];
+  },
   images: {
     remotePatterns: [
       {

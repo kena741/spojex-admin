@@ -242,11 +242,12 @@ export default function VerificationDocsPage() {
   return (
     <>
       <AdminPageHeader
-        title="Verification documents"
+        title="Document requirements"
         description="Document types and role-based upload requirements (identity + role evidence steps)."
+        backHref="/admin/verifications?tab=requirements"
         breadcrumbs={[
-          { label: "Verifications", href: "/admin/verifications" },
-          { label: "Document types" },
+          { label: "Verification Center", href: "/admin/verifications" },
+          { label: "Document requirements" },
         ]}
       />
       {error ? <AdminErrorAlert message={error} /> : null}

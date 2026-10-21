@@ -79,19 +79,24 @@ type NavSection = {
 };
 
 const identityItems: NavItem[] = [
-  { href: "/admin/users", label: "Users", icon: Users, visible: (can) => can("users:read") },
-  { href: "/admin/verifications", label: "Verifications", icon: BadgeCheck, visible: (can) => can("users:read") },
   {
-    href: "/admin/verification-docs",
-    label: "Verification docs",
-    icon: ClipboardList,
-    visible: (can) => can("profiles:read"),
+    href: "/admin/people",
+    label: "People",
+    icon: Users,
+    visible: (can) => can("users:read") || can("profiles:read"),
   },
-  { href: "/admin/categories", label: "Account roles", icon: FolderTree, visible: (can) => can("profiles:read") },
-  { href: "/admin/organizations", label: "Organizations", icon: Building2, visible: (can) => can("organizations:read") },
-  { href: "/admin/athletes", label: "Athletes", icon: ShieldCheck, visible: (can) => can("profiles:read") },
-  { href: "/admin/professionals", label: "Professionals", icon: UserRound, visible: (can) => can("profiles:read") },
-  { href: "/admin/media", label: "Media profiles", icon: Newspaper, visible: (can) => can("profiles:read") },
+  {
+    href: "/admin/organizations",
+    label: "Organizations",
+    icon: Building2,
+    visible: (can) => can("organizations:read"),
+  },
+  {
+    href: "/admin/verifications",
+    label: "Verification Center",
+    icon: BadgeCheck,
+    visible: (can) => can("users:read") || can("profiles:read") || can("users:verify"),
+  },
 ];
 
 const marketplaceItems: NavItem[] = [

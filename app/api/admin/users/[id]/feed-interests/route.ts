@@ -56,18 +56,27 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   return NextResponse.json({
     preferences,
-    topics: (topicsRes.data ?? []).map((row) => ({
-      topic: row.topic,
-      score: Number(row.score) || 0,
-      recent_score: Number(row.recent_score) || 0,
-      updated_at: row.updated_at ?? null,
-    })),
-    creators: (creatorsRes.data ?? []).map((row) => ({
-      creator_key: row.creator_key,
-      score: Number(row.score) || 0,
-      recent_score: Number(row.recent_score) || 0,
-      updated_at: row.updated_at ?? null,
-    })),
+    topics: (topicsRes.data ?? []).map(
+      (row: { topic: string; score?: number; recent_score?: number; updated_at?: string | null }) => ({
+        topic: row.topic,
+        score: Number(row.score) || 0,
+        recent_score: Number(row.recent_score) || 0,
+        updated_at: row.updated_at ?? null,
+      }),
+    ),
+    creators: (creatorsRes.data ?? []).map(
+      (row: {
+        creator_key: string;
+        score?: number;
+        recent_score?: number;
+        updated_at?: string | null;
+      }) => ({
+        creator_key: row.creator_key,
+        score: Number(row.score) || 0,
+        recent_score: Number(row.recent_score) || 0,
+        updated_at: row.updated_at ?? null,
+      }),
+    ),
     feedback: feedbackRes.data ?? [],
   });
 }

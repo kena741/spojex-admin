@@ -12,7 +12,6 @@ import {
   AdminModal,
   AdminSearchInput,
   AdminSelect,
-  AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge, verifiedTone } from "@/components/status-badge";
 import { organizationTypeLabel, organizationTypes } from "@/lib/catalog";
@@ -40,6 +39,7 @@ export default function OrganizationsPage() {
   const { can } = useAdminPermissions();
   const canWrite = can("organizations:write");
   const [rows, setRows] = useState<OrganizationRow[]>([]);
+  const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
   const [ownerCoins, setOwnerCoins] = useState<Record<string, CoinWalletRow>>({});
   const [liveGiftTotals, setLiveGiftTotals] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -89,12 +89,27 @@ export default function OrganizationsPage() {
     if (loadError) throw loadError;
     const orgs = (data ?? []) as OrganizationRow[];
     setRows(orgs);
-    const [wallets, liveTotals] = await Promise.all([
+    const orgIds = orgs.map((o) => o.id);
+    const [wallets, liveTotals, membersRes] = await Promise.all([
       loadCoinWalletsByUserIds(orgs.map((o) => o.user_id)),
-      loadOrgLiveGiftTotals(orgs.map((o) => o.id)),
+      loadOrgLiveGiftTotals(orgIds),
+      orgIds.length
+        ? getSpojexClient()
+            .from("organization_members")
+            .select("organization_id")
+            .in("organization_id", orgIds)
+            .limit(5000)
+        : Promise.resolve({ data: [] as { organization_id: string }[] }),
     ]);
     setOwnerCoins(wallets);
     setLiveGiftTotals(liveTotals);
+    const counts: Record<string, number> = {};
+    for (const id of orgIds) counts[id] = 1; // owner always counted
+    for (const m of membersRes.data ?? []) {
+      const oid = String(m.organization_id);
+      counts[oid] = (counts[oid] ?? 1) + 1;
+    }
+    setMemberCounts(counts);
   };
 
   useEffect(() => {
@@ -321,7 +336,7 @@ export default function OrganizationsPage() {
     <>
       <AdminPageHeader
         title="Organizations"
-        description={`${filtered.length} of ${rows.length} · clubs, academies, and more`}
+        description={`${filtered.length} of ${rows.length} · clubs, academies, and linked people`}
         stackOnSmall
         actions={
           canWrite ? (
@@ -386,92 +401,73 @@ export default function OrganizationsPage() {
       {loading ? <AdminLoadingRow label="Loading organizations…" /> : null}
       {error ? <AdminErrorAlert message={error} /> : null}
 
-      {/* Table Layout */}
-      <AdminTableShell>
-        {filtered.length === 0 && !loading ? (
-          <AdminEmpty
-            title="No organizations"
-            description={
-              canWrite
-                ? "Add a club or academy, or wait for individuals to create them in the app."
-                : "Organizations created in admin or the superapp appear here."
-            }
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">Organization</th>
-                  <th className="px-4 py-3 font-semibold">Type</th>
-                  <th className="px-4 py-3 font-semibold">Owner</th>
-                  <th className="px-4 py-3 font-semibold">Gifts received</th>
-                  <th className="px-4 py-3 font-semibold">Location</th>
-                  <th className="px-4 py-3 font-semibold">Verified</th>
-                  <th className="px-4 py-3 font-semibold">Created</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((row) => {
-                  const liveGifts = liveGiftTotals[row.id] ?? 0;
-                  const ownerReceived = ownerCoins[row.user_id]?.lifetime_received ?? 0;
-                  const shown = liveGifts > 0 ? liveGifts : ownerReceived;
-                  return (
-                    <tr key={row.id} className="border-b border-border last:border-0 hover:bg-muted/40">
-                      <td className="px-4 py-3">
-                        <Link href={`/admin/organizations/${row.id}`} className="font-medium text-text-primary">
-                          {row.name || "Unnamed"}
-                        </Link>
-                        <p className="text-xs text-text-secondary">
-                          {row.public_id}
-                          {row.is_platform ? " · Spojex platform" : ""}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3 text-text-secondary">{organizationTypeLabel(row.organization_type)}</td>
-                      <td className="px-4 py-3">
-                        {row.users ? (
-                          <Link href={`/admin/users/${row.users.id}`} className="text-primary">
-                            {row.users.display_name}
-                          </Link>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="font-medium tabular-nums text-text-primary">{formatCoins(shown)}</span>
-                        {liveGifts > 0 ? (
-                          <span className="mt-0.5 block text-[11px] text-text-secondary">Live gifts</span>
-                        ) : ownerReceived > 0 ? (
-                          <span className="mt-0.5 block text-[11px] text-text-secondary">Owner wallet</span>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3 text-text-secondary">{locationLabel(row.city, row.country)}</td>
-                      <td className="px-4 py-3">
-                        <StatusBadge tone={verifiedTone(row.verified)}>
-                          {row.verified ? "Verified" : "Unverified"}
-                        </StatusBadge>
-                      </td>
-                      <td className="px-4 py-3 text-text-secondary">{formatDate(row.created_at)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </AdminTableShell>
-
-      {/* Mobile Empty State */}
       {!loading && filtered.length === 0 ? (
-        <div className="lg:hidden">
-          <AdminEmpty
-            title="No organizations"
-            description={
-              canWrite
-                ? "Add a club or academy, or wait for individuals to create them in the app."
-                : "Organizations created in admin or the superapp appear here."
-            }
-          />
+        <AdminEmpty
+          title="No organizations"
+          description={
+            canWrite
+              ? "Add a club or academy, or wait for individuals to create them in the app."
+              : "Organizations created in admin or the superapp appear here."
+          }
+        />
+      ) : null}
+
+      {filtered.length > 0 ? (
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <ul className="divide-y divide-border">
+            {filtered.map((row) => {
+              const liveGifts = liveGiftTotals[row.id] ?? 0;
+              const ownerReceived = ownerCoins[row.user_id]?.lifetime_received ?? 0;
+              const shown = liveGifts > 0 ? liveGifts : ownerReceived;
+              const members = memberCounts[row.id] ?? 1;
+              return (
+                <li key={row.id}>
+                  <Link
+                    href={`/admin/organizations/${row.id}`}
+                    className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
+                  >
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-muted text-sm font-semibold text-text-secondary">
+                      {row.logo_url?.trim() ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={row.logo_url} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        (row.name || "O").slice(0, 1).toUpperCase()
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate font-medium text-foreground">{row.name || "Unnamed"}</p>
+                        <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+                          {organizationTypeLabel(row.organization_type)}
+                        </span>
+                        {row.is_platform ? (
+                          <span className="text-[10px] font-medium text-primary">Platform</span>
+                        ) : null}
+                      </div>
+                      <p className="truncate text-xs text-text-secondary">
+                        {[row.public_id, locationLabel(row.city, row.country)].filter(Boolean).join(" · ")}
+                      </p>
+                    </div>
+                    <div className="hidden shrink-0 flex-col items-end gap-1 sm:flex">
+                      <StatusBadge tone={verifiedTone(row.verified)}>
+                        {row.verified ? "Verified" : "Unverified"}
+                      </StatusBadge>
+                      <span className="text-[10px] text-text-hint">{members} people</span>
+                    </div>
+                    <div className="hidden w-28 shrink-0 text-right text-xs text-text-secondary lg:block">
+                      <span className="font-medium tabular-nums text-foreground">{formatCoins(shown)}</span>
+                      <span className="mt-0.5 block text-[10px] text-text-hint">
+                        {liveGifts > 0 ? "Live gifts" : "Activity"}
+                      </span>
+                    </div>
+                    <div className="hidden w-24 shrink-0 text-right text-[11px] text-text-hint xl:block">
+                      {formatDate(row.created_at)}
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       ) : null}
 
