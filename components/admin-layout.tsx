@@ -1,6 +1,7 @@
 import { useId, type ReactNode } from "react";
 import { Search } from "lucide-react";
 import Sidebar from "@/components/sidebar";
+import AdminTopBar from "@/components/admin-topbar";
 import { cn } from "@/lib/utils";
 
 export const adminPageMainClassName =
@@ -13,6 +14,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen w-full max-w-[100vw] overflow-x-hidden">
       <Sidebar />
       <main className={adminPageMainClassName}>
+        <AdminTopBar />
         <div className={adminPageContentClassName}>{children}</div>
       </main>
     </div>

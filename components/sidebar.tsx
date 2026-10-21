@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Bell,
@@ -10,10 +10,8 @@ import {
   FolderTree,
   Flag,
   LayoutDashboard,
-  LogOut,
   MessageCircle,
   MessagesSquare,
-  Moon,
   Music,
   Newspaper,
   Sparkles,
@@ -21,7 +19,6 @@ import {
   Shield,
   ShieldCheck,
   Store,
-  Sun,
   UserCog,
   UserRound,
   Users,
@@ -47,7 +44,6 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { getSpojexClient } from "@/lib/spojex/client";
 import { canReadRadioChat } from "@/lib/admin-permissions";
 import { canManageLiveEvents } from "@/lib/live-events";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
@@ -426,8 +422,6 @@ function matchTrackedHref(pathname: string): string | null {
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
-  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
     const defaults: Record<string, boolean> = {};
     for (const section of NAV_SECTIONS) {
@@ -440,7 +434,7 @@ export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [navQuery, setNavQuery] = useState("");
   const [frequentNav, setFrequentNav] = useState<FrequentNavEntry[]>([]);
-  const { can, staff } = useAdminPermissions();
+  const { can } = useAdminPermissions();
 
   const visibleSections = NAV_SECTIONS.map((section) => ({
     ...section,
@@ -468,11 +462,6 @@ export default function Sidebar() {
   const hasNavMatches = showDashboard || filteredSections.length > 0;
 
   useEffect(() => {
-    const saved = localStorage.getItem("theme");
-    const initial = saved === "dark" ? "dark" : "light";
-    document.documentElement.classList.toggle("dark", initial === "dark");
-    setTheme(initial);
-
     let stored: Record<string, boolean> = {};
     try {
       const raw = localStorage.getItem(SIDEBAR_OPEN_KEY);
@@ -563,20 +552,6 @@ export default function Sidebar() {
       saveFrequentNav(next);
       return next;
     });
-  };
-
-  const toggleTheme = () => {
-    setTheme((prev) => {
-      const next = prev === "dark" ? "light" : "dark";
-      document.documentElement.classList.toggle("dark", next === "dark");
-      localStorage.setItem("theme", next);
-      return next;
-    });
-  };
-
-  const signOut = async () => {
-    await getSpojexClient().auth.signOut();
-    router.replace("/login");
   };
 
   const sidebarContent = (
@@ -722,29 +697,6 @@ export default function Sidebar() {
         </nav>
       </div>
 
-      <div className="border-t border-sidebar-border p-3">
-        {staff ? (
-          <p className="mb-2 truncate px-3 text-xs text-text-hint">
-            {staff.full_name || staff.email || "Admin"} · {staff.role.replace(/_/g, " ")}
-          </p>
-        ) : null}
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className="mb-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-        >
-          {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
-        </button>
-        <button
-          type="button"
-          onClick={signOut}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-        >
-          <LogOut className="h-4 w-4" />
-          <span>Sign out</span>
-        </button>
-      </div>
     </>
   );
 
