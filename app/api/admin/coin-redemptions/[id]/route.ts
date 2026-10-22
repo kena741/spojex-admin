@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAnyAdminPermission } from "@/lib/admin-auth";
+import { logAdminActivity } from "@/lib/admin-activity-log";
 import { getSpojexApiBaseUrl } from "@/lib/env";
 import { requestAccessToken } from "@/lib/spojex/server";
 
@@ -27,8 +28,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const auth = await requireAnyAdminPermission([
-    "donations:write",
-    "requests:write",
+    "coins:redemptions:execute",
+    "coins:write",
   ]);
   if (!auth.ok) return auth.error;
 
@@ -61,10 +62,30 @@ export async function PATCH(
   );
   const payload = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
+    await logAdminActivity({
+      context: auth.context,
+      request,
+      action: "coins.redemption.resolve",
+      resource_type: "coin_redemption",
+      resource_id: id,
+      summary: `Coin redemption resolve failed (${action})`,
+      outcome: res.status === 403 ? "denied" : "error",
+      metadata: { action, status: res.status },
+    });
     return NextResponse.json(
       { error: backendError(payload, "Update failed") },
       { status: res.status },
     );
   }
+  await logAdminActivity({
+    context: auth.context,
+    request,
+    action: "coins.redemption.resolve",
+    resource_type: "coin_redemption",
+    resource_id: id,
+    summary: `Resolved coin redemption as ${action}`,
+    outcome: "success",
+    metadata: { action },
+  });
   return NextResponse.json(payload);
 }

@@ -14,6 +14,8 @@ export interface AdminActivityLog {
     display_summary?: string;
     metadata: Record<string, unknown>;
     env: string;
+    outcome?: string | null;
+    request_id?: string | null;
 }
 
 export interface CreateActivityLogPayload {

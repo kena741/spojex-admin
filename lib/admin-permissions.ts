@@ -45,16 +45,35 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { key: "banners:read", label: "View banners", group: "Content" },
   { key: "banners:write", label: "Manage banners", group: "Content" },
   { key: "analytics:read", label: "View analytics dashboard", group: "Content" },
-  { key: "wallets:read", label: "View wallets", group: "Finance" },
-  { key: "wallets:write", label: "Adjust wallets", group: "Finance" },
+  { key: "finance:read", label: "View transaction summaries", group: "Finance" },
+  { key: "finance:sensitive:read", label: "View sensitive payment details", group: "Finance" },
+  { key: "finance:export", label: "Export transactions", group: "Finance" },
+  { key: "wallets:read", label: "View balances and ledger", group: "Finance" },
+  { key: "wallets:adjust:request", label: "Request wallet adjustment", group: "Finance" },
+  { key: "wallets:adjust:approve", label: "Approve wallet adjustment", group: "Finance" },
+  { key: "wallets:adjust:execute", label: "Execute approved wallet adjustment", group: "Finance" },
+  { key: "wallets:adjust:history", label: "View adjustment history", group: "Finance" },
+  { key: "wallets:write", label: "Legacy: wallet adjust (maps to request/approve/execute)", group: "Finance" },
   { key: "withdrawals:read", label: "View withdrawals", group: "Finance" },
-  { key: "withdrawals:write", label: "Resolve withdrawals", group: "Finance" },
+  { key: "withdrawals:prepare", label: "Prepare / request withdrawal action", group: "Finance" },
+  { key: "withdrawals:approve", label: "Approve / reject withdrawal", group: "Finance" },
+  { key: "withdrawals:execute", label: "Execute / retry eligible withdrawal", group: "Finance" },
+  { key: "withdrawals:beneficiaries", label: "Manage payout beneficiaries", group: "Finance" },
+  { key: "withdrawals:write", label: "Legacy: resolve withdrawals (maps to prepare/approve/execute)", group: "Finance" },
   { key: "coins:read", label: "View coin catalog", group: "Finance" },
-  { key: "coins:write", label: "Manage coins & redemptions", group: "Finance" },
-  { key: "payments:read", label: "View payment settings", group: "Finance" },
-  { key: "payments:write", label: "Edit payment settings", group: "Finance" },
-  { key: "finance:read", label: "View transaction history", group: "Finance" },
-  { key: "finance:export", label: "Export transaction history", group: "Finance" },
+  { key: "coins:catalog:write", label: "Manage coin catalog", group: "Finance" },
+  { key: "coins:rates:propose", label: "Propose coin rate changes", group: "Finance" },
+  { key: "coins:rates:approve", label: "Approve coin rate changes", group: "Finance" },
+  { key: "coins:redemptions:execute", label: "Resolve coin redemptions", group: "Finance" },
+  { key: "coins:write", label: "Legacy: manage coins & redemptions", group: "Finance" },
+  { key: "payments:read", label: "View payment gateway status (no secrets)", group: "Finance" },
+  { key: "payments:config:propose", label: "Propose commission / fee changes", group: "Finance" },
+  { key: "payments:config:approve", label: "Approve commission / fee changes", group: "Finance" },
+  { key: "payments:credentials", label: "Rotate payment credentials (privileged)", group: "Finance" },
+  { key: "payments:write", label: "Legacy: edit payment settings", group: "Finance" },
+  { key: "finance:reconcile:read", label: "View reconciliation discrepancies", group: "Finance" },
+  { key: "finance:reconcile:propose", label: "Propose reconciliation resolution", group: "Finance" },
+  { key: "finance:reconcile:approve", label: "Approve reconciliation corrective action", group: "Finance" },
   { key: "network:read", label: "View connections", group: "Network" },
   { key: "network:write", label: "Manage connections", group: "Network" },
   { key: "reports:read", label: "View reports", group: "Network" },
@@ -73,40 +92,164 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { key: "logs:export", label: "Export activity logs", group: "Administration" },
 ];
 
-const READ_KEYS = PERMISSION_DEFINITIONS.filter((p) => p.key.endsWith(":read")).map((p) => p.key);
+const FINANCE_WRITE_PREFIXES = [
+  "wallets:adjust",
+  "wallets:write",
+  "withdrawals:prepare",
+  "withdrawals:approve",
+  "withdrawals:execute",
+  "withdrawals:beneficiaries",
+  "withdrawals:write",
+  "coins:catalog",
+  "coins:rates",
+  "coins:redemptions",
+  "coins:write",
+  "payments:config",
+  "payments:credentials",
+  "payments:write",
+  "finance:export",
+  "finance:sensitive",
+  "finance:reconcile:propose",
+  "finance:reconcile:approve",
+];
+
+function isFinanceWriteKey(key: string) {
+  return FINANCE_WRITE_PREFIXES.some((p) => key === p || key.startsWith(p));
+}
+
+const READ_KEYS = PERMISSION_DEFINITIONS.filter(
+  (p) =>
+    p.key.endsWith(":read") &&
+    p.key !== "messages:read" &&
+    p.key !== "finance:sensitive:read",
+).map((p) => p.key);
 
 export const DEFAULT_ADMIN_ROLES = [
   {
     slug: "super_admin",
     name: "Super Admin",
-    description: "Full access to every SpoJex admin module",
+    description:
+      "Exceptional platform administration. Does not silently bypass financial dual-control rules.",
     permissions: ["*"],
     is_system: true,
   },
   {
     slug: "operations_admin",
     name: "Operations Admin",
-    description: "Identities, marketplace, native apps, content, and network",
+    description: "Identities, marketplace, native apps, content, and network — no money movement",
     permissions: PERMISSION_DEFINITIONS.map((p) => p.key).filter(
-      (k) => !k.startsWith("admins:") && !k.startsWith("roles:") && k !== "logs:export",
+      (k) =>
+        !k.startsWith("admins:") &&
+        !k.startsWith("roles:") &&
+        k !== "logs:export" &&
+        k !== "messages:read" &&
+        k !== "payments:credentials" &&
+        !isFinanceWriteKey(k),
     ),
+    is_system: true,
+  },
+  {
+    slug: "finance_viewer",
+    name: "Finance Viewer",
+    description: "Read-only financial reporting (no sensitive payment secrets or exports)",
+    permissions: [
+      "finance:read",
+      "finance:reconcile:read",
+      "wallets:read",
+      "wallets:adjust:history",
+      "withdrawals:read",
+      "coins:read",
+      "payments:read",
+      "donations:read",
+      "requests:read",
+      "logs:read",
+    ],
+    is_system: true,
+  },
+  {
+    slug: "finance_operator",
+    name: "Finance Operator",
+    description: "Prepares financial requests; cannot approve own operations",
+    permissions: [
+      "finance:read",
+      "finance:reconcile:read",
+      "finance:reconcile:propose",
+      "wallets:read",
+      "wallets:adjust:request",
+      "wallets:adjust:history",
+      "withdrawals:read",
+      "withdrawals:prepare",
+      "coins:read",
+      "coins:catalog:write",
+      "coins:rates:propose",
+      "payments:read",
+      "payments:config:propose",
+      "donations:read",
+      "requests:read",
+      "logs:read",
+    ],
+    is_system: true,
+  },
+  {
+    slug: "finance_approver",
+    name: "Finance Approver",
+    description: "Approves eligible finance requests and executes when authorized",
+    permissions: [
+      "finance:read",
+      "finance:sensitive:read",
+      "finance:reconcile:read",
+      "finance:reconcile:approve",
+      "wallets:read",
+      "wallets:adjust:approve",
+      "wallets:adjust:execute",
+      "wallets:adjust:history",
+      "withdrawals:read",
+      "withdrawals:approve",
+      "withdrawals:execute",
+      "coins:read",
+      "coins:rates:approve",
+      "coins:redemptions:execute",
+      "payments:read",
+      "payments:config:approve",
+      "donations:read",
+      "requests:read",
+      "logs:read",
+    ],
     is_system: true,
   },
   {
     slug: "finance_admin",
     name: "Finance Admin",
-    description: "Wallets, withdrawals, coins, payment settings, and transaction history",
+    description: "Legacy combined finance role. Prefer split viewer/operator/approver for SoD.",
     permissions: [
+      "finance:read",
+      "finance:sensitive:read",
+      "finance:export",
+      "finance:reconcile:read",
+      "finance:reconcile:propose",
+      "finance:reconcile:approve",
       "wallets:read",
       "wallets:write",
+      "wallets:adjust:request",
+      "wallets:adjust:approve",
+      "wallets:adjust:execute",
+      "wallets:adjust:history",
       "withdrawals:read",
       "withdrawals:write",
+      "withdrawals:prepare",
+      "withdrawals:approve",
+      "withdrawals:execute",
+      "withdrawals:beneficiaries",
       "coins:read",
       "coins:write",
+      "coins:catalog:write",
+      "coins:rates:propose",
+      "coins:rates:approve",
+      "coins:redemptions:execute",
       "payments:read",
       "payments:write",
-      "finance:read",
-      "finance:export",
+      "payments:config:propose",
+      "payments:config:approve",
       "donations:read",
       "requests:read",
       "logs:read",
@@ -195,11 +338,49 @@ export const DEFAULT_ADMIN_ROLES = [
   {
     slug: "viewer",
     name: "Viewer",
-    description: "Read-only access across modules",
+    description:
+      "Read-only operational access. Excludes private messages, sensitive finance, and exports.",
     permissions: READ_KEYS,
     is_system: true,
   },
 ] as const;
+
+/** Legacy broad grants expand to granular keys (mirror backend PERMISSION_EXPANDS). */
+const PERMISSION_EXPANDS: Record<string, string[]> = {
+  "wallets:write": [
+    "wallets:adjust:request",
+    "wallets:adjust:approve",
+    "wallets:adjust:execute",
+    "wallets:adjust:history",
+  ],
+  "withdrawals:write": ["withdrawals:prepare", "withdrawals:approve", "withdrawals:execute"],
+  "coins:write": [
+    "coins:catalog:write",
+    "coins:rates:propose",
+    "coins:rates:approve",
+    "coins:redemptions:execute",
+  ],
+  "payments:write": ["payments:config:propose", "payments:config:approve"],
+  "finance:read": ["finance:reconcile:read", "wallets:adjust:history"],
+};
+
+export const SENSITIVE_PERMISSION_KEYS = new Set([
+  "finance:sensitive:read",
+  "finance:export",
+  "logs:export",
+  "payments:credentials",
+  "payments:write",
+  "wallets:adjust:execute",
+  "wallets:write",
+  "withdrawals:execute",
+  "withdrawals:write",
+  "coins:redemptions:execute",
+  "coins:write",
+  "messages:read",
+  "admins:write",
+  "roles:write",
+  "*",
+]);
 
 export type AdminRow = {
   id: string;
@@ -234,7 +415,17 @@ export function permissionMatches(granted: string, required: string) {
 }
 
 export function hasPermission(permissions: string[], required: string) {
-  return permissions.some((granted) => permissionMatches(granted, required));
+  const expanded = new Set<string>();
+  for (const key of permissions) {
+    expanded.add(key);
+    for (const extra of PERMISSION_EXPANDS[key] ?? []) expanded.add(extra);
+  }
+  if ([...expanded].some((g) => permissionMatches(g, "*")) || expanded.has("*")) {
+    return true;
+  }
+  const known = new Set(PERMISSION_DEFINITIONS.map((p) => p.key));
+  if (!known.has(required)) return false;
+  return [...expanded].some((granted) => permissionMatches(granted, required));
 }
 
 export function groupPermissionsByCategory(permissions: PermissionDefinition[]) {

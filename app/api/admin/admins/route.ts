@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdminPermission } from "@/lib/admin-auth";
+import { requireAdminPermission, requireAnyAdminPermission } from "@/lib/admin-auth";
 import { logAdminActivity } from "@/lib/admin-activity-log";
 import { getSpojexApiBaseUrl } from "@/lib/env";
 import { requestAccessToken } from "@/lib/spojex/server";
@@ -22,7 +22,7 @@ export async function GET() {
  * Does not default to Super Admin — role is required and must exist.
  */
 export async function POST(request: Request) {
-  const auth = await requireAdminPermission("admins:write");
+  const auth = await requireAnyAdminPermission(["admins:invite", "admins:write"]);
   if (!auth.ok) return auth.error;
 
   const body = (await request.json()) as {

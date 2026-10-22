@@ -10,6 +10,7 @@ export type LogAdminActivityInput = {
   summary: string;
   metadata?: Record<string, unknown>;
   route?: string | null;
+  outcome?: "success" | "denied" | "error";
 };
 
 export async function logAdminActivity(input: LogAdminActivityInput): Promise<void> {
@@ -47,6 +48,7 @@ export async function logAdminActivity(input: LogAdminActivityInput): Promise<vo
       summary: input.summary,
       metadata: sanitizeLogMetadata(input.metadata ?? {}),
       env,
+      outcome: input.outcome ?? "success",
     });
 
     if (error && process.env.NODE_ENV === "development") {

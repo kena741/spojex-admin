@@ -12,9 +12,15 @@ import { deleteAdmin, postAdmin } from "@/lib/hooks";
 import {
   groupPermissionsByCategory,
   PERMISSION_DEFINITIONS,
+  SENSITIVE_PERMISSION_KEYS,
   type AdminRoleRow,
 } from "@/lib/admin-permissions";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+
+function sensitiveCount(perms: string[]) {
+  if (perms.includes("*")) return SENSITIVE_PERMISSION_KEYS.size;
+  return perms.filter((p) => SENSITIVE_PERMISSION_KEYS.has(p)).length;
+}
 
 export default function RolesPage() {
   const { can } = useAdminPermissions();
@@ -26,7 +32,9 @@ export default function RolesPage() {
   const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
   const [permissions, setPermissions] = useState<string[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const grouped = useMemo(() => groupPermissionsByCategory(PERMISSION_DEFINITIONS), []);
+  const selected = rows.find((r) => r.id === selectedId) ?? null;
 
   const load = async () => {
     const response = await fetch("/api/admin/roles");
@@ -90,7 +98,7 @@ export default function RolesPage() {
     <>
       <AdminPageHeader
         title="Roles & permissions"
-        description="Searchable permission matrix with role descriptions and assigned staff counts"
+        description="System and custom roles. Custom roles do not silently receive newly introduced permissions."
       />
       {error ? <AdminErrorAlert message={error} /> : null}
 
@@ -151,65 +159,126 @@ export default function RolesPage() {
         {rows.length === 0 && !loading ? (
           <AdminEmpty title="No roles" description="Run 016_admins.sql to seed Super Admin, Operations, Identity, Marketplace, Support, and Viewer." />
         ) : (
-          <div className="divide-y divide-border">
-            {rows.map((role) => (
-              <div key={role.id} className="p-5">
-                <div className="mb-3 flex items-start justify-between gap-3">
-                  <div>
-                    <h2 className="font-heading text-sm font-semibold">{role.name}</h2>
-                    <p className="text-xs text-text-secondary">
-                      {role.slug} {role.is_system ? "· system" : ""}
-                      {typeof role.staff_count === "number"
-                        ? ` · ${role.staff_count} active staff`
-                        : ""}
-                    </p>
-                    <p className="mt-1 text-sm text-text-secondary">{role.description}</p>
-                  </div>
-                  {canWrite && !role.is_system ? (
+          <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+            <ul className="divide-y divide-border">
+              {rows.map((role) => {
+                const active = selectedId === role.id;
+                return (
+                  <li key={role.id}>
                     <button
                       type="button"
-                      onClick={() => remove(role.id)}
-                      className="text-sm text-red-600 hover:underline"
+                      onClick={() => setSelectedId(active ? null : role.id)}
+                      className={`block w-full px-4 py-3 text-left hover:bg-muted/50 ${
+                        active ? "bg-muted/80" : ""
+                      }`}
                     >
-                      Delete
+                      <p className="text-sm font-semibold">{role.name}</p>
+                      <p className="text-[11px] text-text-hint">
+                        {role.is_system ? "System" : "Custom"}
+                        {typeof role.staff_count === "number"
+                          ? ` · ${role.staff_count} staff`
+                          : ""}
+                        {" · "}
+                        {role.permissions.includes("*")
+                          ? "All permissions"
+                          : `${role.permissions.length} grants`}
+                        {" · "}
+                        {sensitiveCount(role.permissions)} sensitive
+                      </p>
+                      <p className="mt-1 line-clamp-2 text-xs text-text-secondary">
+                        {role.description}
+                      </p>
                     </button>
-                  ) : null}
-                </div>
-                <p className="text-xs text-text-hint">
-                  {role.permissions.includes("*")
-                    ? "All permissions"
-                    : `${role.permissions.length} permissions`}
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="border-l border-border p-4">
+              {!selected ? (
+                <p className="text-sm text-text-secondary">
+                  Select a role to inspect grants grouped by module.
                 </p>
-                {canWrite && !role.permissions.includes("*") ? (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {PERMISSION_DEFINITIONS.map((item) => {
-                      const checked = role.permissions.includes(item.key);
-                      return (
-                        <button
-                          key={item.key}
-                          type="button"
-                          onClick={() =>
-                            savePermissions(
-                              role,
-                              checked
-                                ? role.permissions.filter((key) => key !== item.key)
-                                : [...role.permissions, item.key],
-                            )
-                          }
-                          className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                            checked
-                              ? "border-primary/30 bg-primary/10 text-primary"
-                              : "border-border bg-muted text-text-secondary"
-                          }`}
-                        >
-                          {item.label}
-                        </button>
-                      );
-                    })}
+              ) : (
+                <>
+                  <div className="mb-4 flex items-start justify-between gap-3">
+                    <div>
+                      <h2 className="font-heading text-sm font-semibold">{selected.name}</h2>
+                      <p className="text-xs text-text-secondary">
+                        {selected.slug}
+                        {selected.is_system ? " · system (synced from catalog)" : ""}
+                      </p>
+                      <p className="mt-1 text-sm text-text-secondary">{selected.description}</p>
+                    </div>
+                    {canWrite && !selected.is_system ? (
+                      <button
+                        type="button"
+                        onClick={() => remove(selected.id)}
+                        className="text-sm text-red-600 hover:underline"
+                      >
+                        Delete
+                      </button>
+                    ) : null}
                   </div>
-                ) : null}
-              </div>
-            ))}
+                  {selected.permissions.includes("*") ? (
+                    <p className="text-sm text-text-secondary">
+                      Super Admin wildcard. Financial self-approval and last-admin protections still
+                      apply on the server.
+                    </p>
+                  ) : (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {Object.entries(grouped).map(([group, items]) => (
+                        <fieldset key={group} className="rounded-lg border border-border p-3">
+                          <legend className="px-1 text-xs font-semibold uppercase text-text-hint">
+                            {group}
+                          </legend>
+                          <div className="space-y-1.5">
+                            {items.map((item) => {
+                              const checked = selected.permissions.includes(item.key);
+                              const sensitive = SENSITIVE_PERMISSION_KEYS.has(item.key);
+                              return (
+                                <label
+                                  key={item.key}
+                                  className="flex items-start gap-2 text-sm"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="mt-0.5"
+                                    checked={checked}
+                                    disabled={!canWrite || selected.is_system}
+                                    onChange={() => {
+                                      if (!canWrite || selected.is_system) return;
+                                      void savePermissions(
+                                        selected,
+                                        checked
+                                          ? selected.permissions.filter((key) => key !== item.key)
+                                          : [...selected.permissions, item.key],
+                                      );
+                                    }}
+                                  />
+                                  <span>
+                                    <span className="block">
+                                      {item.label}
+                                      {sensitive ? (
+                                        <span className="ml-1 text-[10px] font-semibold uppercase text-amber-700">
+                                          sensitive
+                                        </span>
+                                      ) : null}
+                                    </span>
+                                    <span className="block font-mono text-[10px] text-text-hint">
+                                      {item.key} · {checked ? "granted" : "not granted"}
+                                    </span>
+                                  </span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </fieldset>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         )}
       </AdminTableShell>

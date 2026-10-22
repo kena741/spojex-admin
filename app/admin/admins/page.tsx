@@ -37,6 +37,9 @@ export default function AdminsPage() {
   const [saving, setSaving] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [roleEdit, setRoleEdit] = useState<AdminRow | null>(null);
+  const [nextRole, setNextRole] = useState("");
+  const [roleSaving, setRoleSaving] = useState(false);
 
   const load = async () => {
     const [adminsRes, rolesRes] = await Promise.all([
@@ -89,12 +92,21 @@ export default function AdminsPage() {
     }
   };
 
-  const updateRole = async (id: string, role: string) => {
+  const saveRoleChange = async () => {
+    if (!roleEdit || !nextRole || nextRole === roleEdit.role) {
+      setRoleEdit(null);
+      return;
+    }
+    setRoleSaving(true);
+    setError(null);
     try {
-      await patchAdmin(`/api/admin/admins/${id}`, { role });
+      await patchAdmin(`/api/admin/admins/${roleEdit.id}`, { role: nextRole });
+      setRoleEdit(null);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
+    } finally {
+      setRoleSaving(false);
     }
   };
 
@@ -156,6 +168,7 @@ export default function AdminsPage() {
                   <th className="px-4 py-3 font-semibold">Admin</th>
                   <th className="px-4 py-3 font-semibold">Role</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold">Staff / user IDs</th>
                   <th className="px-4 py-3 font-semibold">Added</th>
                   {canWrite ? <th className="px-4 py-3 font-semibold" /> : null}
                 </tr>
@@ -165,46 +178,60 @@ export default function AdminsPage() {
                   <tr key={row.id} className="border-b border-border last:border-0">
                     <td className="px-4 py-3">
                       <p className="font-medium">{row.full_name || "Unnamed"}</p>
-                      <p className="text-xs text-text-secondary">{row.email || row.user_id.slice(0, 8)}</p>
+                      <p className="text-xs text-text-secondary">{row.email || "—"}</p>
                     </td>
                     <td className="px-4 py-3">
-                      {canWrite ? (
-                        <select
-                          value={row.role}
-                          onChange={(event) => updateRole(row.id, event.target.value)}
-                          className="h-9 rounded-lg border border-border px-2 text-sm"
-                        >
-                          {(roles.length ? roles : [{ slug: row.role, name: formatStatusLabel(row.role) }]).map(
-                            (role) => (
-                              <option key={role.slug} value={role.slug}>
-                                {role.name}
-                              </option>
-                            ),
-                          )}
-                        </select>
-                      ) : (
-                        formatStatusLabel(row.role)
-                      )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-medium">{formatStatusLabel(row.role)}</span>
+                        {canWrite ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNextRole(row.role);
+                              setRoleEdit(row);
+                            }}
+                            className="text-xs text-primary hover:underline"
+                          >
+                            Change
+                          </button>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge tone={row.is_active ? "success" : "neutral"}>
-                        {row.is_active ? "Active" : "Disabled"}
+                        {row.is_active ? "Active" : "Suspended"}
                       </StatusBadge>
+                    </td>
+                    <td className="px-4 py-3 font-mono text-[10px] text-text-hint">
+                      <p title="Staff record id">{row.id}</p>
+                      <p title="Linked users.id">{row.user_id}</p>
                     </td>
                     <td className="px-4 py-3 text-text-secondary">{formatDate(row.created_at)}</td>
                     {canWrite ? (
                       <td className="px-4 py-3 text-right">
                         <button
                           type="button"
-                          onClick={() => toggleActive(row)}
+                          onClick={() => {
+                            const ok = window.confirm(
+                              row.is_active
+                                ? "Suspend this admin? Active sessions will be revoked."
+                                : "Re-enable this admin? Previous revoked sessions stay invalid.",
+                            );
+                            if (ok) void toggleActive(row);
+                          }}
                           className="mr-3 text-sm text-primary hover:underline"
                         >
-                          {row.is_active ? "Disable" : "Enable"}
+                          {row.is_active ? "Suspend" : "Re-enable"}
                         </button>
                         {staff?.id !== row.id ? (
                           <button
                             type="button"
-                            onClick={() => remove(row.id)}
+                            onClick={() => {
+                              const ok = window.confirm(
+                                "Remove this staff membership? Audit history is retained.",
+                              );
+                              if (ok) void remove(row.id);
+                            }}
                             className="text-sm text-red-600 hover:underline"
                           >
                             Remove
@@ -219,6 +246,53 @@ export default function AdminsPage() {
           </div>
         )}
       </AdminTableShell>
+
+      <AdminModal
+        open={Boolean(roleEdit)}
+        title="Change role"
+        onClose={() => {
+          if (roleSaving) return;
+          setRoleEdit(null);
+        }}
+        footer={
+          <AdminModalFooter
+            onCancel={() => setRoleEdit(null)}
+            onSave={() => void saveRoleChange()}
+            saving={roleSaving}
+            saveLabel="Save role"
+          />
+        }
+      >
+        {roleEdit ? (
+          <div className="space-y-3 text-sm">
+            <p>
+              Changing access for <strong>{roleEdit.full_name || roleEdit.email}</strong>
+            </p>
+            <p className="text-xs text-text-secondary">
+              Current: {formatStatusLabel(roleEdit.role)} → New role below. Save is required; the
+              dropdown alone does not apply changes.
+            </p>
+            <AdminSelect value={nextRole} onChange={setNextRole}>
+              {(roles.length
+                ? roles
+                : [{ slug: roleEdit.role, name: formatStatusLabel(roleEdit.role) }]
+              ).map((role) => (
+                <option key={role.slug} value={role.slug}>
+                  {role.name}
+                </option>
+              ))}
+            </AdminSelect>
+            {nextRole && nextRole !== roleEdit.role ? (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                Impact: effective permissions change from{" "}
+                <strong>{formatStatusLabel(roleEdit.role)}</strong> to{" "}
+                <strong>{formatStatusLabel(nextRole)}</strong>. Financial dual-control rules still
+                apply regardless of Super Admin.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </AdminModal>
 
       <AdminModal
         open={createOpen}

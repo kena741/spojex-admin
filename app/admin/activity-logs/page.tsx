@@ -14,41 +14,26 @@ import {
 import { ActivityLogDetails } from "@/components/ActivityLogDetails";
 import { hasActivityDetails } from "@/lib/activity-log-changes";
 import type { AdminActivityLog } from "@/lib/activity-log";
+import {
+  AUDIT_ACTION_REGISTRY,
+  AUDIT_OUTCOMES,
+  AUDIT_RESOURCE_REGISTRY,
+} from "@/lib/audit-event-registry";
 import { adminFetch } from "@/lib/hooks";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { StatusBadge } from "@/components/status-badge";
 
 const PAGE_SIZE = 30;
 
-const ACTION_OPTIONS = [
-  "create",
-  "update",
-  "delete",
-  "archive",
-  "restore",
-  "approve",
-  "reject",
-  "transfer",
-  "verify",
-  "activate",
-];
+const ACTION_OPTIONS = [...AUDIT_ACTION_REGISTRY];
+const RESOURCE_OPTIONS = [...AUDIT_RESOURCE_REGISTRY];
 
-const RESOURCE_OPTIONS = [
-  "admin",
-  "role",
-  "user",
-  "organization",
-  "service",
-  "booking",
-  "settings",
-  "payment",
-  "withdrawal",
-  "donation",
-  "live_event",
-  "event",
-  "stadium",
-  "news",
-  "stream",
-];
+function outcomeTone(outcome?: string | null): "success" | "warning" | "danger" | "neutral" {
+  if (outcome === "success") return "success";
+  if (outcome === "denied") return "warning";
+  if (outcome === "error") return "danger";
+  return "neutral";
+}
 
 export default function ActivityLogsPage() {
   const { can, loading: permsLoading } = useAdminPermissions();
@@ -151,12 +136,16 @@ export default function ActivityLogsPage() {
     <div>
       <AdminPageHeader
         title="Activity Logs"
-        description="Track actions performed by admin users"
+        description="Append-only audit of privileged admin actions. Times shown in your browser local timezone."
         actions={
           <div className="flex gap-2">
             {canExport ? (
               <a
-                href="/api/admin/activity-logs/export"
+                href={`/api/admin/activity-logs/export?${new URLSearchParams({
+                  ...(actionFilter ? { action: actionFilter } : {}),
+                  ...(resourceFilter ? { resource_type: resourceFilter } : {}),
+                  ...(outcomeFilter ? { outcome: outcomeFilter } : {}),
+                }).toString()}`}
                 className="inline-flex h-9 items-center rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted"
               >
                 Export
@@ -199,11 +188,17 @@ export default function ActivityLogsPage() {
           </AdminSelect>
           <AdminSelect value={outcomeFilter} onChange={setOutcomeFilter}>
             <option value="">All outcomes</option>
-            <option value="success">success</option>
-            <option value="denied">denied</option>
-            <option value="error">error</option>
+            {AUDIT_OUTCOMES.map((outcome) => (
+              <option key={outcome} value={outcome}>
+                {outcome}
+              </option>
+            ))}
           </AdminSelect>
         </div>
+        <p className="mt-2 text-[11px] text-text-hint">
+          Filters use the canonical audit registry. Historical rows with other action names remain
+          searchable via the text box on the current page.
+        </p>
       </AdminFilterPanel>
 
       {loading ? <AdminLoadingRow label="Loading activity logs…" /> : null}
@@ -218,9 +213,10 @@ export default function ActivityLogsPage() {
                 <th className="px-4 py-3 font-semibold">Admin</th>
                 <th className="px-4 py-3 font-semibold">Action</th>
                 <th className="px-4 py-3 font-semibold">Resource</th>
+                <th className="px-4 py-3 font-semibold">Outcome</th>
                 <th className="px-4 py-3 font-semibold">Summary</th>
                 <th className="w-[120px] px-4 py-3 font-semibold">Details</th>
-                <th className="px-4 py-3 font-semibold">When</th>
+                <th className="px-4 py-3 font-semibold">When (local)</th>
               </tr>
             </thead>
             <tbody>
@@ -230,6 +226,9 @@ export default function ActivityLogsPage() {
                   hasActivityDetails(log.metadata) ||
                   Boolean(log.resource_id) ||
                   Boolean(log.route);
+                const outcome =
+                  log.outcome ||
+                  (typeof log.metadata?.outcome === "string" ? log.metadata.outcome : null);
 
                 return (
                   <React.Fragment key={log.id}>
@@ -267,6 +266,11 @@ export default function ActivityLogsPage() {
                           ) : null}
                         </div>
                       </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge tone={outcomeTone(typeof outcome === "string" ? outcome : null)}>
+                          {typeof outcome === "string" && outcome ? outcome : "Not recorded"}
+                        </StatusBadge>
+                      </td>
                       <td className="max-w-md px-4 py-3 text-muted-foreground">
                         {log.display_summary || log.summary}
                       </td>
@@ -291,7 +295,7 @@ export default function ActivityLogsPage() {
                     </tr>
                     {isExpanded ? (
                       <tr className="bg-muted/40">
-                        <td colSpan={7} className="px-4 py-4">
+                        <td colSpan={8} className="px-4 py-4">
                           <ActivityLogDetails
                             metadata={log.metadata}
                             resourceId={log.resource_id}
@@ -306,7 +310,7 @@ export default function ActivityLogsPage() {
               })}
               {filtered.length === 0 && !loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
+                  <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
                     <div className="flex flex-col items-center gap-3">
                       <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
                         <Search className="h-8 w-8 text-muted-foreground" />
