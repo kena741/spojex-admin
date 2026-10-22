@@ -166,6 +166,28 @@ export function formatEventWhenWithTz(
   }
 }
 
+/** Compact schedule for dense tables (timezone belongs in the column header). */
+export function formatEventWhenCompact(
+  value?: string | null,
+  timeZone = "Africa/Addis_Ababa",
+) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  try {
+    return date.toLocaleString("en-GB", {
+      timeZone,
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return formatEventWhen(value);
+  }
+}
+
 export function eventPhotoUrls(photos: unknown): string[] {
   if (!Array.isArray(photos)) return [];
   return photos

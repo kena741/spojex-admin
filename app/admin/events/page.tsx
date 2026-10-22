@@ -31,12 +31,11 @@ import {
   eventVisibilities,
   eventVisibilityLabel,
   formatEventPrice,
-  formatEventWhenWithTz,
+  formatEventWhenCompact,
 } from "@/lib/events";
 import { deleteAdmin, patchAdmin, postAdminResponse, adminFetch } from "@/lib/hooks";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { EventRow } from "@/lib/types";
-import { formatDate } from "@/lib/utils";
 
 const fieldClass = "h-10 w-full rounded-lg border border-border px-3 text-sm";
 
@@ -442,29 +441,35 @@ export default function EventsPage() {
           <AdminEmpty title="No events" description="Create an event to sell tickets." />
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
+            <table className="min-w-[1120px] w-full table-fixed text-left text-sm">
               <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
                 <tr>
-                  <th className="px-4 py-3 font-semibold">Event</th>
-                  <th className="px-4 py-3 font-semibold">When (Africa/Addis_Ababa)</th>
-                  <th className="px-4 py-3 font-semibold" title="Active tier prices; legacy ticket_price only if no active tiers">
-                    Ticket price
-                  </th>
-                  <th className="px-4 py-3 font-semibold" title="Confirmed paid quantity (pending reservations excluded)">
-                    Sold / capacity
+                  <th className="w-[26%] px-4 py-3 font-semibold">Event</th>
+                  <th className="w-[14%] px-4 py-3 font-semibold" title="Africa/Addis_Ababa">
+                    When
                   </th>
                   <th
-                    className="px-4 py-3 font-semibold"
+                    className="w-[12%] px-4 py-3 font-semibold"
+                    title="Active tier prices; legacy ticket_price only if no active tiers"
+                  >
+                    Price
+                  </th>
+                  <th
+                    className="w-[10%] px-4 py-3 font-semibold"
+                    title="Confirmed paid quantity (pending reservations excluded)"
+                  >
+                    Sold
+                  </th>
+                  <th
+                    className="w-[11%] px-4 py-3 font-semibold"
                     title="Verified payment collections only — pending checkouts excluded"
                   >
-                    Verified collections
+                    Collections
                   </th>
-                  <th className="px-4 py-3 font-semibold">Upcoming promo</th>
-                  <th className="px-4 py-3 font-semibold">Featured</th>
-                  <th className="px-4 py-3 font-semibold">Publication</th>
-                  <th className="px-4 py-3 font-semibold">Created</th>
-                  <th className="px-4 py-3 font-semibold">Open</th>
-                  {canWrite ? <th className="px-4 py-3 font-semibold">Actions</th> : null}
+                  <th className="w-[8%] px-4 py-3 font-semibold">Promo</th>
+                  <th className="w-[8%] px-4 py-3 font-semibold">Featured</th>
+                  <th className="w-[8%] px-4 py-3 font-semibold">Status</th>
+                  <th className="w-[13%] px-4 py-3 font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -473,120 +478,133 @@ export default function EventsPage() {
                   const sold = row.inventory?.confirmed_sold ?? 0;
                   const capacity = row.inventory?.capacity ?? row.capacity ?? 0;
                   const reserved = row.inventory?.reserved ?? 0;
+                  const meta = [
+                    row.organizer_name || null,
+                    row.venue_name || row.location || null,
+                    eventLifecycleLabel(row.lifecycle),
+                  ]
+                    .filter(Boolean)
+                    .join(" · ");
                   return (
-                    <tr key={row.id} className="border-b border-border last:border-0 hover:bg-muted/30">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
+                    <tr key={row.id} className="border-b border-border last:border-0 hover:bg-muted/40">
+                      <td className="px-4 py-3 align-middle">
+                        <div className="flex min-w-0 items-center gap-3">
                           {cover ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={cover} alt="" className="h-11 w-16 shrink-0 rounded-md object-cover" />
+                            <img
+                              src={cover}
+                              alt=""
+                              className="h-11 w-14 shrink-0 rounded-md object-cover"
+                            />
                           ) : (
-                            <div className="flex h-11 w-16 shrink-0 items-center justify-center rounded-md bg-muted text-[10px] text-text-secondary">
+                            <div className="flex h-11 w-14 shrink-0 items-center justify-center rounded-md bg-muted text-[10px] text-text-secondary">
                               No img
                             </div>
                           )}
-                          <div>
-                            <Link href={`/admin/events/${row.id}`} className="font-medium hover:text-primary">
+                          <div className="min-w-0 flex-1">
+                            <Link
+                              href={`/admin/events/${row.id}`}
+                              className="block truncate font-medium text-text-primary hover:text-primary"
+                              title={row.name}
+                            >
                               {row.name}
                             </Link>
-                            <p className="text-xs text-text-secondary">
-                              {[
-                                row.organizer_name || null,
-                                row.venue_name || row.location || null,
-                                eventCategoryLabel(row.category),
-                                eventVisibilityLabel(row.visibility),
-                                eventLifecycleLabel(row.lifecycle),
-                              ]
-                                .filter(Boolean)
-                                .join(" · ")}
+                            <p className="truncate text-xs text-text-hint" title={meta}>
+                              {meta || "—"}
+                            </p>
+                            <p className="truncate text-[11px] text-text-hint">
+                              {eventCategoryLabel(row.category)} · {eventVisibilityLabel(row.visibility)}
                             </p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-xs text-text-secondary">
-                        {formatEventWhenWithTz(row.starts_at)}
+                      <td className="px-4 py-3 align-middle text-xs text-text-secondary whitespace-nowrap">
+                        <span className="block">{formatEventWhenCompact(row.starts_at)}</span>
                         {row.ends_at ? (
-                          <span className="mt-0.5 block">→ {formatEventWhenWithTz(row.ends_at)}</span>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="font-medium">{row.pricing?.label || formatEventPrice(row.ticket_price, row.currency)}</span>
-                        {row.pricing?.legacy_fallback_used ? (
-                          <span className="mt-0.5 block text-[10px] text-amber-700">Legacy fallback</span>
-                        ) : (
-                          <span className="mt-0.5 block text-[10px] text-text-hint">Active tiers</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 tabular-nums text-xs">
-                        {sold}
-                        {capacity > 0 ? <span className="text-text-secondary"> / {capacity}</span> : null}
-                        {reserved > 0 ? (
-                          <span className="mt-0.5 block text-[10px] text-text-hint">
-                            +{reserved} reserved
+                          <span className="mt-0.5 block text-text-hint">
+                            → {formatEventWhenCompact(row.ends_at)}
                           </span>
                         ) : null}
                       </td>
-                      <td className="px-4 py-3 font-medium text-xs">
+                      <td className="px-4 py-3 align-middle">
+                        <span className="block truncate font-medium" title={row.pricing?.label || undefined}>
+                          {row.pricing?.label || formatEventPrice(row.ticket_price, row.currency)}
+                        </span>
+                        {row.pricing?.legacy_fallback_used ? (
+                          <span className="mt-0.5 block truncate text-[10px] text-amber-700">Legacy</span>
+                        ) : (
+                          <span className="mt-0.5 block truncate text-[10px] text-text-hint">Tiers</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 align-middle tabular-nums text-xs whitespace-nowrap">
+                        {sold}
+                        {capacity > 0 ? <span className="text-text-secondary"> / {capacity}</span> : null}
+                        {reserved > 0 ? (
+                          <span className="mt-0.5 block text-[10px] text-text-hint">+{reserved} hold</span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 align-middle font-medium text-xs whitespace-nowrap">
                         {formatEventPrice(
                           Number(row.verified_collections?.amount ?? 0),
                           row.verified_collections?.currency || row.currency,
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-middle">
                         {canWrite ? (
                           <button
                             type="button"
                             onClick={() => toggleUpcoming(row)}
-                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${
                               row.is_upcoming
                                 ? "bg-emerald-100 text-emerald-800"
                                 : "bg-muted text-text-secondary hover:bg-muted/80"
                             }`}
                           >
-                            {row.is_upcoming ? "Upcoming" : "Off"}
+                            {row.is_upcoming ? "On" : "Off"}
                           </button>
                         ) : row.is_upcoming ? (
-                          <StatusBadge tone="success">Upcoming</StatusBadge>
+                          <StatusBadge tone="success">On</StatusBadge>
                         ) : (
                           <span className="text-xs text-text-secondary">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-middle">
                         {canWrite ? (
                           <button
                             type="button"
                             onClick={() => toggleFeatured(row)}
-                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${
                               row.is_featured
                                 ? "bg-violet-100 text-violet-800"
                                 : "bg-muted text-text-secondary hover:bg-muted/80"
                             }`}
                           >
-                            {row.is_featured ? "Featured" : "Off"}
+                            {row.is_featured ? "On" : "Off"}
                           </button>
                         ) : row.is_featured ? (
-                          <StatusBadge tone="info">Featured</StatusBadge>
+                          <StatusBadge tone="info">On</StatusBadge>
                         ) : (
                           <span className="text-xs text-text-secondary">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge tone={requestTone(row.status)}>{eventStatusLabel(row.status)}</StatusBadge>
+                      <td className="px-4 py-3 align-middle">
+                        <StatusBadge tone={requestTone(row.status)}>
+                          {eventStatusLabel(row.status)}
+                        </StatusBadge>
                       </td>
-                      <td className="px-4 py-3 text-text-secondary">{formatDate(row.created_at)}</td>
-                      <td className="px-4 py-3">
-                        <Link
-                          href={`/admin/events/${row.id}`}
-                          className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
-                        >
-                          Open event
-                        </Link>
+                      <td className="px-4 py-3 align-middle">
+                        <div className="flex flex-nowrap items-center gap-2">
+                          <Link
+                            href={`/admin/events/${row.id}`}
+                            className="whitespace-nowrap rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
+                          >
+                            Open
+                          </Link>
+                          {canWrite ? (
+                            <AdminTableActions canWrite onDelete={() => remove(row)} />
+                          ) : null}
+                        </div>
                       </td>
-                      {canWrite ? (
-                        <td className="px-4 py-3">
-                          <AdminTableActions canWrite onDelete={() => remove(row)} />
-                        </td>
-                      ) : null}
                     </tr>
                   );
                 })}
