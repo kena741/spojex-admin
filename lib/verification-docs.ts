@@ -1,4 +1,4 @@
-/** Role-based verification document catalog (Zemen documents + sub_category_documents pattern). */
+/** Role-based verification document catalog. */
 
 export type VerificationDocStep = "identity" | "role_evidence";
 

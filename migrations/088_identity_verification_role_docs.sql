@@ -1,4 +1,4 @@
--- Role-based identity verification document catalog (Zemen/LoleLink pattern).
+-- Role-based identity verification document catalog.
 -- Document types + per-role requirements drive mobile upload steps and admin review.
 -- Safe to re-run.
 
@@ -28,7 +28,7 @@ create trigger identity_document_types_updated_at
   for each row execute function public.set_updated_at();
 
 -- ---------------------------------------------------------------------------
--- Mapping: identity role slug → document type (like Zemen sub_category_documents)
+-- Mapping: identity role slug → document type
 -- ---------------------------------------------------------------------------
 create table if not exists public.identity_role_document_requirements (
   id uuid primary key default gen_random_uuid(),

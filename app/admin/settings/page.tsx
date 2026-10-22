@@ -344,7 +344,7 @@ export default function GlobalSettingsPage() {
     <div className="space-y-4">
       <AdminPageHeader
         title="Global settings"
-        description="App-wide configuration (same surface as Lolelink / Zemen admin)."
+        description="Platform-wide configuration for SpoJex."
         breadcrumbs={[
           { label: "Dashboard", href: "/admin/dashboard" },
           { label: "Global settings" },
@@ -841,7 +841,6 @@ export default function GlobalSettingsPage() {
                     </div>
                   </div>
 
-                  {/* Chapa — same layout as Lolelink */}
                   <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
                     <h3 className="mb-4 text-lg font-bold text-foreground">Chapa</h3>
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">

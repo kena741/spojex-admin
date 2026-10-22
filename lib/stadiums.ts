@@ -318,7 +318,7 @@ export function parseMapsCoordinates(input: string): { latitude: number; longitu
   return null;
 }
 
-/** Cover image: prefer image_url, else first entry in photos (same as mobile app). */
+/** Cover image: prefer image_url, else first entry in photos. */
 export function stadiumCoverUrl(row: {
   image_url?: string | null;
   photos?: unknown;
