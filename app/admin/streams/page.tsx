@@ -1,41 +1,189 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Radio, Tv } from "lucide-react";
+import { Info, Radio, Tv } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
 import LiveEventsPanel from "@/components/live-events-panel";
 import RadioStreamsPanel from "@/components/radio-streams-panel";
+import { adminFetch } from "@/lib/hooks";
 import { canManageLiveEvents } from "@/lib/live-events";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { cn } from "@/lib/utils";
 
-export type StreamsTab = "radio" | "video";
+/** `live` is canonical; `video` is accepted from old bookmarks and links. */
+export type StreamsTab = "radio" | "live";
 
 const TABS: { id: StreamsTab; label: string; icon: typeof Radio }[] = [
   { id: "radio", label: "Radio", icon: Radio },
-  { id: "video", label: "Video", icon: Tv },
+  { id: "live", label: "Live Events", icon: Tv },
 ];
+
+type Overview = {
+  radio?: {
+    enabled_stations?: number;
+    total_stations?: number;
+    health_failures?: number;
+    reachable?: number;
+    health_unknown?: number;
+    definitions?: Record<string, string>;
+  };
+  live_events?: {
+    scheduled_broadcasts?: number;
+    confirmed_live_sessions?: number;
+    live_source_gaps?: number;
+    definitions?: Record<string, string>;
+  };
+  config_vs_health?: string;
+};
+
+function SummaryCard({
+  label,
+  value,
+  hint,
+  tooltip,
+  tone,
+}: {
+  label: string;
+  value: number | null;
+  hint?: string;
+  tooltip?: string;
+  tone?: "danger";
+}) {
+  return (
+    <div
+      className="min-w-0 rounded-xl border border-border bg-card p-3 shadow-sm"
+      title={tooltip}
+    >
+      <p className="flex items-center gap-1 text-xs font-semibold text-text-secondary">
+        <span className="truncate">{label}</span>
+        {tooltip ? <Info className="h-3 w-3 shrink-0 text-text-hint" aria-label={tooltip} /> : null}
+      </p>
+      <p
+        className={cn(
+          "mt-1 text-xl font-bold tabular-nums",
+          tone === "danger" && (value ?? 0) > 0 ? "text-red-600" : "text-text-primary",
+        )}
+      >
+        {value == null ? "—" : value.toLocaleString()}
+      </p>
+      {hint ? <p className="mt-0.5 text-[11px] leading-snug text-text-secondary">{hint}</p> : null}
+    </div>
+  );
+}
+
+function StreamsOverviewCards({ enabled }: { enabled: boolean }) {
+  const [overview, setOverview] = useState<Overview | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    adminFetch("/api/admin/streams/overview")
+      .then(async (res) => {
+        const payload = (await res.json().catch(() => ({}))) as Overview;
+        if (!res.ok) throw new Error("overview");
+        if (!cancelled) setOverview(payload);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled]);
+
+  if (!enabled) return null;
+  if (failed) {
+    return (
+      <p className="mb-4 text-xs text-text-secondary">Summary is unavailable right now.</p>
+    );
+  }
+
+  const radio = overview?.radio;
+  const live = overview?.live_events;
+  const gaps = live?.live_source_gaps ?? 0;
+
+  return (
+    <section aria-label="Streams summary" className="mb-5">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <SummaryCard
+          label="Enabled radio stations"
+          value={radio ? (radio.enabled_stations ?? 0) : null}
+          hint={
+            radio
+              ? `of ${radio.total_stations ?? 0} · listing status, not health`
+              : undefined
+          }
+          tooltip={
+            radio?.definitions?.enabled ??
+            "Publication status = active (on-air listing). This is not playback health."
+          }
+        />
+        <SummaryCard
+          label="Scheduled broadcasts"
+          value={live ? (live.scheduled_broadcasts ?? 0) : null}
+          hint="Countdown alone does not mean live"
+          tooltip={
+            live?.definitions?.scheduled ??
+            "Status = scheduled. A countdown can reach zero without going live."
+          }
+        />
+        <SummaryCard
+          label="Confirmed live sessions"
+          value={live ? (live.confirmed_live_sessions ?? 0) : null}
+          hint={gaps > 0 ? `${gaps} live without a ready source` : "Explicitly set live by an admin"}
+          tooltip={
+            live?.definitions?.confirmed_live ??
+            "Status = live, set through an explicit go-live action."
+          }
+        />
+        <SummaryCard
+          label="Streams with detected failures"
+          value={radio ? (radio.health_failures ?? 0) : null}
+          hint={
+            radio
+              ? `${radio.reachable ?? 0} reachable · ${radio.health_unknown ?? 0} unchecked`
+              : undefined
+          }
+          tone="danger"
+          tooltip={
+            radio?.definitions?.health_failures ??
+            "Last health probe reported unreachable or invalid URL (health, not configuration)."
+          }
+        />
+      </div>
+      {overview?.config_vs_health ? (
+        <p className="mt-2 text-[11px] text-text-secondary">{overview.config_vs_health}</p>
+      ) : null}
+    </section>
+  );
+}
 
 function StreamsHub() {
   const router = useRouter();
   const search = useSearchParams();
   const { can, loading } = useAdminPermissions();
   const canRadio = can("streams:read");
-  const canVideo = canManageLiveEvents(can);
+  const canLive = canManageLiveEvents(can);
 
   const availableTabs = useMemo(
-    () => TABS.filter((tab) => (tab.id === "radio" ? canRadio : canVideo)),
-    [canRadio, canVideo],
+    () => TABS.filter((tab) => (tab.id === "radio" ? canRadio : canLive)),
+    [canRadio, canLive],
   );
 
   const requested = search.get("tab");
-  const activeTab: StreamsTab =
-    requested === "video" && canVideo
-      ? "video"
-      : requested === "radio" && canRadio
+  // Backward compat: tab=video is the old name for Live Events.
+  const requestedTab: StreamsTab | null =
+    requested === "live" || requested === "video"
+      ? "live"
+      : requested === "radio"
         ? "radio"
-        : availableTabs[0]?.id ?? "radio";
+        : null;
+  const activeTab: StreamsTab =
+    requestedTab && availableTabs.some((tab) => tab.id === requestedTab)
+      ? requestedTab
+      : availableTabs[0]?.id ?? "radio";
 
   const setTab = (tab: StreamsTab) => {
     router.replace(`/admin/streams?tab=${tab}`, { scroll: false });
@@ -44,7 +192,7 @@ function StreamsHub() {
   if (loading) {
     return (
       <>
-        <AdminPageHeader title="Streams" description="Radio stations and live video" />
+        <AdminPageHeader title="Streams" description="Radio stations and live events" />
         <p className="text-sm text-text-secondary">Checking permissions…</p>
       </>
     );
@@ -53,7 +201,7 @@ function StreamsHub() {
   if (availableTabs.length === 0) {
     return (
       <>
-        <AdminPageHeader title="Streams" description="Radio stations and live video" />
+        <AdminPageHeader title="Streams" description="Radio stations and live events" />
         <p className="text-sm text-text-secondary">You do not have permission to view streams.</p>
       </>
     );
@@ -63,8 +211,10 @@ function StreamsHub() {
     <>
       <AdminPageHeader
         title="Streams"
-        description="Radio stations and live video events in one place"
+        description="Radio stations and Live Events (video / audio broadcasts) in one place"
       />
+
+      <StreamsOverviewCards enabled={canRadio} />
 
       <nav className="mb-6 flex gap-1 overflow-x-auto border-b border-border">
         {availableTabs.map((item) => {
@@ -90,7 +240,7 @@ function StreamsHub() {
       </nav>
 
       {activeTab === "radio" && canRadio ? <RadioStreamsPanel /> : null}
-      {activeTab === "video" && canVideo ? <LiveEventsPanel /> : null}
+      {activeTab === "live" && canLive ? <LiveEventsPanel /> : null}
     </>
   );
 }
@@ -100,7 +250,7 @@ export default function StreamsPage() {
     <Suspense
       fallback={
         <>
-          <AdminPageHeader title="Streams" description="Radio stations and live video events" />
+          <AdminPageHeader title="Streams" description="Radio stations and live events" />
           <p className="text-sm text-text-secondary">Loading…</p>
         </>
       }

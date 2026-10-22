@@ -696,6 +696,13 @@ export type LiveEventRow = {
   host_org_id?: string | null;
   default_duration_minutes?: number;
   round_ends_at?: string | null;
+  /** external_url | ingest (unsupported) | mock_dev */
+  source_type?: string | null;
+  source_ready?: boolean | null;
+  visibility?: string | null;
+  timezone?: string | null;
+  actual_started_at?: string | null;
+  actual_ended_at?: string | null;
   created_at: string;
   updated_at: string;
 };
