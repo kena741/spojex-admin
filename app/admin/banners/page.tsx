@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -38,6 +39,9 @@ type BannerDraft = {
 };
 
 export default function BannersPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { can } = useAdminPermissions();
   const canWrite = can("banners:write") || can("services:write");
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -45,8 +49,19 @@ export default function BannersPage() {
   const [rows, setRows] = useState<BannerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
+  const query = searchParams.get("q") || "";
+  const status = searchParams.get("status") || "all";
+  const missingImage = searchParams.get("missing_image") === "1";
+
+  const writeParams = (patch: Record<string, string | null>) => {
+    const next = new URLSearchParams(searchParams.toString());
+    for (const [k, v] of Object.entries(patch)) {
+      if (v == null || v === "" || v === "all") next.delete(k);
+      else next.set(k, v);
+    }
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
 
   const [title, setTitle] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
@@ -79,13 +94,14 @@ export default function BannersPage() {
     const q = query.trim().toLowerCase();
     return rows.filter((row) => {
       if (status === "active" && !row.is_active) return false;
-      if (status === "hidden" && row.is_active) return false;
+      if ((status === "hidden" || status === "inactive") && row.is_active) return false;
+      if (missingImage && (row.image_url || "").trim()) return false;
       if (!q) return true;
       return [row.title, row.link_url, row.image_url]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q));
     });
-  }, [query, rows, status]);
+  }, [missingImage, query, rows, status]);
 
   const validateLink = (value: string) => {
     const v = value.trim();
@@ -309,13 +325,32 @@ export default function BannersPage() {
 
       <AdminFilterPanel>
         <div className="grid gap-3 md:grid-cols-[1fr_180px]">
-          <AdminSearchInput value={query} onChange={setQuery} placeholder="Search title or link" />
-          <AdminSelect value={status} onChange={setStatus}>
+          <AdminSearchInput
+            value={query}
+            onChange={(value) => writeParams({ q: value || null })}
+            placeholder="Search title or link"
+          />
+          <AdminSelect
+            value={status}
+            onChange={(value) => writeParams({ status: value === "all" ? null : value })}
+          >
             <option value="all">All statuses</option>
             <option value="active">Active</option>
             <option value="hidden">Hidden</option>
           </AdminSelect>
         </div>
+        {missingImage ? (
+          <p className="mt-2 text-xs text-text-hint">
+            Showing active banners missing images.{" "}
+            <button
+              type="button"
+              className="text-primary hover:underline"
+              onClick={() => writeParams({ missing_image: null })}
+            >
+              Clear
+            </button>
+          </p>
+        ) : null}
       </AdminFilterPanel>
 
       {loading ? <AdminLoadingRow label="Loading banners…" /> : null}

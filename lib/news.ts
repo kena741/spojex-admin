@@ -6,6 +6,24 @@ export const newsStatuses: { id: NewsStatus; label: string }[] = [
   { id: "archived", label: "Archived" },
 ];
 
+/** Normalize overview/drill-down aliases: published → active. */
+export function normalizeNewsStatusFilter(raw?: string | null): NewsStatus | "all" {
+  const value = String(raw || "").trim().toLowerCase();
+  if (!value || value === "all") return "all";
+  if (value === "published") return "active";
+  if (value === "draft" || value === "active" || value === "archived") return value;
+  return "all";
+}
+
+export function newsStatusMatches(rowStatus: string | null | undefined, filter: string) {
+  if (!filter || filter === "all") return true;
+  const row = String(rowStatus || "").toLowerCase();
+  const want = normalizeNewsStatusFilter(filter);
+  if (want === "all") return true;
+  if (want === "active") return row === "active" || row === "published";
+  return row === want;
+}
+
 export const newsCategories = [
   "General",
   "Local",

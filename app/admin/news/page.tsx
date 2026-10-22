@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -28,7 +29,14 @@ import {
 import { NewsOrgPicker } from "@/components/news-org-picker";
 import { NewsSourceField } from "@/components/news-source-field";
 import { NewsTikTokPreview } from "@/components/news-tiktok-preview";
-import { newsCategories, newsRecency, newsStatusLabel, newsStatuses } from "@/lib/news";
+import {
+  newsCategories,
+  newsRecency,
+  newsStatusLabel,
+  newsStatusMatches,
+  newsStatuses,
+  normalizeNewsStatusFilter,
+} from "@/lib/news";
 import { rememberNewsSource } from "@/lib/news-sources";
 import {
   captureVideoCoverFile,
@@ -49,15 +57,30 @@ type NewsDraft = {
 };
 
 export default function NewsPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { can, staff } = useAdminPermissions();
   const canWrite = can("news:write");
   const authorName = staff?.full_name?.trim() || staff?.email?.trim() || "";
   const [rows, setRows] = useState<SportNewsRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
-  const [featuredFilter, setFeaturedFilter] = useState("all");
+  const status = normalizeNewsStatusFilter(searchParams.get("status"));
+  const query = searchParams.get("q") || "";
+  const featuredFilter = searchParams.get("featured") || "all";
+  const publishedFrom = searchParams.get("published_from") || "";
+  const publishedTo = searchParams.get("published_to") || "";
+
+  const writeParams = (patch: Record<string, string | null>) => {
+    const next = new URLSearchParams(searchParams.toString());
+    for (const [k, v] of Object.entries(patch)) {
+      if (v == null || v === "" || v === "all") next.delete(k);
+      else next.set(k, v);
+    }
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("General");
   const [creating, setCreating] = useState(false);
@@ -97,18 +120,26 @@ export default function NewsPage() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const fromMs = publishedFrom ? new Date(`${publishedFrom}T00:00:00`).getTime() : null;
+    const toMs = publishedTo ? new Date(`${publishedTo}T23:59:59.999`).getTime() : null;
     return rows
       .filter((row) => {
-        if (status !== "all" && row.status !== status) return false;
+        if (!newsStatusMatches(row.status, status)) return false;
         if (featuredFilter === "featured" && !row.is_featured) return false;
         if (featuredFilter === "standard" && row.is_featured) return false;
+        if (fromMs != null || toMs != null) {
+          const t = newsRecency(row);
+          if (fromMs != null && t < fromMs) return false;
+          if (toMs != null && t > toMs) return false;
+        }
         if (!q) return true;
+        if (row.id === q) return true;
         return [row.title, row.slug, row.body, row.category, row.source, row.author]
           .filter(Boolean)
           .some((v) => String(v).toLowerCase().includes(q));
       })
       .sort((a, b) => newsRecency(b) - newsRecency(a));
-  }, [featuredFilter, query, rows, status]);
+  }, [featuredFilter, publishedFrom, publishedTo, query, rows, status]);
 
   const mediaTypeOf = (row: SportNewsRow) => {
     if ((row.video_url || "").trim()) return "Video";
@@ -348,8 +379,15 @@ export default function NewsPage() {
       {error ? <AdminErrorAlert message={error} /> : null}
       <AdminFilterPanel>
         <div className="grid gap-3 md:grid-cols-[1fr_160px_140px]">
-          <AdminSearchInput value={query} onChange={setQuery} placeholder="Search headline, category, source" />
-          <AdminSelect value={status} onChange={setStatus}>
+          <AdminSearchInput
+            value={query}
+            onChange={(value) => writeParams({ q: value || null })}
+            placeholder="Search headline, category, source"
+          />
+          <AdminSelect
+            value={status}
+            onChange={(value) => writeParams({ status: value === "all" ? null : value })}
+          >
             <option value="all">All statuses</option>
             {newsStatuses.map((item) => (
               <option key={item.id} value={item.id}>
@@ -359,13 +397,25 @@ export default function NewsPage() {
           </AdminSelect>
           <AdminSelect
             value={featuredFilter}
-            onChange={setFeaturedFilter}
+            onChange={(value) => writeParams({ featured: value === "all" ? null : value })}
           >
             <option value="all">All placement</option>
             <option value="featured">Featured</option>
             <option value="standard">Not featured</option>
           </AdminSelect>
         </div>
+        {publishedFrom || publishedTo ? (
+          <p className="mt-2 text-xs text-text-hint">
+            Publication window: {publishedFrom || "…"} → {publishedTo || "…"}{" "}
+            <button
+              type="button"
+              className="ml-2 text-primary hover:underline"
+              onClick={() => writeParams({ published_from: null, published_to: null })}
+            >
+              Clear dates
+            </button>
+          </p>
+        ) : null}
       </AdminFilterPanel>
       {loading ? <AdminLoadingRow label="Loading articles…" /> : null}
       <AdminTableShell>

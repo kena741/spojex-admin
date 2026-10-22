@@ -1,10 +1,26 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 
 /** Media Library hub — Sounds is the first library surface; no second storage system. */
 export default function MediaLibraryPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const library = searchParams.get("library");
+  const status = searchParams.get("status");
+
+  useEffect(() => {
+    if (library === "sounds") {
+      const qs = new URLSearchParams();
+      if (status) qs.set("status", status);
+      const suffix = qs.toString();
+      router.replace(suffix ? `/admin/sound-library?${suffix}` : "/admin/sound-library");
+    }
+  }, [library, router, status]);
+
   return (
     <div className="space-y-5">
       <AdminPageHeader
@@ -18,7 +34,7 @@ export default function MediaLibraryPage() {
 
       <div className="grid gap-3 md:grid-cols-2">
         <Link
-          href="/admin/sound-library"
+          href="/admin/sound-library?status=active"
           className="rounded-xl border border-border bg-card p-5 shadow-sm transition-shadow hover:shadow-md"
         >
           <p className="font-heading text-base font-semibold">Sounds</p>
