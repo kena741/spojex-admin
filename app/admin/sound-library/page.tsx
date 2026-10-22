@@ -7,6 +7,7 @@ import {
   AdminErrorAlert,
   AdminLoadingRow,
   AdminModal,
+  AdminRowMenu,
   AdminSearchInput,
   AdminTableShell,
 } from "@/components/admin-layout";
@@ -471,30 +472,31 @@ export default function SoundLibraryPage() {
                   </td>
                   <td className="px-3 py-3">{row.is_active ? "Active" : "Hidden"}</td>
                   <td className="px-3 py-3">
-                    {canWrite ? (
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => startRename(row)}
-                          className="text-xs font-medium text-primary hover:underline"
-                        >
-                          Rename
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void toggleActive(row)}
-                          className="text-xs font-medium text-primary hover:underline"
-                        >
-                          {row.is_active ? "Hide" : "Show"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void remove(row)}
-                          className="text-xs font-medium text-red-600 hover:underline"
-                        >
-                          Delete
-                        </button>
-                      </div>
+                    {canWrite && editingId !== row.id ? (
+                      <AdminRowMenu
+                        aria-label={`Actions for ${row.name}`}
+                        items={[
+                          {
+                            id: "rename",
+                            label: "Rename",
+                            onClick: () => startRename(row),
+                          },
+                          {
+                            id: "toggle",
+                            label: row.is_active ? "Hide" : "Show",
+                            onClick: () => void toggleActive(row),
+                          },
+                          {
+                            id: "delete",
+                            label: "Delete",
+                            tone: "danger",
+                            separatorBefore: true,
+                            onClick: () => void remove(row),
+                          },
+                        ]}
+                      />
+                    ) : canWrite && editingId === row.id ? (
+                      <span className="text-xs text-text-hint">Editing…</span>
                     ) : (
                       "—"
                     )}

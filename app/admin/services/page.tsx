@@ -3,17 +3,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { MoreHorizontal } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
   AdminErrorAlert,
   AdminFilterPanel,
   AdminLoadingRow,
+  AdminRowMenu,
   AdminSearchInput,
   AdminSelect,
   AdminStatCard,
   AdminTableShell,
+  type AdminRowMenuItem,
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { deleteAdmin, postAdminResponse } from "@/lib/hooks";
@@ -32,7 +33,6 @@ import {
 import { serviceCoverUrl } from "@/lib/services-media";
 import type { ServiceCategory, ServiceRow, ServiceSubcategory } from "@/lib/types";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
-import { cn } from "@/lib/utils";
 
 type ListRow = ServiceRow & {
   href?: string;
@@ -88,7 +88,6 @@ export default function ServicesPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [menuId, setMenuId] = useState<string | null>(null);
   const loadGen = useRef(0);
 
   const writeParams = useCallback(
@@ -148,12 +147,6 @@ export default function ServicesPage() {
       .finally(() => setLoading(false));
   }, [load]);
 
-  useEffect(() => {
-    const onDoc = () => setMenuId(null);
-    document.addEventListener("click", onDoc);
-    return () => document.removeEventListener("click", onDoc);
-  }, []);
-
   const categorySubs = subcategories.filter((s) =>
     category === "all" ? true : s.category_id === category,
   );
@@ -195,7 +188,6 @@ export default function ServicesPage() {
           ? "Approved and published."
           : `Action “${action.replace(/_/g, " ")}” applied.`,
       );
-      setMenuId(null);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
@@ -259,13 +251,51 @@ export default function ServicesPage() {
           ? result.message || "Archived (bookings and payments preserved)."
           : "Deleted.",
       );
-      setMenuId(null);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Archive failed");
     } finally {
       setBusy(null);
     }
+  };
+
+  const serviceMenuItems = (row: ListRow): AdminRowMenuItem[] => {
+    const items: AdminRowMenuItem[] = [
+      { id: "open", label: "Open", onClick: () => openDetail(row.id) },
+    ];
+    if (!canWrite) return items;
+    if (!row.published) {
+      items.push({
+        id: "approve",
+        label: "Approve & publish",
+        tone: "success",
+        onClick: () => void moderate(row.id, "approve"),
+      });
+      items.push({
+        id: "request_changes",
+        label: "Request changes",
+        onClick: () => void moderate(row.id, "request_changes"),
+      });
+    } else {
+      items.push({
+        id: "unpublish",
+        label: "Unpublish",
+        onClick: () => void moderate(row.id, "unpublish"),
+      });
+    }
+    items.push({
+      id: "feature",
+      label: row.is_featured ? "Unfeature" : "Feature",
+      onClick: () => void moderate(row.id, row.is_featured ? "unfeature" : "feature"),
+    });
+    items.push({
+      id: "archive",
+      label: "Archive",
+      tone: "danger",
+      separatorBefore: true,
+      onClick: () => void archive(row),
+    });
+    return items;
   };
 
   const toggleSelect = (id: string) => {
@@ -444,7 +474,6 @@ export default function ServicesPage() {
           <ul className="divide-y divide-border">
             {rows.map((row) => {
               const cover = serviceCoverUrl(row);
-              const href = row.href || `/admin/services/${row.id}`;
               return (
                 <li key={row.id} className="relative flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
                   <div className="flex min-w-0 flex-1 gap-3">
@@ -540,77 +569,11 @@ export default function ServicesPage() {
                       {row.publication_label || formatPublicationStatus(row.published)}
                     </StatusBadge>
 
-                    <Link
-                      href={href}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        openDetail(row.id);
-                      }}
-                      className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
-                    >
-                      Open
-                    </Link>
-
-                    {canWrite ? (
-                      <div className="relative">
-                        <button
-                          type="button"
-                          aria-label="More actions"
-                          className="grid h-8 w-8 place-items-center rounded-md border border-border hover:bg-muted"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setMenuId((cur) => (cur === row.id ? null : row.id));
-                          }}
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </button>
-                        {menuId === row.id ? (
-                          <div
-                            className="absolute right-0 z-20 mt-1 w-48 rounded-lg border border-border bg-card py-1 shadow-lg"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {!row.published ? (
-                              <MenuItem
-                                disabled={busy === row.id}
-                                onClick={() => void moderate(row.id, "approve")}
-                              >
-                                Approve & publish
-                              </MenuItem>
-                            ) : (
-                              <MenuItem
-                                disabled={busy === row.id}
-                                onClick={() => void moderate(row.id, "unpublish")}
-                              >
-                                Unpublish
-                              </MenuItem>
-                            )}
-                            <MenuItem
-                              disabled={busy === row.id}
-                              onClick={() =>
-                                void moderate(row.id, row.is_featured ? "unfeature" : "feature")
-                              }
-                            >
-                              {row.is_featured ? "Unfeature" : "Feature"}
-                            </MenuItem>
-                            {!row.published ? (
-                              <MenuItem
-                                disabled={busy === row.id}
-                                onClick={() => void moderate(row.id, "request_changes")}
-                              >
-                                Request changes
-                              </MenuItem>
-                            ) : null}
-                            <MenuItem
-                              disabled={busy === row.id}
-                              danger
-                              onClick={() => void archive(row)}
-                            >
-                              Archive
-                            </MenuItem>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
+                    <AdminRowMenu
+                      items={serviceMenuItems(row)}
+                      disabled={busy === row.id}
+                      aria-label={`Actions for ${row.title}`}
+                    />
                   </div>
                 </li>
               );
@@ -627,20 +590,26 @@ export default function ServicesPage() {
                   <th className="px-3 py-3">Provider</th>
                   <th className="px-3 py-3">Price</th>
                   <th className="px-3 py-3">Status</th>
-                  <th className="px-3 py-3"> </th>
+                  <th className="px-3 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <tr key={row.id} className="border-b border-border last:border-0">
+                  <tr
+                    key={row.id}
+                    role="link"
+                    tabIndex={0}
+                    className="cursor-pointer border-b border-border last:border-0 hover:bg-muted/30"
+                    onClick={() => openDetail(row.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openDetail(row.id);
+                      }
+                    }}
+                  >
                     <td className="px-3 py-3">
-                      <button
-                        type="button"
-                        className="text-left font-medium text-primary"
-                        onClick={() => openDetail(row.id)}
-                      >
-                        {row.title}
-                      </button>
+                      <p className="font-medium text-text-primary">{row.title}</p>
                       <p className="text-xs text-text-secondary">
                         {formatDelivery(row.availability_mode)}
                       </p>
@@ -654,10 +623,16 @@ export default function ServicesPage() {
                         {formatPublicationStatus(row.published)}
                       </StatusBadge>
                     </td>
-                    <td className="px-3 py-3">
-                      <Link href={`/admin/services/${row.id}`} className="text-sm font-medium text-primary">
-                        Open
-                      </Link>
+                    <td
+                      className="px-3 py-3"
+                      onClick={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => event.stopPropagation()}
+                    >
+                      <AdminRowMenu
+                        items={serviceMenuItems(row)}
+                        disabled={busy === row.id}
+                        aria-label={`Actions for ${row.title}`}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -696,28 +671,3 @@ export default function ServicesPage() {
   );
 }
 
-function MenuItem({
-  children,
-  onClick,
-  disabled,
-  danger,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  disabled?: boolean;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        "block w-full px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50",
-        danger ? "text-red-600" : "text-text-primary",
-      )}
-    >
-      {children}
-    </button>
-  );
-}

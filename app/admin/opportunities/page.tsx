@@ -11,6 +11,7 @@ import {
   AdminLoadingRow,
   AdminModal,
   AdminModalFooter,
+  AdminRowMenu,
   AdminSearchInput,
   AdminSelect,
   AdminStatCard,
@@ -429,7 +430,20 @@ export default function OpportunitiesPage() {
                   return (
                     <tr
                       key={row.id}
-                      className="border-b border-border last:border-0 hover:bg-muted/30"
+                      role="link"
+                      tabIndex={0}
+                      className="cursor-pointer border-b border-border last:border-0 hover:bg-muted/30"
+                      onClick={() => {
+                        rememberReturn();
+                        router.push(detailHref(row.id));
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          rememberReturn();
+                          router.push(detailHref(row.id));
+                        }
+                      }}
                     >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
@@ -446,13 +460,7 @@ export default function OpportunitiesPage() {
                             </div>
                           )}
                           <div className="min-w-0">
-                            <Link
-                              href={detailHref(row.id)}
-                              onClick={rememberReturn}
-                              className="font-medium text-text-primary hover:text-primary"
-                            >
-                              {row.title}
-                            </Link>
+                            <p className="font-medium text-text-primary">{row.title}</p>
                             <p className="truncate text-xs text-text-secondary">
                               {[row.category, row.organizer, row.location, row.country]
                                 .filter(Boolean)
@@ -493,7 +501,10 @@ export default function OpportunitiesPage() {
                           </p>
                         ) : null}
                       </td>
-                      <td className="px-4 py-3">
+                      <td
+                        className="px-4 py-3"
+                        onClick={(event) => event.stopPropagation()}
+                      >
                         <Link
                           href={
                             row.href_applications ||
@@ -505,7 +516,10 @@ export default function OpportunitiesPage() {
                           {row.applicant_count ?? 0}
                         </Link>
                       </td>
-                      <td className="px-4 py-3">
+                      <td
+                        className="px-4 py-3"
+                        onClick={(event) => event.stopPropagation()}
+                      >
                         <Link
                           href={row.href_waitlist || detailHref(row.id, "waitlist")}
                           onClick={rememberReturn}
@@ -514,26 +528,34 @@ export default function OpportunitiesPage() {
                           {row.waitlist_count ?? 0}
                         </Link>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-3">
-                          <Link
-                            href={detailHref(row.id)}
-                            onClick={rememberReturn}
-                            className="text-sm font-medium text-primary hover:underline"
-                          >
-                            Manage
-                          </Link>
-                          {canWrite ? (
-                            <button
-                              type="button"
-                              disabled={busyId === row.id}
-                              onClick={() => void remove(row.id, row.title)}
-                              className="text-sm text-red-600 hover:underline disabled:opacity-50"
-                            >
-                              Archive
-                            </button>
-                          ) : null}
-                        </div>
+                      <td
+                        className="px-4 py-3"
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        <AdminRowMenu
+                          disabled={busyId === row.id}
+                          aria-label={`Actions for ${row.title}`}
+                          items={[
+                            {
+                              id: "manage",
+                              label: "Manage",
+                              href: detailHref(row.id),
+                              onClick: rememberReturn,
+                            },
+                            ...(canWrite
+                              ? [
+                                  {
+                                    id: "archive",
+                                    label: "Archive",
+                                    tone: "danger" as const,
+                                    separatorBefore: true,
+                                    onClick: () => void remove(row.id, row.title),
+                                  },
+                                ]
+                              : []),
+                          ]}
+                        />
                       </td>
                     </tr>
                   );

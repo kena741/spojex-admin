@@ -9,9 +9,11 @@ import {
   AdminLoadingRow,
   AdminModal,
   AdminModalFooter,
+  AdminRowMenu,
   AdminSearchInput,
   AdminSelect,
   AdminTableShell,
+  type AdminRowMenuItem,
 } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
 import { deleteAdmin, patchAdmin } from "@/lib/hooks";
@@ -170,32 +172,55 @@ export default function AdminsPage() {
                   <th className="px-4 py-3 font-semibold">Status</th>
                   <th className="px-4 py-3 font-semibold">Staff / user IDs</th>
                   <th className="px-4 py-3 font-semibold">Added</th>
-                  {canWrite ? <th className="px-4 py-3 font-semibold" /> : null}
+                  {canWrite ? <th className="px-4 py-3 font-semibold">Actions</th> : null}
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((row) => (
+                {filtered.map((row) => {
+                  const items: AdminRowMenuItem[] = [
+                    {
+                      id: "change-role",
+                      label: "Change role",
+                      onClick: () => {
+                        setNextRole(row.role);
+                        setRoleEdit(row);
+                      },
+                    },
+                    {
+                      id: "toggle-active",
+                      label: row.is_active ? "Suspend" : "Re-enable",
+                      onClick: () => {
+                        const ok = window.confirm(
+                          row.is_active
+                            ? "Suspend this admin? Active sessions will be revoked."
+                            : "Re-enable this admin? Previous revoked sessions stay invalid.",
+                        );
+                        if (ok) void toggleActive(row);
+                      },
+                    },
+                  ];
+                  if (staff?.id !== row.id) {
+                    items.push({
+                      id: "remove",
+                      label: "Remove",
+                      tone: "danger",
+                      separatorBefore: true,
+                      onClick: () => {
+                        const ok = window.confirm(
+                          "Remove this staff membership? Audit history is retained.",
+                        );
+                        if (ok) void remove(row.id);
+                      },
+                    });
+                  }
+                  return (
                   <tr key={row.id} className="border-b border-border last:border-0">
                     <td className="px-4 py-3">
                       <p className="font-medium">{row.full_name || "Unnamed"}</p>
                       <p className="text-xs text-text-secondary">{row.email || "—"}</p>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-medium">{formatStatusLabel(row.role)}</span>
-                        {canWrite ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setNextRole(row.role);
-                              setRoleEdit(row);
-                            }}
-                            className="text-xs text-primary hover:underline"
-                          >
-                            Change
-                          </button>
-                        ) : null}
-                      </div>
+                      <span className="text-sm font-medium">{formatStatusLabel(row.role)}</span>
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge tone={row.is_active ? "success" : "neutral"}>
@@ -208,39 +233,16 @@ export default function AdminsPage() {
                     </td>
                     <td className="px-4 py-3 text-text-secondary">{formatDate(row.created_at)}</td>
                     {canWrite ? (
-                      <td className="px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const ok = window.confirm(
-                              row.is_active
-                                ? "Suspend this admin? Active sessions will be revoked."
-                                : "Re-enable this admin? Previous revoked sessions stay invalid.",
-                            );
-                            if (ok) void toggleActive(row);
-                          }}
-                          className="mr-3 text-sm text-primary hover:underline"
-                        >
-                          {row.is_active ? "Suspend" : "Re-enable"}
-                        </button>
-                        {staff?.id !== row.id ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const ok = window.confirm(
-                                "Remove this staff membership? Audit history is retained.",
-                              );
-                              if (ok) void remove(row.id);
-                            }}
-                            className="text-sm text-red-600 hover:underline"
-                          >
-                            Remove
-                          </button>
-                        ) : null}
+                      <td className="px-4 py-3">
+                        <AdminRowMenu
+                          items={items}
+                          aria-label={`Actions for ${row.full_name || row.email || "admin"}`}
+                        />
                       </td>
                     ) : null}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

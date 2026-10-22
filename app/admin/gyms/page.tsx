@@ -15,7 +15,6 @@ import {
   Clock,
   Ban,
   Sparkles,
-  ChevronDown,
 } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
 import {
@@ -25,10 +24,12 @@ import {
   AdminLoadingRow,
   AdminModal,
   AdminModalFooter,
+  AdminRowMenu,
   AdminSearchInput,
   AdminSelect,
   AdminStatCard,
   AdminTableShell,
+  type AdminRowMenuItem,
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { gymAllowedActions, gymActionPatch, type GymActionId } from "@/lib/gym-actions";
@@ -358,56 +359,24 @@ function GymActionsMenu({
   onEdit: () => void;
   onAction: (id: GymActionId, needsReason?: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const actions = gymAllowedActions(row);
-
-  const run = (action: (typeof actions)[number]) => {
-    setOpen(false);
-    if (action.id === "edit") return onEdit();
-    onAction(action.id, action.needsReason);
-  };
-
+  const items: AdminRowMenuItem[] = actions.map((action, index) => ({
+    id: action.id,
+    label: action.label,
+    tone:
+      action.tone === "danger"
+        ? "danger"
+        : action.tone === "success"
+          ? "success"
+          : "default",
+    separatorBefore: action.tone === "danger" && index > 0,
+    onClick: () => {
+      if (action.id === "edit") return onEdit();
+      onAction(action.id, action.needsReason);
+    },
+  }));
   return (
-    <div className="relative">
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
-      >
-        Actions <ChevronDown className="h-3 w-3" />
-      </button>
-      {open ? (
-        <>
-          <button
-            type="button"
-            className="fixed inset-0 z-10 cursor-default"
-            aria-label="Close menu"
-            onClick={() => setOpen(false)}
-          />
-          <ul className="absolute right-0 z-20 mt-1 min-w-[180px] rounded-lg border border-border bg-card py-1 shadow-lg">
-            {actions.map((action) => (
-              <li key={action.id}>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => run(action)}
-                  className={`block w-full px-3 py-2 text-left text-xs hover:bg-muted ${
-                    action.tone === "danger"
-                      ? "text-red-700"
-                      : action.tone === "success"
-                        ? "text-emerald-800"
-                        : ""
-                  }`}
-                >
-                  {action.label}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : null}
-    </div>
+    <AdminRowMenu items={items} disabled={busy} aria-label={`Actions for ${row.name || "gym"}`} />
   );
 }
 

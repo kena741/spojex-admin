@@ -506,10 +506,20 @@ export default function NewsPage() {
                   const thumb = (row.thumbnail || "").trim();
                   const dateLabel = row.display_date?.label || "Date";
                   const dateAt = row.display_date?.at;
+                  const href = row.href || `/admin/news/${row.id}`;
                   return (
                     <tr
                       key={row.id}
-                      className="border-b border-border last:border-0 hover:bg-muted/30"
+                      role="link"
+                      tabIndex={0}
+                      className="cursor-pointer border-b border-border last:border-0 hover:bg-muted/30"
+                      onClick={() => router.push(href)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          router.push(href);
+                        }
+                      }}
                     >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
@@ -526,12 +536,7 @@ export default function NewsPage() {
                             </div>
                           )}
                           <div className="min-w-0">
-                            <Link
-                              href={row.href || `/admin/news/${row.id}`}
-                              className="font-medium text-text-primary hover:text-primary"
-                            >
-                              {row.title}
-                            </Link>
+                            <p className="font-medium text-text-primary">{row.title}</p>
                             <p className="mt-0.5 truncate text-xs text-text-secondary">
                               {row.organization_name || "No organization"}
                               {row.source?.trim() ? ` · ${row.source.trim()}` : ""}
@@ -573,20 +578,16 @@ export default function NewsPage() {
                       <td className="px-4 py-3 text-xs text-text-secondary">
                         {row.updated_at ? formatDate(row.updated_at) : "—"}
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Link
-                            href={row.href || `/admin/news/${row.id}`}
-                            className="text-sm font-medium text-primary"
-                          >
-                            Open
-                          </Link>
-                          <AdminRowMenu
-                            items={rowMenuItems(row)}
-                            disabled={busyId === row.id}
-                            aria-label={`Actions for ${row.title}`}
-                          />
-                        </div>
+                      <td
+                        className="px-4 py-3"
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        <AdminRowMenu
+                          items={rowMenuItems(row)}
+                          disabled={busyId === row.id}
+                          aria-label={`Actions for ${row.title}`}
+                        />
                       </td>
                     </tr>
                   );

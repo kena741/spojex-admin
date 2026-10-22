@@ -9,10 +9,12 @@ import {
   AdminErrorAlert,
   AdminFilterPanel,
   AdminLoadingRow,
+  AdminRowMenu,
   AdminSearchInput,
   AdminSelect,
   AdminStatCard,
   AdminTableShell,
+  type AdminRowMenuItem,
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { UserAvatar } from "@/components/user-avatar";
@@ -385,57 +387,41 @@ function NetworkPageInner() {
                           </td>
                           {canWrite ? (
                             <td className="px-4 py-3">
-                              <details className="relative">
-                                <summary className="cursor-pointer list-none text-sm text-text-secondary hover:text-foreground">
-                                  Actions
-                                </summary>
-                                <div className="absolute right-0 z-10 mt-1 min-w-[160px] rounded-lg border border-border bg-card p-2 shadow-md">
-                                  {row.status === "pending" && row.request_id ? (
-                                    <>
-                                      <button
-                                        type="button"
-                                        disabled={busy}
-                                        onClick={() => acceptRequest(row)}
-                                        className="block w-full rounded px-2 py-1.5 text-left text-xs hover:bg-muted disabled:opacity-50"
-                                      >
-                                        Support: accept request
-                                      </button>
-                                      <button
-                                        type="button"
-                                        disabled={busy}
-                                        onClick={() => declineRequest(row)}
-                                        className="block w-full rounded px-2 py-1.5 text-left text-xs hover:bg-muted disabled:opacity-50"
-                                      >
-                                        Support: decline request
-                                      </button>
-                                      <button
-                                        type="button"
-                                        disabled={busy}
-                                        onClick={() => cancelRequest(row)}
-                                        className="block w-full rounded px-2 py-1.5 text-left text-xs hover:bg-muted disabled:opacity-50"
-                                      >
-                                        Support: cancel request
-                                      </button>
-                                    </>
-                                  ) : null}
-                                  {row.status === "accepted" && row.connection_id ? (
-                                    <button
-                                      type="button"
-                                      disabled={busy}
-                                      onClick={() => removeConnection(row)}
-                                      className="block w-full rounded px-2 py-1.5 text-left text-xs text-red-600 hover:bg-muted disabled:opacity-50"
-                                    >
-                                      Remove connection
-                                    </button>
-                                  ) : null}
-                                  {!(
-                                    (row.status === "pending" && row.request_id) ||
-                                    (row.status === "accepted" && row.connection_id)
-                                  ) ? (
-                                    <p className="px-2 py-1 text-xs text-text-hint">No actions</p>
-                                  ) : null}
-                                </div>
-                              </details>
+                              <AdminRowMenu
+                                disabled={busy}
+                                aria-label="Connection actions"
+                                items={(() => {
+                                  const items: AdminRowMenuItem[] = [];
+                                  if (row.status === "pending" && row.request_id) {
+                                    items.push(
+                                      {
+                                        id: "accept",
+                                        label: "Support: accept request",
+                                        onClick: () => acceptRequest(row),
+                                      },
+                                      {
+                                        id: "decline",
+                                        label: "Support: decline request",
+                                        onClick: () => declineRequest(row),
+                                      },
+                                      {
+                                        id: "cancel",
+                                        label: "Support: cancel request",
+                                        onClick: () => cancelRequest(row),
+                                      },
+                                    );
+                                  }
+                                  if (row.status === "accepted" && row.connection_id) {
+                                    items.push({
+                                      id: "remove",
+                                      label: "Remove connection",
+                                      tone: "danger",
+                                      onClick: () => removeConnection(row),
+                                    });
+                                  }
+                                  return items;
+                                })()}
+                              />
                             </td>
                           ) : null}
                         </tr>
@@ -496,21 +482,18 @@ function NetworkPageInner() {
                           </td>
                           {canWrite ? (
                             <td className="px-4 py-3">
-                              <details className="relative">
-                                <summary className="cursor-pointer list-none text-sm text-text-secondary hover:text-foreground">
-                                  Actions
-                                </summary>
-                                <div className="absolute right-0 z-10 mt-1 min-w-[160px] rounded-lg border border-border bg-card p-2 shadow-md">
-                                  <button
-                                    type="button"
-                                    disabled={busyId === key}
-                                    onClick={() => removeFollow(row)}
-                                    className="block w-full rounded px-2 py-1.5 text-left text-xs text-red-600 hover:bg-muted disabled:opacity-50"
-                                  >
-                                    Remove follow
-                                  </button>
-                                </div>
-                              </details>
+                              <AdminRowMenu
+                                disabled={busyId === key}
+                                aria-label="Follow actions"
+                                items={[
+                                  {
+                                    id: "remove-follow",
+                                    label: "Remove follow",
+                                    tone: "danger",
+                                    onClick: () => removeFollow(row),
+                                  },
+                                ]}
+                              />
                             </td>
                           ) : null}
                         </tr>
@@ -577,26 +560,23 @@ function NetworkPageInner() {
                           </td>
                           {canWrite ? (
                             <td className="px-4 py-3">
-                              <details className="relative">
-                                <summary className="cursor-pointer list-none text-sm text-text-secondary hover:text-foreground">
-                                  Actions
-                                </summary>
-                                <div className="absolute right-0 z-10 mt-1 min-w-[180px] rounded-lg border border-border bg-card p-2 shadow-md">
-                                  <button
-                                    type="button"
-                                    disabled={busyId === key}
-                                    onClick={() => {
+                              <AdminRowMenu
+                                disabled={busyId === key}
+                                aria-label="Block actions"
+                                items={[
+                                  {
+                                    id: "remove-block",
+                                    label: "Support: remove block",
+                                    tone: "danger",
+                                    onClick: () => {
                                       const ok = window.confirm(
                                         "Remove this personal user block? This overrides the user's block preference and should only be used for verified support cases.",
                                       );
                                       if (ok) void removeBlock(row);
-                                    }}
-                                    className="block w-full rounded px-2 py-1.5 text-left text-xs text-red-600 hover:bg-muted disabled:opacity-50"
-                                  >
-                                    Support: remove block
-                                  </button>
-                                </div>
-                              </details>
+                                    },
+                                  },
+                                ]}
+                              />
                             </td>
                           ) : null}
                         </tr>
