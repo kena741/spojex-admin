@@ -157,6 +157,21 @@ export default function SoundLibraryPage() {
         is_active: true,
         sort_order: rows.length,
       });
+      const sound = result.data;
+      if (sound?.id) {
+        try {
+          await postAdminResponse("/api/admin/media-library/register", {
+            media_type: "sound",
+            display_name: shortSoundTitle(sound.name || name),
+            delivery_url: sound.audio_url || audioUrl.trim(),
+            sound_id: sound.id,
+            duration_seconds: sound.duration_seconds ?? durationSeconds,
+            sound_category: sound.kind || kind,
+          });
+        } catch {
+          /* Media list sync also indexes missing sounds */
+        }
+      }
       resetForm();
       setUploadOpen(false);
       setNotice(

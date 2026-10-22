@@ -118,10 +118,39 @@ export async function POST(request: Request) {
   if (existing.error) {
     return NextResponse.json({ error: existing.error.message }, { status: 400 });
   }
-  const hit = ((existing.data ?? []) as Array<{ audio_url?: string }>).find(
-    (row) => normalizeAudioUrl(`${row.audio_url ?? ""}`) === audioUrl,
-  );
+  const hit = (
+    (existing.data ?? []) as Array<{
+      id?: string;
+      name?: string;
+      kind?: string;
+      audio_url?: string;
+      duration_seconds?: number | null;
+    }>
+  ).find((row) => normalizeAudioUrl(`${row.audio_url ?? ""}`) === audioUrl);
   if (hit) {
+    if (hit.id && base && token) {
+      try {
+        await fetch(`${base}/api/v1/admin/media-library/register`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            media_type: "sound",
+            display_name: hit.name || name,
+            delivery_url: audioUrl,
+            sound_id: hit.id,
+            duration_seconds: hit.duration_seconds ?? durationSeconds,
+            sound_category: hit.kind || kind,
+          }),
+          cache: "no-store",
+        });
+      } catch {
+        /* list sync recovers missing rows */
+      }
+    }
     return NextResponse.json({ data: hit, created: false });
   }
 
@@ -147,5 +176,31 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+
+  // Index into Media Library so Sound Library and Media stay aligned.
+  if (data?.id && base && token) {
+    try {
+      await fetch(`${base}/api/v1/admin/media-library/register`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          media_type: "sound",
+          display_name: name,
+          delivery_url: audioUrl,
+          sound_id: data.id,
+          duration_seconds: durationSeconds,
+          sound_category: kind,
+        }),
+        cache: "no-store",
+      });
+    } catch {
+      /* list sync recovers missing rows */
+    }
+  }
+
   return NextResponse.json({ data, created: true });
 }
