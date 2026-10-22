@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import {
+  AdminCardsListToggle,
   AdminEmpty,
   AdminErrorAlert,
   AdminFilterPanel,
@@ -18,6 +19,7 @@ import {
   AdminTableShell,
   type AdminRowMenuItem,
 } from "@/components/admin-layout";
+import type { DirectoryView } from "@/lib/directory-view";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { deleteAdmin, postAdminResponse } from "@/lib/hooks";
 import {
@@ -76,7 +78,10 @@ export default function ServicesPage() {
   const pricingType = searchParams.get("pricing_type") || "all";
   const page = Math.max(1, Number(searchParams.get("page") || 1) || 1);
   const summaryMode = searchParams.get("summary") === "filtered" ? "filtered" : "global";
-  const view = searchParams.get("view") === "table" ? "table" : "list";
+  // URL keeps legacy values: list = cards layout, table = list/table layout.
+  const layoutView: DirectoryView =
+    searchParams.get("view") === "table" ? "list" : "cards";
+  const view = layoutView === "list" ? "table" : "list";
 
   const [rows, setRows] = useState<ListRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -340,15 +345,15 @@ export default function ServicesPage() {
             >
               Settings
             </Link>
-            <button
-              type="button"
-              onClick={() =>
-                writeParams({ view: view === "table" ? "list" : "table", page: null })
+            <AdminCardsListToggle
+              value={layoutView}
+              onChange={(next) =>
+                writeParams({
+                  view: next === "list" ? "table" : "list",
+                  page: null,
+                })
               }
-              className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
-            >
-              {view === "table" ? "List view" : "Compact table"}
-            </button>
+            />
             {canWrite && selectedPending.length > 0 ? (
               <button
                 type="button"

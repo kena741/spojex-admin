@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
 import {
+  AdminCardsListToggle,
   AdminEmpty,
   AdminErrorAlert,
   AdminFilterPanel,
@@ -34,6 +35,11 @@ import {
   formatDonationAmount,
   slugifyDonation,
 } from "@/lib/donations";
+import {
+  readStoredDirectoryView,
+  writeStoredDirectoryView,
+  type DirectoryView,
+} from "@/lib/directory-view";
 import { adminFetch, deleteAdmin, postAdmin } from "@/lib/hooks";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { DonationCampaignRow } from "@/lib/types";
@@ -50,20 +56,7 @@ type Totals = {
   note?: string;
 };
 
-type DirectoryView = "cards" | "list";
-
 const DONATIONS_VIEW_KEY = "spojex_admin_donations_view";
-
-function readStoredView(): DirectoryView {
-  if (typeof window === "undefined") return "list";
-  try {
-    const raw = localStorage.getItem(DONATIONS_VIEW_KEY);
-    if (raw === "cards" || raw === "list") return raw;
-  } catch {
-    /* ignore */
-  }
-  return "list";
-}
 
 export default function DonationsPage() {
   const { can } = useAdminPermissions();
@@ -90,17 +83,13 @@ export default function DonationsPage() {
   const [viewReady, setViewReady] = useState(false);
 
   useEffect(() => {
-    setView(readStoredView());
+    setView(readStoredDirectoryView(DONATIONS_VIEW_KEY, "list"));
     setViewReady(true);
   }, []);
 
   const setDirectoryView = (next: DirectoryView) => {
     setView(next);
-    try {
-      localStorage.setItem(DONATIONS_VIEW_KEY, next);
-    } catch {
-      /* ignore */
-    }
+    writeStoredDirectoryView(DONATIONS_VIEW_KEY, next);
   };
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -267,22 +256,7 @@ export default function DonationsPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <AdminReloadButton loading={loading} onClick={() => void refresh()} />
-            <div className="flex rounded-lg border border-border p-0.5 text-sm">
-              <button
-                type="button"
-                onClick={() => setDirectoryView("cards")}
-                className={`rounded-md px-3 py-1.5 ${view === "cards" ? "bg-muted font-medium" : "text-text-secondary"}`}
-              >
-                Cards
-              </button>
-              <button
-                type="button"
-                onClick={() => setDirectoryView("list")}
-                className={`rounded-md px-3 py-1.5 ${view === "list" ? "bg-muted font-medium" : "text-text-secondary"}`}
-              >
-                List
-              </button>
-            </div>
+            <AdminCardsListToggle value={view} onChange={setDirectoryView} />
             {canWrite ? (
               <button
                 type="button"

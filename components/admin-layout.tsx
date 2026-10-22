@@ -168,6 +168,59 @@ export function AdminReloadButton({
   );
 }
 
+/**
+ * Segmented Cards / List control for directories that support both layouts.
+ * Do not use on table-only admin pages.
+ */
+export function AdminCardsListToggle({
+  value,
+  onChange,
+  className,
+  cardsLabel = "Cards",
+  listLabel = "List",
+}: {
+  value: "cards" | "list";
+  onChange: (next: "cards" | "list") => void;
+  className?: string;
+  cardsLabel?: string;
+  listLabel?: string;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Directory layout"
+      className={cn("flex rounded-lg border border-border bg-card p-0.5 text-sm", className)}
+    >
+      <button
+        type="button"
+        onClick={() => onChange("cards")}
+        aria-pressed={value === "cards"}
+        className={cn(
+          "rounded-md px-3 py-1.5 transition-colors",
+          value === "cards"
+            ? "bg-muted font-medium text-text-primary"
+            : "text-text-secondary hover:text-text-primary",
+        )}
+      >
+        {cardsLabel}
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("list")}
+        aria-pressed={value === "list"}
+        className={cn(
+          "rounded-md px-3 py-1.5 transition-colors",
+          value === "list"
+            ? "bg-muted font-medium text-text-primary"
+            : "text-text-secondary hover:text-text-primary",
+        )}
+      >
+        {listLabel}
+      </button>
+    </div>
+  );
+}
+
 export function AdminErrorAlert({ message }: { message: string }) {
   return (
     <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">

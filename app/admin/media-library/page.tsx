@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import {
+  AdminCardsListToggle,
   AdminEmpty,
   AdminErrorAlert,
   AdminFilterPanel,
@@ -12,6 +13,7 @@ import {
   AdminSearchInput,
   AdminSelect,
 } from "@/components/admin-layout";
+import type { DirectoryView } from "@/lib/directory-view";
 import { SharedAudioPlayer } from "@/components/shared-audio-player";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { SoundClipEditor } from "@/components/sound-clip-editor";
@@ -91,9 +93,17 @@ function MediaLibraryPage() {
   const dateTo = searchParams.get("to") || "";
   const page = Math.max(1, Number(searchParams.get("page") || "1") || 1);
   const assetId = searchParams.get("asset") || "";
-  const viewParam = searchParams.get("view") as ViewMode | null;
+  const viewParam = searchParams.get("view");
+  // Prefer cards/list; keep grid as alias for cards.
   const view: ViewMode =
-    viewParam || (typeFilter === "sound" || typeFilter === "all" ? "list" : "grid");
+    viewParam === "list"
+      ? "list"
+      : viewParam === "grid" || viewParam === "cards"
+        ? "grid"
+        : typeFilter === "sound" || typeFilter === "all"
+          ? "list"
+          : "grid";
+  const layoutView: DirectoryView = view === "grid" ? "cards" : "list";
 
   const [payload, setPayload] = useState<MediaLibraryListResponse | null>(null);
   const [detail, setDetail] = useState<MediaAssetDetail | null>(null);
@@ -386,22 +396,16 @@ function MediaLibraryPage() {
             {count != null ? ` (${count})` : ""}
           </button>
         ))}
-        <div className="ml-auto flex gap-2">
-          <button
-            type="button"
-            className={`rounded-md border px-2 py-1 text-xs ${view === "grid" ? "border-primary text-primary" : "border-border"}`}
-            onClick={() => writeParams({ view: "grid" }, { resetPage: false })}
-          >
-            Grid
-          </button>
-          <button
-            type="button"
-            className={`rounded-md border px-2 py-1 text-xs ${view === "list" ? "border-primary text-primary" : "border-border"}`}
-            onClick={() => writeParams({ view: "list" }, { resetPage: false })}
-          >
-            List
-          </button>
-        </div>
+        <AdminCardsListToggle
+          className="ml-auto"
+          value={layoutView}
+          onChange={(next) =>
+            writeParams(
+              { view: next === "cards" ? "grid" : "list" },
+              { resetPage: false },
+            )
+          }
+        />
       </div>
 
       <AdminFilterPanel>
