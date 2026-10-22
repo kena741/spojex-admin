@@ -20,8 +20,15 @@ export async function GET(
   );
   const payload = await res.json().catch(() => ({}));
   if (!res.ok) {
+    const body = payload as { message?: string; detail?: string; error?: string };
     return NextResponse.json(
-      { error: (payload as { error?: string }).error || "Failed to load workspace" },
+      {
+        error:
+          body.message ||
+          body.detail ||
+          (body.error === "not_found" ? "Event not found" : body.error) ||
+          "Failed to load workspace",
+      },
       { status: res.status },
     );
   }

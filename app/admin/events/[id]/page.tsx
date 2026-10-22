@@ -476,7 +476,17 @@ export default function EventDetailPage() {
   };
 
   if (loading) return <AdminLoadingRow label="Loading event…" />;
-  if (!event) return <AdminErrorAlert message={error || "Event not found"} />;
+  if (!event) {
+    return (
+      <AdminErrorAlert
+        message={
+          error === "not_found" || !error
+            ? "Event not found. It may have been deleted, or the id in the URL is invalid."
+            : error
+        }
+      />
+    );
+  }
 
   return (
     <>

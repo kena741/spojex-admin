@@ -136,8 +136,18 @@ export default function EventsPage() {
       data?: DirectoryEvent[];
       total?: number;
       error?: string;
+      message?: string;
+      detail?: string;
     };
-    if (!response.ok) throw new Error(payload.error || "Failed to load");
+    if (!response.ok) {
+      const msg =
+        payload.message ||
+        payload.detail ||
+        (payload.error && !payload.error.includes("_") ? payload.error : null) ||
+        payload.error ||
+        "Failed to load events";
+      throw new Error(msg === "not_found" ? "Events API unavailable. Retry in a moment." : msg);
+    }
     setRows(payload.data ?? []);
     setTotal(Number(payload.total ?? 0));
   };
