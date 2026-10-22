@@ -27,11 +27,12 @@ export const metadata: Metadata = {
   description: "Operate SpoJex identities, organizations, and the football services marketplace.",
   icons: {
     icon: [
+      { url: "/favicon.ico", sizes: "any" },
       { url: "/favicon.png", type: "image/png", sizes: "32x32" },
-      { url: "/images/logo-transparent.png", type: "image/png", sizes: "any" },
+      { url: "/icon.png", type: "image/png", sizes: "512x512" },
     ],
     apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
-    shortcut: "/favicon.png",
+    shortcut: ["/favicon.ico"],
   },
 };
 
