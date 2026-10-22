@@ -9,8 +9,6 @@ import {
   AdminErrorAlert,
   AdminFilterPanel,
   AdminLoadingRow,
-  AdminModal,
-  AdminModalFooter,
   AdminRowMenu,
   AdminSearchInput,
   AdminSelect,
@@ -20,19 +18,6 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import {
-  NewsMediaFields,
-  removeNewsVideoWatermark,
-  extractNewsVideoPoster,
-  uploadNewsFile,
-  type NewsUploadOptions,
-  type NewsWatermarkMode,
-  type NewsWatermarkPreset,
-} from "@/components/news-media-fields";
-import { NewsOrgPicker } from "@/components/news-org-picker";
-import { NewsSourceField } from "@/components/news-source-field";
-import { NewsTikTokPreview } from "@/components/news-tiktok-preview";
-import {
-  classifyNewsMedia,
   newsCategories,
   newsMediaTypes,
   newsStatusLabel,
@@ -41,14 +26,7 @@ import {
   type NewsDirectoryResponse,
   type NewsDirectoryRow,
 } from "@/lib/news";
-import { rememberNewsSource } from "@/lib/news-sources";
-import {
-  captureVideoCoverFile,
-  resolveNewsStoryMedia,
-  type NewsStoryMedia,
-  type NewsUploadKind,
-} from "@/lib/news-media";
-import { adminFetch, deleteAdmin, postAdmin, postAdminResponse } from "@/lib/hooks";
+import { adminFetch, deleteAdmin, postAdminResponse } from "@/lib/hooks";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { formatDate } from "@/lib/utils";
 
@@ -56,14 +34,14 @@ export default function NewsPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { can, staff } = useAdminPermissions();
+  const { can } = useAdminPermissions();
   const canWrite = can("news:write");
-  const authorName = staff?.full_name?.trim() || staff?.email?.trim() || "";
 
   const status = normalizeNewsStatusFilter(searchParams.get("status"));
   const query = searchParams.get("q") || "";
   const category = searchParams.get("category") || "all";
   const organizationId = searchParams.get("organization_id") || "";
+  const launchOrg = searchParams.get("org") || searchParams.get("organization") || "";
   const mediaType = searchParams.get("media_type") || "all";
   const featuredFilter = searchParams.get("featured") || "all";
   const publishedFrom = searchParams.get("published_from") || "";
@@ -78,23 +56,6 @@ export default function NewsPage() {
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const [createOpen, setCreateOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [title, setTitle] = useState("");
-  const [categoryValue, setCategoryValue] = useState("General");
-  const [body, setBody] = useState("");
-  const [source, setSource] = useState("");
-  const [orgId, setOrgId] = useState("");
-  const [orgName, setOrgName] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
-  const [videoUrl, setVideoUrl] = useState("");
-  const [audioUrl, setAudioUrl] = useState("");
-  const [soundId, setSoundId] = useState("");
-  const [pickedKind, setPickedKind] = useState<NewsStoryMedia | null>("none");
-  const [uploading, setUploading] = useState<NewsUploadKind | null>(null);
-  const [statusValue, setStatusValue] = useState("draft");
-  const [featured, setFeatured] = useState(false);
 
   const writeParams = useCallback(
     (patch: Record<string, string | null>, opts?: { resetPage?: boolean }) => {
@@ -109,6 +70,11 @@ export default function NewsPage() {
     },
     [pathname, router, searchParams],
   );
+
+  useEffect(() => {
+    if (!launchOrg) return;
+    router.replace(`/admin/news/new?organization_id=${encodeURIComponent(launchOrg)}`);
+  }, [launchOrg, router]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -313,143 +279,6 @@ export default function NewsPage() {
     return items;
   };
 
-  const resetCreate = () => {
-    setTitle("");
-    setBody("");
-    setSource("");
-    setOrgId("");
-    setOrgName("");
-    setImageUrl("");
-    setImageUrls([]);
-    setVideoUrl("");
-    setAudioUrl("");
-    setSoundId("");
-    setPickedKind("none");
-    setCategoryValue("General");
-    setStatusValue("draft");
-    setFeatured(false);
-  };
-
-  const uploadMedia = async (
-    file: File,
-    kind: NewsUploadKind,
-    options?: NewsUploadOptions,
-  ) => {
-    if (kind === "video" && (audioUrl.trim() || soundId.trim())) {
-      setError("Remove the audio or soundtrack before uploading video.");
-      return;
-    }
-    if (kind === "audio" && videoUrl.trim()) {
-      setError("Remove the video file before uploading audio.");
-      return;
-    }
-    setUploading(kind);
-    setError(null);
-    try {
-      const needsAutoCover = kind === "video" && imageUrls.length === 0 && !imageUrl.trim();
-      const coverPromise = needsAutoCover
-        ? captureVideoCoverFile(file).catch(() => null)
-        : Promise.resolve(null);
-      const publicUrl = await uploadNewsFile(null, file, kind, options);
-      if (kind === "image") {
-        setImageUrls((prev) => {
-          const next = prev.includes(publicUrl) ? prev : [...prev, publicUrl].slice(0, 10);
-          setImageUrl(next[0] ?? "");
-          return next;
-        });
-      }
-      if (kind === "video") {
-        setVideoUrl(publicUrl);
-        setSoundId("");
-        setAudioUrl("");
-        setPickedKind("video");
-        if (needsAutoCover) {
-          let coverUrl = "";
-          const coverFile = await coverPromise;
-          if (coverFile) {
-            try {
-              coverUrl = await uploadNewsFile(null, coverFile, "image");
-            } catch {
-              coverUrl = "";
-            }
-          }
-          if (!coverUrl) {
-            try {
-              coverUrl = await extractNewsVideoPoster(null, publicUrl);
-            } catch {
-              coverUrl = "";
-            }
-          }
-          if (coverUrl) {
-            setImageUrls([coverUrl]);
-            setImageUrl(coverUrl);
-          }
-        }
-      }
-      if (kind === "audio") {
-        setAudioUrl(publicUrl);
-        setSoundId("");
-        setPickedKind("audio");
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setUploading(null);
-    }
-  };
-
-  const create = async () => {
-    if (!canWrite || !title.trim() || uploading) return;
-    if (!orgId.trim()) {
-      setError("Publishing organization is required.");
-      return;
-    }
-    setCreating(true);
-    setError(null);
-    try {
-      const gallery =
-        imageUrls.length > 0 ? imageUrls : imageUrl.trim() ? [imageUrl.trim()] : [];
-      const image = gallery[0] ?? "";
-      const sourceLabel = source.trim();
-      const created = (await postAdmin("/api/admin/news", {
-        title: title.trim(),
-        category: categoryValue,
-        status: statusValue,
-        summary: "",
-        body: body.trim(),
-        source: sourceLabel,
-        organization_id: orgId.trim(),
-        image_url: image,
-        cover_url: image,
-        image_urls: gallery,
-        video_url: videoUrl.trim(),
-        audio_url: audioUrl.trim(),
-        sound_id: soundId.trim() || null,
-        is_featured: featured,
-      })) as { id?: string } | null;
-      if (sourceLabel) rememberNewsSource(sourceLabel);
-      resetCreate();
-      setCreateOpen(false);
-      if (created?.id) {
-        router.push(`/admin/news/${created.id}`);
-        return;
-      }
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Create failed");
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const createMedia = classifyNewsMedia({
-    video_url: videoUrl,
-    audio_url: audioUrl,
-    sound_id: soundId,
-    image_url: imageUrls[0] ?? imageUrl,
-    image_urls: imageUrls,
-  });
-
   return (
     <>
       <AdminPageHeader
@@ -461,13 +290,12 @@ export default function NewsPage() {
         ]}
         actions={
           canWrite ? (
-            <button
-              type="button"
-              onClick={() => setCreateOpen(true)}
+            <Link
+              href="/admin/news/new"
               className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
             >
               Add news
-            </button>
+            </Link>
           ) : null
         }
       />
@@ -795,194 +623,6 @@ export default function NewsPage() {
         ) : null}
       </AdminTableShell>
 
-      <AdminModal
-        open={createOpen}
-        title="Add news"
-        onClose={() => {
-          if (creating || uploading) return;
-          setCreateOpen(false);
-        }}
-        className="max-w-2xl"
-        sheet
-        footer={
-          <AdminModalFooter
-            onCancel={() => {
-              if (creating || uploading) return;
-              setCreateOpen(false);
-            }}
-            onSave={() => void create()}
-            saving={creating || Boolean(uploading)}
-            saveLabel="Create draft"
-          />
-        }
-      >
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void create();
-          }}
-          className="grid gap-3"
-        >
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Headline"
-            required
-            className="h-10 rounded-lg border border-border px-3 text-sm"
-          />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <select
-              value={categoryValue}
-              onChange={(e) => setCategoryValue(e.target.value)}
-              className="h-10 rounded-lg border border-border px-3 text-sm"
-            >
-              {newsCategories.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-            <select
-              value={statusValue}
-              onChange={(e) => setStatusValue(e.target.value)}
-              className="h-10 rounded-lg border border-border px-3 text-sm"
-            >
-              {newsStatuses.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder="Description"
-            rows={5}
-            className="rounded-lg border border-border px-3 py-2 text-sm"
-          />
-          <NewsOrgPicker
-            value={orgId}
-            disabled={creating || Boolean(uploading)}
-            onChange={(nextId, org) => {
-              setOrgId(nextId);
-              setOrgName(org?.name ?? "");
-            }}
-          />
-          <NewsSourceField
-            label="Source label"
-            optional
-            value={source}
-            onChange={setSource}
-            knownSources={[]}
-            disabled={creating || Boolean(uploading)}
-            inputClassName="h-10 w-full rounded-lg border border-border px-3 text-sm"
-            hint="Optional credit under the title on the app. Leave blank to hide."
-          />
-          <p className="text-sm text-text-secondary">
-            Author{" "}
-            <span className="font-medium text-text-primary">
-              {authorName || "Signed-in admin"}
-            </span>
-            <span className="ml-2 text-xs text-text-hint">
-              · Primary media: {createMedia.label}
-              {createMedia.has_soundtrack ? " + soundtrack" : ""}
-            </span>
-          </p>
-          <NewsTikTokPreview
-            title={title}
-            body={body}
-            organizationName={orgName}
-            source={source.trim()}
-            imageUrl={imageUrls[0] ?? imageUrl}
-            videoUrl={videoUrl}
-            audioUrl={audioUrl}
-            mediaKind={resolveNewsStoryMedia(videoUrl, audioUrl, pickedKind, {
-              imageUrl: imageUrls[0] ?? imageUrl,
-              soundId,
-            })}
-            className="mb-2"
-          />
-          <NewsMediaFields
-            imageUrl={imageUrls[0] ?? imageUrl}
-            imageUrls={imageUrls}
-            videoUrl={videoUrl}
-            audioUrl={audioUrl}
-            soundId={soundId}
-            pickedKind={pickedKind}
-            uploading={uploading}
-            onKind={setPickedKind}
-            onUpload={(file, kind, options) => void uploadMedia(file, kind, options)}
-            onRemoveImage={() => {
-              setImageUrl("");
-              setImageUrls([]);
-              if (soundId) {
-                setSoundId("");
-                setAudioUrl("");
-              }
-            }}
-            onRemoveImageAt={(index) => {
-              setImageUrls((prev) => {
-                const next = prev.filter((_, i) => i !== index);
-                setImageUrl(next[0] ?? "");
-                if (next.length === 0 && soundId) {
-                  setSoundId("");
-                  setAudioUrl("");
-                }
-                return next;
-              });
-            }}
-            onRemoveVideo={() => {
-              setVideoUrl("");
-              setPickedKind("none");
-            }}
-            onRemoveAudio={() => {
-              setAudioUrl("");
-              setSoundId("");
-              setPickedKind("none");
-            }}
-            onRemoveWatermark={(options: {
-              preset: NewsWatermarkPreset;
-              mode: NewsWatermarkMode;
-            }) =>
-              void (async () => {
-                if (!videoUrl.trim()) {
-                  setError("Upload a video first.");
-                  return;
-                }
-                setUploading("video");
-                try {
-                  const publicUrl = await removeNewsVideoWatermark(null, videoUrl, options);
-                  setVideoUrl(publicUrl);
-                  setPickedKind("video");
-                } catch (err) {
-                  setError(err instanceof Error ? err.message : "Watermark removal failed");
-                } finally {
-                  setUploading(null);
-                }
-              })()
-            }
-            onTrimVideo={(result) => {
-              setVideoUrl(result.publicUrl);
-              setPickedKind("video");
-            }}
-            onSoundSelect={(sound) => {
-              setSoundId(sound?.id ?? "");
-              setAudioUrl(sound?.audio_url?.trim() ?? "");
-              setPickedKind("none");
-            }}
-          />
-          <label className="flex items-center gap-2 text-sm text-text-secondary">
-            <input
-              type="checkbox"
-              checked={featured}
-              onChange={(e) => setFeatured(e.target.checked)}
-              disabled={statusValue === "archived"}
-            />
-            Feature on home
-          </label>
-        </form>
-      </AdminModal>
     </>
   );
 }

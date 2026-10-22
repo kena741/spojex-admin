@@ -643,7 +643,7 @@ export default function OrganizationDetailPage() {
                 </li>
                 <li>
                   <Link
-                    href={`/admin/news?org=${encodeURIComponent(org.id)}`}
+                    href={`/admin/news/new?organization_id=${encodeURIComponent(org.id)}`}
                     className="text-primary hover:underline"
                   >
                     Sport News ({newsCount})
