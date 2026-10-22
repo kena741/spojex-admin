@@ -333,8 +333,8 @@ function MessagesPageInner() {
         className={cn(
           "grid gap-4",
           selectedId && showDetails
-            ? "xl:grid-cols-[300px_1fr_280px]"
-            : "lg:grid-cols-[320px_1fr]",
+            ? "xl:grid-cols-[280px_minmax(0,1fr)_260px]"
+            : "lg:grid-cols-[300px_minmax(0,1fr)]",
         )}
       >
         <AdminTableShell>
@@ -417,19 +417,21 @@ function MessagesPageInner() {
           ) : null}
         </AdminTableShell>
 
-        <AdminTableShell>
+        <div className="flex min-h-[70vh] justify-center rounded-xl border border-border bg-muted/30 p-3 sm:p-5">
           {!selectedId ? (
             <div className="grid place-items-center px-6 py-16 text-center text-sm text-text-secondary">
               Select a conversation to inspect messages.
             </div>
           ) : detailLoading ? (
-            <AdminLoadingRow label="Loading conversation…" fill />
+            <div className="flex w-full max-w-[420px] items-center justify-center">
+              <AdminLoadingRow label="Loading conversation…" fill />
+            </div>
           ) : detail ? (
-            <div className="flex h-[70vh] flex-col">
-              <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
+            <div className="flex h-[min(78vh,760px)] w-full max-w-[420px] flex-col overflow-hidden rounded-[1.75rem] border border-border bg-[#ececf0] shadow-lg dark:bg-muted/60">
+              <div className="flex items-start justify-between gap-3 border-b border-border/80 bg-card px-3 py-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">{detail.display_title}</p>
-                  <p className="text-xs text-text-secondary">
+                  <p className="truncate text-[11px] text-text-secondary">
                     {chatKindLabel(detail)}
                     {detail.organization_name ? ` · ${detail.organization_name}` : ""}
                     {detail.member_count != null ? ` · ${detail.member_count} members` : ""}
@@ -437,7 +439,7 @@ function MessagesPageInner() {
                     {detail.group_visibility ? ` · ${detail.group_visibility}` : ""}
                   </p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex shrink-0 gap-2 pt-0.5">
                   <button
                     type="button"
                     onClick={() => setShowDetails((v) => !v)}
@@ -456,7 +458,7 @@ function MessagesPageInner() {
               </div>
 
               {detail.has_more ? (
-                <div className="border-b border-border px-4 py-2 text-center">
+                <div className="border-b border-border/60 bg-card/70 px-3 py-2 text-center">
                   <button
                     type="button"
                     disabled={loadingOlder}
@@ -471,11 +473,11 @@ function MessagesPageInner() {
                 </div>
               ) : null}
 
-              <div className="flex-1 space-y-3 overflow-y-auto bg-muted/20 px-4 py-4">
+              <div className="flex-1 space-y-2 overflow-y-auto px-2.5 py-3">
                 {timeline.map((block) => {
                   if (block.type === "day") {
                     return (
-                      <div key={block.key} className="flex justify-center">
+                      <div key={block.key} className="flex justify-center py-1">
                         <span className="rounded-full bg-card px-3 py-1 text-[11px] text-text-hint shadow-sm">
                           {block.label}
                         </span>
@@ -494,7 +496,7 @@ function MessagesPageInner() {
               </div>
 
               {detail.note ? (
-                <p className="border-t border-border px-4 py-2 text-[11px] text-text-hint">
+                <p className="border-t border-border/80 bg-card px-3 py-2 text-[11px] text-text-hint">
                   {detail.note}
                 </p>
               ) : null}
@@ -502,7 +504,7 @@ function MessagesPageInner() {
           ) : (
             <AdminEmpty title="Conversation unavailable" description="It may have been removed." />
           )}
-        </AdminTableShell>
+        </div>
 
         {selectedId && showDetails && detail ? (
           <AdminTableShell>
@@ -581,11 +583,16 @@ function MessageBubble({ message }: { message: MessageItem }) {
     : "";
   const structured = message.structured || {};
   const isSystem = message.type === "system" || message.preview_kind === "system";
+  const body = message.body || message.display_body || "";
+  const isCard =
+    message.preview_kind === "coin_gift" ||
+    message.preview_kind === "news_share" ||
+    message.preview_kind === "organization_invitation";
 
   if (isSystem) {
     return (
-      <div className="flex justify-center">
-        <p className="max-w-md rounded-full bg-card px-3 py-1 text-center text-[11px] text-text-secondary shadow-sm">
+      <div className="flex justify-center px-6">
+        <p className="w-fit max-w-[88%] rounded-full bg-card/90 px-3 py-1 text-center text-[11px] leading-snug text-text-secondary shadow-sm">
           {message.display_body}
         </p>
       </div>
@@ -593,7 +600,7 @@ function MessageBubble({ message }: { message: MessageItem }) {
   }
 
   return (
-    <div className="flex gap-2">
+    <div className="flex items-end gap-1.5 pr-5">
       <UserAvatar
         name={name}
         src={
@@ -601,22 +608,18 @@ function MessageBubble({ message }: { message: MessageItem }) {
             ? message.sender_organization?.logo_url
             : message.sender?.avatar_url
         }
-        size={32}
+        size={28}
       />
-      <div className="min-w-0 max-w-[min(100%,36rem)] flex-1">
-        <div className="mb-1 flex flex-wrap items-baseline gap-2">
-          <span className="text-xs font-semibold text-text-primary">{name}</span>
+      <div className="flex min-w-0 max-w-[88%] flex-col items-start">
+        <div className="mb-0.5 flex max-w-full flex-wrap items-baseline gap-x-1.5 gap-y-0.5 px-0.5">
+          <span className="truncate text-[12px] font-semibold text-text-primary">{name}</span>
           {message.sent_as_organization ? (
-            <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-800">
+            <span className="rounded-full bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold text-sky-800">
               As organization
             </span>
           ) : null}
-          {message.sender && !message.sent_as_organization && message.sender.username ? (
-            <span className="text-[11px] text-text-hint">@{message.sender.username}</span>
-          ) : null}
-          <span className="text-[11px] text-text-hint">{time}</span>
           {message.deleted_at ? (
-            <span className="text-[11px] text-amber-700">Hidden / deleted</span>
+            <span className="text-[10px] text-amber-700">Hidden / deleted</span>
           ) : null}
         </div>
 
@@ -627,23 +630,27 @@ function MessageBubble({ message }: { message: MessageItem }) {
         ) : message.preview_kind === "organization_invitation" ? (
           <InviteCard message={message} />
         ) : (
-          <div className="rounded-2xl rounded-tl-md border border-border bg-card px-3 py-2 text-sm shadow-sm">
-            {message.body || message.display_body}
+          <div className="w-fit max-w-full rounded-[18px] rounded-bl-[4px] bg-card px-2.5 pb-1 pt-1.5 text-[15px] leading-[1.35] text-text-primary shadow-sm">
+            <p className="whitespace-pre-wrap break-words">{body}</p>
             {message.media_path ? (
-              <p className="mt-1 text-[11px] text-text-hint">
+              <p className="mt-1 text-[11px] leading-snug text-text-hint">
                 Media · {message.media_mime || message.type || "attachment"}
               </p>
+            ) : null}
+            {time ? (
+              <p className="mt-0.5 text-right text-[11px] leading-none text-text-hint">{time}</p>
             ) : null}
           </div>
         )}
 
-        {structured.accompanying_text &&
-        (message.preview_kind === "coin_gift" ||
-          message.preview_kind === "news_share" ||
-          message.preview_kind === "organization_invitation") ? (
-          <p className="mt-1 whitespace-pre-wrap rounded-xl border border-border/70 bg-card/80 px-3 py-2 text-sm text-text-secondary">
-            {structured.accompanying_text}
-          </p>
+        {isCard && time ? (
+          <p className="mt-0.5 px-0.5 text-[11px] text-text-hint">{time}</p>
+        ) : null}
+
+        {structured.accompanying_text && isCard ? (
+          <div className="mt-1 w-fit max-w-full rounded-[18px] rounded-bl-[4px] bg-card px-2.5 pb-1 pt-1.5 text-[15px] leading-[1.35] text-text-secondary shadow-sm">
+            <p className="whitespace-pre-wrap break-words">{structured.accompanying_text}</p>
+          </div>
         ) : null}
       </div>
     </div>
@@ -655,15 +662,15 @@ function GiftCard({ message }: { message: MessageItem }) {
   const giftLabel = [s.gift_emoji, s.gift_name].filter(Boolean).join(" ").trim();
   const amount = s.amount ? `${s.amount} coins` : "coins";
   return (
-    <div className="rounded-2xl border border-amber-300/70 bg-amber-50/60 px-3 py-3 text-sm dark:border-amber-900/40 dark:bg-amber-950/20">
+    <div className="w-[min(100%,268px)] rounded-2xl border border-amber-300/70 bg-amber-50/80 px-3 py-2.5 text-sm dark:border-amber-900/40 dark:bg-amber-950/20">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-800/80">
         Coin gift
       </p>
-      <p className="mt-1 font-medium text-text-primary">
+      <p className="mt-1 whitespace-pre-wrap break-words font-medium leading-snug text-text-primary">
         {senderLabel(message)} sent {giftLabel || "a gift"} · {amount}
       </p>
       {s.verified === false || s.verification_note ? (
-        <p className="mt-1 text-[11px] text-amber-800">{s.verification_note}</p>
+        <p className="mt-1 text-[11px] leading-snug text-amber-800">{s.verification_note}</p>
       ) : (
         <p className="mt-1 text-[11px] text-text-hint">Verified gift record</p>
       )}
@@ -682,17 +689,23 @@ function GiftCard({ message }: { message: MessageItem }) {
 function NewsCard({ message }: { message: MessageItem }) {
   const s = message.structured || {};
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card text-sm shadow-sm">
+    <div className="w-[min(100%,268px)] overflow-hidden rounded-2xl border border-border bg-card text-sm shadow-sm">
       {s.thumbnail_url ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={s.thumbnail_url} alt="" className="h-32 w-full object-cover bg-muted" />
+        <img src={s.thumbnail_url} alt="" className="aspect-square w-full object-cover bg-muted" />
       ) : null}
       <div className="px-3 py-2">
         <p className="text-[11px] font-semibold uppercase text-text-hint">
           Shared {s.content_kind || "news"}
         </p>
-        <p className="mt-0.5 font-medium">{s.title || message.display_body}</p>
-        {s.note ? <p className="mt-1 text-xs text-text-secondary">{s.note}</p> : null}
+        <p className="mt-0.5 whitespace-pre-wrap break-words font-medium leading-snug">
+          {s.title || message.display_body}
+        </p>
+        {s.note ? (
+          <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-snug text-text-secondary">
+            {s.note}
+          </p>
+        ) : null}
         {s.article_id ? (
           <Link
             href={`/admin/news/${s.article_id}`}
@@ -712,17 +725,17 @@ function InviteCard({ message }: { message: MessageItem }) {
   const s = message.structured || {};
   const orgName = s.organization_name || "Organization";
   return (
-    <div className="rounded-2xl border border-border bg-card px-3 py-3 text-sm shadow-sm">
-      <div className="flex items-start gap-3">
+    <div className="w-[min(100%,268px)] rounded-2xl border border-border bg-card px-3 py-2.5 text-sm shadow-sm">
+      <div className="flex items-start gap-2.5">
         <UserAvatar name={orgName} src={s.organization_logo} size={40} />
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase text-text-hint">
             Organization invitation
           </p>
-          <p className="mt-0.5 font-medium">
+          <p className="mt-0.5 whitespace-pre-wrap break-words font-medium leading-snug">
             {senderLabel(message)} shared an invitation to {orgName}
           </p>
-          <p className="mt-1 text-[11px] text-text-hint">
+          <p className="mt-1 text-[11px] leading-snug text-text-hint">
             Viewing does not join, accept, or submit a request.
           </p>
           {s.organization_id ? (
