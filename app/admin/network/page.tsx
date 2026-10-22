@@ -9,10 +9,12 @@ import {
   AdminErrorAlert,
   AdminFilterPanel,
   AdminLoadingRow,
+  AdminReloadButton,
   AdminRowMenu,
   AdminSearchInput,
   AdminSelect,
   AdminStatCard,
+  AdminTableLoading,
   AdminTableShell,
   type AdminRowMenuItem,
 } from "@/components/admin-layout";
@@ -43,6 +45,14 @@ type NetworkPayload = {
   error?: string;
 };
 
+function parseTab(raw: string | null): TabId {
+  return raw === "follows" || raw === "blocks" ? raw : "connections";
+}
+
+function parseStatus(raw: string | null): StatusFilter {
+  return raw === "pending" || raw === "accepted" || raw === "declined" ? raw : "all";
+}
+
 function UserCell({
   userId,
   user,
@@ -72,33 +82,12 @@ function NetworkPageInner() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const tabParam = searchParams.get("tab");
-  const tab: TabId =
-    tabParam === "follows" || tabParam === "blocks" ? tabParam : "connections";
-  const statusParam = searchParams.get("status");
-  const status: StatusFilter =
-    statusParam === "pending" ||
-    statusParam === "accepted" ||
-    statusParam === "declined"
-      ? statusParam
-      : "all";
-  const query = searchParams.get("q") || "";
-
-  const writeParams = useCallback(
-    (patch: Record<string, string | null>) => {
-      const next = new URLSearchParams(searchParams.toString());
-      for (const [k, v] of Object.entries(patch)) {
-        if (v == null || v === "" || (k === "status" && v === "all") || (k === "tab" && v === "connections")) {
-          next.delete(k);
-        } else {
-          next.set(k, v);
-        }
-      }
-      const qs = next.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname);
-    },
-    [pathname, router, searchParams],
+  // Filters live in React state. Tab/status/search do not refetch - only Reload does.
+  const [tab, setTab] = useState<TabId>(() => parseTab(searchParams.get("tab")));
+  const [status, setStatus] = useState<StatusFilter>(() =>
+    parseStatus(searchParams.get("status")),
   );
+  const [query, setQuery] = useState(() => searchParams.get("q") || "");
 
   const [items, setItems] = useState<NetworkConnectionItem[]>([]);
   const [follows, setFollows] = useState<FollowRow[]>([]);
@@ -114,36 +103,49 @@ function NetworkPageInner() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [searchDraft, setSearchDraft] = useState(query);
   const [note, setNote] = useState<string | null>(null);
 
-  const load = async () => {
-    const response = await fetch("/api/admin/network", { credentials: "same-origin" });
-    const payload = (await response.json()) as NetworkPayload;
-    if (!response.ok) throw new Error(payload.error || "Failed to load connections");
-    setItems(payload.items ?? []);
-    setFollows(payload.follows ?? []);
-    setBlocks(payload.blocks ?? []);
-    setNote(payload.note ?? null);
-    setCounts({
-      pending: payload.counts?.pending ?? 0,
-      accepted: payload.counts?.accepted ?? 0,
-      declined: payload.counts?.declined ?? 0,
-      total: payload.counts?.total ?? 0,
-      follows: payload.counts?.follows ?? payload.follows?.length ?? 0,
-      blocks: payload.counts?.blocks ?? payload.blocks?.length ?? 0,
-    });
-  };
+  const syncUrl = useCallback(
+    (nextTab: TabId, nextStatus: StatusFilter, nextQuery: string) => {
+      const next = new URLSearchParams();
+      if (nextTab !== "connections") next.set("tab", nextTab);
+      if (nextTab === "connections" && nextStatus !== "all") next.set("status", nextStatus);
+      if (nextQuery.trim()) next.set("q", nextQuery.trim());
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router],
+  );
 
-  useEffect(() => {
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/admin/network", { credentials: "same-origin" });
+      const payload = (await response.json()) as NetworkPayload;
+      if (!response.ok) throw new Error(payload.error || "Failed to load connections");
+      setItems(payload.items ?? []);
+      setFollows(payload.follows ?? []);
+      setBlocks(payload.blocks ?? []);
+      setNote(payload.note ?? null);
+      setCounts({
+        pending: payload.counts?.pending ?? 0,
+        accepted: payload.counts?.accepted ?? 0,
+        declined: payload.counts?.declined ?? 0,
+        total: payload.counts?.total ?? 0,
+        follows: payload.counts?.follows ?? payload.follows?.length ?? 0,
+        blocks: payload.counts?.blocks ?? payload.blocks?.length ?? 0,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    setSearchDraft(query);
-  }, [query]);
+    void load();
+  }, [load]);
 
   const filteredItems = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -261,11 +263,33 @@ function NetworkPageInner() {
     });
   };
 
+  const selectTab = (next: TabId) => {
+    setTab(next);
+    const nextStatus: StatusFilter = next === "connections" ? status : "all";
+    if (next !== "connections") setStatus("all");
+    setQuery("");
+    syncUrl(next, nextStatus, "");
+  };
+
+  const selectStatus = (next: StatusFilter) => {
+    setStatus(next);
+    syncUrl(tab, next, query);
+  };
+
+  const selectQuery = (value: string) => {
+    setQuery(value);
+    syncUrl(tab, status, value);
+  };
+
   const tabs: { id: TabId; label: string; count: number }[] = [
     { id: "connections", label: "Connections", count: counts.total },
     { id: "follows", label: "Follows", count: counts.follows },
     { id: "blocks", label: "Blocks", count: counts.blocks },
   ];
+
+  const connectionsColSpan = canWrite ? 6 : 5;
+  const followsColSpan = canWrite ? 5 : 4;
+  const blocksColSpan = canWrite ? 6 : 5;
 
   return (
     <>
@@ -276,9 +300,9 @@ function NetworkPageInner() {
           { label: "Network", href: "/admin/network" },
           { label: "Connections" },
         ]}
+        actions={<AdminReloadButton loading={loading} onClick={() => void load()} />}
       />
 
-      {loading ? <AdminLoadingRow label="Loading connections…" /> : null}
       {error ? <AdminErrorAlert message={error} /> : null}
       {note ? <p className="mb-3 text-xs text-text-secondary">{note}</p> : null}
 
@@ -296,13 +320,7 @@ function NetworkPageInner() {
             <button
               key={item.id}
               type="button"
-              onClick={() => {
-                writeParams({
-                  tab: item.id,
-                  q: null,
-                  status: item.id === "connections" ? "all" : null,
-                });
-              }}
+              onClick={() => selectTab(item.id)}
               className={cn(
                 "rounded-full px-3 py-1.5 text-sm",
                 active
@@ -321,17 +339,11 @@ function NetworkPageInner() {
           <AdminFilterPanel>
             <div className="grid gap-3 md:grid-cols-[1fr_180px]">
               <AdminSearchInput
-                value={searchDraft}
-                onChange={(value) => {
-                  setSearchDraft(value);
-                  writeParams({ q: value.trim() || null });
-                }}
+                value={query}
+                onChange={selectQuery}
                 placeholder="Search by name, username, or user id"
               />
-              <AdminSelect
-                value={status}
-                onChange={(value) => writeParams({ status: value })}
-              >
+              <AdminSelect value={status} onChange={(value) => selectStatus(value as StatusFilter)}>
                 <option value="all">All statuses</option>
                 <option value="pending">Pending</option>
                 <option value="accepted">Accepted</option>
@@ -341,33 +353,49 @@ function NetworkPageInner() {
           </AdminFilterPanel>
 
           <AdminTableShell>
-            {filteredItems.length === 0 && !loading ? (
-              <AdminEmpty
-                title={status === "pending" ? "No pending peer requests" : "No connections match"}
-                description={
-                  status === "pending"
-                    ? "When users send connection requests to each other, pending rows appear here. These are not admin approval queues."
-                    : "Try another status filter or clear search."
-                }
-              />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">From</th>
+                    <th className="px-4 py-3 font-semibold">To</th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 font-semibold">Created</th>
+                    <th className="px-4 py-3 font-semibold">Responded</th>
+                    {canWrite ? <th className="px-4 py-3 font-semibold">Actions</th> : null}
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <AdminTableLoading
+                      colSpan={connectionsColSpan}
+                      label="Loading connections…"
+                    />
+                  ) : filteredItems.length === 0 ? (
                     <tr>
-                      <th className="px-4 py-3 font-semibold">From</th>
-                      <th className="px-4 py-3 font-semibold">To</th>
-                      <th className="px-4 py-3 font-semibold">Status</th>
-                      <th className="px-4 py-3 font-semibold">Created</th>
-                      <th className="px-4 py-3 font-semibold">Responded</th>
-                      {canWrite ? <th className="px-4 py-3 font-semibold">Actions</th> : null}
+                      <td colSpan={connectionsColSpan} className="p-0">
+                        <AdminEmpty
+                          title={
+                            status === "pending"
+                              ? "No pending peer requests"
+                              : "No connections match"
+                          }
+                          description={
+                            status === "pending"
+                              ? "When users send connection requests to each other, pending rows appear here. These are not admin approval queues."
+                              : "Try another status filter or clear search. Reload to fetch the latest data."
+                          }
+                        />
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {filteredItems.map((row) => {
+                  ) : (
+                    filteredItems.map((row) => {
                       const busy = busyId === row.id;
                       return (
-                        <tr key={`${row.source}-${row.id}`} className="border-b border-border last:border-0">
+                        <tr
+                          key={`${row.source}-${row.id}`}
+                          className="border-b border-border last:border-0 hover:bg-muted/40"
+                        >
                           <td className="px-4 py-3">
                             <UserCell userId={row.from_user_id} user={row.from_user} />
                           </td>
@@ -383,7 +411,9 @@ function NetworkPageInner() {
                             {formatDateTime(row.created_at)}
                           </td>
                           <td className="px-4 py-3 text-text-secondary">
-                            {row.responded_at ? formatDateTime(row.responded_at) : "Not recorded"}
+                            {row.responded_at
+                              ? formatDateTime(row.responded_at)
+                              : "Not recorded"}
                           </td>
                           {canWrite ? (
                             <td className="px-4 py-3">
@@ -391,9 +421,9 @@ function NetworkPageInner() {
                                 disabled={busy}
                                 aria-label="Connection actions"
                                 items={(() => {
-                                  const items: AdminRowMenuItem[] = [];
+                                  const menuItems: AdminRowMenuItem[] = [];
                                   if (row.status === "pending" && row.request_id) {
-                                    items.push(
+                                    menuItems.push(
                                       {
                                         id: "accept",
                                         label: "Support: accept request",
@@ -412,25 +442,25 @@ function NetworkPageInner() {
                                     );
                                   }
                                   if (row.status === "accepted" && row.connection_id) {
-                                    items.push({
+                                    menuItems.push({
                                       id: "remove",
                                       label: "Remove connection",
                                       tone: "danger",
                                       onClick: () => removeConnection(row),
                                     });
                                   }
-                                  return items;
+                                  return menuItems;
                                 })()}
                               />
                             </td>
                           ) : null}
                         </tr>
                       );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </AdminTableShell>
         </>
       ) : null}
@@ -442,34 +472,43 @@ function NetworkPageInner() {
           </p>
           <AdminFilterPanel>
             <AdminSearchInput
-              value={searchDraft}
-              onChange={(value) => {
-                setSearchDraft(value);
-                writeParams({ q: value.trim() || null });
-              }}
+              value={query}
+              onChange={selectQuery}
               placeholder="Search follower or following"
             />
           </AdminFilterPanel>
           <AdminTableShell>
-            {filteredFollows.length === 0 && !loading ? (
-              <AdminEmpty title="No follows" description="Public follow relationships from the app." />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Follower</th>
+                    <th className="px-4 py-3 font-semibold">→</th>
+                    <th className="px-4 py-3 font-semibold">Following</th>
+                    <th className="px-4 py-3 font-semibold">Created</th>
+                    {canWrite ? <th className="px-4 py-3 font-semibold">Actions</th> : null}
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <AdminTableLoading colSpan={followsColSpan} label="Loading follows…" />
+                  ) : filteredFollows.length === 0 ? (
                     <tr>
-                      <th className="px-4 py-3 font-semibold">Follower</th>
-                      <th className="px-4 py-3 font-semibold">→</th>
-                      <th className="px-4 py-3 font-semibold">Following</th>
-                      <th className="px-4 py-3 font-semibold">Created</th>
-                      {canWrite ? <th className="px-4 py-3 font-semibold">Actions</th> : null}
+                      <td colSpan={followsColSpan} className="p-0">
+                        <AdminEmpty
+                          title="No follows"
+                          description="Public follow relationships from the app. Reload to fetch the latest data."
+                        />
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {filteredFollows.map((row) => {
+                  ) : (
+                    filteredFollows.map((row) => {
                       const key = `${row.follower_id}-${row.following_id}`;
                       return (
-                        <tr key={key} className="border-b border-border last:border-0">
+                        <tr
+                          key={key}
+                          className="border-b border-border last:border-0 hover:bg-muted/40"
+                        >
                           <td className="px-4 py-3">
                             <UserCell userId={row.follower_id} user={row.follower} />
                           </td>
@@ -498,11 +537,11 @@ function NetworkPageInner() {
                           ) : null}
                         </tr>
                       );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </AdminTableShell>
         </>
       ) : null}
@@ -516,35 +555,44 @@ function NetworkPageInner() {
           </p>
           <AdminFilterPanel>
             <AdminSearchInput
-              value={searchDraft}
-              onChange={(value) => {
-                setSearchDraft(value);
-                writeParams({ q: value.trim() || null });
-              }}
+              value={query}
+              onChange={selectQuery}
               placeholder="Search blocker or blocked user"
             />
           </AdminFilterPanel>
           <AdminTableShell>
-            {filteredBlocks.length === 0 && !loading ? (
-              <AdminEmpty title="No blocks" description="User blocks from the connection graph." />
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Blocker</th>
+                    <th className="px-4 py-3 font-semibold">→</th>
+                    <th className="px-4 py-3 font-semibold">Blocked</th>
+                    <th className="px-4 py-3 font-semibold">Scope</th>
+                    <th className="px-4 py-3 font-semibold">Created</th>
+                    {canWrite ? <th className="px-4 py-3 font-semibold">Actions</th> : null}
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <AdminTableLoading colSpan={blocksColSpan} label="Loading blocks…" />
+                  ) : filteredBlocks.length === 0 ? (
                     <tr>
-                      <th className="px-4 py-3 font-semibold">Blocker</th>
-                      <th className="px-4 py-3 font-semibold">→</th>
-                      <th className="px-4 py-3 font-semibold">Blocked</th>
-                      <th className="px-4 py-3 font-semibold">Scope</th>
-                      <th className="px-4 py-3 font-semibold">Created</th>
-                      {canWrite ? <th className="px-4 py-3 font-semibold">Actions</th> : null}
+                      <td colSpan={blocksColSpan} className="p-0">
+                        <AdminEmpty
+                          title="No blocks"
+                          description="User blocks from the connection graph. Reload to fetch the latest data."
+                        />
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {filteredBlocks.map((row) => {
+                  ) : (
+                    filteredBlocks.map((row) => {
                       const key = `${row.blocker_id}-${row.blocked_id}`;
                       return (
-                        <tr key={key} className="border-b border-border last:border-0">
+                        <tr
+                          key={key}
+                          className="border-b border-border last:border-0 hover:bg-muted/40"
+                        >
                           <td className="px-4 py-3">
                             <UserCell userId={row.blocker_id} user={row.blocker} />
                           </td>
@@ -581,11 +629,11 @@ function NetworkPageInner() {
                           ) : null}
                         </tr>
                       );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </AdminTableShell>
         </>
       ) : null}
