@@ -37,7 +37,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (loading || !staff) {
     return (
-      <div className="ml-64 grid min-h-screen w-full place-items-center bg-background">
+      <div className="grid min-h-screen w-full place-items-center bg-background">
         <div className="flex items-center gap-2 text-sm text-text-secondary">
           <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
           Checking access…
