@@ -99,7 +99,7 @@ function AffinityList({
   return (
     <div className="space-y-1">
       {items.map((item, i) => {
-        const name = item.label || item.creator_key || "—";
+        const name = item.label || item.creator_key || "-";
         return (
           <div key={`${name}-${i}`} className="text-xs">
             <span className="font-medium">{name}</span>{" "}
@@ -316,7 +316,7 @@ function FeedInsightsPageInner() {
     <div className="space-y-4">
       <AdminPageHeader
         title="Feed Insights"
-        description="Performance, personalization evidence, and delivery health — read-only; ranking weights are not edited here."
+        description="Performance, personalization evidence, and delivery health - read-only; ranking weights are not edited here."
         breadcrumbs={[
           { label: "Content", href: "/admin/content" },
           { label: "Feed Insights" },
@@ -433,10 +433,10 @@ function FeedInsightsPageInner() {
           ) : null}
           <p className="text-[11px] text-text-hint max-w-md">
             {tab === "personalization"
-              ? "Personalization values are current snapshots — not historical state for a date range."
+              ? "Personalization values are current snapshots - not historical state for a date range."
               : tab === "performance"
                 ? "Metrics count events/exposures in the selected period. Prefetch is not an impression."
-                : "Worker health from outbox and processing delay — events existing ≠ healthy workers."}
+                : "Worker health from outbox and processing delay - events existing ≠ healthy workers."}
           </p>
         </div>
       </AdminFilterPanel>
@@ -487,7 +487,7 @@ function FeedInsightsPageInner() {
             <div className="border-b border-border px-4 py-3">
               <h2 className="text-sm font-semibold">Content performance</h2>
               <p className="text-xs text-text-hint">
-                Low-exposure rows are labeled — small sample sizes are not strong evidence.
+                Low-exposure rows are labeled - small sample sizes are not strong evidence.
               </p>
             </div>
             {(perf.content?.length ?? 0) === 0 ? (
@@ -539,7 +539,7 @@ function FeedInsightsPageInner() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-xs text-text-secondary">
-                          {row.organization_name || "—"}
+                          {row.organization_name || "-"}
                         </td>
                         <td className="px-4 py-3 text-xs capitalize">{row.media_type}</td>
                         <td className="px-4 py-3 tabular-nums">{row.exposures}</td>
@@ -575,7 +575,7 @@ function FeedInsightsPageInner() {
             <summary className="cursor-pointer font-medium text-foreground">Score & taxonomy notes</summary>
             <ul className="mt-2 list-disc space-y-1 pl-4">
               <li>
-                Negative affinity reduces ranking weight — it does{" "}
+                Negative affinity reduces ranking weight - it does{" "}
                 <strong>not</strong> hard-exclude content. Hard exclusion uses feedback + exposure windows.
               </li>
               <li>
@@ -653,20 +653,20 @@ function FeedInsightsPageInner() {
                             <td className="px-4 py-3">
                               <ChipList
                                 items={row.preferred_languages}
-                                empty={row.languages_label || "—"}
+                                empty={row.languages_label || "-"}
                               />
                             </td>
                             <td className="px-4 py-3">
                               <AffinityList
                                 items={row.positive_topics}
-                                empty="—"
+                                empty="-"
                                 kind="positive"
                               />
                             </td>
                             <td className="px-4 py-3">
                               <AffinityList
                                 items={row.reduced_topics}
-                                empty="—"
+                                empty="-"
                                 kind="reduced"
                               />
                             </td>
@@ -688,13 +688,13 @@ function FeedInsightsPageInner() {
                             </td>
                             <td className="px-4 py-3 text-xs text-text-secondary">
                               {row.feedback_total === 0
-                                ? "—"
+                                ? "-"
                                 : Object.entries(row.feedback)
                                     .map(([k, v]) => `${v} ${k.replace(/_/g, " ")}`)
                                     .join(" · ")}
                             </td>
                             <td className="px-4 py-3 text-xs text-text-secondary whitespace-nowrap">
-                              {row.last_signal_at ? formatDateTime(row.last_signal_at) : "—"}
+                              {row.last_signal_at ? formatDateTime(row.last_signal_at) : "-"}
                             </td>
                           </tr>
                         );
@@ -777,7 +777,7 @@ function FeedInsightsPageInner() {
                             <span className="text-text-secondary"> · {e.content_key}</span>
                           ) : null}
                           <p className="text-text-hint">
-                            {e.occurred_at ? formatDateTime(e.occurred_at) : "—"}
+                            {e.occurred_at ? formatDateTime(e.occurred_at) : "-"}
                             {e.active_watch_ms_total != null
                               ? ` · watch ${e.active_watch_ms_total} ms`
                               : ""}
@@ -800,7 +800,7 @@ function FeedInsightsPageInner() {
                           {f.content_key ? ` · ${f.content_key}` : ""}
                           <span className="text-text-hint">
                             {" "}
-                            · {f.created_at ? formatDateTime(f.created_at) : "—"}
+                            · {f.created_at ? formatDateTime(f.created_at) : "-"}
                           </span>
                         </li>
                       ))}
@@ -837,7 +837,7 @@ function FeedInsightsPageInner() {
             <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
               <p className="text-xs text-text-secondary">Ranking / serving version</p>
               <p className="mt-1 font-heading text-lg font-semibold">
-                {delivery.ranking_version || "—"}
+                {delivery.ranking_version || "-"}
               </p>
             </div>
             <div className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
@@ -869,7 +869,7 @@ function FeedInsightsPageInner() {
               <p className="mt-1 text-sm font-medium">
                 {delivery.outbox?.last_processed_at
                   ? formatDateTime(delivery.outbox.last_processed_at)
-                  : "—"}
+                  : "-"}
               </p>
             </div>
             <MetricCard title="Event processing delay (24h avg)" metric={delivery.processing_delay} />

@@ -160,7 +160,7 @@ export default function ContentOverviewPage() {
     <div className="space-y-5">
       <AdminPageHeader
         title="Content overview"
-        description="Publishing health for Sport News, media, banners, and moderation — snapshots stay separate from period activity."
+        description="Publishing health for Sport News, media, banners, and moderation - snapshots stay separate from period activity."
         actions={
           <button
             type="button"
@@ -282,7 +282,7 @@ export default function ContentOverviewPage() {
               <Kpi
                 label="Published content"
                 value={display(m.published_news)}
-                hint="Snapshot — currently published"
+                hint="Snapshot - currently published"
                 href={metricHref(m.published_news, drills.published_news)}
                 primary
               />
@@ -428,13 +428,13 @@ export default function ContentOverviewPage() {
           <section className="grid gap-3 md:grid-cols-3">
             <OpCard
               title="Media"
-              body={`Active sounds ${data?.operational?.sounds?.active ?? "—"} · Hidden ${data?.operational?.sounds?.hidden ?? "—"}`}
+              body={`Active sounds ${data?.operational?.sounds?.active ?? "-"} · Hidden ${data?.operational?.sounds?.hidden ?? "-"}`}
               href={data?.operational?.sounds?.href || "/admin/media-library"}
               note="Ordinary active sounds are not treated as problems."
             />
             <OpCard
               title="Banners"
-              body={`Active ${data?.operational?.banners?.active ?? "—"} · Missing image ${data?.operational?.banners?.missing_image ?? "—"}`}
+              body={`Active ${data?.operational?.banners?.active ?? "-"} · Missing image ${data?.operational?.banners?.missing_image ?? "-"}`}
               href={data?.operational?.banners?.href || "/admin/banners"}
             />
             <OpCard
@@ -567,7 +567,7 @@ function ArticleList({
                 />
               ) : (
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-muted text-[10px] text-text-hint">
-                  {item.media_type || "—"}
+                  {item.media_type || "-"}
                 </div>
               )}
               <div className="min-w-0 flex-1">
@@ -578,8 +578,8 @@ function ArticleList({
                   {item.title}
                 </Link>
                 <p className="mt-0.5 text-[11px] text-text-hint">
-                  {item.organization_name || "No org"} · {item.media_type || "—"} ·{" "}
-                  {item.status_label || "—"}
+                  {item.organization_name || "No org"} · {item.media_type || "-"} ·{" "}
+                  {item.status_label || "-"}
                   {item.published_at ? ` · ${formatDateTime(item.published_at)}` : ""}
                 </p>
                 {showLifetime && item.metrics ? (

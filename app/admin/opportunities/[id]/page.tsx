@@ -426,7 +426,7 @@ export default function OpportunityDetailPage() {
       );
       if (!url) throw new Error("Upload did not return an image URL");
       setDraft((d) => ({ ...d, cover_image_url: url }));
-      setNotice("Cover uploaded — save settings to keep it.");
+      setNotice("Cover uploaded - save settings to keep it.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -591,7 +591,7 @@ export default function OpportunityDetailPage() {
             <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
               <h2 className="font-heading text-lg font-semibold">{row.title}</h2>
               <p className="mt-1 text-sm text-text-secondary">
-                {[row.organizer, row.location, row.country].filter(Boolean).join(" · ") || "—"}
+                {[row.organizer, row.location, row.country].filter(Boolean).join(" · ") || "-"}
               </p>
               <p className="mt-3 text-sm text-text-secondary line-clamp-4">{row.description}</p>
               <div className="mt-4 flex flex-wrap gap-2 text-xs">
@@ -615,7 +615,7 @@ export default function OpportunityDetailPage() {
             <Stat
               label="Verified fee collections"
               value={`${overview?.currency || "ETB"} ${Number(overview?.verified_collections || revenue?.total_collected || 0).toLocaleString()}`}
-              hint="Customer fees — not platform commission"
+              hint="Customer fees - not platform commission"
             />
           </section>
 
@@ -626,20 +626,20 @@ export default function OpportunityDetailPage() {
                 Applications open:{" "}
                 {overview?.applications_open_at
                   ? formatDateTime(overview.applications_open_at)
-                  : "—"}
+                  : "-"}
               </li>
               <li>
                 Deadline:{" "}
                 {overview?.application_deadline
                   ? formatDateTime(overview.application_deadline)
-                  : "—"}
+                  : "-"}
               </li>
               <li>
                 Event / trial:{" "}
                 {[overview?.event_start, overview?.event_end]
                   .filter(Boolean)
                   .map((d) => formatDate(d!))
-                  .join(" → ") || "—"}
+                  .join(" → ") || "-"}
               </li>
               <li>
                 Capacity:{" "}
@@ -680,8 +680,8 @@ export default function OpportunityDetailPage() {
                 Last Process schedules:{" "}
                 {lastScheduleRun.created_at
                   ? formatDateTime(lastScheduleRun.created_at)
-                  : "—"}
-                {lastScheduleRun.summary ? ` — ${lastScheduleRun.summary}` : ""}
+                  : "-"}
+                {lastScheduleRun.summary ? ` - ${lastScheduleRun.summary}` : ""}
                 {lastScheduleRun.admin_name ? ` · ${lastScheduleRun.admin_name}` : ""}
               </p>
             ) : (
@@ -766,7 +766,7 @@ export default function OpportunityDetailPage() {
                             {app.users?.display_name || app.users?.username || "Applicant"}
                           </Link>
                           <p className="text-[11px] text-text-hint">
-                            {app.users?.role || "—"} · profile {app.profile_completion_percent}%
+                            {app.users?.role || "-"} · profile {app.profile_completion_percent}%
                           </p>
                         </td>
                         <td className="px-4 py-3 text-xs text-text-secondary">
@@ -847,7 +847,7 @@ export default function OpportunityDetailPage() {
                     <p>
                       {selectedApp.fee_snapshot.fee_type === "paid"
                         ? `${selectedApp.fee_snapshot.currency || "ETB"} ${selectedApp.fee_snapshot.fee_amount}`
-                        : "Not required — free opportunity"}
+                        : "Not required - free opportunity"}
                       {selectedApp.fee_snapshot.quoted_at
                         ? ` · ${formatDateTime(selectedApp.fee_snapshot.quoted_at)}`
                         : ""}
@@ -857,14 +857,14 @@ export default function OpportunityDetailPage() {
                 {selectedApp.profile_snapshot ? (
                   <p className="text-xs text-text-secondary">
                     Profile at submission:{" "}
-                    {selectedApp.profile_snapshot.profile_completion_percent ?? "—"}%
+                    {selectedApp.profile_snapshot.profile_completion_percent ?? "-"}%
                     {selectedApp.users?.email ? ` · ${selectedApp.users.email}` : ""}
                   </p>
                 ) : null}
                 <div>
                   <p className="text-xs font-medium text-text-hint">Message / answers</p>
                   <p className="mt-1 whitespace-pre-wrap rounded-lg bg-muted/40 p-2 text-xs">
-                    {selectedApp.message || "—"}
+                    {selectedApp.message || "-"}
                   </p>
                 </div>
                 {(() => {
@@ -975,7 +975,7 @@ export default function OpportunityDetailPage() {
                 ) : null}
                 <p className="text-[11px] text-text-hint">
                   Decisions require authorized reviewers. Rejection and withdrawal require a reason.
-                  Profile completion is informational — not used to auto-rank or reject.
+                  Profile completion is informational - not used to auto-rank or reject.
                 </p>
               </div>
             )}
@@ -1044,7 +1044,7 @@ export default function OpportunityDetailPage() {
                               {w.related_application_status || "View"}
                             </button>
                           ) : (
-                            "—"
+                            "-"
                           )}
                         </td>
                       </tr>
@@ -1089,7 +1089,7 @@ export default function OpportunityDetailPage() {
                           opportunityPaymentLabel("paid", p.status)}
                       </td>
                       <td className="px-4 py-3 font-mono text-xs">
-                        {p.provider_ref || "—"}
+                        {p.provider_ref || "-"}
                       </td>
                       <td className="px-4 py-3 text-xs text-text-secondary">
                         {p.paid_at ? formatDateTime(p.paid_at) : formatDateTime(p.created_at)}
@@ -1353,7 +1353,7 @@ export default function OpportunityDetailPage() {
             <h2 className="mb-4 font-heading text-sm font-semibold">Eligibility and required information</h2>
             <p className="mb-3 text-xs text-text-hint">
               Eligible roles gate who can apply in the app. Empty selection means all roles.
-              Profile-completion % is a soft gate at apply time — it does not auto-rank or reject
+              Profile-completion % is a soft gate at apply time - it does not auto-rank or reject
               in admin review. Editing terms here bumps terms_version; already-submitted
               applications keep their snapshot.
             </p>

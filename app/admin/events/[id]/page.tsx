@@ -604,7 +604,7 @@ export default function EventDetailPage() {
                 { label: "Verified collections", hint: sales.currency, value: formatEventPrice(sales.revenue, sales.currency) },
                 { label: "Inside now", hint: "Valid entry without exit", value: `${sales.inside}` },
                 { label: "Attendance %", hint: "Inside ÷ confirmed sold", value: `${checkInPct}%` },
-                { label: "Available", hint: remaining == null ? "No cap" : "Capacity − held", value: remaining == null ? "—" : `${remaining}` },
+                { label: "Available", hint: remaining == null ? "No cap" : "Capacity − held", value: remaining == null ? "-" : `${remaining}` },
               ].map((item) => (
                 <div key={item.label} className="py-4 first:pt-0 last:pb-0 sm:px-5 sm:py-1 sm:first:pl-0 sm:last:pr-0">
                   <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-text-hint">{item.label}</p>
@@ -658,7 +658,7 @@ export default function EventDetailPage() {
               </div>
               <div>
                 <dt className="text-xs uppercase tracking-wide text-text-hint">Venue</dt>
-                <dd className="mt-1">{[event.venue_name, event.location].filter(Boolean).join(" · ") || "—"}</dd>
+                <dd className="mt-1">{[event.venue_name, event.location].filter(Boolean).join(" · ") || "-"}</dd>
               </div>
               <div>
                 <dt className="text-xs uppercase tracking-wide text-text-hint">Category / visibility</dt>
@@ -673,7 +673,7 @@ export default function EventDetailPage() {
               </div>
               <div>
                 <dt className="text-xs uppercase tracking-wide text-text-hint">Ends</dt>
-                <dd className="mt-1">{event.ends_at ? formatEventWhenWithTz(event.ends_at) : "—"}</dd>
+                <dd className="mt-1">{event.ends_at ? formatEventWhenWithTz(event.ends_at) : "-"}</dd>
               </div>
               <div>
                 <dt className="text-xs uppercase tracking-wide text-text-hint">Sales window</dt>
@@ -1205,7 +1205,7 @@ export default function EventDetailPage() {
                           <span className="block text-xs text-text-hint">confirmed</span>
                         ) : null}
                       </td>
-                      <td className="px-3 py-3 tabular-nums">{tier.reserved ?? "—"}</td>
+                      <td className="px-3 py-3 tabular-nums">{tier.reserved ?? "-"}</td>
                       <td className="px-3 py-3 tabular-nums">{tier.max_per_user}</td>
                       <td className="px-3 py-3">
                         <StatusBadge tone={tier.is_active ? "success" : "neutral"}>
@@ -1324,7 +1324,7 @@ export default function EventDetailPage() {
                         const inside = ticketIsInside(row);
                         return (
                           <tr key={row.id} className="border-b border-border last:border-0">
-                            <td className="px-4 py-3 tabular-nums">{row.ticket_number || "—"}</td>
+                            <td className="px-4 py-3 tabular-nums">{row.ticket_number || "-"}</td>
                             <td className="px-4 py-3">
                               {revealedCodes.has(row.id) && canWrite ? (
                                 <AdminCode value={row.ticket_code} />
@@ -1363,7 +1363,7 @@ export default function EventDetailPage() {
                               ) : (
                                 <span>{row.guest_name || "Buyer"}</span>
                               )}
-                              <p className="text-xs text-text-secondary">{row.users?.email || row.guest_phone || "—"}</p>
+                              <p className="text-xs text-text-secondary">{row.users?.email || row.guest_phone || "-"}</p>
                             </td>
                             <td className="px-4 py-3 tabular-nums">{row.quantity}</td>
                             <td className="px-4 py-3 font-medium">
@@ -1375,7 +1375,7 @@ export default function EventDetailPage() {
                             <td className="px-4 py-3 font-medium">
                               {row.status === "confirmed" || row.status === "used"
                                 ? formatEventPrice(row.amount, row.currency)
-                                : "—"}
+                                : "-"}
                               <span className="block text-xs font-normal text-text-secondary">
                                 {row.status === "confirmed" || row.status === "used"
                                   ? "Collected"
@@ -1401,7 +1401,7 @@ export default function EventDetailPage() {
                                     </button>
                                   )
                                 ) : (
-                                  <span className="text-text-secondary">—</span>
+                                  <span className="text-text-secondary">-</span>
                                 )}
                               </td>
                             ) : null}
@@ -1424,13 +1424,13 @@ export default function EventDetailPage() {
               <h2 className="font-heading text-sm font-semibold">
                 {event.visibility === "private"
                   ? "Private event invitations / RSVPs"
-                  : "RSVPs (optional — not a paid ticket)"}
+                  : "RSVPs (optional - not a paid ticket)"}
               </h2>
               <p className="text-xs text-text-secondary">
                 {event.visibility === "private"
                   ? "Invite Spojex users by email. Private events stay out of public discovery."
                   : "Optional guest responses. "}
-                An RSVP is not admission — entry requires a confirmed ticket.
+                An RSVP is not admission - entry requires a confirmed ticket.
               </p>
             </div>
             {canWrite ? (
@@ -1481,7 +1481,7 @@ export default function EventDetailPage() {
                         ) : (
                           <span>User</span>
                         )}
-                        <p className="text-xs text-text-secondary">{row.users?.email || "—"}</p>
+                        <p className="text-xs text-text-secondary">{row.users?.email || "-"}</p>
                       </td>
                       <td className="px-3 py-3">
                         <StatusBadge tone={requestTone(row.status)}>
@@ -1493,7 +1493,7 @@ export default function EventDetailPage() {
                       </td>
                       <td className="px-3 py-3 text-text-secondary">{formatDateTime(row.invited_at)}</td>
                       <td className="px-3 py-3 text-text-secondary">
-                        {row.responded_at ? formatDateTime(row.responded_at) : "—"}
+                        {row.responded_at ? formatDateTime(row.responded_at) : "-"}
                       </td>
                       <td className="px-3 py-3 text-right">
                         {canWrite ? (
@@ -1554,7 +1554,7 @@ export default function EventDetailPage() {
               </div>
               <div className="rounded-xl bg-muted/40 px-4 py-3">
                 <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-text-hint">Platform earnings</p>
-                <p className="mt-1 text-2xl font-semibold tabular-nums">—</p>
+                <p className="mt-1 text-2xl font-semibold tabular-nums">-</p>
                 <p className="mt-1 text-xs text-text-secondary">Unavailable</p>
               </div>
             </div>
@@ -1579,7 +1579,7 @@ export default function EventDetailPage() {
               <div>
                 <h2 className="font-heading text-sm font-semibold">Assigned managers</h2>
                 <p className="mt-1 text-sm text-text-secondary">
-                  Assign an existing Spojex user or invite by email. Passwords are never shown here — use Auth
+                  Assign an existing Spojex user or invite by email. Passwords are never shown here - use Auth
                   reset. Event-scoped roles: gate, attendance, tickets, configure, finance.
                 </p>
               </div>
@@ -1623,10 +1623,10 @@ export default function EventDetailPage() {
                                 {row.users.display_name}
                               </Link>
                             ) : (
-                              "—"
+                              "-"
                             )}
                           </td>
-                          <td className="px-4 py-3 font-mono text-xs">{row.users?.email || "—"}</td>
+                          <td className="px-4 py-3 font-mono text-xs">{row.users?.email || "-"}</td>
                           <td className="px-4 py-3 text-text-secondary">{row.manager_role}</td>
                           <td className="px-4 py-3">
                             <StatusBadge tone={row.is_active ? "success" : "neutral"}>
@@ -1713,7 +1713,7 @@ export default function EventDetailPage() {
         ) : (
           <form id="create-event-manager-form" onSubmit={(formEvent) => void createManager(formEvent)} className="grid gap-3 md:grid-cols-2">
             <p className="text-sm text-text-secondary md:col-span-2">
-              Prefer an existing Spojex email (assigned without password reset). New emails get an invite — use a{" "}
+              Prefer an existing Spojex email (assigned without password reset). New emails get an invite - use a{" "}
               <span className="font-medium text-text-primary">different email than your admin account</span>.
             </p>
             <label className="text-sm">

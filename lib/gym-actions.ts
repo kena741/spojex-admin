@@ -25,7 +25,7 @@ export type GymAction = {
 
 /**
  * Allowed gym admin actions for the current listing / verification / feature state.
- * Listing, verification, and featuring are separate axes — do not show Approve for
+ * Listing, verification, and featuring are separate axes - do not show Approve for
  * an already active+verified gym.
  *
  * Prefer `workspace.allowed_actions` from the Python API when available; this helper

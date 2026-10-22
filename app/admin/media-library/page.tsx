@@ -239,7 +239,7 @@ function MediaLibraryPage() {
         );
         setNotice(
           uploaded.extractedFromVideo
-            ? "Audio extracted — source video is not retained. Trim if needed, then save."
+            ? "Audio extracted - source video is not retained. Trim if needed, then save."
             : "Uploaded. Trim if needed, then save to the library.",
         );
       } catch (err) {
@@ -660,12 +660,12 @@ function MediaLibraryPage() {
                 </div>
                 <div>
                   <dt className="text-text-secondary">Organization</dt>
-                  <dd>{detail.asset.organization_name || "—"}</dd>
+                  <dd>{detail.asset.organization_name || "-"}</dd>
                 </div>
                 <div>
                   <dt className="text-text-secondary">Uploaded</dt>
                   <dd>
-                    {detail.asset.created_at ? formatDate(detail.asset.created_at) : "—"}
+                    {detail.asset.created_at ? formatDate(detail.asset.created_at) : "-"}
                   </dd>
                 </div>
               </dl>
@@ -700,7 +700,7 @@ function MediaLibraryPage() {
                 <summary className="cursor-pointer">Technical details</summary>
                 <p className="mt-1 break-all">ID: {detail.asset.id}</p>
                 <p className="break-all">Key: {detail.technical.storage_key}</p>
-                <p>{detail.technical.mime_type || "—"}</p>
+                <p>{detail.technical.mime_type || "-"}</p>
               </details>
 
               {canWrite ? (
@@ -794,7 +794,7 @@ function MediaLibraryPage() {
         <form onSubmit={saveSound} className="grid gap-3">
           <p className="text-xs text-text-secondary">
             Sounds: upload audio, or a short video to extract the soundtrack. Source video is not
-            retained. Images and videos for articles can also be uploaded from Add News — run Refresh
+            retained. Images and videos for articles can also be uploaded from Add News - run Refresh
             index to catalog them here.
           </p>
           <label className="grid gap-1 text-sm">

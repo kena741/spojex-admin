@@ -4,7 +4,7 @@ import { proxyRadioChat } from "@/lib/radio-chat-api";
 
 export const dynamic = "force-dynamic";
 
-/** Legacy hide endpoint — prefer /messages/[id]/actions. */
+/** Legacy hide endpoint - prefer /messages/[id]/actions. */
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },

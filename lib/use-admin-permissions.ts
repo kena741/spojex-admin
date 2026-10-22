@@ -22,7 +22,7 @@ export async function resolveAdminStaff(userId: string) {
   return data as AdminRow | null;
 }
 
-/** Only when the admin table is empty — never advertise as normal onboarding. */
+/** Only when the admin table is empty - never advertise as normal onboarding. */
 export async function bootstrapFirstAdmin(user: {
   id: string;
   email?: string | null;

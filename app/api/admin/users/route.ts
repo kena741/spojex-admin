@@ -38,7 +38,7 @@ export async function GET(request: Request) {
     }
   };
 
-  // Exact email (server-side eq) — reliable even when the user is past the first page.
+  // Exact email (server-side eq) - reliable even when the user is past the first page.
   if (q.includes("@")) {
     const email = q.toLowerCase();
     const exact = await client.from("users").select(userSelect).eq("email", email).limit(5);

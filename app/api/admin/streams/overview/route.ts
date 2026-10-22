@@ -57,8 +57,8 @@ export async function GET() {
       confirmed_live_sessions: live ?? 0,
       live_source_gaps: 0,
       definitions: {
-        scheduled: "status=scheduled — countdown may reach zero without going live.",
-        confirmed_live: "status=live — requires explicit go-live, not countdown alone.",
+        scheduled: "status=scheduled - countdown may reach zero without going live.",
+        confirmed_live: "status=live - requires explicit go-live, not countdown alone.",
         live_source_gaps: "Marked live but missing ready source / stream URL.",
       },
     },

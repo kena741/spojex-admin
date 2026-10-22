@@ -139,7 +139,7 @@ export default function CategoriesPage() {
     <>
       <AdminPageHeader
         title="Profile settings"
-        description="Customer profile types for mobile registration — separate from admin staff permissions"
+        description="Customer profile types for mobile registration - separate from admin staff permissions"
         backHref="/admin/people"
         breadcrumbs={[
           { label: "People", href: "/admin/people" },
@@ -270,7 +270,7 @@ export default function CategoriesPage() {
                                   className="w-full min-w-[200px] rounded-lg border border-border px-2 py-1 text-sm"
                                 />
                               ) : (
-                                role.blurb || "—"
+                                role.blurb || "-"
                               )}
                             </td>
                             <td className="px-4 py-3">

@@ -34,7 +34,7 @@ const categoryLabelMap = new Map(gymCategories.map((item) => [item.id, item.labe
 
 /**
  * Resolve category label for display.
- * Unknown / legacy slugs are shown as-is with a legacy marker — never silently
+ * Unknown / legacy slugs are shown as-is with a legacy marker - never silently
  * remapped to another catalog option (e.g. do not force "Gym").
  */
 export function gymCategoryLabel(
@@ -123,12 +123,12 @@ export function gymStaffRoleLabel(role?: string | null) {
 }
 
 export function gymStatusLabel(status?: string | null) {
-  if (!status) return "—";
+  if (!status) return "-";
   return gymStatuses.find((item) => item.id === status)?.label ?? status.replace(/_/g, " ");
 }
 
 export function gymVerificationLabel(status?: string | null) {
-  if (!status) return "—";
+  if (!status) return "-";
   return (
     gymVerificationStatuses.find((item) => item.id === status)?.label ??
     status.replace(/_/g, " ")
@@ -379,10 +379,10 @@ export function gymNum(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Whole-number metric, or "—" when the backend did not provide it. */
+/** Whole-number metric, or "-" when the backend did not provide it. */
 export function gymMetricLabel(value: unknown) {
   const n = gymNum(value);
-  return n === null ? "—" : n.toLocaleString("en-ET");
+  return n === null ? "-" : n.toLocaleString("en-ET");
 }
 
 export function gymVerificationTone(status?: string | null): GymUiTone {
@@ -562,7 +562,7 @@ export function gymMemberAccessLabel(accessType?: string | null) {
     case "inactive_roster":
       return "Inactive";
     default:
-      return accessType ? accessType.replace(/_/g, " ") : "—";
+      return accessType ? accessType.replace(/_/g, " ") : "-";
   }
 }
 
@@ -580,7 +580,7 @@ export function gymMemberAccessTone(accessType?: string | null): GymUiTone {
   }
 }
 
-/** Never returns blank — roster-only members get an explicit label. */
+/** Never returns blank - roster-only members get an explicit label. */
 export function gymMemberPlanLabel(member: GymDirectoryMember) {
   const raw = (
     member.plan_label ||
@@ -588,7 +588,7 @@ export function gymMemberPlanLabel(member: GymDirectoryMember) {
     member.current_membership?.purchased_plan_title ||
     ""
   ).trim();
-  if (raw && raw !== "—") return { label: raw, rosterOnly: false };
+  if (raw && raw !== "-") return { label: raw, rosterOnly: false };
   const access = member.entitlement?.access_type;
   if (!access || access === "community_only" || access === "inactive_roster") {
     return { label: GYM_COMMUNITY_ONLY_LABEL, rosterOnly: true };

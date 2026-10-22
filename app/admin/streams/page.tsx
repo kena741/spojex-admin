@@ -66,7 +66,7 @@ function SummaryCard({
           tone === "danger" && (value ?? 0) > 0 ? "text-red-600" : "text-text-primary",
         )}
       >
-        {value == null ? "—" : value.toLocaleString()}
+        {value == null ? "-" : value.toLocaleString()}
       </p>
       {hint ? <p className="mt-0.5 text-[11px] leading-snug text-text-secondary">{hint}</p> : null}
     </div>

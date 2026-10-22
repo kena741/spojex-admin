@@ -161,7 +161,7 @@ export default function SoundLibraryPage() {
       setUploadOpen(false);
       setNotice(
         result.created === false
-          ? "That audio URL is already in the library — reused existing track (names are not merged)."
+          ? "That audio URL is already in the library - reused existing track (names are not merged)."
           : "Sound added to the library.",
       );
       await load();
@@ -307,7 +307,7 @@ export default function SoundLibraryPage() {
               className="h-10 rounded-lg border border-border px-3"
               required
             />
-            <span className="text-[11px] text-text-hint">Keep it short — max 48 characters.</span>
+            <span className="text-[11px] text-text-hint">Keep it short - max 48 characters.</span>
           </label>
           <label className="grid gap-1 text-sm">
             <span className="text-text-secondary">Kind</span>
@@ -340,7 +340,7 @@ export default function SoundLibraryPage() {
             />
             <span className="text-[11px] text-text-hint">
               MP3 / M4A / WAV (max 20 MB), or MP4 / MOV / WebM video (max 28 MB). Video uploads extract
-              audio only — original video is not stored.
+              audio only - original video is not stored.
             </span>
           </label>
           {audioUrl ? (
@@ -396,7 +396,7 @@ export default function SoundLibraryPage() {
         {!loading && filtered.length === 0 ? (
           <AdminEmpty
             title="No library sounds yet"
-            description="Use Upload sound. Duplicate names stay separate — only exact audio URLs are reused."
+            description="Use Upload sound. Duplicate names stay separate - only exact audio URLs are reused."
           />
         ) : null}
         {!loading && filtered.length > 0 ? (
@@ -464,11 +464,11 @@ export default function SoundLibraryPage() {
                         storedDurationSeconds={row.duration_seconds}
                       />
                     ) : (
-                      "—"
+                      "-"
                     )}
                   </td>
                   <td className="px-3 py-3 text-xs text-text-secondary">
-                    {row.created_at ? formatDate(row.created_at) : "—"}
+                    {row.created_at ? formatDate(row.created_at) : "-"}
                   </td>
                   <td className="px-3 py-3">{row.is_active ? "Active" : "Hidden"}</td>
                   <td className="px-3 py-3">
@@ -498,7 +498,7 @@ export default function SoundLibraryPage() {
                     ) : canWrite && editingId === row.id ? (
                       <span className="text-xs text-text-hint">Editing…</span>
                     ) : (
-                      "—"
+                      "-"
                     )}
                   </td>
                 </tr>

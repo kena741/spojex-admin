@@ -223,7 +223,7 @@ export async function DELETE(
   ];
   for (const check of checks) {
     try {
-      // Prefer * — organization_members has a composite PK without `id`.
+      // Prefer * - organization_members has a composite PK without `id`.
       const { count, error } = await auth.context.client
         .from(check.table)
         .select("*", { count: "exact", head: true })

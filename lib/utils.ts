@@ -15,7 +15,7 @@ export function formatStatusLabel(value: string | null | undefined) {
 }
 
 export function formatDate(value: string | null | undefined) {
-  if (!value) return "—";
+  if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString("en-GB", {
@@ -26,7 +26,7 @@ export function formatDate(value: string | null | undefined) {
 }
 
 export function formatDateTime(value: string | null | undefined) {
-  if (!value) return "—";
+  if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("en-GB", {
@@ -41,7 +41,7 @@ export function formatDateTime(value: string | null | undefined) {
 export function locationLabel(city?: string | null, country?: string | null) {
   const c = (city ?? "").trim();
   const co = (country ?? "").trim();
-  if (!c && !co) return "—";
+  if (!c && !co) return "-";
   if (!c) return co;
   if (!co) return c;
   // Avoid "Ethiopia, Ethiopia" when city already includes the country.

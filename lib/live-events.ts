@@ -25,7 +25,7 @@ export const liveStreamKinds = [
 /**
  * Playback source types stored on live_events.source_type.
  * - external_url: a hosted HLS/MP4/audio URL we simply play back.
- * - ingest: broadcaster pushes to Spojex — NOT available yet (backend rejects it).
+ * - ingest: broadcaster pushes to Spojex - NOT available yet (backend rejects it).
  * - mock_dev: public sample files for testing only.
  */
 export const liveSourceTypes = [
@@ -88,11 +88,11 @@ export function mockLiveStream(id: "video" | "audio") {
 }
 
 export function liveKindLabel(kind?: string | null) {
-  return liveEventKinds.find((item) => item.id === kind)?.label ?? kind ?? "—";
+  return liveEventKinds.find((item) => item.id === kind)?.label ?? kind ?? "-";
 }
 
 export function liveStatusLabel(status?: string | null) {
-  return liveEventStatuses.find((item) => item.id === status)?.label ?? status ?? "—";
+  return liveEventStatuses.find((item) => item.id === status)?.label ?? status ?? "-";
 }
 
 export function slugifyLiveEvent(value: string) {
@@ -159,7 +159,7 @@ export const STREAMS_LIVE_HREF = `/admin/streams?tab=${STREAMS_LIVE_TAB}`;
 /** Human countdown for a scheduled broadcast; never implies the event is live. */
 export function formatCountdown(seconds?: number | null) {
   if (seconds == null || !Number.isFinite(seconds)) return null;
-  if (seconds <= 0) return "Start time reached — not live until an admin goes live";
+  if (seconds <= 0) return "Start time reached - not live until an admin goes live";
   const days = Math.floor(seconds / 86400);
   const hours = Math.floor((seconds % 86400) / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);

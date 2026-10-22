@@ -4,7 +4,7 @@ import { getSpojexApiBaseUrl } from "@/lib/env";
 import { requestAccessToken } from "@/lib/spojex/server";
 
 /**
- * Broadcast push — proxies to Spojex REST
+ * Broadcast push - proxies to Spojex REST
  * `POST /api/v1/push/admin/broadcast`.
  */
 export async function POST(request: Request) {

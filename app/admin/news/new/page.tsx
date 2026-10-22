@@ -536,7 +536,7 @@ export default function NewsComposerPage() {
     <div className="pb-28">
       <AdminPageHeader
         title="Create news"
-        description="Post as an organization — media first, then caption."
+        description="Post as an organization - media first, then caption."
         backHref="/admin/news"
         breadcrumbs={[
           { label: "Content", href: "/admin/content" },
@@ -734,7 +734,7 @@ export default function NewsComposerPage() {
                   account)
                 </p>
                 <p className="text-xs text-text-hint">
-                  Related entity linking (gym / stadium / event) requires a backend field — coming
+                  Related entity linking (gym / stadium / event) requires a backend field - coming
                   next. Publishing organization stays the owner.
                 </p>
               </div>

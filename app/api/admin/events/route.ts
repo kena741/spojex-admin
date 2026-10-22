@@ -49,7 +49,7 @@ type EventRow = Record<string, unknown> & {
 };
 
 async function listEventsLocal(
-  // Spojex table client — thenable query builders.
+  // Spojex table client - thenable query builders.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   client: { from: (table: string) => any },
   search: URLSearchParams,
@@ -329,7 +329,7 @@ export async function POST(request: Request) {
   if (!startsAt) return NextResponse.json({ error: "Start time is required" }, { status: 400 });
 
   const slugBase = slugifyEvent(name) || "event";
-  // Backend events columns are NOT NULL without DB defaults — send full row.
+  // Backend events columns are NOT NULL without DB defaults - send full row.
   const { data, error } = await auth.context.client
     .from("events")
     .insert({

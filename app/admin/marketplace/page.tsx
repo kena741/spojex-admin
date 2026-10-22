@@ -306,7 +306,7 @@ export default function MarketplaceOverviewPage() {
       {data?.period?.label ? (
         <p className="text-xs text-text-hint">
           Period activity: {data.period.label}. Snapshot metrics (queues, published counts) are
-          current — not filtered by this range.
+          current - not filtered by this range.
         </p>
       ) : null}
 
@@ -317,7 +317,7 @@ export default function MarketplaceOverviewPage() {
             {Object.entries(defs).map(([key, value]) => (
               <li key={key}>
                 <span className="font-medium text-foreground">{key.replace(/_/g, " ")}</span>
-                — {value}
+                - {value}
               </li>
             ))}
           </ul>
@@ -381,7 +381,7 @@ export default function MarketplaceOverviewPage() {
                 label="Published services"
                 value={displayMetric(m.published_services)}
                 href={m.published_services?.href}
-                hint="Snapshot — current published listings"
+                hint="Snapshot - current published listings"
                 badge="Snapshot"
                 available={m.published_services?.available !== false}
                 sectionOk={sections.services?.available !== false}
@@ -504,7 +504,7 @@ export default function MarketplaceOverviewPage() {
               </div>
             </div>
             <p className="mt-1 text-[11px] text-text-hint">
-              Future window — not filtered by the historical period above. Unscheduled accepted
+              Future window - not filtered by the historical period above. Unscheduled accepted
               bookings are counted separately.
             </p>
           </section>
@@ -571,7 +571,7 @@ export default function MarketplaceOverviewPage() {
                       </li>
                     ))}
                     {(data?.trends?.booking_status_distribution?.items ?? []).length === 0 ? (
-                      <li className="text-xs text-text-hint">Low volume — no bookings created in range.</li>
+                      <li className="text-xs text-text-hint">Low volume - no bookings created in range.</li>
                     ) : null}
                   </ul>
                   {data?.completion_rate ? (
@@ -771,7 +771,7 @@ function AttentionChip({
         {hint ? <Hint text={hint} /> : null}
       </div>
       <p className="text-lg font-semibold tabular-nums">
-        {metric?.available === false ? "—" : n?.toLocaleString("en-US") ?? "—"}
+        {metric?.available === false ? "-" : n?.toLocaleString("en-US") ?? "-"}
       </p>
     </div>
   );
@@ -809,7 +809,7 @@ function QueueCard({
                 <p className="truncate text-text-hint">
                   {[item.requester_name || item.payer_name, item.provider_name]
                     .filter(Boolean)
-                    .join(" · ") || "—"}
+                    .join(" · ") || "-"}
                   {item.status ? ` · ${item.status}` : ""}
                   {item.appointment_label ? ` · ${item.appointment_label}` : ""}
                   {item.created_at ? ` · ${formatDateTime(item.created_at)}` : ""}
@@ -875,7 +875,7 @@ function TrendBars({
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
       <p className="text-sm font-semibold">{title}</p>
       {points.length === 0 ? (
-        <p className="mt-4 text-xs text-text-hint">Low volume — no data points in this range.</p>
+        <p className="mt-4 text-xs text-text-hint">Low volume - no data points in this range.</p>
       ) : (
         <div className="mt-3 flex h-28 items-end gap-1">
           {points.map((p) => (

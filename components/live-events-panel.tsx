@@ -169,7 +169,7 @@ export default function LiveEventsPanel() {
       });
   }, []);
 
-  // URL: write tab=live (old links used tab=video — the hub accepts both).
+  // URL: write tab=live (old links used tab=video - the hub accepts both).
   useEffect(() => {
     const next = new URLSearchParams(searchParams.toString());
     next.set("tab", "live");
@@ -367,7 +367,7 @@ export default function LiveEventsPanel() {
       setCreatedId(created.id);
 
       const warnings: string[] = [];
-      // Source type, visibility and timezone are not part of the create route — apply right after.
+      // Source type, visibility and timezone are not part of the create route - apply right after.
       try {
         await postAdminResponse(`/api/admin/live-events/${created.id}/actions`, {
           action: "update",
@@ -421,7 +421,7 @@ export default function LiveEventsPanel() {
     { id: "external_url", label: "External URL (hosted HLS / MP4 / audio link)", disabled: false },
     {
       id: "ingest",
-      label: "Broadcaster ingest — not available yet",
+      label: "Broadcaster ingest - not available yet",
       disabled: true,
     },
     ...(devSources
@@ -436,7 +436,7 @@ export default function LiveEventsPanel() {
       <p className="mb-4 text-sm text-text-secondary">
         <strong className="font-medium text-text-primary">Live Events</strong> is the former Video
         tab: scheduled matches, fights, shows and streams. A countdown reaching zero never means
-        the event is live — it needs an explicit go-live.
+        the event is live - it needs an explicit go-live.
       </p>
       {canWrite ? (
         <div className="mb-4 flex justify-end">
@@ -578,7 +578,7 @@ export default function LiveEventsPanel() {
 
       <AdminModal
         open={createOpen}
-        title={`New live event — step ${step + 1} of ${steps.length}`}
+        title={`New live event - step ${step + 1} of ${steps.length}`}
         onClose={() => {
           if (!creating) setCreateOpen(false);
         }}
@@ -688,7 +688,7 @@ export default function LiveEventsPanel() {
                 className={fieldClass}
                 value={form.name}
                 onChange={(e) => patchForm({ name: e.target.value })}
-                placeholder="e.g. Ethiopia vs Egypt — AFCON qualifier"
+                placeholder="e.g. Ethiopia vs Egypt - AFCON qualifier"
               />
             </label>
             {isScoreKind(form.kind) ? (
@@ -801,7 +801,7 @@ export default function LiveEventsPanel() {
               />
             </label>
             <label className="grid gap-1 text-sm">
-              <span className="font-medium">Ends ({form.timezone}) — optional</span>
+              <span className="font-medium">Ends ({form.timezone}) - optional</span>
               <input
                 type="datetime-local"
                 className={fieldClass}
@@ -991,12 +991,12 @@ export default function LiveEventsPanel() {
             <dl className="grid gap-1 rounded-lg bg-muted/50 p-3 text-xs text-text-secondary">
               <div>
                 <dt className="inline font-medium text-text-primary">{liveKindLabel(form.kind)}: </dt>
-                <dd className="inline">{form.name || "—"}</dd>
+                <dd className="inline">{form.name || "-"}</dd>
               </div>
               <div>
                 <dt className="inline font-medium text-text-primary">Starts: </dt>
                 <dd className="inline">
-                  {form.starts_at ? `${form.starts_at.replace("T", " ")} (${form.timezone})` : "—"}
+                  {form.starts_at ? `${form.starts_at.replace("T", " ")} (${form.timezone})` : "-"}
                 </dd>
               </div>
               <div>

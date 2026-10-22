@@ -50,7 +50,7 @@ export default function WalletsPage() {
     <>
       <AdminPageHeader
         title="Wallets & Ledgers"
-        description="Provider ETB wallet ownership and purpose. Open a wallet for chronological ledger — available may exceed lifetime earned when adjustments exist. Coin wallets live under Coins & Gifts activity in Transactions."
+        description="Provider ETB wallet ownership and purpose. Open a wallet for chronological ledger - available may exceed lifetime earned when adjustments exist. Coin wallets live under Coins & Gifts activity in Transactions."
         breadcrumbs={[{ label: "Finance", href: "/admin/finance" }, { label: "Wallets & Ledgers" }]}
       />
       <AdminFilterPanel>

@@ -81,9 +81,9 @@ export async function GET(
       payment_source: {
         method: isCoin ? "coin_wallet" : "chapa",
         label: isCoin ? "Coin wallet" : "Chapa (ETB)",
-        reference: ref || "—",
+        reference: ref || "-",
       },
-      transaction_reference: ref || "—",
+      transaction_reference: ref || "-",
       finance_href: `/admin/finance/transactions?module=donations&q=${row.id}`,
     };
   });

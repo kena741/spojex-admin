@@ -111,7 +111,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const client = auth.context.client;
   const hint = missingServiceRoleMessage();
 
-  // Order items hang off orders (no event_id) — clear those first.
+  // Order items hang off orders (no event_id) - clear those first.
   const { data: orders, error: ordersListError } = await client
     .from("event_orders")
     .select("id")

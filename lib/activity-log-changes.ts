@@ -12,7 +12,7 @@ function valuesEqual(left: unknown, right: unknown): boolean {
 }
 
 export function formatActivityValue(value: unknown): string {
-    if (value === null || value === undefined || value === '') return '—';
+    if (value === null || value === undefined || value === '') return '-';
     if (value === '[hidden]') return 'Hidden';
     if (value === '[changed]' || value === '[reset]') return 'Changed';
     if (typeof value === 'boolean') return value ? 'Yes' : 'No';

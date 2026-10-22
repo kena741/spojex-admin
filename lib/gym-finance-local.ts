@@ -166,7 +166,7 @@ export async function getGymFinanceLocal(
       pending_count: pendingCount,
       currency: "ETB",
       note:
-        "Sums use commission_amount / gym_net_amount recorded on each payment (historical snapshot). Local fallback — Python finance API was unavailable.",
+        "Sums use commission_amount / gym_net_amount recorded on each payment (historical snapshot). Local fallback - Python finance API was unavailable.",
     },
     by_payment_type: [...byType.values()]
       .sort((a, b) => b.amount - a.amount)

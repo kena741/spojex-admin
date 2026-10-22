@@ -226,7 +226,7 @@ export default function GymCategoriesPage() {
                             className="h-9 w-20 rounded-md border border-border px-2 text-sm"
                           />
                         ) : (
-                          <span className="text-lg">{row.emoji || "—"}</span>
+                          <span className="text-lg">{row.emoji || "-"}</span>
                         )}
                       </td>
                       <td className="px-4 py-3">

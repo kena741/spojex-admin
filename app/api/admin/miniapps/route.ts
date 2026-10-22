@@ -26,7 +26,7 @@ export async function GET() {
     data: data ?? [],
     notes: [
       (data ?? []).length === 0
-        ? "No mini apps in this database. Create one below or apply migration 052 — nothing is auto-published."
+        ? "No mini apps in this database. Create one below or apply migration 052 - nothing is auto-published."
         : null,
     ].filter(Boolean),
   });

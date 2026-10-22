@@ -25,7 +25,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   ]);
 
   if (tiersRes.error) {
-    // Migration may not be applied yet — return empty rather than hard-failing the page.
+    // Migration may not be applied yet - return empty rather than hard-failing the page.
     if (tiersRes.error.message.toLowerCase().includes("event_ticket_tiers")) {
       return NextResponse.json({ data: [] });
     }
@@ -52,7 +52,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const capacity = Number(tier.capacity || 0);
     return {
       ...tier,
-      // Capacity held (includes pending reservations) — used for remaining seats.
+      // Capacity held (includes pending reservations) - used for remaining seats.
       sold: held,
       sold_confirmed: inv.confirmed,
       reserved: inv.reserved,

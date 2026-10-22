@@ -91,7 +91,7 @@ function targetLabel(row: ReportItem) {
   if (row.service?.title) return row.service.title;
   if (row.target) return userLabel(row.target, row.target_user_id);
   if (row.target_id) return `${row.target_type} · ${row.target_id.slice(0, 8)}`;
-  return "—";
+  return "-";
 }
 
 function statusTone(status: string) {
@@ -418,7 +418,7 @@ function ReportsPageInner() {
                       >
                         <td className="px-4 py-3 font-medium capitalize">{row.target_type}</td>
                         <td className="px-4 py-3">
-                          <div className="font-medium">{row.reason || row.reason_code || "—"}</div>
+                          <div className="font-medium">{row.reason || row.reason_code || "-"}</div>
                           {row.details ? (
                             <p className="mt-0.5 line-clamp-2 text-xs text-text-secondary">
                               {row.details}
@@ -457,7 +457,7 @@ function ReportsPageInner() {
                           {row.related_report_count ?? 1}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-text-secondary">
-                          {row.created_at ? formatDateTime(row.created_at) : "—"}
+                          {row.created_at ? formatDateTime(row.created_at) : "-"}
                         </td>
                       </tr>
                     );
@@ -516,7 +516,7 @@ function ReportsPageInner() {
                   <dt className="text-text-secondary">Type</dt>
                   <dd className="capitalize">{detail.target_type}</dd>
                   <dt className="text-text-secondary">Reason</dt>
-                  <dd>{detail.reason || detail.reason_code || "—"}</dd>
+                  <dd>{detail.reason || detail.reason_code || "-"}</dd>
                   <dt className="text-text-secondary">Status</dt>
                   <dd className="capitalize">{detail.status?.replace(/_/g, " ")}</dd>
                   <dt className="text-text-secondary">Target</dt>
@@ -562,7 +562,7 @@ function ReportsPageInner() {
                       {userLabel(detail.reporter, detail.reporter_id)}
                     </Link>
                     <p className="mt-1 text-[11px] text-text-hint">
-                      Reporter identity is admin-only — not shown to the reported user.
+                      Reporter identity is admin-only - not shown to the reported user.
                     </p>
                   </div>
                 ) : null}

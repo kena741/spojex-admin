@@ -62,7 +62,7 @@ async function applyServerTrim(
 
 /**
  * Vertical 9:16 HTML5 trimmer (no WebGL).
- * Cursor / embedded browsers often disable WebGL — @elah/editor Preview crashes there.
+ * Cursor / embedded browsers often disable WebGL - @elah/editor Preview crashes there.
  */
 export function VideoClipEditor({
   videoUrl,

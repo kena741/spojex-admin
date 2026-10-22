@@ -639,7 +639,7 @@ export default function DonationDetailPage() {
                 <div className="flex justify-between gap-3">
                   <dt className="text-text-secondary">Managing organization</dt>
                   <dd className="text-right">
-                    {workspace.attribution?.public_beneficiary_org?.name || "—"}
+                    {workspace.attribution?.public_beneficiary_org?.name || "-"}
                     {workspace.attribution?.public_beneficiary_org?.is_platform
                       ? " (platform)"
                       : ""}
@@ -790,7 +790,7 @@ export default function DonationDetailPage() {
                                 {row.donor_display_name || "Donor"}
                               </Link>
                             ) : (
-                              row.donor_display_name || "—"
+                              row.donor_display_name || "-"
                             )}
                           </td>
                           <td className="px-4 py-3 font-medium tabular-nums">
@@ -801,7 +801,7 @@ export default function DonationDetailPage() {
                             <StatusBadge tone={requestTone(row.status)}>{row.status}</StatusBadge>
                           </td>
                           <td className="max-w-[180px] truncate px-4 py-3 text-text-secondary">
-                            {sanitizeDonorMessage(row.message) || "—"}
+                            {sanitizeDonorMessage(row.message) || "-"}
                           </td>
                           <td className="px-4 py-3 text-text-secondary">
                             {formatDate(row.paid_at || row.created_at)}
@@ -871,7 +871,7 @@ export default function DonationDetailPage() {
             <div>
               <h2 className="text-sm font-semibold">Settings</h2>
               <p className="text-xs text-text-secondary">
-                Explicit save — edits do not autosave.
+                Explicit save - edits do not autosave.
               </p>
             </div>
             {canWrite ? (
@@ -993,7 +993,7 @@ export default function DonationDetailPage() {
               </select>
               {assetLocked ? (
                 <span className="mt-1 block text-[11px] text-text-hint">
-                  Locked after contributions — historical coins cannot be relabeled as ETB.
+                  Locked after contributions - historical coins cannot be relabeled as ETB.
                 </span>
               ) : null}
             </label>

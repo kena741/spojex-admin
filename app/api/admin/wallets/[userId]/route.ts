@@ -54,7 +54,7 @@ export async function GET(_request: Request, ctx: Ctx) {
   const notes: string[] = [];
   if (available > lifetime) {
     notes.push(
-      "Available balance is above lifetime earnings. This can be explained by opening balances, adjustments, or credits not counted in lifetime_earned — check ledger kinds.",
+      "Available balance is above lifetime earnings. This can be explained by opening balances, adjustments, or credits not counted in lifetime_earned - check ledger kinds.",
     );
   }
   notes.push(

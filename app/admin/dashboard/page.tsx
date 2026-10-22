@@ -486,7 +486,7 @@ function UsersPanel({ loading, data }: { loading: boolean; data: Record<string, 
               <div className="flex justify-between">
                 <span className="text-text-secondary">Conversion</span>
                 <span className="font-medium tabular-nums">
-                  {first.rate_pct != null ? `${first.rate_pct}%` : "—"}
+                  {first.rate_pct != null ? `${first.rate_pct}%` : "-"}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -540,13 +540,13 @@ function UsersPanel({ loading, data }: { loading: boolean; data: Record<string, 
                     <td className="py-2 pr-3 tabular-nums">{c.cohort_day}</td>
                     <td className="py-2 pr-3 tabular-nums">{c.cohort_size}</td>
                     <td className="py-2 pr-3 tabular-nums">
-                      {c.d1_rate != null ? `${c.d1_rate}%` : "—"}
+                      {c.d1_rate != null ? `${c.d1_rate}%` : "-"}
                     </td>
                     <td className="py-2 pr-3 tabular-nums">
-                      {c.d7_rate != null ? `${c.d7_rate}%` : "—"}
+                      {c.d7_rate != null ? `${c.d7_rate}%` : "-"}
                     </td>
                     <td className="py-2 tabular-nums">
-                      {c.d30_rate != null ? `${c.d30_rate}%` : "—"}
+                      {c.d30_rate != null ? `${c.d30_rate}%` : "-"}
                     </td>
                   </tr>
                 ))}
@@ -842,18 +842,18 @@ function ContentPanel({
                   </td>
                   <td className="px-3 py-2.5 tabular-nums">{formatCompact(row.views)}</td>
                   <td className="px-3 py-2.5 tabular-nums">
-                    {row.shares_status === "not_tracked" ? "—" : formatCompact(row.shares)}
+                    {row.shares_status === "not_tracked" ? "-" : formatCompact(row.shares)}
                   </td>
-                  <td className="px-3 py-2.5 tabular-nums">{row.engagement_rate ?? "—"}</td>
+                  <td className="px-3 py-2.5 tabular-nums">{row.engagement_rate ?? "-"}</td>
                   <td className="px-3 py-2.5 tabular-nums text-text-secondary">
                     {row.completion_rate != null
                       ? `${row.completion_rate}%`
                       : row.avg_watch_ms != null
                         ? `${Math.round(row.avg_watch_ms / 1000)}s`
-                        : "—"}
+                        : "-"}
                   </td>
                   <td className="px-3 py-2.5 tabular-nums font-medium">
-                    {row.trending_score != null ? row.trending_score : "—"}
+                    {row.trending_score != null ? row.trending_score : "-"}
                   </td>
                 </tr>
               ))}
@@ -897,7 +897,7 @@ function ContentMiniTable({
             >
               <td className="max-w-[220px] truncate py-2 pr-2 font-medium">{row.title}</td>
               <td className="py-2 pr-2 tabular-nums">{formatCompact(row.views)}</td>
-              <td className="py-2 tabular-nums">{row.trending_score ?? "—"}</td>
+              <td className="py-2 tabular-nums">{row.trending_score ?? "-"}</td>
             </tr>
           ))}
         </tbody>
@@ -945,11 +945,11 @@ function ContentDrawer({
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <Stat label="Views" value={formatCompact(item.views)} />
-                <Stat label="Engagement" value={`${item.engagement_rate ?? "—"}%`} />
+                <Stat label="Engagement" value={`${item.engagement_rate ?? "-"}%`} />
                 <Stat label="Shares" value={formatCompact(item.shares)} />
                 <Stat
                   label="Completion"
-                  value={item.completion_rate != null ? `${item.completion_rate}%` : "—"}
+                  value={item.completion_rate != null ? `${item.completion_rate}%` : "-"}
                 />
               </div>
               <ChartCard title="Performance over time" empty={!detail.performance_over_time?.length}>
@@ -959,7 +959,7 @@ function ContentDrawer({
                 <p className="mb-1 font-medium text-foreground">Traffic sources</p>
                 {detail.traffic_sources?.status === "not_tracked"
                   ? detail.traffic_sources.message
-                  : "—"}
+                  : "-"}
               </div>
               {item.manage_href ? (
                 <Link

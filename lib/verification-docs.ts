@@ -303,5 +303,5 @@ export function fallbackRequirementsForRole(roleSlug?: string | null): Verificat
 }
 
 export function verificationStepLabel(step?: string | null) {
-  return VERIFICATION_STEPS.find((item) => item.id === step)?.label ?? step ?? "—";
+  return VERIFICATION_STEPS.find((item) => item.id === step)?.label ?? step ?? "-";
 }

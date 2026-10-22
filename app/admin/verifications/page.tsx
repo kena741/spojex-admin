@@ -69,7 +69,7 @@ type QueueCounts = {
 
 function requestAgeLabel(createdAt: string) {
   const t = new Date(createdAt).getTime();
-  if (Number.isNaN(t)) return "—";
+  if (Number.isNaN(t)) return "-";
   const hours = Math.max(0, (Date.now() - t) / 36e5);
   if (hours < 24) return `${Math.round(hours)}h waiting`;
   return `${Math.round(hours / 24)}d waiting`;
@@ -286,7 +286,7 @@ export default function VerificationCenterPage() {
 
   const oldestPendingLabel = counts.oldest_pending_at
     ? requestAgeLabel(counts.oldest_pending_at)
-    : "—";
+    : "-";
 
   return (
     <div className="space-y-4">
@@ -482,7 +482,7 @@ export default function VerificationCenterPage() {
                               {person?.display_name || person?.full_name || "Unknown"}
                             </p>
                             <p className="truncate text-[11px] text-text-secondary">
-                              {person?.role || "—"} · identity · {formatDate(row.created_at)}
+                              {person?.role || "-"} · identity · {formatDate(row.created_at)}
                             </p>
                             <div className="mt-1 flex flex-wrap items-center gap-2">
                               <StatusBadge tone={requestTone(row.status)}>
@@ -573,7 +573,7 @@ export default function VerificationCenterPage() {
                         <p className="font-heading text-base font-semibold">Unknown user</p>
                       )}
                       <p className="mt-1 text-xs text-text-secondary">
-                        Role: {selected.users?.role || "—"} · Scope: identity / role credentials ·
+                        Role: {selected.users?.role || "-"} · Scope: identity / role credentials ·
                         submitted {formatDateTime(selected.created_at)}
                       </p>
                       {selected.reviewer_id ? (
@@ -670,7 +670,7 @@ export default function VerificationCenterPage() {
                         Checklist
                         {selected.requirements_source === "fallback" ? (
                           <span className="ml-2 text-xs font-normal text-amber-800">
-                            (fallback — not live catalog)
+                            (fallback - not live catalog)
                           </span>
                         ) : null}
                       </h3>
@@ -779,7 +779,7 @@ export default function VerificationCenterPage() {
                       <ul className="space-y-1 text-xs text-text-secondary">
                         {selected.timeline.map((event, index) => (
                           <li key={`${event.action}-${index}`}>
-                            {event.at ? formatDateTime(event.at) : "—"} · {event.label || event.action}
+                            {event.at ? formatDateTime(event.at) : "-"} · {event.label || event.action}
                           </li>
                         ))}
                       </ul>

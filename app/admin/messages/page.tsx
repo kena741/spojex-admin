@@ -375,12 +375,12 @@ function MessagesPageInner() {
                             </p>
                           ) : null}
                           <p className="mt-0.5 truncate text-xs text-text-secondary">
-                            {session.preview || "—"}
+                            {session.preview || "-"}
                           </p>
                           <p className="mt-1 text-[11px] text-text-hint">
                             {session.last_message_at
                               ? formatDateTime(session.last_message_at)
-                              : "—"}
+                              : "-"}
                           </p>
                         </div>
                       </div>

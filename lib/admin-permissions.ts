@@ -136,7 +136,7 @@ export const DEFAULT_ADMIN_ROLES = [
   {
     slug: "operations_admin",
     name: "Operations Admin",
-    description: "Identities, marketplace, native apps, content, and network — no money movement",
+    description: "Identities, marketplace, native apps, content, and network - no money movement",
     permissions: PERMISSION_DEFINITIONS.map((p) => p.key).filter(
       (k) =>
         !k.startsWith("admins:") &&

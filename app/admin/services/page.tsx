@@ -56,7 +56,7 @@ function catalogLabel(
 ) {
   if (embedded?.label) return `${embedded.emoji ?? ""} ${embedded.label}`.trim();
   const match = rows.find((item) => item.id === id);
-  return match ? `${match.emoji ?? ""} ${match.label}`.trim() : "—";
+  return match ? `${match.emoji ?? ""} ${match.label}`.trim() : "-";
 }
 
 export default function ServicesPage() {
@@ -310,8 +310,8 @@ export default function ServicesPage() {
   const headerCount = loading
     ? "Loading…"
     : listOk
-      ? `${scope?.services ?? total} ${summaryMode === "filtered" ? "matching" : "total"} · ${scope?.pending ?? "—"} pending`
-      : "—";
+      ? `${scope?.services ?? total} ${summaryMode === "filtered" ? "matching" : "total"} · ${scope?.pending ?? "-"} pending`
+      : "-";
 
   return (
     <>
@@ -355,11 +355,11 @@ export default function ServicesPage() {
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
         <AdminStatCard
           title={summaryMode === "filtered" ? "Matching" : "All services"}
-          value={loading ? "…" : String(scope?.services ?? "—")}
+          value={loading ? "…" : String(scope?.services ?? "-")}
         />
         <AdminStatCard
           title="Pending review"
-          value={loading ? "…" : String(scope?.pending ?? "—")}
+          value={loading ? "…" : String(scope?.pending ?? "-")}
         />
         <div className="min-w-0 rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
           <p className="mb-1 text-sm font-semibold text-text-secondary">Summary scope</p>
@@ -615,7 +615,7 @@ export default function ServicesPage() {
                       </p>
                     </td>
                     <td className="px-3 py-3 text-text-secondary">
-                      {row.users?.display_name || "—"}
+                      {row.users?.display_name || "-"}
                     </td>
                     <td className="px-3 py-3">{formatServicePrice(row)}</td>
                     <td className="px-3 py-3">

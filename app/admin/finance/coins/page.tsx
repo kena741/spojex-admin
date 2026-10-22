@@ -12,7 +12,7 @@ const TABS = [
 ] as const;
 
 /**
- * Coins & Gifts hub — catalog configuration. Purchase/gift history stays in Transactions.
+ * Coins & Gifts hub - catalog configuration. Purchase/gift history stays in Transactions.
  */
 export default function FinanceCoinsHubPage() {
   const router = useRouter();
@@ -24,7 +24,7 @@ export default function FinanceCoinsHubPage() {
     <div className="space-y-5">
       <AdminPageHeader
         title="Coins & Gifts"
-        description="Configure packs, gifts, and rates — purchases and gift transfers appear in Transactions (module filters: coins / gifts)."
+        description="Configure packs, gifts, and rates - purchases and gift transfers appear in Transactions (module filters: coins / gifts)."
         breadcrumbs={[{ label: "Finance", href: "/admin/finance" }, { label: "Coins & Gifts" }]}
         actions={
           <div className="flex flex-wrap gap-2">
@@ -84,7 +84,7 @@ export default function FinanceCoinsHubPage() {
         <h2 className="font-heading text-sm font-semibold">Operational history</h2>
         <p className="mt-1 text-xs text-text-secondary">
           Coin purchases, gifts, and redemptions are business/ledger records under Transactions and
-          Payouts — not edited here.
+          Payouts - not edited here.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Link

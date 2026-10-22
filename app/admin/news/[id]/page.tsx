@@ -352,7 +352,7 @@ export default function NewsDetailPage() {
       } else if (kind === "audio") {
         setPickedKind("audio");
       }
-      setNotice(`${kind === "image" ? "Image" : kind === "video" ? "Video" : "Audio"} added — save to keep.`);
+      setNotice(`${kind === "image" ? "Image" : kind === "video" ? "Video" : "Audio"} added - save to keep.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -422,7 +422,7 @@ export default function NewsDetailPage() {
       </p>
       <p className="mt-1 text-center text-xs text-text-hint">
         {workspace.display_date?.label || "Updated"}{" "}
-        {workspace.display_date?.at ? formatDate(workspace.display_date.at) : "—"}
+        {workspace.display_date?.at ? formatDate(workspace.display_date.at) : "-"}
       </p>
     </div>
   );
@@ -501,7 +501,7 @@ export default function NewsDetailPage() {
           </div>
         </div>
         <p className="mt-2 text-xs text-text-hint">
-          Saves are explicit — edits are not autosaved. Upload media, then Save to persist.
+          Saves are explicit - edits are not autosaved. Upload media, then Save to persist.
         </p>
       </div>
 
@@ -616,14 +616,14 @@ export default function NewsDetailPage() {
               <dl className="grid gap-2 rounded-lg border border-border bg-muted/30 p-3 text-xs text-text-secondary sm:grid-cols-2">
                 <div>
                   <dt className="font-medium text-text-primary">Publishing organization</dt>
-                  <dd>{workspace.attribution?.publishing_organization || orgName || "—"}</dd>
+                  <dd>{workspace.attribution?.publishing_organization || orgName || "-"}</dd>
                 </div>
                 <div>
                   <dt className="font-medium text-text-primary">Last editor (admin)</dt>
                   <dd>
                     {workspace.attribution?.last_edited_by_admin_id
                       ? String(workspace.attribution.last_edited_by_admin_id).slice(0, 8) + "…"
-                      : "—"}
+                      : "-"}
                   </dd>
                 </div>
               </dl>
@@ -644,7 +644,7 @@ export default function NewsDetailPage() {
                 ) : null}
               </p>
               <p className="text-xs text-text-hint">
-                An image or gallery with background music stays Image/Gallery — not Audio.
+                An image or gallery with background music stays Image/Gallery - not Audio.
               </p>
               <NewsMediaFields
                 articleId={id}
@@ -705,7 +705,7 @@ export default function NewsDetailPage() {
                       );
                       setDraft({ ...draft, video_url: publicUrl });
                       setPickedKind("video");
-                      setNotice("Watermark removed — save to keep.");
+                      setNotice("Watermark removed - save to keep.");
                     } catch (err) {
                       setError(
                         err instanceof Error ? err.message : "Watermark removal failed",
@@ -718,7 +718,7 @@ export default function NewsDetailPage() {
                 onTrimVideo={(result) => {
                   setDraft({ ...draft, video_url: result.publicUrl });
                   setPickedKind("video");
-                  setNotice("Video trimmed — save to keep.");
+                  setNotice("Video trimmed - save to keep.");
                 }}
                 onSoundSelect={(sound) => {
                   if (draft.video_url.trim()) {
@@ -800,7 +800,7 @@ export default function NewsDetailPage() {
                   <dd className="font-medium">
                     {str(workspace.article.archived_at)
                       ? formatDate(str(workspace.article.archived_at))
-                      : "—"}
+                      : "-"}
                   </dd>
                 </div>
               </dl>
@@ -854,14 +854,14 @@ export default function NewsDetailPage() {
                 <div key={label} className="rounded-lg border border-border px-3 py-2">
                   <dt className="text-xs text-text-secondary">{label}</dt>
                   <dd className="mt-1 font-medium">
-                    {value ? formatDate(value) : "—"}
+                    {value ? formatDate(value) : "-"}
                   </dd>
                 </div>
               ))}
               <div className="rounded-lg border border-border px-3 py-2 sm:col-span-2">
                 <dt className="text-xs text-text-secondary">Last edited by admin</dt>
                 <dd className="mt-1 font-medium">
-                  {workspace.activity?.last_edited_by_admin_id || "—"}
+                  {workspace.activity?.last_edited_by_admin_id || "-"}
                 </dd>
               </div>
             </dl>

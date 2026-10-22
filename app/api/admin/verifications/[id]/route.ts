@@ -106,7 +106,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return {
       ...doc,
       signed_url: directUrl(path) || urlByPath.get(path) || "",
-      // No per-document status column yet — presence means submitted.
+      // No per-document status column yet - presence means submitted.
       review_state: "submitted" as const,
     };
   });

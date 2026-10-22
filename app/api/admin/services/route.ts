@@ -43,7 +43,7 @@ function enrichLocalRow(row: Record<string, unknown>) {
       ? "Identity verified"
       : "Identity not verified",
     provider_verification_note:
-      "Profile identity verification only — not a professional credential or license.",
+      "Profile identity verification only - not a professional credential or license.",
   });
 }
 
@@ -203,7 +203,7 @@ export async function GET(request: Request) {
       delivery_on_request:
         "Legacy availability_mode value preserved as-is. Displayed as “On request”; not remapped.",
       provider_verification:
-        "users.verified is identity verification scope only — not professional credentials.",
+        "users.verified is identity verification scope only - not professional credentials.",
     },
   });
 }

@@ -90,7 +90,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // notes is NOT NULL on stadium_availability — omit → Internal Server Error.
+  // notes is NOT NULL on stadium_availability - omit → Internal Server Error.
   const hours = [1, 2, 3, 4, 5, 6, 0].map((day) => ({
     stadium_id: data.id,
     day_of_week: day,

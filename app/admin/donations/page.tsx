@@ -233,7 +233,7 @@ export default function DonationsPage() {
     <>
       <AdminPageHeader
         title="Donations"
-        description="Fundraising campaigns — ETB and coins are tracked separately."
+        description="Fundraising campaigns - ETB and coins are tracked separately."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex rounded-lg border border-border p-0.5 text-sm">
@@ -283,7 +283,7 @@ export default function DonationsPage() {
         </div>
         <div className="rounded-xl border border-border bg-card p-4">
           <p className="text-xs uppercase text-text-secondary">Active campaigns</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums">{totals.active_count ?? "—"}</p>
+          <p className="mt-1 text-xl font-semibold tabular-nums">{totals.active_count ?? "-"}</p>
         </div>
       </div>
 

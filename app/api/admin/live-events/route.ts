@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     sourceTypeRaw === "mock_dev"
       ? "mock_dev"
       : sourceTypeRaw === "ingest"
-        ? "external_url" // ingest not available — fall back
+        ? "external_url" // ingest not available - fall back
         : "external_url";
   const visibility = asText(body.visibility) === "private" ? "private" : "public";
   const timezone = asText(body.timezone) || "Africa/Addis_Ababa";
@@ -127,7 +127,7 @@ export async function POST(request: Request) {
     .select()
     .single();
 
-  // Pre-migration DBs may lack readiness columns — retry without them.
+  // Pre-migration DBs may lack readiness columns - retry without them.
   if (
     insert.error &&
     /visibility|timezone|source_type|source_ready|column .* does not exist/i.test(

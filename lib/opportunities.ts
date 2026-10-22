@@ -107,7 +107,7 @@ export function formatOpportunityFee(
   amount: number | string | null | undefined,
 ) {
   if (feeType === "free" || feeType !== "paid") {
-    return "Not required — free opportunity";
+    return "Not required - free opportunity";
   }
   const n = Number(amount || 0);
   if (!(n > 0)) return "Paid (fee not set)";

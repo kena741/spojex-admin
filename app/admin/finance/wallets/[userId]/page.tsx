@@ -135,7 +135,7 @@ export default function WalletDetailPage() {
               <li key={row.id} className="flex items-start justify-between gap-3 py-2.5 text-sm">
                 <div className="min-w-0">
                   <p className="font-medium">{row.kind}</p>
-                  <p className="truncate text-xs text-text-secondary">{row.note || "—"}</p>
+                  <p className="truncate text-xs text-text-secondary">{row.note || "-"}</p>
                   <p className="text-[11px] text-text-hint">{formatDateTime(row.created_at)}</p>
                   {row.payment_id ? (
                     <Link

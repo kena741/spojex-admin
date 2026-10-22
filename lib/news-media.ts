@@ -263,7 +263,7 @@ export async function captureVideoCoverFile(
         await video.play();
         video.pause();
       } catch {
-        // ignore autoplay restrictions — we only need a decoded frame
+        // ignore autoplay restrictions - we only need a decoded frame
       }
     }
 

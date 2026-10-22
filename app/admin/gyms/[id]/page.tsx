@@ -163,7 +163,7 @@ function money(value: unknown, currency = "ETB") {
 /** Money for dense table cells. */
 function moneyCell(value: unknown, currency = "ETB") {
   const n = gymNum(value);
-  return n === null ? "—" : formatMoney(n, currency);
+  return n === null ? "-" : formatMoney(n, currency);
 }
 
 function paymentTone(status?: string | null): StatusTone {
@@ -203,8 +203,8 @@ function membershipStatusTone(status?: string | null): StatusTone {
 function dateRange(start?: string | null, end?: string | null) {
   const a = start ? formatDate(start) : null;
   const b = end ? formatDate(end) : null;
-  if (!a && !b) return "—";
-  return `${a ?? "—"} → ${b ?? "open-ended"}`;
+  if (!a && !b) return "-";
+  return `${a ?? "-"} → ${b ?? "open-ended"}`;
 }
 
 function validateImageFile(file: File) {
@@ -347,7 +347,7 @@ function eventChanges(event: GymAdminEvent) {
     }
     const show = (value: unknown) =>
       value === null || value === undefined || value === ""
-        ? "—"
+        ? "-"
         : formatStatusLabel(String(value));
     changes.push(`${EVENT_STATE_LABELS[key]}: ${show(a)} → ${show(b)}`);
   }
@@ -933,7 +933,7 @@ function GymWorkspaceView() {
         <div className="min-w-0 flex-1 space-y-2">
           <p className="truncate text-sm text-text-secondary">
             <span className="font-medium text-text-primary">{categoryText}</span>
-            {locationText && locationText !== "—" ? ` · ${locationText}` : ""}
+            {locationText && locationText !== "-" ? ` · ${locationText}` : ""}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge tone={gymListingTone(gym.status)}>
@@ -974,7 +974,7 @@ function GymWorkspaceView() {
       {wsError ? (
         <div className="mb-4">
           <Notice tone="warning">
-            Workspace summary unavailable ({wsError}). Showing basic gym data — metrics that
+            Workspace summary unavailable ({wsError}). Showing basic gym data - metrics that
             need the workspace API are marked unavailable.
           </Notice>
         </div>
@@ -1181,8 +1181,8 @@ function OverviewTab({
             <Field label="Location">
               {gym.location_display?.trim() || locationLabel(gym.city, gym.country)}
             </Field>
-            <Field label="Phone">{gym.contact_phone || "—"}</Field>
-            <Field label="Email">{gym.contact_email || "—"}</Field>
+            <Field label="Phone">{gym.contact_phone || "-"}</Field>
+            <Field label="Email">{gym.contact_email || "-"}</Field>
             <Field label="Rating">{gymRatingLabel(ratingAvg, ratingCount)}</Field>
             <Field label="Followers">
               {gymMetricLabel(ov?.followers ?? gym.follower_count)}
@@ -1191,10 +1191,10 @@ function OverviewTab({
               {gymPlatformFeeLabel(gymNum(gym.monthly_payment))}
             </Field>
             <Field label="Commission per transaction">
-              {gymNum(gym.commission_pct) === null ? "—" : `${gymNum(gym.commission_pct)}%`}
+              {gymNum(gym.commission_pct) === null ? "-" : `${gymNum(gym.commission_pct)}%`}
             </Field>
             <Field label="Created">{formatDate(gym.created_at)}</Field>
-            <Field label="Updated">{gym.updated_at ? formatDate(gym.updated_at) : "—"}</Field>
+            <Field label="Updated">{gym.updated_at ? formatDate(gym.updated_at) : "-"}</Field>
           </dl>
           {gym.description?.trim() ? (
             <p className="mt-4 border-t border-border pt-4 text-sm text-text-secondary">
@@ -1260,7 +1260,7 @@ function OverviewTab({
           ) : (
             <dl className="space-y-2">
               <Field label="Room">
-                {community.room_state ? formatStatusLabel(community.room_state) : "—"}
+                {community.room_state ? formatStatusLabel(community.room_state) : "-"}
               </Field>
               <Field label="Participants">{gymMetricLabel(community.participant_count)}</Field>
               <Field label="Posting">{postingModeLabel(community.posting_mode)}</Field>
@@ -1330,7 +1330,7 @@ function postingModeLabel(mode?: string | null) {
     case "members_can_post":
       return "Members can post";
     default:
-      return mode ? formatStatusLabel(mode) : "—";
+      return mode ? formatStatusLabel(mode) : "-";
   }
 }
 
@@ -1668,7 +1668,7 @@ function MembersTab({
                           {plan.rosterOnly ? (
                             <p className="mt-0.5 max-w-[14rem] text-xs text-text-hint">
                               {row.source_note ||
-                                "Roster entry without a purchased plan — not a missing paid plan."}
+                                "Roster entry without a purchased plan - not a missing paid plan."}
                             </p>
                           ) : null}
                         </td>
@@ -1678,7 +1678,7 @@ function MembersTab({
                           </StatusBadge>
                         </td>
                         <td className="px-4 py-3 text-xs capitalize text-text-secondary">
-                          {row.entitlement?.payment_state?.replace(/_/g, " ") || "—"}
+                          {row.entitlement?.payment_state?.replace(/_/g, " ") || "-"}
                         </td>
                         <td className="px-4 py-3 text-xs text-text-secondary">
                           {row.current_membership
@@ -1686,7 +1686,7 @@ function MembersTab({
                                 row.current_membership.start_date,
                                 row.current_membership.end_date,
                               )
-                            : "—"}
+                            : "-"}
                         </td>
                         <td className="px-4 py-3">
                           <StatusBadge tone={row.is_active ? "success" : "neutral"}>
@@ -1876,12 +1876,12 @@ function MemberDrawer({
                 <dl className="space-y-2 pt-1">
                   <Field label="Plan">{plan.label}</Field>
                   <Field label="Payment state">
-                    {entitlement?.payment_state?.replace(/_/g, " ") || "—"}
+                    {entitlement?.payment_state?.replace(/_/g, " ") || "-"}
                   </Field>
                   <Field label="Entitlement">
                     {entitlement?.entitlement_status
                       ? formatStatusLabel(entitlement.entitlement_status)
-                      : "—"}
+                      : "-"}
                   </Field>
                   <Field label="Check-ins">
                     {detail.attendance?.supported === false
@@ -2255,7 +2255,7 @@ function PlansView({
                 ) : null}
               </div>
               <p className="mt-4 text-2xl font-bold tabular-nums text-text-primary">
-                {price === null ? "—" : formatMoney(price, plan.currency || "ETB")}
+                {price === null ? "-" : formatMoney(price, plan.currency || "ETB")}
               </p>
               {price === 0 ? (
                 <p className="text-xs text-text-hint">Free / complimentary plan</p>
@@ -2271,10 +2271,10 @@ function PlansView({
                   </StatusBadge>
                 </Field>
                 <Field label="Active subscribers">
-                  {activeSubs === null ? "—" : activeSubs.toLocaleString("en-ET")}
+                  {activeSubs === null ? "-" : activeSubs.toLocaleString("en-ET")}
                 </Field>
                 <Field label="Lifetime subscriptions">
-                  {lifetimeSubs === null ? "—" : lifetimeSubs.toLocaleString("en-ET")}
+                  {lifetimeSubs === null ? "-" : lifetimeSubs.toLocaleString("en-ET")}
                 </Field>
               </dl>
             </article>
@@ -2556,7 +2556,7 @@ function CommunityTab({
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard
               label="Room state"
-              value={data.room_state ? formatStatusLabel(data.room_state) : "—"}
+              value={data.room_state ? formatStatusLabel(data.room_state) : "-"}
               hint={data.conversation?.last_message_at ? `Last activity ${formatDateTime(data.conversation.last_message_at)}` : undefined}
             />
             <MetricCard
@@ -2593,14 +2593,14 @@ function CommunityTab({
                       {data.organization.name || "Organization"}
                     </Link>
                   ) : (
-                    data.organization?.name || "—"
+                    data.organization?.name || "-"
                   )}
                 </Field>
                 <Field label="Active org members">
                   {gymMetricLabel(data.organization?.active_members)}
                 </Field>
                 <Field label="Configuration">
-                  {data.configuration_state ? formatStatusLabel(data.configuration_state) : "—"}
+                  {data.configuration_state ? formatStatusLabel(data.configuration_state) : "-"}
                 </Field>
               </dl>
               {roomMissing ? (
@@ -2631,19 +2631,19 @@ function CommunityTab({
                   <Field label="Who can post">
                     {data.settings.who_can_post
                       ? formatStatusLabel(data.settings.who_can_post)
-                      : "—"}
+                      : "-"}
                   </Field>
                   <Field label="Members can send">
                     {data.settings.allow_members_send === null ||
                     data.settings.allow_members_send === undefined
-                      ? "—"
+                      ? "-"
                       : data.settings.allow_members_send
                         ? "Yes"
                         : "No"}
                   </Field>
                   <Field label="Media">
                     {data.settings.allow_media === null || data.settings.allow_media === undefined
-                      ? "—"
+                      ? "-"
                       : data.settings.allow_media
                         ? "Allowed"
                         : "Not allowed"}
@@ -2651,7 +2651,7 @@ function CommunityTab({
                   <Field label="Reactions">
                     {data.settings.allow_reactions === null ||
                     data.settings.allow_reactions === undefined
-                      ? "—"
+                      ? "-"
                       : data.settings.allow_reactions
                         ? "Allowed"
                         : "Not allowed"}
@@ -2659,7 +2659,7 @@ function CommunityTab({
                   <Field label="Visibility">
                     {data.settings.group_visibility
                       ? formatStatusLabel(data.settings.group_visibility)
-                      : "—"}
+                      : "-"}
                   </Field>
                 </dl>
               ) : (
@@ -2928,10 +2928,10 @@ function FinanceTab({
                       <td className="whitespace-nowrap px-4 py-3 text-text-secondary">
                         {formatDate(txn.paid_at || txn.created_at)}
                       </td>
-                      <td className="px-4 py-3">{txn.member_name || "—"}</td>
-                      <td className="px-4 py-3">{txn.plan_title || "—"}</td>
+                      <td className="px-4 py-3">{txn.member_name || "-"}</td>
+                      <td className="px-4 py-3">{txn.plan_title || "-"}</td>
                       <td className="px-4 py-3">
-                        {txn.payment_type ? formatStatusLabel(txn.payment_type) : "—"}
+                        {txn.payment_type ? formatStatusLabel(txn.payment_type) : "-"}
                       </td>
                       <td className="px-4 py-3 tabular-nums">{moneyCell(txn.amount, cur)}</td>
                       <td className="px-4 py-3 tabular-nums">
@@ -3211,7 +3211,7 @@ function ProfileSection({
     <dl className="grid gap-3 sm:grid-cols-2">
       <Field label="Name">{gym.name}</Field>
       <Field label="Slug">
-        <span className="font-mono text-xs">{gym.slug || "—"}</span>
+        <span className="font-mono text-xs">{gym.slug || "-"}</span>
       </Field>
       <Field label="Category">
         {gym.category_display?.trim() || gymCategoryLabel(gym.category, catalog)}
@@ -3220,10 +3220,10 @@ function ProfileSection({
         {gymPlatformFeeLabel(gymNum(gym.monthly_payment))}
       </Field>
       <Field label="City / country">{locationLabel(gym.city, gym.country)}</Field>
-      <Field label="Area">{gym.location || "—"}</Field>
-      <Field label="Address">{gym.address || "—"}</Field>
-      <Field label="Phone">{gym.contact_phone || "—"}</Field>
-      <Field label="Email">{gym.contact_email || "—"}</Field>
+      <Field label="Area">{gym.location || "-"}</Field>
+      <Field label="Address">{gym.address || "-"}</Field>
+      <Field label="Phone">{gym.contact_phone || "-"}</Field>
+      <Field label="Email">{gym.contact_email || "-"}</Field>
       <Field label="Website">
         {gym.website?.trim() ? (
           <a
@@ -3235,11 +3235,11 @@ function ProfileSection({
             {gym.website}
           </a>
         ) : (
-          "—"
+          "-"
         )}
       </Field>
       <Field label="Commission (read-only)">
-        {gymNum(gym.commission_pct) === null ? "—" : `${gymNum(gym.commission_pct)}%`}
+        {gymNum(gym.commission_pct) === null ? "-" : `${gymNum(gym.commission_pct)}%`}
       </Field>
       <Field label="Listing">
         <StatusBadge tone={gymListingTone(gym.status)}>{gymStatusLabel(gym.status)}</StatusBadge>
@@ -3250,7 +3250,7 @@ function ProfileSection({
         </StatusBadge>
       </Field>
       <div className="sm:col-span-2">
-        <Field label="Description">{gym.description?.trim() || "—"}</Field>
+        <Field label="Description">{gym.description?.trim() || "-"}</Field>
       </div>
     </dl>
   );
@@ -3629,7 +3629,7 @@ function StaffSection({
     <div className="space-y-6">
       <Card
         title="Staff & access"
-        description="Assign an existing Spojex user or invite a new one. Gym staff role is separate from their platform profile role — assigning staff never overwrites it. Passwords are never shown in admin."
+        description="Assign an existing Spojex user or invite a new one. Gym staff role is separate from their platform profile role - assigning staff never overwrites it. Passwords are never shown in admin."
         actions={
           canWrite ? (
             <button
@@ -3977,7 +3977,7 @@ function OwnershipSection({
     <div className="space-y-6">
       <Card title="Current owner">
         <dl className="space-y-2">
-          <Field label="Name">{ownerName || "—"}</Field>
+          <Field label="Name">{ownerName || "-"}</Field>
           <Field label="Profile">
             {ownerId ? (
               <Link href={`/admin/users/${ownerId}`} className="text-primary hover:underline">
@@ -3987,9 +3987,9 @@ function OwnershipSection({
               "No owner assigned"
             )}
           </Field>
-          <Field label="Email">{ownerEmail || "—"}</Field>
+          <Field label="Email">{ownerEmail || "-"}</Field>
           <Field label="Owner ID">
-            <span className="font-mono text-xs">{ownerId || "—"}</span>
+            <span className="font-mono text-xs">{ownerId || "-"}</span>
           </Field>
         </dl>
       </Card>
@@ -4088,7 +4088,7 @@ function OwnershipSection({
           <span className="font-medium">{pendingName || pendingId}</span>?
         </p>
         <p className="text-text-secondary">
-          Reason: {reason.trim() || "—"}. Historical payments and personal balances are not moved.
+          Reason: {reason.trim() || "-"}. Historical payments and personal balances are not moved.
         </p>
       </ConfirmDialog>
     </div>
@@ -4103,7 +4103,7 @@ function HistorySection({ ws }: { ws: GymWorkspace | null }) {
       description="Most recent admin events for this gym."
     >
       {!ws ? (
-        <p className="text-sm text-text-hint">Unavailable — workspace summary could not be loaded.</p>
+        <p className="text-sm text-text-hint">Unavailable - workspace summary could not be loaded.</p>
       ) : events.length === 0 ? (
         <AdminEmpty title="No history yet" description="Admin actions on this gym are recorded here." />
       ) : (
@@ -4128,9 +4128,9 @@ function HistorySection({ ws }: { ws: GymWorkspace | null }) {
                     </td>
                     <td className="px-4 py-3 font-medium">{formatStatusLabel(event.action)}</td>
                     <td className="px-4 py-3 text-xs text-text-secondary">
-                      {changes.length > 0 ? changes.join(" · ") : "—"}
+                      {changes.length > 0 ? changes.join(" · ") : "-"}
                     </td>
-                    <td className="px-4 py-3 text-xs text-text-secondary">{event.reason || "—"}</td>
+                    <td className="px-4 py-3 text-xs text-text-secondary">{event.reason || "-"}</td>
                     <td className="px-4 py-3 text-xs">
                       {event.actor_user_id ? (
                         <Link

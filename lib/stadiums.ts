@@ -24,7 +24,7 @@ export const stadiumPlanTypes: { id: StadiumPlanType; label: string }[] = [
   { id: "yearly", label: "Yearly pass" },
 ];
 
-/** Explicit product semantics — keep UI/API/mobile labels aligned. */
+/** Explicit product semantics - keep UI/API/mobile labels aligned. */
 export const STADIUM_PRODUCT_DEFINITIONS: Record<
   StadiumPlanType,
   { label: string; grants: string; enforces: string; does_not: string }
@@ -134,11 +134,11 @@ export function stadiumPricingPayload(pricing: StadiumPricing) {
 }
 
 export function sizeTypeLabel(sizeType?: string | null) {
-  return stadiumSizeTypes.find((item) => item.id === sizeType)?.label ?? sizeType ?? "—";
+  return stadiumSizeTypes.find((item) => item.id === sizeType)?.label ?? sizeType ?? "-";
 }
 
 export function stadiumStatusLabel(status?: string | null) {
-  return stadiumStatuses.find((item) => item.id === status)?.label ?? status ?? "—";
+  return stadiumStatuses.find((item) => item.id === status)?.label ?? status ?? "-";
 }
 
 export function planTypeLabel(planType?: string | null) {
@@ -149,7 +149,7 @@ export function planTypeLabel(planType?: string | null) {
       : raw === "hour" || raw === "hr"
         ? "hourly"
         : raw;
-  return stadiumPlanTypes.find((item) => item.id === type)?.label ?? type ?? "—";
+  return stadiumPlanTypes.find((item) => item.id === type)?.label ?? type ?? "-";
 }
 
 export function slugifyStadium(name: string) {
@@ -161,7 +161,7 @@ export function slugifyStadium(name: string) {
 }
 
 export function formatPrice(amount: number | null | undefined, currency = "ETB") {
-  if (amount == null) return "—";
+  if (amount == null) return "-";
   return `${Number(amount).toLocaleString()} ${currency}`;
 }
 

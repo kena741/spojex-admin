@@ -1,4 +1,4 @@
-/** Static fallback — mirrors mobile IdentityCatalog when DB tables are not applied yet. */
+/** Static fallback - mirrors mobile IdentityCatalog when DB tables are not applied yet. */
 
 export type IdentityRoleGroupSeed = {
   slug: string;

@@ -13,7 +13,7 @@ export function VisiblePassword({
   const [hidden, setHidden] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  if (!value) return <span className="text-text-secondary">—</span>;
+  if (!value) return <span className="text-text-secondary">-</span>;
 
   const copy = async () => {
     try {

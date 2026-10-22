@@ -394,10 +394,10 @@ export default function PeopleDirectoryPage() {
                     ) : null}
                   </div>
                   <div className="hidden w-36 shrink-0 truncate text-right text-xs text-text-secondary lg:block">
-                    {row.organizations?.[0]?.name || "—"}
+                    {row.organizations?.[0]?.name || "-"}
                   </div>
                   <div className="hidden w-24 shrink-0 text-right text-[11px] text-text-hint xl:block">
-                    {row.last_activity_at ? formatDate(row.last_activity_at) : "—"}
+                    {row.last_activity_at ? formatDate(row.last_activity_at) : "-"}
                   </div>
                 </div>
               </li>
@@ -438,7 +438,7 @@ function SummaryCard({
         <div className="mt-2 h-7 w-16 animate-pulse rounded bg-muted" />
       ) : (
         <p className="mt-1 font-heading text-2xl font-semibold tabular-nums">
-          {value == null ? "—" : new Intl.NumberFormat("en-US").format(value)}
+          {value == null ? "-" : new Intl.NumberFormat("en-US").format(value)}
         </p>
       )}
     </div>
@@ -495,7 +495,7 @@ function PersonDrawer({
                   <p className="font-heading text-base font-semibold">
                     {user.display_name || user.full_name}
                   </p>
-                  <p className="text-xs text-text-secondary">{user.email || user.username || "—"}</p>
+                  <p className="text-xs text-text-secondary">{user.email || user.username || "-"}</p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     <StatusBadge tone={verifiedTone(user.verified)}>
                       {user.verified ? "Verified" : "Unverified"}
@@ -601,7 +601,7 @@ function PersonDrawer({
                 <div>
                   <dt className="text-text-hint">Location</dt>
                   <dd className="font-medium">
-                    {[user.city, user.country].filter(Boolean).join(", ") || "—"}
+                    {[user.city, user.country].filter(Boolean).join(", ") || "-"}
                   </dd>
                 </div>
               </dl>

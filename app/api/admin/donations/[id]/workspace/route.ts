@@ -119,13 +119,13 @@ export async function GET(
 
   const alerts: string[] = [];
   if (!campaign.beneficiary_user_id) {
-    alerts.push("No beneficiary set — contributions may credit the platform default.");
+    alerts.push("No beneficiary set - contributions may credit the platform default.");
   }
   if ((contribCount ?? 0) > 0) {
     alerts.push(`Asset is locked (${coin ? "coin" : "ETB"} campaign with contributions).`);
   }
   if (campaign.status === "paused") {
-    alerts.push("Campaign is paused — new contributions are blocked.");
+    alerts.push("Campaign is paused - new contributions are blocked.");
   }
 
   return NextResponse.json({
@@ -151,7 +151,7 @@ export async function GET(
         "Each contribution stores credited_user_id at completion. Changing the campaign beneficiary does not move historical funds.",
       managing_organization: beneficiaryOrg,
       redeem_authorized:
-        "Credited user wallet (coin) or platform payout rules (ETB) — see Finance.",
+        "Credited user wallet (coin) or platform payout rules (ETB) - see Finance.",
     },
     aggregates: {
       completed_count: completed.length,

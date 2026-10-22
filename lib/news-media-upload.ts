@@ -262,7 +262,7 @@ export async function uploadNewsMediaFromForm(
 ): Promise<NextResponse> {
   const raw = form.get("file");
   const kind = parseNewsUploadKind(`${form.get("kind") ?? ""}`);
-  // instanceof File fails across Node/undici realms — accept Blob-like.
+  // instanceof File fails across Node/undici realms - accept Blob-like.
   if (!(raw instanceof Blob) || typeof (raw as Blob).arrayBuffer !== "function") {
     return NextResponse.json({ error: "file is required" }, { status: 400 });
   }

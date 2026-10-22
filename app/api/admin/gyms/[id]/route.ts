@@ -231,7 +231,7 @@ export async function GET(
     plans = [];
   }
 
-  // Payments summary for Finance tab (customer memberships — not platform fee invoices).
+  // Payments summary for Finance tab (customer memberships - not platform fee invoices).
   const paymentsRes = await auth.context.client
     .from("gym_payments")
     .select(

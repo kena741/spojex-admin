@@ -132,7 +132,7 @@ export async function GET(request: Request) {
   if (profileUserIds) query = query.in("id", profileUserIds);
 
   if (profile === "fan") {
-    // Primary role fans / community without extra profile tables — soft filter by role
+    // Primary role fans / community without extra profile tables - soft filter by role
     query = query.in("role", ["fan", "supporter", "community", "parent", "guardian"]);
   }
 

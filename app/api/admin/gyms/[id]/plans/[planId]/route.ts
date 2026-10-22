@@ -109,7 +109,7 @@ export async function DELETE(
   if (!auth.ok) return auth.error;
   const { id: gymId, planId } = await params;
 
-  // Never hard-delete plans — preserve history for past memberships / payments.
+  // Never hard-delete plans - preserve history for past memberships / payments.
   const { data, error } = await auth.context.client
     .from("gym_plans")
     .update({ is_active: false })

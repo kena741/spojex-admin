@@ -401,7 +401,7 @@ export default function BannersPage() {
                         {row.link_url?.trim() ? (
                           <span className="break-all">{row.link_url}</span>
                         ) : (
-                          "—"
+                          "-"
                         )}
                       </td>
                       <td className="px-4 py-3 text-text-secondary">{row.sort_order}</td>

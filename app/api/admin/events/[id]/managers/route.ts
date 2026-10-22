@@ -354,7 +354,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       invite_sent: inviteSent,
       message: inviteSent
         ? `Invitation sent to ${email}. Passwords are not shown in admin.`
-        : `Manager linked for ${email}. Use Auth activation / password-reset — passwords are not returned.`,
+        : `Manager linked for ${email}. Use Auth activation / password-reset - passwords are not returned.`,
     });
   } catch (err) {
     return NextResponse.json(

@@ -107,7 +107,7 @@ function pricingFromBookingItems(items: AddisSportField["bookingItems"]): Stadiu
     }
     if (hourly == null) hourly = price;
   }
-  // Only import hourly when present — do not invent daily/monthly/yearly multipliers.
+  // Only import hourly when present - do not invent daily/monthly/yearly multipliers.
   return {
     currency: "ETB",
     hourly,
@@ -192,10 +192,10 @@ function normalizeField(raw: unknown): FieldRow | null {
     longitude: numberOrNull(addis.longitude),
     size_type: sizeFromSurface(addis.surface),
     surface: normalizeStadiumSurface(addis.surface),
-    // Do not invent capacity — leave unset (null → omit on update / 0 only on create default).
+    // Do not invent capacity - leave unset (null → omit on update / 0 only on create default).
     capacity: null,
     description: (en?.description || "").trim(),
-    // Operator display label only — not an account owner.
+    // Operator display label only - not an account owner.
     owner_name: "",
     contact_phone: "",
     contact_email: "",
@@ -333,7 +333,7 @@ export async function POST(request: Request) {
           if (existing.owner_user_id) {
             delete updatePayload.owner_name;
           }
-          // Keep existing pricing — never silently rewrite product prices on re-import.
+          // Keep existing pricing - never silently rewrite product prices on re-import.
           delete updatePayload.pricing;
         } else {
           updatePayload.pricing = pricing;
@@ -344,7 +344,7 @@ export async function POST(request: Request) {
           .update(updatePayload)
           .eq("id", existing.id);
         if (error) {
-          // Columns may be missing before migration — retry without new fields.
+          // Columns may be missing before migration - retry without new fields.
           if (/external_id|import_source|imported_at|location_review/i.test(error.message)) {
             const legacy: Record<string, unknown> = { ...updatePayload };
             delete legacy.external_id;

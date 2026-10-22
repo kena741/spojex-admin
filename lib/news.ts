@@ -46,7 +46,7 @@ export const newsCategories = [
 export function newsStatusLabel(status?: string | null) {
   const normalized = String(status || "").toLowerCase();
   if (normalized === "published" || normalized === "active") return "Published";
-  return newsStatuses.find((item) => item.id === status)?.label ?? status ?? "—";
+  return newsStatuses.find((item) => item.id === status)?.label ?? status ?? "-";
 }
 
 export function slugifyNews(title: string) {

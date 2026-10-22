@@ -4,7 +4,7 @@ import { getSpojexApiBaseUrl } from "@/lib/env";
 import { requestAccessToken } from "@/lib/spojex/server";
 
 /**
- * Per-user push status / send — proxies to Spojex REST
+ * Per-user push status / send - proxies to Spojex REST
  * `GET|POST /api/v1/push/admin/users/{user_id}`.
  */
 

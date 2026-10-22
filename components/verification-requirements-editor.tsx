@@ -342,7 +342,7 @@ export default function VerificationRequirementsEditor({ embedded = false }: Pro
       ) : null}
       {!fromDatabase ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          Catalog tables are missing or unreachable. Showing client fallbacks for reference only —
+          Catalog tables are missing or unreachable. Showing client fallbacks for reference only -
           they are not enforced until the live catalog is initialized.
         </div>
       ) : null}
@@ -403,7 +403,7 @@ export default function VerificationRequirementsEditor({ embedded = false }: Pro
                   <tr key={type.id} className="border-t border-border">
                     <td className="px-4 py-3">
                       <p className="font-medium">{type.label}</p>
-                      <p className="text-xs text-text-secondary">{type.description || "—"}</p>
+                      <p className="text-xs text-text-secondary">{type.description || "-"}</p>
                     </td>
                     <td className="px-4 py-3 font-mono text-xs">{type.slug}</td>
                     <td className="px-4 py-3">{verificationStepLabel(type.step)}</td>

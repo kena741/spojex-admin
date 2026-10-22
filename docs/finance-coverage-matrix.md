@@ -8,7 +8,7 @@ Last updated with the Finance workspace unification. Source of truth for integra
 |-------|---------|
 | **live** | Verified payment path with domain records in unified Finance |
 | **partial** | Records exist; settlement, commission snapshot, or recipient wallet incomplete |
-| **config_only** | Settings UI only — no charge path |
+| **config_only** | Settings UI only - no charge path |
 | **unimplemented** | No payment records / no checkout |
 
 ## Modules
@@ -25,10 +25,10 @@ Last updated with the Finance workspace unification. Source of truth for integra
 | Opportunities | Application fee | partial | Yes | Chapa initialize/confirm + mobile checkout wired |
 | Mini apps | Partner payments | live | Yes | Confirm verifies via Chapa |
 | Featured | Service feature request fee | live | Yes | Confirm requires Chapa verify (unsafe RPC removed) |
-| Wallet / withdrawals | Earnings, refunds, withdrawals | live | Yes | Manual Mark paid — not bank transfer |
-| Telebirr | — | config_only | Settings only | No processor |
-| Campaign disbursements | — | unimplemented | — | Explicit product gap |
-| Gym/stadium/event owner payouts | — | unimplemented | Display attribution only | |
+| Wallet / withdrawals | Earnings, refunds, withdrawals | live | Yes | Manual Mark paid - not bank transfer |
+| Telebirr | - | config_only | Settings only | No processor |
+| Campaign disbursements | - | unimplemented | - | Explicit product gap |
+| Gym/stadium/event owner payouts | - | unimplemented | Display attribution only | |
 
 ## Double-counting rules
 
@@ -41,7 +41,7 @@ Last updated with the Finance workspace unification. Source of truth for integra
 ## Historical gaps (do not backfill from today’s rates)
 
 1. Stadium payments lack commission snapshots
-2. No dedicated `payment_attempts` table — retries share `provider_ref`
+2. No dedicated `payment_attempts` table - retries share `provider_ref`
 3. Gym/event/donation ETB recipient wallets not automated
 4. Admin-marked payouts lack PSP settlement confirmation
 

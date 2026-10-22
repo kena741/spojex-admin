@@ -41,7 +41,7 @@ function asLibraryItem(row: Record<string, unknown>): SoundtrackCatalogItem | nu
 }
 
 /**
- * Curated sound library only — no news/video scrape (avoids duplicate tracks).
+ * Curated sound library only - no news/video scrape (avoids duplicate tracks).
  */
 export async function GET(request: Request) {
   const auth = await requireAnyAdminPermission(["sounds:read", "news:read"]);

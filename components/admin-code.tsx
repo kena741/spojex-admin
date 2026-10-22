@@ -9,7 +9,7 @@ export function normalizeAdminCode(value: string) {
 
 export function AdminCode({
   value,
-  empty = "—",
+  empty = "-",
 }: {
   value?: string | null;
   empty?: string;

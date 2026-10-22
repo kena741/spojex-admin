@@ -14,13 +14,13 @@ export const donationLifecyclePolicy = {
   closed: "No new contributions; history preserved. Reopen via activate with reason.",
   target_auto_close: false,
   over_100_percent:
-    "Allowed — progress bar caps visually at 100% while totals and labels show overflow.",
+    "Allowed - progress bar caps visually at 100% while totals and labels show overflow.",
   asset_lock: "Currency/asset cannot change after any contribution exists.",
-  disbursements: "Not implemented — do not infer payout from wallet credit.",
+  disbursements: "Not implemented - do not infer payout from wallet credit.",
 } as const;
 
 export function donationStatusLabel(status?: string | null) {
-  return donationStatuses.find((item) => item.id === status)?.label ?? status ?? "—";
+  return donationStatuses.find((item) => item.id === status)?.label ?? status ?? "-";
 }
 
 export function slugifyDonation(title: string) {
@@ -32,7 +32,7 @@ export function slugifyDonation(title: string) {
 }
 
 export function formatDonationAmount(amount: number | null | undefined, currency = "ETB") {
-  if (amount == null) return "—";
+  if (amount == null) return "-";
   const code = (currency || "ETB").toUpperCase();
   if (code === "COIN" || code === "COINS") {
     return `${Number(amount).toLocaleString()} coins`;
@@ -185,10 +185,10 @@ export function contributionPaymentLabel(row: {
   const code = (row.currency || "").toUpperCase();
   const ref = String(row.provider_ref || "").trim();
   if (code === "COIN" || code === "COINS" || ref.startsWith("coin:")) {
-    return { method: "coin_wallet", label: "Coin wallet", reference: ref || "—" };
+    return { method: "coin_wallet", label: "Coin wallet", reference: ref || "-" };
   }
   if (ref) {
     return { method: "chapa", label: "Chapa (ETB)", reference: ref };
   }
-  return { method: "unknown", label: "Payment", reference: "—" };
+  return { method: "unknown", label: "Payment", reference: "-" };
 }

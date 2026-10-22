@@ -93,7 +93,7 @@ export default function BeneficiarySelect({
       {
         value: "",
         label: "Spojex (platform org)",
-        sublabel: "Default — platform organization owner wallet",
+        sublabel: "Default - platform organization owner wallet",
         kind: "default",
       },
     ];

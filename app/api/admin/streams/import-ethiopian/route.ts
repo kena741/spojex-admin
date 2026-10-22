@@ -91,7 +91,7 @@ export async function GET() {
       missing_playback: [] as unknown[],
       unmapped_metadata: [] as unknown[],
       policy: {
-        match: "source_id or slug — never name alone",
+        match: "source_id or slug - never name alone",
         preserve_local: ["host_org_id", "is_featured", "status", "sort_order"],
         new_default_status: "inactive",
       },
@@ -190,7 +190,7 @@ export async function POST(request: Request) {
   }
 
   if (dryRun) {
-    // Reuse GET preview path logic via recursive call pattern — return GET-equivalent.
+    // Reuse GET preview path logic via recursive call pattern - return GET-equivalent.
     const previewUrl = new URL(request.url);
     previewUrl.search = "";
     return GET();

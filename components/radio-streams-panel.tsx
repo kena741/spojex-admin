@@ -168,7 +168,7 @@ function ImportList({ title, items }: { title: string; items?: ImportEntry[] }) 
         {items.slice(0, 100).map((item, index) => (
           <li key={`${item.source_id ?? item.name ?? "row"}-${index}`}>
             {item.name || item.source_id || "Unnamed"}
-            {item.reason ? ` — ${item.reason}` : ""}
+            {item.reason ? ` - ${item.reason}` : ""}
           </li>
         ))}
         {items.length > 100 ? <li>…and {items.length - 100} more</li> : null}
@@ -177,7 +177,7 @@ function ImportList({ title, items }: { title: string; items?: ImportEntry[] }) 
   );
 }
 
-/** Radio station list — server-side filtering, health vs publication kept separate. */
+/** Radio station list - server-side filtering, health vs publication kept separate. */
 export default function RadioStreamsPanel() {
   const { can } = useAdminPermissions();
   const canWrite = can("streams:write");
@@ -299,7 +299,7 @@ export default function RadioStreamsPanel() {
       setNotice(
         action === "health_check"
           ? `${row.name}: ${streamHealthLabel(payload.health_status)}${
-              payload.health_message ? ` — ${payload.health_message}` : ""
+              payload.health_message ? ` - ${payload.health_message}` : ""
             }`
           : `${row.name}: ${doneLabel}`,
       );
@@ -665,7 +665,7 @@ export default function RadioStreamsPanel() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-text-secondary">
-                      {row.genre || "—"}
+                      {row.genre || "-"}
                       {row.city ? ` · ${row.city}` : ""}
                     </td>
                     <td className="px-4 py-3">
@@ -690,7 +690,7 @@ export default function RadioStreamsPanel() {
                       {row.is_featured ? (
                         <StatusBadge tone="success">Featured</StatusBadge>
                       ) : (
-                        <span className="text-text-secondary">—</span>
+                        <span className="text-text-secondary">-</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -897,7 +897,7 @@ export default function RadioStreamsPanel() {
           {importPreview && previewCounts ? (
             <>
               <p className="text-sm text-text-secondary">
-                This is a preview only — nothing has changed yet.
+                This is a preview only - nothing has changed yet.
               </p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <ImportCount label="Will create" count={previewCounts.create} tone="text-emerald-700" />
@@ -913,7 +913,7 @@ export default function RadioStreamsPanel() {
               </div>
               <div className="rounded-lg bg-muted/50 p-3 text-xs text-text-secondary">
                 <p>
-                  Matching: {importPreview.policy?.match ?? "source_id or slug — never name alone"}.
+                  Matching: {importPreview.policy?.match ?? "source_id or slug - never name alone"}.
                 </p>
                 <p className="mt-1">
                   Preserved on update:{" "}

@@ -83,7 +83,7 @@ export type MediaAssetDetail = {
 };
 
 export function formatDuration(seconds: number | null | undefined): string {
-  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return "—";
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return "-";
   const s = Math.round(seconds);
   const m = Math.floor(s / 60);
   const r = s % 60;
@@ -91,7 +91,7 @@ export function formatDuration(seconds: number | null | undefined): string {
 }
 
 export function formatBytes(n: number | null | undefined): string {
-  if (n == null || n < 0) return "—";
+  if (n == null || n < 0) return "-";
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;

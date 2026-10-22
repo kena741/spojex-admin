@@ -96,7 +96,7 @@ type DetailPayload = {
 const PAGE_SIZE = 40;
 
 function money(amount: string | null | undefined, currency = "ETB") {
-  if (amount == null || amount === "") return "—";
+  if (amount == null || amount === "") return "-";
   if (currency === "COIN") {
     return `${Number(amount).toLocaleString("en-US")} coins`;
   }
@@ -183,7 +183,7 @@ export default function FinanceTransactionsPage() {
       setSummary(payload);
       if (payload.source) setDataSource(payload.source);
     } catch (err) {
-      // Summary failure is soft — list error is the primary signal.
+      // Summary failure is soft - list error is the primary signal.
       console.warn(err);
     } finally {
       setSummaryLoading(false);
@@ -354,7 +354,7 @@ export default function FinanceTransactionsPage() {
 
       {dataSource === "admin_local_fallback" && !error ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          Showing admin local aggregation — Python finance API was unavailable. Coin purchases and
+          Showing admin local aggregation - Python finance API was unavailable. Coin purchases and
           other payment tables are included from the database directly.
         </p>
       ) : null}
@@ -385,36 +385,36 @@ export default function FinanceTransactionsPage() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <Kpi
           label="Verified customer payments"
-          value={primary ? money(primary.verified_customer_payments, primary.currency) : "—"}
-          hint="Confirmed checkouts only — not wallet credits"
+          value={primary ? money(primary.verified_customer_payments, primary.currency) : "-"}
+          hint="Confirmed checkouts only - not wallet credits"
           loading={summaryLoading}
         />
         <Kpi
           label="Platform commission earned"
-          value={primary ? money(primary.platform_commission_earned, primary.currency) : "—"}
+          value={primary ? money(primary.platform_commission_earned, primary.currency) : "-"}
           hint="Only amounts recorded on the payment"
           loading={summaryLoading}
         />
         <Kpi
           label="Provider earnings"
-          value={primary ? money(primary.provider_earnings, primary.currency) : "—"}
+          value={primary ? money(primary.provider_earnings, primary.currency) : "-"}
           hint="Recipient net where stored"
           loading={summaryLoading}
         />
         <Kpi
           label="Refunds"
-          value={primary ? money(primary.refunds, primary.currency) : "—"}
+          value={primary ? money(primary.refunds, primary.currency) : "-"}
           loading={summaryLoading}
         />
         <Kpi
           label="Completed payouts"
-          value={primary ? money(primary.completed_payouts, primary.currency) : "—"}
+          value={primary ? money(primary.completed_payouts, primary.currency) : "-"}
           hint="Admin-marked withdrawals & coin redemptions"
           loading={summaryLoading}
         />
         <Kpi
           label="Pending withdrawals"
-          value={primary ? money(primary.pending_withdrawals, primary.currency) : "—"}
+          value={primary ? money(primary.pending_withdrawals, primary.currency) : "-"}
           loading={summaryLoading}
         />
       </div>
@@ -476,7 +476,7 @@ export default function FinanceTransactionsPage() {
           {view === "all"
             ? ` · business ${businessTotal.toLocaleString()} · ledger ${ledgerTotal.toLocaleString()}`
             : ""}
-          {view === "business" ? " (business transactions only — not ledger echoes)" : ""}
+          {view === "business" ? " (business transactions only - not ledger echoes)" : ""}
           {view === "ledger" ? " (ledger entries only)" : ""}
         </p>
       ) : null}
@@ -789,15 +789,15 @@ function TransactionDrawer({
                 </div>
                 <div className="col-span-2">
                   <dt className="text-text-hint">Provider reference</dt>
-                  <dd className="font-mono text-[11px]">{tx.provider_ref || "—"}</dd>
+                  <dd className="font-mono text-[11px]">{tx.provider_ref || "-"}</dd>
                 </div>
                 <div>
                   <dt className="text-text-hint">Occurred</dt>
-                  <dd>{tx.occurred_at ? formatDateTime(tx.occurred_at) : "—"}</dd>
+                  <dd>{tx.occurred_at ? formatDateTime(tx.occurred_at) : "-"}</dd>
                 </div>
                 <div>
                   <dt className="text-text-hint">Verified</dt>
-                  <dd>{tx.verified_at ? formatDateTime(tx.verified_at) : "—"}</dd>
+                  <dd>{tx.verified_at ? formatDateTime(tx.verified_at) : "-"}</dd>
                 </div>
               </dl>
 
@@ -912,7 +912,7 @@ function TransactionDrawer({
                         />
                         <p className="font-medium">{ev.label}</p>
                         <p className="text-[11px] text-text-hint">
-                          {ev.at ? formatDateTime(ev.at) : "—"}
+                          {ev.at ? formatDateTime(ev.at) : "-"}
                           {ev.amount ? ` · ${ev.amount}` : ""}
                         </p>
                       </li>
@@ -957,7 +957,7 @@ function Participant({ label, person }: { label: string; person: Person }) {
   if (!person) {
     return (
       <li className="text-xs text-text-hint">
-        {label}: —
+        {label}: -
       </li>
     );
   }
@@ -970,7 +970,7 @@ function Participant({ label, person }: { label: string; person: Person }) {
           {person.display_name || person.email || person.id.slice(0, 8)}
         </Link>
       ) : (
-        <span>{person.display_name || "—"}</span>
+        <span>{person.display_name || "-"}</span>
       )}
     </li>
   );
@@ -998,7 +998,7 @@ function FlowStep({
     <div className="flex justify-between gap-2">
       <span className="text-text-hint">{label}</span>
       <span className="font-medium tabular-nums">
-        {value != null ? money(value, currency) : "—"}
+        {value != null ? money(value, currency) : "-"}
       </span>
     </div>
   );

@@ -1,4 +1,4 @@
-/** Explicit PostgREST hints — profile tables have both id and user_id → users. */
+/** Explicit PostgREST hints - profile tables have both id and user_id → users. */
 
 export const userProfileSelect =
   "*, athlete_profiles!athlete_profiles_user_id_fkey(*), professional_profiles!professional_profiles_user_id_fkey(*), media_profiles!media_profiles_user_id_fkey(*)";

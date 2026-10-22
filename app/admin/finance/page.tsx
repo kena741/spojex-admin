@@ -184,7 +184,7 @@ export default function FinanceOverviewPage() {
     <div className="space-y-5">
       <AdminPageHeader
         title="Finance overview"
-        description="Verified collections vs platform revenue, refunds, recipient earnings, and payouts — money and coins kept separate."
+        description="Verified collections vs platform revenue, refunds, recipient earnings, and payouts - money and coins kept separate."
         actions={
           <div className="flex flex-wrap gap-2">
             <button
@@ -284,7 +284,7 @@ export default function FinanceOverviewPage() {
             <Kpi
               label="Verified customer collections"
               value={primary ? money(primary.verified_customer_payments, primary.currency) : "Unavailable"}
-              hint="Period activity — confirmed checkouts only (not wallet credits)"
+              hint="Period activity - confirmed checkouts only (not wallet credits)"
               delta={deltaLabel(primary?.verified_customer_payments, prevPrimary?.verified_customer_payments)}
               href={rangeHref(drills.verified_customer_payments || "/admin/finance/transactions?status=verified&view=business&asset=money")}
             />
@@ -298,7 +298,7 @@ export default function FinanceOverviewPage() {
             <Kpi
               label="Recorded recipient earnings"
               value={primary ? money(primary.provider_earnings, primary.currency) : "Unavailable"}
-              hint="Recipient net where stored — not inferred from current rates"
+              hint="Recipient net where stored - not inferred from current rates"
               delta={deltaLabel(primary?.provider_earnings, prevPrimary?.provider_earnings)}
             />
             <Kpi
@@ -310,13 +310,13 @@ export default function FinanceOverviewPage() {
             <Kpi
               label="Pending payout requests"
               value={primary ? money(primary.pending_withdrawals, primary.currency) : "Unavailable"}
-              hint="Current queue — withdrawals + coin redemptions"
+              hint="Current queue - withdrawals + coin redemptions"
               href={drills.pending_withdrawals || "/admin/finance/payouts?status=pending"}
             />
             <Kpi
               label="Recorded completed payouts"
               value={primary ? money(primary.completed_payouts, primary.currency) : "Unavailable"}
-              hint="Manually marked paid — not bank execution"
+              hint="Manually marked paid - not bank execution"
               href={drills.completed_payouts || "/admin/finance/payouts?status=paid"}
             />
           </div>
@@ -324,28 +324,28 @@ export default function FinanceOverviewPage() {
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <StatChip
               label="Business transactions"
-              value={String(summary?.counts?.business_transactions ?? "—")}
+              value={String(summary?.counts?.business_transactions ?? "-")}
               hint="Checkout rows in period"
             />
             <StatChip
               label="Verified checkouts"
-              value={String(summary?.counts?.verified_business_transactions ?? "—")}
+              value={String(summary?.counts?.verified_business_transactions ?? "-")}
             />
             <StatChip
               label="Ledger entries"
-              value={String(summary?.counts?.ledger_entries ?? "—")}
-              hint="Wallet + coin movements — not purchases"
+              value={String(summary?.counts?.ledger_entries ?? "-")}
+              hint="Wallet + coin movements - not purchases"
             />
             <StatChip
               label="Pending payment attempts"
-              value={String(summary?.counts?.pending_payment_attempts ?? "—")}
+              value={String(summary?.counts?.pending_payment_attempts ?? "-")}
             />
           </div>
 
           {summary?.balances_snapshot ? (
             <div className="rounded-xl border border-border bg-card p-4 text-sm shadow-sm">
               <p className="text-xs font-semibold uppercase tracking-wide text-text-hint">
-                Current balances (snapshot — not period activity)
+                Current balances (snapshot - not period activity)
               </p>
               <p className="mt-1">
                 Provider wallets available:{" "}
@@ -447,7 +447,7 @@ export default function FinanceOverviewPage() {
                           {money(t.verified_payments, t.currency)}
                         </td>
                         <td className="px-2 py-1.5 tabular-nums">
-                          {t.refunds != null ? money(t.refunds, t.currency) : "—"}
+                          {t.refunds != null ? money(t.refunds, t.currency) : "-"}
                         </td>
                         <td className="px-2 py-1.5 tabular-nums">
                           {money(t.commission, t.currency)}

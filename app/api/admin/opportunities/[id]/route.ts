@@ -77,7 +77,7 @@ export async function GET(
     return NextResponse.json({ error: "Opportunity not found" }, { status: 404 });
   }
 
-  // Embeds can fail on the Spojex REST shim — fall back to plain rows + user lookup.
+  // Embeds can fail on the Spojex REST shim - fall back to plain rows + user lookup.
   let apps = (appsRes.data ?? []) as Array<Record<string, any>>;
   if (appsRes.error) {
     const plain = await auth.context.client
@@ -155,7 +155,7 @@ export async function GET(
     const feeSnap = extra._fee_snapshot || null;
     const snapFee = feeSnap?.fee_type || feeType;
     const payStatus = String(row.payment_status || "");
-    let payment_label = "Not required — free opportunity";
+    let payment_label = "Not required - free opportunity";
     if (snapFee === "paid" || feeType === "paid") {
       const s = payStatus.toLowerCase();
       if (!s || s === "none") payment_label = "Awaiting payment";

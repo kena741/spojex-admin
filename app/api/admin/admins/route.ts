@@ -19,7 +19,7 @@ export async function GET() {
 
 /**
  * Invite staff via backend (preferred). Body: { email, full_name, role }.
- * Does not default to Super Admin — role is required and must exist.
+ * Does not default to Super Admin - role is required and must exist.
  */
 export async function POST(request: Request) {
   const auth = await requireAnyAdminPermission(["admins:invite", "admins:write"]);
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     email?: string;
     full_name?: string;
     role?: string;
-    /** @deprecated direct create — prefer invitation */
+    /** @deprecated direct create - prefer invitation */
     password?: string;
     is_active?: boolean;
     mode?: "invite" | "direct";
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ data: payload, mode: "invite" });
   }
 
-  // Direct attach for existing Spojex users (legacy fallback) — always users.id
+  // Direct attach for existing Spojex users (legacy fallback) - always users.id
   const client = auth.context.client;
   const { data: roleRow } = await client.from("admin_role").select("slug").eq("slug", role).maybeSingle();
   if (!roleRow) return NextResponse.json({ error: `Role "${role}" does not exist` }, { status: 400 });
@@ -109,7 +109,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const userId = existing.id as string; // public.users.id — never auth uid
+  const userId = existing.id as string; // public.users.id - never auth uid
 
   const { data: dup } = await client
     .from("admin")

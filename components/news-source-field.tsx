@@ -32,7 +32,7 @@ export function NewsSourceField({
   disabled,
   className,
   inputClassName = "h-10 w-full rounded-lg border border-border px-3 text-sm",
-  placeholder = "Optional — e.g. Reuters, ESPN",
+  placeholder = "Optional - e.g. Reuters, ESPN",
   label,
   hint,
   optional = true,

@@ -18,7 +18,7 @@ export type MediaPickerSelection = {
   displayName: string;
   mediaType: string;
   durationSeconds: number | null;
-  /** Soundtrack offset (seconds) — optional. */
+  /** Soundtrack offset (seconds) - optional. */
   offsetSeconds?: number;
   volume?: number;
 };

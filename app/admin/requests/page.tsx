@@ -32,7 +32,7 @@ function PersonCell({
   person?: BookingRow["requester"];
   href: string;
 }) {
-  if (!person?.id) return <span className="text-text-hint">—</span>;
+  if (!person?.id) return <span className="text-text-hint">-</span>;
   return (
     <Link href={href} className="flex items-center gap-2 hover:opacity-90">
       {person.avatar_url ? (
@@ -165,7 +165,7 @@ export default function RequestsPage() {
       reason =
         window.prompt(
           next === "completed"
-            ? "Override reason (payment not verified — required):"
+            ? "Override reason (payment not verified - required):"
             : "Reason (required):",
         ) || undefined;
       if (!reason?.trim()) return;
@@ -250,7 +250,7 @@ export default function RequestsPage() {
           >
             <AdminStatCard
               title={c.title}
-              value={loading ? "…" : String(g[c.key] ?? "—")}
+              value={loading ? "…" : String(g[c.key] ?? "-")}
             />
           </button>
         ))}
@@ -367,7 +367,7 @@ export default function RequestsPage() {
                   />
                 ) : (
                   <div className="grid h-14 w-16 shrink-0 place-items-center rounded bg-muted text-[10px] text-text-hint">
-                    —
+                    -
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
@@ -393,7 +393,7 @@ export default function RequestsPage() {
                 <StatusBadge tone={requestTone(row.status)}>
                   {formatStatusLabel(row.status)}
                 </StatusBadge>
-                <span className="text-xs text-text-secondary">{row.payment?.label || "—"}</span>
+                <span className="text-xs text-text-secondary">{row.payment?.label || "-"}</span>
                 <button
                   type="button"
                   onClick={() => openBooking(row.id)}
@@ -461,7 +461,7 @@ export default function RequestsPage() {
                         ) : null}
                       </p>
                       <p className="text-[11px] text-text-hint">
-                        Created {row.created_at ? formatDateTime(row.created_at) : "—"}
+                        Created {row.created_at ? formatDateTime(row.created_at) : "-"}
                       </p>
                     </div>
                   </button>
@@ -476,7 +476,7 @@ export default function RequestsPage() {
                       href={row.people_provider_href || `/admin/people/${row.provider?.id}`}
                     />
                     <div className="min-w-[7rem] text-right text-xs">
-                      <p className="font-medium">{row.payment?.label || "—"}</p>
+                      <p className="font-medium">{row.payment?.label || "-"}</p>
                       {row.payment?.amount != null ? (
                         <p className="text-text-hint">
                           {row.payment.currency}{" "}

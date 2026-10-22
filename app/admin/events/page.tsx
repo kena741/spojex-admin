@@ -430,7 +430,7 @@ export default function EventsPage() {
           <p className="mt-2 text-[11px] text-text-hint">
             Native Apps upcoming-14-day filter active
             {startsFrom ? ` from ${startsFrom}` : ""}
-            {startsTo ? ` to ${startsTo}` : ""} — excludes cancelled/ended/completed. Timezone
+            {startsTo ? ` to ${startsTo}` : ""} - excludes cancelled/ended/completed. Timezone
             Africa/Addis_Ababa.
           </p>
         ) : null}
@@ -462,7 +462,7 @@ export default function EventsPage() {
                   </th>
                   <th
                     className="w-[11%] px-4 py-3 font-semibold"
-                    title="Verified payment collections only — pending checkouts excluded"
+                    title="Verified payment collections only - pending checkouts excluded"
                   >
                     Collections
                   </th>
@@ -510,7 +510,7 @@ export default function EventsPage() {
                               {row.name}
                             </Link>
                             <p className="truncate text-xs text-text-hint" title={meta}>
-                              {meta || "—"}
+                              {meta || "-"}
                             </p>
                             <p className="truncate text-[11px] text-text-hint">
                               {eventCategoryLabel(row.category)} · {eventVisibilityLabel(row.visibility)}

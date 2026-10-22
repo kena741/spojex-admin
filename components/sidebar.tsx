@@ -724,7 +724,7 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Mobile hamburger — visible only on small screens */}
+      {/* Mobile hamburger - visible only on small screens */}
       <button
         type="button"
         onClick={() => setMobileOpen(true)}

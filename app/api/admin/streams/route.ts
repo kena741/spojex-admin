@@ -61,7 +61,7 @@ export async function POST(request: Request) {
     .select()
     .single();
 
-  // Pre-migration DBs lack host_org_id — retry without it.
+  // Pre-migration DBs lack host_org_id - retry without it.
   if (
     insert.error &&
     hostOrgId &&

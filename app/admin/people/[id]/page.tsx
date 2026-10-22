@@ -369,7 +369,7 @@ export default function UserDetailPage() {
           <div className="flex flex-col items-center text-center">
             <UserAvatar name={user.display_name} src={user.avatar_url} size={72} />
             <h2 className="mt-3 font-heading text-base font-semibold">{user.display_name || "Unnamed"}</h2>
-            <p className="text-sm text-text-secondary">{user.full_name || user.username || "—"}</p>
+            <p className="text-sm text-text-secondary">{user.full_name || user.username || "-"}</p>
             <div className="mt-3">
               <StatusBadge tone={verifiedTone(user.verified)}>
                 {user.verified ? "Verified" : "Unverified"}
@@ -379,8 +379,8 @@ export default function UserDetailPage() {
           <dl className="mt-5 space-y-2 text-sm">
             <Row label="Role" value={catalog ? catalogRoleLabel(user.role) : roleLabel(user.role)} />
             <Row label="Location" value={locationLabel(user.city, user.country)} />
-            <Row label="Email" value={user.email || "—"} />
-            <Row label="Phone" value={user.phone || "—"} />
+            <Row label="Email" value={user.email || "-"} />
+            <Row label="Phone" value={user.phone || "-"} />
             <Row label="Joined" value={formatDate(user.created_at)} />
           </dl>
           {verificationId ? (
@@ -472,18 +472,18 @@ export default function UserDetailPage() {
               <ProfileCard title="Athlete profile">
                 <DetailGroup title="Playing">
                   <DetailField label="Position" value={athlete.position} />
-                  <DetailField label="Secondary position" value={athlete.secondary_position || "—"} />
+                  <DetailField label="Secondary position" value={athlete.secondary_position || "-"} />
                   <DetailField label="Preferred foot" value={athlete.preferred_foot} />
                   <DetailField label="Team" value={athlete.team} />
-                  <DetailField label="Playing level" value={athlete.playing_level || "—"} />
-                  <DetailField label="Jersey" value={athlete.jersey_number?.toString() ?? "—"} />
+                  <DetailField label="Playing level" value={athlete.playing_level || "-"} />
+                  <DetailField label="Jersey" value={athlete.jersey_number?.toString() ?? "-"} />
                 </DetailGroup>
                 <DetailGroup title="Physical">
-                  <DetailField label="Nationality" value={athlete.nationality || "—"} />
+                  <DetailField label="Nationality" value={athlete.nationality || "-"} />
                   <DetailField label="Date of birth" value={formatDob(athlete.date_of_birth)} />
-                  <DetailField label="Height" value={athlete.height_cm ? `${athlete.height_cm} cm` : "—"} />
-                  <DetailField label="Weight" value={athlete.weight_kg ? `${athlete.weight_kg} kg` : "—"} />
-                  <DetailField label="Experience" value={athlete.years_experience?.toString() ?? "—"} />
+                  <DetailField label="Height" value={athlete.height_cm ? `${athlete.height_cm} cm` : "-"} />
+                  <DetailField label="Weight" value={athlete.weight_kg ? `${athlete.weight_kg} kg` : "-"} />
+                  <DetailField label="Experience" value={athlete.years_experience?.toString() ?? "-"} />
                 </DetailGroup>
                 <DetailGroup title="Season">
                   <DetailField label="Matches" value={String(athlete.matches_played)} />
@@ -498,7 +498,7 @@ export default function UserDetailPage() {
                   />
                   <DetailField
                     label="Opportunity interests"
-                    value={athlete.opportunity_interests?.join(", ") || "—"}
+                    value={athlete.opportunity_interests?.join(", ") || "-"}
                   />
                 </DetailGroup>
               </ProfileCard>
@@ -517,13 +517,13 @@ export default function UserDetailPage() {
                   <DetailField label={professionalCopy.organization} value={professional.organization} />
                   <DetailField label={professionalCopy.license} value={professional.license} />
                   <DetailField label="Certified" value={professional.certified ? "Yes" : "No"} />
-                  <DetailField label="Experience" value={professional.years_experience?.toString() ?? "—"} />
+                  <DetailField label="Experience" value={professional.years_experience?.toString() ?? "-"} />
                 </DetailGroup>
                 <DetailGroup title="Focus">
-                  <DetailField label="Specializations" value={professional.specializations?.join(", ") || "—"} />
-                  <DetailField label="Regions" value={professional.regions?.join(", ") || "—"} />
-                  <DetailField label="Age groups" value={professional.age_groups?.join(", ") || "—"} />
-                  <DetailField label="Notes" value={professional.notes || "—"} />
+                  <DetailField label="Specializations" value={professional.specializations?.join(", ") || "-"} />
+                  <DetailField label="Regions" value={professional.regions?.join(", ") || "-"} />
+                  <DetailField label="Age groups" value={professional.age_groups?.join(", ") || "-"} />
+                  <DetailField label="Notes" value={professional.notes || "-"} />
                 </DetailGroup>
               </ProfileCard>
               <ProfileCard title="Career history">
@@ -540,9 +540,9 @@ export default function UserDetailPage() {
                 <DetailGroup>
                   <DetailField label="Outlet" value={media.outlet} />
                   <DetailField label="Specialty" value={media.specialty} />
-                  <DetailField label="Portfolio" value={media.portfolio_url || "—"} />
-                  <DetailField label="Experience" value={media.years_experience?.toString() ?? "—"} />
-                  <DetailField label="Regions" value={media.regions?.join(", ") || "—"} />
+                  <DetailField label="Portfolio" value={media.portfolio_url || "-"} />
+                  <DetailField label="Experience" value={media.years_experience?.toString() ?? "-"} />
+                  <DetailField label="Regions" value={media.regions?.join(", ") || "-"} />
                 </DetailGroup>
               </ProfileCard>
               <ProfileCard title="Career history">
@@ -591,7 +591,7 @@ export default function UserDetailPage() {
                         value={
                           feedInterest.preferences.preferred_languages.length
                             ? feedInterest.preferences.preferred_languages.join(", ")
-                            : "—"
+                            : "-"
                         }
                       />
                       <Row
@@ -878,7 +878,7 @@ function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-3">
       <dt className="text-text-secondary">{label}</dt>
-      <dd className="max-w-[60%] truncate text-right font-medium">{value || "—"}</dd>
+      <dd className="max-w-[60%] truncate text-right font-medium">{value || "-"}</dd>
     </div>
   );
 }

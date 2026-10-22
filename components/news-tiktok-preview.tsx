@@ -8,7 +8,7 @@ type NewsTikTokPreviewProps = {
   body?: string;
   /** Publishing organization shown as the bold poster line. */
   organizationName?: string;
-  /** Optional credit under the org — hidden when empty. */
+  /** Optional credit under the org - hidden when empty. */
   source?: string;
   imageUrl?: string;
   videoUrl?: string;
@@ -74,7 +74,7 @@ export function NewsTikTokPreview({
     if (org && s.toLowerCase() === org.toLowerCase()) return "";
     return /^source\s*:/i.test(s) ? s : `Source: ${s}`;
   })();
-  const caption = [title.trim(), body.trim()].filter(Boolean).join(" — ");
+  const caption = [title.trim(), body.trim()].filter(Boolean).join(" - ");
   const shortCaption =
     caption.length > 110 ? `${caption.slice(0, 108).trimEnd()}… more` : caption;
   const hasVideo = mediaKind === "video" && Boolean(video);
@@ -207,7 +207,7 @@ export function NewsTikTokPreview({
   );
 }
 
-/** @deprecated Prefer NewsTikTokPreview — kept for call-site compatibility. */
+/** @deprecated Prefer NewsTikTokPreview - kept for call-site compatibility. */
 export function NewsMediaPreview({
   imageUrl,
   videoUrl,

@@ -108,7 +108,7 @@ function formFromStation(station: Workspace["station"]): SettingsForm {
 }
 
 function formatWhen(value?: string | null) {
-  if (!value) return "—";
+  if (!value) return "-";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
@@ -347,7 +347,7 @@ export default function StreamDetailPage() {
       setTouched(false);
       setNotice(
         "stream_url" in patch
-          ? "Station saved. The stream URL changed, so playback health was reset — run a health check."
+          ? "Station saved. The stream URL changed, so playback health was reset - run a health check."
           : "Station saved.",
       );
     } catch (err) {
@@ -399,7 +399,7 @@ export default function StreamDetailPage() {
       await loadWorkspace();
       setNotice(
         `Health check: ${streamHealthLabel(result.health_status)}${
-          result.health_message ? ` — ${result.health_message}` : ""
+          result.health_message ? ` - ${result.health_message}` : ""
         }`,
       );
     } catch (err) {
@@ -602,7 +602,7 @@ export default function StreamDetailPage() {
             {preview === "error" ? (
               <p className="mt-2 text-xs text-text-secondary">
                 {mixedContent
-                  ? "This admin page is HTTPS but the stream is plain HTTP — browsers block it. Check the stream URL or use an HTTPS source."
+                  ? "This admin page is HTTPS but the stream is plain HTTP - browsers block it. Check the stream URL or use an HTTPS source."
                   : "The browser could not play this URL (it may be offline, geo-blocked, or not an audio stream)."}
               </p>
             ) : (
@@ -617,7 +617,7 @@ export default function StreamDetailPage() {
           </section>
 
           <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-            <h2 className="mb-3 font-heading text-sm font-semibold">Status — three separate things</h2>
+            <h2 className="mb-3 font-heading text-sm font-semibold">Status - three separate things</h2>
             <div className="grid gap-3">
               <Fact label="Configured (publication)">
                 <div className="flex flex-wrap items-center gap-2">
@@ -628,7 +628,7 @@ export default function StreamDetailPage() {
                 </div>
                 <p className="mt-1 text-xs text-text-secondary">
                   {enabled
-                    ? "Listed on air. This is configuration — it does not confirm the stream works."
+                    ? "Listed on air. This is configuration - it does not confirm the stream works."
                     : "Not listed on air."}
                 </p>
               </Fact>
@@ -651,7 +651,7 @@ export default function StreamDetailPage() {
                 </StatusBadge>
                 <p className="mt-1 text-xs text-text-secondary">
                   {health?.url_message ??
-                    "Shape and host checks only — says nothing about the stream being live."}
+                    "Shape and host checks only - says nothing about the stream being live."}
                 </p>
               </Fact>
             </div>
@@ -906,7 +906,7 @@ export default function StreamDetailPage() {
                 onChange={(e) => setForm({ ...form, city: e.target.value })}
               />
             </Field>
-            <Field label="Publication status" hint="Configuration only — not playback health.">
+            <Field label="Publication status" hint="Configuration only - not playback health.">
               <select
                 className={fieldClass}
                 disabled={!editing}

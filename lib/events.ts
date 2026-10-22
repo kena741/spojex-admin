@@ -45,7 +45,7 @@ export const eventRsvpStatuses = [
 ] as const;
 
 export function eventStatusLabel(status?: string | null) {
-  return eventStatuses.find((item) => item.id === status)?.label ?? status ?? "—";
+  return eventStatuses.find((item) => item.id === status)?.label ?? status ?? "-";
 }
 
 export function eventCategoryLabel(category?: string | null) {
@@ -61,7 +61,7 @@ export function eventLifecycleLabel(lifecycle?: string | null) {
 }
 
 export function eventRsvpStatusLabel(status?: string | null) {
-  return eventRsvpStatuses.find((item) => item.id === status)?.label ?? status ?? "—";
+  return eventRsvpStatuses.find((item) => item.id === status)?.label ?? status ?? "-";
 }
 
 export function slugifyEvent(value: string) {
@@ -81,7 +81,7 @@ export function eventDateInput(value?: string | null) {
 }
 
 export function formatEventWhen(value?: string | null) {
-  if (!value) return "—";
+  if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString();
@@ -92,7 +92,7 @@ export function normalizeTicketCode(value: string) {
 }
 
 export function formatEventPrice(amount: number | null | undefined, currency = "ETB") {
-  if (amount == null) return "—";
+  if (amount == null) return "-";
   return `${currency} ${Number(amount).toLocaleString()}`;
 }
 
@@ -152,7 +152,7 @@ export function formatEventWhenWithTz(
   value?: string | null,
   timeZone = "Africa/Addis_Ababa",
 ) {
-  if (!value) return "—";
+  if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   try {
@@ -171,7 +171,7 @@ export function formatEventWhenCompact(
   value?: string | null,
   timeZone = "Africa/Addis_Ababa",
 ) {
-  if (!value) return "—";
+  if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   try {
@@ -204,7 +204,7 @@ export function eventCoverUrl(row: { image_url?: string | null; photos?: unknown
 export type EventTicketSales = {
   /** Confirmed paid quantity (not pending reservations). */
   sold: number;
-  /** @deprecated alias of sold — confirmed paid only */
+  /** @deprecated alias of sold - confirmed paid only */
   sales: number;
   revenue: number;
   inside: number;

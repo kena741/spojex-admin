@@ -1068,7 +1068,7 @@ export default function GymsAdminPage() {
                         ) : null}
                       </td>
                       <td className="px-4 py-3 text-text-secondary">
-                        {row.owner_name || "—"}
+                        {row.owner_name || "-"}
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge tone={requestTone(row.status)}>{row.status}</StatusBadge>
@@ -1099,7 +1099,7 @@ export default function GymsAdminPage() {
                       <td className="px-4 py-3 text-xs text-text-secondary">
                         {row.membership_summary
                           ? `${row.membership_summary.active_entitlements ?? 0} entitlements · ${row.membership_summary.active_roster ?? 0} roster`
-                          : "—"}
+                          : "-"}
                       </td>
                       {canWrite ? (
                         <td
@@ -1310,7 +1310,7 @@ export default function GymsAdminPage() {
                 </p>
               ) : (
                 <p className="text-xs text-text-secondary">
-                  Required. Pick a user from the results — create the account under Users first if
+                  Required. Pick a user from the results - create the account under Users first if
                   they are not listed.
                 </p>
               )}

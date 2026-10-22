@@ -1,4 +1,4 @@
-/** Canonical activity-log filter values — keep in sync with backend admin_rbac registries. */
+/** Canonical activity-log filter values - keep in sync with backend admin_rbac registries. */
 
 export const AUDIT_ACTION_REGISTRY = [
   "accept_invite",

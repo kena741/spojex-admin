@@ -98,7 +98,7 @@ export default function FinanceReconciliationPage() {
     <div className="space-y-5">
       <AdminPageHeader
         title="Reconciliation"
-        description="Coverage diagnostics for verified payments, ledger gaps, and payout reservations. Read-only — no silent balance changes."
+        description="Coverage diagnostics for verified payments, ledger gaps, and payout reservations. Read-only - no silent balance changes."
         actions={
           <div className="flex flex-wrap gap-2">
             <button
@@ -275,7 +275,7 @@ export default function FinanceReconciliationPage() {
                           </span>
                         </td>
                         <td className="px-2 py-2 text-xs text-text-secondary">
-                          {(row.flows || []).join(", ") || "—"}
+                          {(row.flows || []).join(", ") || "-"}
                         </td>
                         <td className="px-2 py-2 text-xs text-text-secondary">{row.notes}</td>
                       </tr>

@@ -33,7 +33,7 @@ function facetForRow(row: {
   return "pending";
 }
 
-/** Queue list — prefer Python admin (service DB), fall back to Spojex service role. */
+/** Queue list - prefer Python admin (service DB), fall back to Spojex service role. */
 export async function GET(request: Request) {
   const auth = await requireAnyAdminPermission(["users:read", "users:verify"]);
   if (!auth.ok) return auth.error;

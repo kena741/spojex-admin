@@ -69,7 +69,7 @@ async function loadStaff(user: SpojexUser, sessionClient: SpojexClient) {
     roleClient = await createAdminClientFromRequest();
   }
 
-  // Role permissions are optional — don't fail the whole admin session if this
+  // Role permissions are optional - don't fail the whole admin session if this
   // call races an expired token (defaults still grant role-based access).
   const { data: roleRow, error: roleError } = await roleClient
     .from("admin_role")

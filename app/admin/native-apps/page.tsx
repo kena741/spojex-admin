@@ -92,7 +92,7 @@ function MetricValue({ metric }: { metric?: Metric }) {
   if (!metric || metric.available === false || metric.value == null) {
     return (
       <p className="text-sm text-text-hint" title={metric?.note || undefined}>
-        {metric?.note ? "Unavailable" : "—"}
+        {metric?.note ? "Unavailable" : "-"}
       </p>
     );
   }
@@ -449,7 +449,7 @@ export default function NativeAppsOverviewPage() {
                                   ? "Unavailable"
                                   : metric?.value != null
                                     ? new Intl.NumberFormat("en-US").format(metric.value)
-                                    : "—"}
+                                    : "-"}
                               </span>
                             )}
                             <div>
@@ -585,7 +585,7 @@ export default function NativeAppsOverviewPage() {
                   ) : series.low_volume ? (
                     <div>
                       <p className="mb-2 text-xs text-text-hint">
-                        Low volume — showing daily counts instead of a chart.
+                        Low volume - showing daily counts instead of a chart.
                       </p>
                       <ul className="max-h-40 space-y-1 overflow-auto text-xs">
                         {series.points.map((p) => (

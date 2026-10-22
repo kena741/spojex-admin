@@ -10,9 +10,9 @@ export function verificationDocLabel(kind: string, label?: string) {
   if (label?.trim()) return label.trim();
   switch (kind) {
     case "national_id_front":
-      return "National ID — front";
+      return "National ID - front";
     case "national_id_back":
-      return "National ID — back";
+      return "National ID - back";
     case "professional_license":
       return "Professional license";
     case "professional_certificate":
@@ -33,5 +33,5 @@ export function verificationDocLabel(kind: string, label?: string) {
 }
 
 export function verificationStatusLabel(status?: string | null) {
-  return verificationStatuses.find((item) => item.id === status)?.label ?? status ?? "—";
+  return verificationStatuses.find((item) => item.id === status)?.label ?? status ?? "-";
 }

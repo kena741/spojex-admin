@@ -4,7 +4,7 @@ import { getSpojexApiBaseUrl } from "@/lib/env";
 import { requestAccessToken } from "@/lib/spojex/server";
 
 /**
- * List recent in-app notifications — proxies to Spojex REST
+ * List recent in-app notifications - proxies to Spojex REST
  * `GET /api/v1/push/admin/notifications`.
  */
 export async function GET() {

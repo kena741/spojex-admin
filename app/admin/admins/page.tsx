@@ -217,7 +217,7 @@ export default function AdminsPage() {
                   <tr key={row.id} className="border-b border-border last:border-0">
                     <td className="px-4 py-3">
                       <p className="font-medium">{row.full_name || "Unnamed"}</p>
-                      <p className="text-xs text-text-secondary">{row.email || "—"}</p>
+                      <p className="text-xs text-text-secondary">{row.email || "-"}</p>
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-sm font-medium">{formatStatusLabel(row.role)}</span>
@@ -332,7 +332,7 @@ export default function AdminsPage() {
         {inviteToken ? (
           <div className="space-y-3 text-sm">
             <p className="text-text-secondary">
-              Single-use invitation created. Share this link once — it expires in 72 hours and cannot be reused.
+              Single-use invitation created. Share this link once - it expires in 72 hours and cannot be reused.
             </p>
             <code className="block break-all rounded-lg border border-border bg-muted/50 p-3 text-xs">
               {typeof window !== "undefined"

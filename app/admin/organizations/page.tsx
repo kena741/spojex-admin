@@ -570,7 +570,7 @@ export default function OrganizationsPage() {
                     </div>
                     <div className="hidden w-28 shrink-0 text-right text-xs text-text-secondary lg:block">
                       <span className="font-medium tabular-nums text-foreground">
-                        {liveGifts > 0 ? formatCoins(liveGifts) : "—"}
+                        {liveGifts > 0 ? formatCoins(liveGifts) : "-"}
                       </span>
                       <span className="mt-0.5 block text-[10px] text-text-hint">
                         Live gifts received

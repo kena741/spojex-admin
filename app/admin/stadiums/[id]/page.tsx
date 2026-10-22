@@ -496,7 +496,7 @@ export default function StadiumDetailPage() {
   };
 
   const formatSlotTime = (value?: string | null) => {
-    if (!value) return "—";
+    if (!value) return "-";
     return String(value).slice(0, 5);
   };
 
@@ -715,14 +715,14 @@ export default function StadiumDetailPage() {
                         {stadium.users.display_name}
                       </Link>
                     ) : (
-                      stadium.owner_name || "—"
+                      stadium.owner_name || "-"
                     )}
                   </dd>
                 </div>
                 <div className="flex flex-col gap-0.5 border-b border-border py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                   <dt className="shrink-0 text-text-secondary">Contact</dt>
                   <dd className="break-all font-medium sm:text-right">
-                    {stadium.contact_phone || "—"}
+                    {stadium.contact_phone || "-"}
                     {stadium.contact_email ? ` · ${stadium.contact_email}` : ""}
                   </dd>
                 </div>
@@ -778,15 +778,15 @@ export default function StadiumDetailPage() {
               <dl className="space-y-2 text-sm">
                 <div className="flex justify-between gap-3">
                   <dt className="shrink-0 text-text-secondary">Phone</dt>
-                  <dd className="font-medium">{stadium.contact_phone || "—"}</dd>
+                  <dd className="font-medium">{stadium.contact_phone || "-"}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
                   <dt className="shrink-0 text-text-secondary">Email</dt>
-                  <dd className="text-right font-medium">{stadium.contact_email || "—"}</dd>
+                  <dd className="text-right font-medium">{stadium.contact_email || "-"}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
                   <dt className="shrink-0 text-text-secondary">Owner name</dt>
-                  <dd className="text-right font-medium">{stadium.owner_name || "—"}</dd>
+                  <dd className="text-right font-medium">{stadium.owner_name || "-"}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
                   <dt className="shrink-0 text-text-secondary">Managers</dt>
@@ -803,7 +803,7 @@ export default function StadiumDetailPage() {
           <section className="rounded-2xl border border-border bg-card p-5 sm:p-6">
             <h2 className="font-heading text-sm font-semibold">Weekly hours</h2>
             <p className="mt-1 mb-5 text-sm text-text-secondary">
-              Set visiting hours for each day. Fans pay once for the day at any time — these slots only show when the
+              Set visiting hours for each day. Fans pay once for the day at any time - these slots only show when the
               pitch is open so they can decide whether to go.
             </p>
             <form onSubmit={saveHours} className="space-y-5">
@@ -1220,7 +1220,7 @@ export default function StadiumDetailPage() {
                                   {paymentPaid(row) &&
                                   String(row.status).toLowerCase() === "pending" ? (
                                     <p className="mt-1 text-[11px] font-medium text-amber-700">
-                                      Paid — booking still pending
+                                      Paid - booking still pending
                                     </p>
                                   ) : null}
                                 </div>
@@ -1266,7 +1266,7 @@ export default function StadiumDetailPage() {
                                   ) : null}
                                 </div>
                               ) : (
-                                <span className="text-xs text-text-hint">—</span>
+                                <span className="text-xs text-text-hint">-</span>
                               )}
                             </td>
                           </tr>
@@ -1314,7 +1314,7 @@ export default function StadiumDetailPage() {
                       <tbody>
                         {filteredSubscriptions.map((row) => (
                           <tr key={row.id} className="border-b border-border last:border-0">
-                            <td className="px-4 py-3 tabular-nums">{row.pass_number || "—"}</td>
+                            <td className="px-4 py-3 tabular-nums">{row.pass_number || "-"}</td>
                             <td className="px-4 py-3">
                               <AdminCode value={row.pass_code} />
                             </td>
@@ -1360,7 +1360,7 @@ export default function StadiumDetailPage() {
                   <tbody>
                     {payments.map((row) => (
                       <tr key={row.id} className="border-b border-border last:border-0">
-                        <td className="px-4 py-3">{row.users?.display_name ?? "—"}</td>
+                        <td className="px-4 py-3">{row.users?.display_name ?? "-"}</td>
                         <td className="px-4 py-3 font-medium">{formatPrice(row.amount, row.currency)}</td>
                         <td className="px-4 py-3 text-text-secondary">{row.payment_type}</td>
                         <td className="px-4 py-3">
@@ -1423,10 +1423,10 @@ export default function StadiumDetailPage() {
                                 {row.users.display_name}
                               </Link>
                             ) : (
-                              "—"
+                              "-"
                             )}
                           </td>
-                          <td className="px-4 py-3 font-mono text-xs">{row.users?.email || "—"}</td>
+                          <td className="px-4 py-3 font-mono text-xs">{row.users?.email || "-"}</td>
                           <td className="px-4 py-3">
                             <VisiblePassword value={row.login_password} />
                           </td>

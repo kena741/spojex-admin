@@ -101,7 +101,7 @@ export function DocCountBadge({ label, count }: { label: string; count: number }
 }
 
 export function formatDob(value?: string | null) {
-  if (!value) return "—";
+  if (!value) return "-";
   return formatDate(value);
 }
 
@@ -109,7 +109,7 @@ export function DetailField({ label, value }: { label: string; value: string }) 
   return (
     <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5">
       <p className="text-xs text-text-secondary">{label}</p>
-      <p className="mt-0.5 break-words text-sm font-medium text-text-primary">{value || "—"}</p>
+      <p className="mt-0.5 break-words text-sm font-medium text-text-primary">{value || "-"}</p>
     </div>
   );
 }

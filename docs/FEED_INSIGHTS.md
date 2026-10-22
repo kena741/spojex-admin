@@ -20,9 +20,9 @@ Timezone for report windows: **Africa/Addis_Ababa**. APIs: Python `/api/v1/admin
 | Impressions | visible exposures | Rows with `visible_at` (client ≥50% on screen ~1s). API-delivered / thumbnail load ≠ impression. |
 | Qualified views | viewed exposures | Rows with `viewed_at` (active playback started). |
 | Watch time | ms | Sum of `active_watch_ms` on viewed exposures (high-water per playback; retries do not inflate). |
-| Avg watch / qualified view | ms | Watch time ÷ qualified views. PiP tracked separately as `pip_watch` events — not mixed into this average. |
+| Avg watch / qualified view | ms | Watch time ÷ qualified views. PiP tracked separately as `pip_watch` events - not mixed into this average. |
 | Video completion rate | ratio | `watch_complete` events ÷ qualified views on **video** posts only. Image/audio excluded from denominator. |
-| Likes / comments / saves / shares (period) | — | **Unavailable** — not emitted as period `feed_events`; denormalized counters are lifetime only. |
+| Likes / comments / saves / shares (period) | - | **Unavailable** - not emitted as period `feed_events`; denormalized counters are lifetime only. |
 | Not interested | feedback records | `feed_feedback.action = not_interested` in period. |
 | Not interested rate | ratio | Not interested ÷ unique viewers. |
 
@@ -40,7 +40,7 @@ Previous-period deltas are shown only when prior-window aggregates exist.
 
 - Outbox pending/failed and last processed time from `feed_outbox`.
 - Event processing delay: avg/p95 `received_at − occurred_at` (24h).
-- Empty sessions (24h): sessions with no exposures — may be intentional empty inventory.
+- Empty sessions (24h): sessions with no exposures - may be intentional empty inventory.
 - HTTP success rate, latency, pagination failures, in-session duplicates: **Unavailable** in Postgres (use APM / ops logs).
 - Existence of `feed_events` does **not** imply a healthy worker.
 

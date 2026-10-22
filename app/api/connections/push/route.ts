@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSpojexApiBaseUrl } from "@/lib/env";
 
 /**
- * Connection push — proxies to Spojex REST `POST /api/v1/push/connections`.
+ * Connection push - proxies to Spojex REST `POST /api/v1/push/connections`.
  * Auth: Bearer from the mobile client (same as before).
  */
 export async function POST(request: Request) {

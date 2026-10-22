@@ -23,7 +23,7 @@ export type SportNewsSoundRow = {
   updated_at: string;
 };
 
-/** Curated sound library entry (explicitly added — not scraped from news/video). */
+/** Curated sound library entry (explicitly added - not scraped from news/video). */
 export type SoundtrackCatalogItem = {
   key: string;
   name: string;
@@ -47,7 +47,7 @@ export function newsSoundKindLabel(kind: string) {
   return NEWS_SOUND_KINDS.find((item) => item.id === kind)?.label ?? kind;
 }
 
-/** Normalize a sound title (strip extension / separators). No ellipsis — safe to store. */
+/** Normalize a sound title (strip extension / separators). No ellipsis - safe to store. */
 export function shortSoundTitle(raw: string, max = 40): string {
   let value = `${raw ?? ""}`.trim().replace(/…+$/g, "").replace(/\.{2,}$/g, "");
   if (!value) return "Untitled sound";

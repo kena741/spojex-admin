@@ -242,7 +242,7 @@ export default function ActivityLogsPage() {
                             {log.admin_name || "Unknown"}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            {log.admin_email || "—"}
+                            {log.admin_email || "-"}
                           </span>
                           {log.admin_role ? (
                             <span className="mt-1 inline-flex w-fit rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
@@ -286,7 +286,7 @@ export default function ActivityLogsPage() {
                             {isExpanded ? "Hide" : "View"}
                           </button>
                         ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
+                          <span className="text-xs text-muted-foreground">-</span>
                         )}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">

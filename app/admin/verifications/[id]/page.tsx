@@ -150,7 +150,7 @@ export default function VerificationDetailPage() {
       {requirements.length > 0 ? (
         <div className="mb-6 rounded-xl border border-border bg-card p-5 shadow-sm">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold">Required for role · {person?.role || "—"}</h2>
+            <h2 className="text-sm font-semibold">Required for role · {person?.role || "-"}</h2>
             <Link
               href="/admin/verifications?tab=requirements"
               className="text-xs font-medium text-primary hover:underline"

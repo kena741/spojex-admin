@@ -138,7 +138,7 @@ export async function GET(request: Request) {
       people_count:
         "Unique active users: owner plus active organization_members (owner counted once).",
       live_gifts:
-        "Sum of live_event_gifts.coins for events hosted by this org — not personal wallet totals.",
+        "Sum of live_event_gifts.coins for events hosted by this org - not personal wallet totals.",
       gift_recipient_model:
         "Live gifts currently credit the organization owner's personal coin_wallets row.",
     },

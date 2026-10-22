@@ -69,7 +69,7 @@ export default function StadiumsPage() {
         .select("*, users:owner_user_id(id, display_name, email)")
         .order("created_at", { ascending: false })
         .limit(500),
-      // Pass codes intentionally omitted from list responses — reveal only on detail with audit.
+      // Pass codes intentionally omitted from list responses - reveal only on detail with audit.
       spojex
         .from("stadium_subscriptions")
         .select("id, stadium_id, plan_type, status, created_at, users:user_id(id, display_name)")
@@ -181,7 +181,7 @@ export default function StadiumsPage() {
       };
       setNotice(
         result?.archived
-          ? result.message || "Deactivated — bookings and payments preserved."
+          ? result.message || "Deactivated - bookings and payments preserved."
           : result?.message || "Removed.",
       );
       await load();
@@ -218,7 +218,7 @@ export default function StadiumsPage() {
       await load();
       const errCount = result.errors?.length ?? 0;
       setNotice(
-        `Import done — created ${result.created ?? 0}, updated ${result.updated ?? 0}, errors ${errCount}.`,
+        `Import done - created ${result.created ?? 0}, updated ${result.updated ?? 0}, errors ${errCount}.`,
       );
       if (errCount > 0) {
         setError(result.errors!.map((e) => `${e.name}: ${e.error}`).slice(0, 5).join(" · "));
@@ -234,7 +234,7 @@ export default function StadiumsPage() {
     <>
       <AdminPageHeader
         title="Stadiums"
-        description="Venues, hourly reservations, and access passes — pass codes stay on the detail workspace"
+        description="Venues, hourly reservations, and access passes - pass codes stay on the detail workspace"
         actions={
           canWrite ? (
             <div className="flex flex-wrap gap-2">
@@ -402,7 +402,7 @@ export default function StadiumsPage() {
                       {formatStadiumArea(row.subcity, row.wereda) ||
                         row.location ||
                         row.address ||
-                        "—"}
+                        "-"}
                     </td>
                     <td className="px-4 py-3">
                       {row.users ? (
@@ -410,7 +410,7 @@ export default function StadiumsPage() {
                           {row.users.display_name}
                         </Link>
                       ) : (
-                        <span className="text-text-secondary">{row.owner_name || "—"}</span>
+                        <span className="text-text-secondary">{row.owner_name || "-"}</span>
                       )}
                       {row.users && row.owner_name && row.owner_name !== row.users.display_name ? (
                         <span className="mt-0.5 block text-[11px] text-text-hint">
@@ -448,7 +448,7 @@ export default function StadiumsPage() {
                           <div className="space-y-2">
                             <p className="text-sm text-text-secondary">
                               {holders.length} active subscription{holders.length === 1 ? "" : "s"}. Pass
-                              codes are concealed on list views — open the stadium to reveal them
+                              codes are concealed on list views - open the stadium to reveal them
                               (requires permission; access is audited).
                             </p>
                             <table className="min-w-full text-left text-sm">

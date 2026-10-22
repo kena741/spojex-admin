@@ -259,7 +259,7 @@ export default function OpportunitiesPage() {
     <>
       <AdminPageHeader
         title="Opportunities"
-        description="Trials, jobs, and scouting listings — publication, applications, and interest waitlists are separate"
+        description="Trials, jobs, and scouting listings - publication, applications, and interest waitlists are separate"
         actions={
           canWrite ? (
             <div className="flex flex-wrap gap-2">
@@ -464,7 +464,7 @@ export default function OpportunitiesPage() {
                             <p className="truncate text-xs text-text-secondary">
                               {[row.category, row.organizer, row.location, row.country]
                                 .filter(Boolean)
-                                .join(" · ") || "—"}
+                                .join(" · ") || "-"}
                             </p>
                           </div>
                         </div>
@@ -484,13 +484,13 @@ export default function OpportunitiesPage() {
                           Open{" "}
                           {row.application_opens_at
                             ? formatDateTime(row.application_opens_at)
-                            : "—"}
+                            : "-"}
                         </p>
                         <p className="text-text-hint">
                           Due{" "}
                           {row.application_deadline
                             ? formatDateTime(row.application_deadline)
-                            : "—"}
+                            : "-"}
                         </p>
                       </td>
                       <td className="px-4 py-3 text-text-secondary">

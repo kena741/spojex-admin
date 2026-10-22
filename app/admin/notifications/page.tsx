@@ -279,7 +279,7 @@ export default function NotificationsPage() {
             <div className="mt-4 rounded-lg border border-dashed border-border bg-muted/40 px-4 py-3 text-sm">
               <p className="text-[11px] font-semibold uppercase text-text-hint">Preview</p>
               <p className="mt-1 font-medium">{title.trim() || "Untitled"}</p>
-              <p className="text-text-secondary">{body.trim() || "—"}</p>
+              <p className="text-text-secondary">{body.trim() || "-"}</p>
               <p className="mt-2 text-xs text-text-hint">Opens: {route || "/notifications"}</p>
             </div>
           ) : null}

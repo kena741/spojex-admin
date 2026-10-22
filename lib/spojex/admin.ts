@@ -27,7 +27,7 @@ export async function createAdminClientFromRequest(): Promise<SpojexClient> {
   return createAdminClient(session);
 }
 
-/** Always true — Spojex API auth is JWT + admin table. */
+/** Always true - Spojex API auth is JWT + admin table. */
 export function canUseAdminClient() {
   return true;
 }

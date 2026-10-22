@@ -16,7 +16,7 @@ export async function loadCoinWalletsByUserIds(
     .in("user_id", ids);
 
   if (error) {
-    // Table missing or RLS — treat as empty rather than breaking the page.
+    // Table missing or RLS - treat as empty rather than breaking the page.
     console.warn("coin_wallets load failed", error.message);
     return {};
   }

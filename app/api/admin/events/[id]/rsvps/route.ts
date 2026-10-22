@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAdminPermission } from "@/lib/admin-auth";
 
-/** Admin disposition only — never overwrite user-reported going/declined via free edit. */
+/** Admin disposition only - never overwrite user-reported going/declined via free edit. */
 const ADMIN_DISPOSITIONS = new Set(["invited", "waitlisted", "cancelled"]);
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -147,7 +147,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     .from("event_rsvps")
     .update({
       status,
-      // Disposition changes are admin actions — do not rewrite responded_at for user answers.
+      // Disposition changes are admin actions - do not rewrite responded_at for user answers.
     })
     .eq("id", rsvpId)
     .eq("event_id", id)

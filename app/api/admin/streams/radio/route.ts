@@ -78,7 +78,7 @@ export async function GET(request: Request) {
     publication: {
       status: row.status,
       enabled: String(row.status || "").toLowerCase() === "active",
-      note: "Enabled means listed on air — not confirmed healthy playback.",
+      note: "Enabled means listed on air - not confirmed healthy playback.",
     },
     playback_health: {
       status: row.health_status || "unknown",

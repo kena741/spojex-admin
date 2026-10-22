@@ -43,7 +43,7 @@ function money(amount: number, currency = "ETB") {
 }
 
 function maskAccount(value?: string | null) {
-  if (!value) return "—";
+  if (!value) return "-";
   const s = String(value);
   if (s.length <= 4) return "••••";
   return `••••${s.slice(-4)}`;
@@ -167,7 +167,7 @@ export default function FinancePayoutsPage() {
     const canAct = row.type === "withdrawal" ? canResolveWithdrawals : canResolveCoins;
     if (!canAct) return;
     const ref = window.prompt(
-      "Transfer reference (required). Marking paid records an external transfer — it does not send money.",
+      "Transfer reference (required). Marking paid records an external transfer - it does not send money.",
     );
     if (!ref?.trim()) return;
     setBusyId(row.id);
@@ -225,7 +225,7 @@ export default function FinancePayoutsPage() {
     <div className="space-y-4">
       <AdminPageHeader
         title="Payouts"
-        description="Provider money withdrawals and creator coin redemptions — manually recorded transfers"
+        description="Provider money withdrawals and creator coin redemptions - manually recorded transfers"
       />
 
       <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-text-secondary">

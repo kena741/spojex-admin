@@ -243,7 +243,7 @@ export default function PaymentSettingsPage() {
                   Secret Key
                   <span className="ml-2 font-normal text-text-hint">
                     {Boolean(paymentSettings.chapa?.secretConfigured)
-                      ? "(configured — leave blank to keep)"
+                      ? "(configured - leave blank to keep)"
                       : "(not configured)"}
                   </span>
                 </label>

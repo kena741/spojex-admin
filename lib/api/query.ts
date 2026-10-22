@@ -390,7 +390,7 @@ export class SpojexQueryBuilder implements PromiseLike<QueryResult> {
   }
 
   private async list(query?: Record<string, string>) {
-    // Client-side filters (or/ilike/in/…) thin results after fetch — pull a wider
+    // Client-side filters (or/ilike/in/…) thin results after fetch - pull a wider
     // page so `.limit(12).or(…ilike…)` still searches beyond the first 12 rows.
     const hasClientFilters = this.filters.length > 0;
     const base = this.limitN == null ? 200 : this.limitN + this.offsetN;
@@ -462,7 +462,7 @@ export class SpojexQueryBuilder implements PromiseLike<QueryResult> {
 
   private wrapCount(data: unknown, count: number) {
     // Caller of execute() uses ok(); for count we return a special shape via execute override.
-    // Instead, stash on a symbol — simpler: return { __count: count, data }.
+    // Instead, stash on a symbol - simpler: return { __count: count, data }.
     return { __spojex_count: count, __spojex_data: data };
   }
 
@@ -555,7 +555,7 @@ export class SpojexQueryBuilder implements PromiseLike<QueryResult> {
     return this.ok(result);
   }
 
-  // Patch execute to use count-aware select — redefine execute properly below via monkeypatch in file
+  // Patch execute to use count-aware select - redefine execute properly below via monkeypatch in file
   private async expandEmbeds(rows: Record<string, unknown>[]) {
     if (!rows.length || this.columns.trim() === "*" || !this.columns.includes("(")) return rows;
     const embeds = parseEmbeds(this.columns);
@@ -621,7 +621,7 @@ export class SpojexQueryBuilder implements PromiseLike<QueryResult> {
   }
 }
 
-// Fix execute to use count-aware path — replace method via prototype patch at bottom
+// Fix execute to use count-aware path - replace method via prototype patch at bottom
 const _origExecute = SpojexQueryBuilder.prototype["execute" as never] as (
   this: SpojexQueryBuilder,
 ) => Promise<QueryResult>;

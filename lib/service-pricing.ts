@@ -30,7 +30,7 @@ export function formatServicePrice(row: {
   if (pt === "free") return "Free";
   if (pt === "custom_quote" || pt === "quote" || pt === "custom") return "Request quote";
   if (row.price_amount == null || row.price_amount === "") {
-    return pt.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) || "—";
+    return pt.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) || "-";
   }
   const n = Number(row.price_amount);
   const pretty = `${cur} ${n.toLocaleString("en-ET", { maximumFractionDigits: 2 })}`;
@@ -61,7 +61,7 @@ export function formatDuration(minutes: number | null | undefined) {
 
 /**
  * Display-only delivery labels.
- * `on_request` is a legacy outlier — shown as "On request", never coerced to
+ * `on_request` is a legacy outlier - shown as "On request", never coerced to
  * In person / Online / Custom quote. Stored value must be preserved until migration.
  */
 export function formatDelivery(mode: string | null | undefined) {
@@ -70,7 +70,7 @@ export function formatDelivery(mode: string | null | undefined) {
   if (m === "online") return "Online";
   if (m === "both") return "In person & online";
   if (m === "on_request") return "On request";
-  if (!m) return "—";
+  if (!m) return "-";
   return m.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
@@ -88,7 +88,7 @@ export function providerVerificationLabel(verified: boolean | null | undefined) 
 }
 
 export const PROVIDER_VERIFICATION_NOTE =
-  "Profile identity verification only — not a professional credential or license.";
+  "Profile identity verification only - not a professional credential or license.";
 
 export function bookingPaymentLabel(
   paymentStatus: string | null | undefined,

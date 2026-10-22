@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import { AdminLoadingRow } from "@/components/admin-layout";
 
-/** Legacy route — requirements editor now lives in Verification Center. */
+/** Legacy route - requirements editor now lives in Verification Center. */
 export default function VerificationDocsRedirectPage() {
   const router = useRouter();
 

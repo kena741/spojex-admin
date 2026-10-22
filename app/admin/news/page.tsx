@@ -301,34 +301,34 @@ export default function NewsPage() {
       />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <AdminStatCard title="All (catalog)" value={`${totals.all ?? "—"}`} />
+        <AdminStatCard title="All (catalog)" value={`${totals.all ?? "-"}`} />
         <button
           type="button"
           className="text-left"
           onClick={() => writeParams({ status: "active" })}
         >
-          <AdminStatCard title="Published" value={`${totals.published ?? "—"}`} />
+          <AdminStatCard title="Published" value={`${totals.published ?? "-"}`} />
         </button>
         <button
           type="button"
           className="text-left"
           onClick={() => writeParams({ status: "draft" })}
         >
-          <AdminStatCard title="Draft" value={`${totals.draft ?? "—"}`} />
+          <AdminStatCard title="Draft" value={`${totals.draft ?? "-"}`} />
         </button>
         <button
           type="button"
           className="text-left"
           onClick={() => writeParams({ status: "archived" })}
         >
-          <AdminStatCard title="Archived" value={`${totals.archived ?? "—"}`} />
+          <AdminStatCard title="Archived" value={`${totals.archived ?? "-"}`} />
         </button>
         <button
           type="button"
           className="text-left"
           onClick={() => writeParams({ featured: "featured", status: null })}
         >
-          <AdminStatCard title="Featured" value={`${totals.featured ?? "—"}`} />
+          <AdminStatCard title="Featured" value={`${totals.featured ?? "-"}`} />
         </button>
       </div>
       <p className="mb-4 text-xs text-text-hint">
@@ -556,7 +556,7 @@ export default function NewsPage() {
                           ) : null}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-text-secondary">{row.category || "—"}</td>
+                      <td className="px-4 py-3 text-text-secondary">{row.category || "-"}</td>
                       <td className="px-4 py-3">
                         <StatusBadge tone={requestTone(row.status)}>
                           {row.status_label || newsStatusLabel(row.status)}
@@ -573,10 +573,10 @@ export default function NewsPage() {
                       </td>
                       <td className="px-4 py-3 text-xs text-text-secondary">
                         <div className="font-medium text-text-primary">{dateLabel}</div>
-                        <div>{dateAt ? formatDate(dateAt) : "—"}</div>
+                        <div>{dateAt ? formatDate(dateAt) : "-"}</div>
                       </td>
                       <td className="px-4 py-3 text-xs text-text-secondary">
-                        {row.updated_at ? formatDate(row.updated_at) : "—"}
+                        {row.updated_at ? formatDate(row.updated_at) : "-"}
                       </td>
                       <td
                         className="px-4 py-3"

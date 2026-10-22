@@ -250,7 +250,7 @@ export function NewsMediaFields({
   onTrimVideo,
   onSoundSelect,
 }: {
-  /** When editing an existing article — used for trim / watermark API paths. */
+  /** When editing an existing article - used for trim / watermark API paths. */
   articleId?: string | null;
   imageUrl: string;
   /** Ordered gallery (preferred). Falls back to [imageUrl] when empty. */
@@ -271,7 +271,7 @@ export function NewsMediaFields({
   onRemoveImageAt?: (index: number) => void;
   onRemoveVideo: () => void;
   onRemoveAudio: () => void;
-  /** After video is uploaded and previewed — optional TikTok/IG cleanup. */
+  /** After video is uploaded and previewed - optional TikTok/IG cleanup. */
   onRemoveWatermark?: (options: {
     preset: NewsWatermarkPreset;
     mode: NewsWatermarkMode;
@@ -730,7 +730,7 @@ export function NewsMediaFields({
             />
           ) : (
             <div className="mb-2 flex h-16 items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 text-xs text-text-secondary">
-              No audio uploaded — MP3/M4A or video (audio track only)
+              No audio uploaded - MP3/M4A or video (audio track only)
             </div>
           )}
           <input

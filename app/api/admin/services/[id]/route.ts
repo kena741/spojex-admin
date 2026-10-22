@@ -194,7 +194,7 @@ export async function GET(
       ? "Identity verified"
       : "Identity not verified",
     provider_verification_note:
-      "Profile identity verification only — not a professional credential or license.",
+      "Profile identity verification only - not a professional credential or license.",
   });
 
   const payCount = await auth.context.client
@@ -259,7 +259,7 @@ export async function PATCH(
     });
   }
 
-  // Moderation via published flip (legacy path) — prefer /moderate
+  // Moderation via published flip (legacy path) - prefer /moderate
   if ("published" in body && Object.keys(body).every((k) =>
     ["published", "moderation_reason", "action", "reason"].includes(k),
   )) {

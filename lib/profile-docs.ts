@@ -46,12 +46,12 @@ export function careerEntryLabel(entry: CareerEntry) {
 }
 
 export function careerPeriodLabel(entry: CareerEntry) {
-  const start = entry.period?.start_date ?? "—";
-  const end = entry.period?.is_current ? "Present" : entry.period?.end_date ?? "—";
+  const start = entry.period?.start_date ?? "-";
+  const end = entry.period?.is_current ? "Present" : entry.period?.end_date ?? "-";
   return `${start} → ${end}`;
 }
 
 export function formatEntryType(value?: string) {
-  if (!value) return "—";
+  if (!value) return "-";
   return value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }

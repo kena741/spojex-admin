@@ -39,7 +39,7 @@ export function UserPasswordResetModal({
   }, [open, user?.id]);
 
   const label = user?.display_name || user?.email || "this user";
-  const email = user?.email || "—";
+  const email = user?.email || "-";
 
   const submit = async () => {
     const next = password.trim();

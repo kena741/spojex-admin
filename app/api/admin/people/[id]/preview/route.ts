@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/spojex/admin";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** Lightweight drawer payload — separate from full profile page loads. */
+/** Lightweight drawer payload - separate from full profile page loads. */
 export async function GET(_request: Request, ctx: Ctx) {
   const auth = await requireAnyAdminPermission(["users:read", "profiles:read"]);
   if (!auth.ok) return auth.error;

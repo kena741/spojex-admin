@@ -108,7 +108,7 @@ export default function BookingDetailPage() {
       reason =
         window.prompt(
           next === "completed"
-            ? "Override reason (payment not verified — required):"
+            ? "Override reason (payment not verified - required):"
             : "Reason (required):",
         ) || undefined;
       if (!reason?.trim()) return;
@@ -262,20 +262,20 @@ export default function BookingDetailPage() {
                 {formatStatusLabel(booking.status)}
               </StatusBadge>
             </Item>
-            <Item label="Payment">{booking.payment?.label || "—"}</Item>
+            <Item label="Payment">{booking.payment?.label || "-"}</Item>
             {booking.payment?.refund_label ? (
               <Item label="Refund">{booking.payment.refund_label}</Item>
             ) : null}
             <Item label="Agreed amount">
               {booking.agreed_amount != null
                 ? `${booking.agreed_currency || "ETB"} ${Number(booking.agreed_amount).toLocaleString("en-ET")}`
-                : "—"}
+                : "-"}
             </Item>
             <Item label="Created">
-              {booking.created_at ? formatDateTime(booking.created_at) : "—"}
+              {booking.created_at ? formatDateTime(booking.created_at) : "-"}
             </Item>
             <Item label="Completed">
-              {booking.completed_at ? formatDateTime(booking.completed_at) : "—"}
+              {booking.completed_at ? formatDateTime(booking.completed_at) : "-"}
             </Item>
             <Item label="Requested appointment">
               {booking.appointment_label || "Not scheduled"}
@@ -285,11 +285,11 @@ export default function BookingDetailPage() {
                 <span className="font-medium text-red-600">Overdue</span>
               </Item>
             ) : null}
-            <Item label="Location">{booking.location || "—"}</Item>
+            <Item label="Location">{booking.location || "-"}</Item>
             <Item label="Delivery">
               {booking.service?.delivery_label ||
                 formatStatusLabel(booking.service?.availability_mode || "") ||
-                "—"}
+                "-"}
             </Item>
           </dl>
           {booking.payment_explanation ? (
@@ -324,7 +324,7 @@ export default function BookingDetailPage() {
                 {booking.service?.title || booking.service_id.slice(0, 8)}
               </Link>
               <p className="text-xs text-text-secondary">
-                {booking.service?.price_label || "—"}
+                {booking.service?.price_label || "-"}
               </p>
               <p className="mt-1 text-[11px] text-text-hint">
                 Live listing may have changed since this request.
@@ -356,7 +356,7 @@ export default function BookingDetailPage() {
         <h2 className="mb-3 font-heading text-sm font-semibold">Schedule</h2>
         <p className="mb-3 text-xs text-text-hint">
           {payload?.definitions?.appointment ||
-            "requested_at is the preferred appointment. Not scheduled means both fields are null — never invented from created time."}
+            "requested_at is the preferred appointment. Not scheduled means both fields are null - never invented from created time."}
         </p>
         {canWrite ? (
           <div className="flex flex-wrap items-end gap-3">
@@ -423,7 +423,7 @@ export default function BookingDetailPage() {
             {(payload?.payment_attempts || []).map((p) => (
               <li key={String(p.id)} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
                 <div>
-                  <p className="font-medium">{String(p.label || p.status || "—")}</p>
+                  <p className="font-medium">{String(p.label || p.status || "-")}</p>
                   <p className="text-xs text-text-hint">
                     {String(p.currency || "ETB")} {Number(p.amount || 0).toLocaleString("en-ET")}
                     {p.provider_ref ? ` · ref ${String(p.provider_ref)}` : ""}
@@ -445,7 +445,7 @@ export default function BookingDetailPage() {
         {booking.status === "cancelled" &&
         booking.payment?.label === "Verified" ? (
           <p className="mt-3 rounded-lg border border-border bg-muted/40 p-3 text-xs text-text-secondary">
-            Booking is cancelled but payment remains verified. Refund is separate — not automatic.
+            Booking is cancelled but payment remains verified. Refund is separate - not automatic.
           </p>
         ) : null}
       </section>
@@ -454,7 +454,7 @@ export default function BookingDetailPage() {
         <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
           <h2 className="mb-2 font-heading text-sm font-semibold">Similar nearby requests</h2>
           <p className="mb-3 text-xs text-text-hint">
-            Same customer and service within ±30 minutes. Distinct IDs — not merged.
+            Same customer and service within ±30 minutes. Distinct IDs - not merged.
           </p>
           <ul className="space-y-2 text-sm">
             {payload!.similar_bookings!.map((s) => (
@@ -514,7 +514,7 @@ function PersonBlock({
     return (
       <div>
         <p className="text-xs text-text-secondary">{label}</p>
-        <p className="text-sm">—</p>
+        <p className="text-sm">-</p>
       </div>
     );
   }

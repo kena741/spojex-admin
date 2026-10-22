@@ -124,6 +124,6 @@ export async function GET() {
       follows: follows.length,
       blocks: blocks.length,
     },
-    note: "Peer connection requests are between users — they are not waiting for admin approval.",
+    note: "Peer connection requests are between users - they are not waiting for admin approval.",
   });
 }

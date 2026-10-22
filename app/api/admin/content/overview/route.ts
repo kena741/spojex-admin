@@ -34,7 +34,7 @@ async function localOverview(rangeDays: number, start?: string | null, end?: str
   const sinceIso = since.toISOString();
   const untilIso = until.toISOString();
 
-  // Count via head requests — never derive totals from one page of rows.
+  // Count via head requests - never derive totals from one page of rows.
   const [
     draftHead,
     publishedHead,

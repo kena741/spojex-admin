@@ -190,7 +190,7 @@ export const SURFACE_OPTIONS = [
 ] as const;
 
 export function formatMetric(m: MetricValue | undefined | null): string {
-  if (!m) return "—";
+  if (!m) return "-";
   if (!m.available || m.value == null) return "Unavailable";
   if (m.unit === "ratio") {
     return `${(Number(m.value) * 100).toFixed(1)}%`;

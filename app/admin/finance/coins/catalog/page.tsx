@@ -726,13 +726,13 @@ export default function CoinCatalogPage() {
                     <td className="px-3 py-2 text-text-secondary">
                       {row.paid_at || row.created_at
                         ? new Date(row.paid_at || row.created_at).toLocaleString()
-                        : "—"}
+                        : "-"}
                     </td>
                     <td className="px-3 py-2 font-medium">{row.coins}</td>
                     <td className="px-3 py-2">{row.price_etb}</td>
                     <td className="px-3 py-2">{row.status}</td>
                     <td className="max-w-[12rem] truncate px-3 py-2 font-mono text-xs">
-                      {row.provider_ref || "—"}
+                      {row.provider_ref || "-"}
                     </td>
                   </tr>
                 ))}

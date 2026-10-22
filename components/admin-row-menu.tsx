@@ -51,7 +51,7 @@ export function AdminRowMenu({
   }, [open]);
 
   if (items.length === 0) {
-    return <span className="text-text-secondary">—</span>;
+    return <span className="text-text-secondary">-</span>;
   }
 
   return (
@@ -214,7 +214,7 @@ export function AdminTableActions({
   }
 
   if (menuItems.length === 0) {
-    return <span className="text-text-secondary">—</span>;
+    return <span className="text-text-secondary">-</span>;
   }
 
   return <AdminRowMenu items={menuItems} disabled={saving || deleting} />;

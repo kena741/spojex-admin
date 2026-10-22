@@ -796,7 +796,7 @@ export default function GlobalSettingsPage() {
                     </Link>
                   </div>
 
-                  {/* Coin ↔ Birr — used when crediting wallet after Chapa pay */}
+                  {/* Coin ↔ Birr - used when crediting wallet after Chapa pay */}
                   <div className="mb-6 rounded-2xl border border-border bg-card p-6 shadow-sm">
                     <div className="mb-1 flex items-center gap-2">
                       <Coins className="h-5 w-5 text-primary" />

@@ -112,7 +112,7 @@ export default function ReviewsPage() {
                 {filtered.map((row) => (
                   <tr key={row.id} className="border-b border-border last:border-0">
                     <td className="px-4 py-3 font-semibold">{row.rating}/5</td>
-                    <td className="max-w-md px-4 py-3 text-text-secondary">{row.body || "—"}</td>
+                    <td className="max-w-md px-4 py-3 text-text-secondary">{row.body || "-"}</td>
                     <td className="px-4 py-3">
                       <Link href={`/admin/services/${row.service_id}`} className="text-primary">
                         {row.services?.title || row.service_id.slice(0, 8)}

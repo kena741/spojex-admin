@@ -431,16 +431,16 @@ export default function ServiceDetailPage() {
 
   const categoryLabel = service.category
     ? `${service.category.emoji ?? ""} ${service.category.label}`.trim()
-    : categories.find((item) => item.id === service.category_id)?.label || "—";
+    : categories.find((item) => item.id === service.category_id)?.label || "-";
   const subcategoryLabel = service.subcategory
     ? `${service.subcategory.emoji ?? ""} ${service.subcategory.label}`.trim()
-    : subcategories.find((item) => item.id === service.subcategory_id)?.label || "—";
+    : subcategories.find((item) => item.id === service.subcategory_id)?.label || "-";
 
   const deliveryOptions: Array<{ id: string; label: string }> = [...DELIVERY_MODES];
   if (availability && !DELIVERY_MODES.some((m) => m.id === availability)) {
     deliveryOptions.push({
       id: availability,
-      label: `${formatDelivery(availability)} (legacy — preserved)`,
+      label: `${formatDelivery(availability)} (legacy - preserved)`,
     });
   }
 
@@ -572,7 +572,7 @@ export default function ServiceDetailPage() {
               <Item label="Category" value={categoryLabel} />
               <Item label="Subcategory" value={subcategoryLabel} />
               <Item label="Location" value={locationLabel(service.city, service.country)} />
-              <Item label="Service area" value={service.service_area || "—"} />
+              <Item label="Service area" value={service.service_area || "-"} />
               <Item
                 label="Delivery"
                 value={service.delivery_label || formatDelivery(service.availability_mode)}
@@ -583,7 +583,7 @@ export default function ServiceDetailPage() {
               />
               <Item
                 label="Duration"
-                value={formatDuration(service.duration_minutes) || "—"}
+                value={formatDuration(service.duration_minutes) || "-"}
               />
               <Item
                 label="Rating"
@@ -643,7 +643,7 @@ export default function ServiceDetailPage() {
               <h2 className="mb-3 font-heading text-sm font-semibold">Performance</h2>
               <dl className="space-y-2 text-sm">
                 <Item label="Bookings" value={String(metrics.booking_count ?? bookings.length)} />
-                <Item label="Payments" value={String(metrics.payment_count ?? "—")} />
+                <Item label="Payments" value={String(metrics.payment_count ?? "-")} />
                 <Item
                   label="Featured"
                   value={service.is_featured ? "Yes" : "No"}

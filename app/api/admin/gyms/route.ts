@@ -197,7 +197,7 @@ export async function POST(request: Request) {
   const slug = `${slugBase}-${Date.now().toString(36).slice(-4)}`;
 
   // Spojex gyms rows have many NOT NULL columns without Postgres DEFAULTs when
-  // the schema came from SQLAlchemy create_all — always send safe empties.
+  // the schema came from SQLAlchemy create_all - always send safe empties.
   const { data, error } = await auth.context.client
     .from("gyms")
     .insert({

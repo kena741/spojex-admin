@@ -180,7 +180,7 @@ function formFromEvent(event: LiveEventRow): SettingsForm {
 }
 
 function formatWhen(value?: string | null) {
-  if (!value) return "—";
+  if (!value) return "-";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
@@ -294,13 +294,13 @@ function LiveEventDetail() {
   const [showDevSources, setShowDevSources] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
-  // Lifecycle (Broadcast tab) — separate from score controls.
+  // Lifecycle (Broadcast tab) - separate from score controls.
   const [pending, setPending] = useState<LiveLifecycleAction | null>(null);
   const [reason, setReason] = useState("");
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [showPlayer, setShowPlayer] = useState(false);
 
-  // Score / fight drafts — explicit "Update" buttons.
+  // Score / fight drafts - explicit "Update" buttons.
   const [score, setScore] = useState({
     home_score: 0,
     away_score: 0,
@@ -818,7 +818,7 @@ function LiveEventDetail() {
                   <p className="mt-1 text-xs text-amber-700">{source.go_live_blocked_reason}</p>
                 ) : null}
                 <p className="mt-1 text-xs text-text-secondary">
-                  Ready only means a playback URL is set — it does not prove the stream is up.
+                  Ready only means a playback URL is set - it does not prove the stream is up.
                 </p>
               </Fact>
               <Fact label="Visibility">
@@ -996,7 +996,7 @@ function LiveEventDetail() {
                 {liveSourceTypeLabel(source?.type ?? event.source_type)}
                 {source?.mock_dev_only ? (
                   <p className="mt-1 text-xs text-amber-700">
-                    Development / testing sample — not for production audiences.
+                    Development / testing sample - not for production audiences.
                   </p>
                 ) : null}
               </Fact>
@@ -1011,7 +1011,7 @@ function LiveEventDetail() {
                 <span className="text-text-secondary">
                   {source?.ingest_supported
                     ? "Supported."
-                    : "Not supported yet — events play an external URL only. No stream keys exist."}
+                    : "Not supported yet - events play an external URL only. No stream keys exist."}
                 </span>
               </Fact>
             </div>
@@ -1103,7 +1103,7 @@ function LiveEventDetail() {
                     >
                       {matchPeriods.map((item) => (
                         <option key={item || "none"} value={item}>
-                          {item || "—"}
+                          {item || "-"}
                         </option>
                       ))}
                     </select>
@@ -1221,7 +1221,7 @@ function LiveEventDetail() {
             {audience?.unavailable ? (
               <p className="rounded-lg bg-muted/50 p-3 text-sm text-text-secondary">
                 Audience analytics are unavailable for this event
-                {audience.analytics_note ? ` — ${audience.analytics_note}` : "."} No numbers are
+                {audience.analytics_note ? ` - ${audience.analytics_note}` : "."} No numbers are
                 shown rather than guessing zeros.
               </p>
             ) : (
@@ -1392,7 +1392,7 @@ function LiveEventDetail() {
                 value={form.host_org_id}
                 onChange={(e) => setForm({ ...form, host_org_id: e.target.value })}
               >
-                <option value="">— None (gifts unavailable) —</option>
+                <option value="">- None (gifts unavailable) -</option>
                 {orgs.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.is_platform ? "★ " : ""}
@@ -1435,7 +1435,7 @@ function LiveEventDetail() {
               />
             </Field>
             <Field
-              label={`Ends (${form.timezone}) — optional`}
+              label={`Ends (${form.timezone}) - optional`}
               error={touched ? settingsErrors?.ends_at : null}
             >
               <input
@@ -1655,7 +1655,7 @@ function LiveEventDetail() {
                 >
                   <option value="external_url">External URL</option>
                   <option value="ingest" disabled>
-                    Broadcaster ingest — not available yet
+                    Broadcaster ingest - not available yet
                   </option>
                 </select>
               </Field>

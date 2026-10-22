@@ -558,7 +558,7 @@ export default function OrganizationDetailPage() {
                     {org.users.display_name}
                   </Link>
                 ) : (
-                  "—"
+                  "-"
                 )}
               </Row>
               <Row label="Public ID">
@@ -620,7 +620,7 @@ export default function OrganizationDetailPage() {
             <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
               <h2 className="font-heading text-sm font-semibold">Linked products</h2>
               <p className="mt-1 text-xs text-text-hint">
-                Links use explicit foreign keys — not name matching. Gym verification is a separate
+                Links use explicit foreign keys - not name matching. Gym verification is a separate
                 scope from organization verification.
               </p>
               <ul className="mt-3 space-y-2 text-sm">
@@ -707,7 +707,7 @@ export default function OrganizationDetailPage() {
                           <span className="text-sm font-medium">{m.user_id.slice(0, 8)}</span>
                         )}
                         <p className="text-xs text-text-secondary">
-                          Profile role: {m.users?.role ? formatRole(m.users.role) : "—"} · Org
+                          Profile role: {m.users?.role ? formatRole(m.users.role) : "-"} · Org
                           access: {isOwner ? "owner" : m.member_role || "member"} ·{" "}
                           {m.status || "active"}
                           {m.joined_at ? ` · Joined ${formatDate(m.joined_at)}` : ""}

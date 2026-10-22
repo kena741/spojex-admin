@@ -795,7 +795,7 @@ function RadioChatPage() {
               onClick={applyPending}
               className="mb-3 w-full rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-sm font-medium text-primary"
             >
-              {pendingNew.length} new message{pendingNew.length === 1 ? "" : "s"} — jump to latest
+              {pendingNew.length} new message{pendingNew.length === 1 ? "" : "s"} - jump to latest
             </button>
           ) : null}
 
@@ -880,7 +880,7 @@ function RadioChatPage() {
               <span className="text-text-secondary">
                 Page {page} · {messagesPayload.total} matching
                 {messagesPayload.counts.unresolved_reports_scope
-                  ? ` · unresolved reports (${messagesPayload.counts.unresolved_reports_scope}): ${messagesPayload.counts.unresolved_reports ?? "—"}`
+                  ? ` · unresolved reports (${messagesPayload.counts.unresolved_reports_scope}): ${messagesPayload.counts.unresolved_reports ?? "-"}`
                   : ""}
               </span>
               <button
@@ -1073,7 +1073,7 @@ function RadioChatPage() {
                     <ul className="space-y-1 text-xs text-text-secondary">
                       {detail.history.map((h) => (
                         <li key={h.id}>
-                          {h.created_at ? formatDateTime(h.created_at) : ""} — {h.action}
+                          {h.created_at ? formatDateTime(h.created_at) : ""} - {h.action}
                           {h.reason ? `: ${h.reason}` : ""}
                         </li>
                       ))}

@@ -282,7 +282,7 @@ export async function POST(
   // Owners/staff should not also be members of the same gym.
   await client.from("gym_members").delete().eq("gym_id", gymId).eq("user_id", userId);
 
-  // Never overwrite the person's platform sports/profile role — only gym_staff.staff_role.
+  // Never overwrite the person's platform sports/profile role - only gym_staff.staff_role.
   const defaultPermissions: Record<string, boolean> = {
     members: ["owner", "manager", "receptionist"].includes(staffRole),
     checkin: true,
@@ -367,7 +367,7 @@ export async function POST(
     message: inviteSent
       ? `Invitation sent to ${userEmail}. Gym staff role assigned without changing their platform profile role.`
       : createdNewLogin
-        ? `Account linked for ${userEmail}. Share the Auth activation / password-reset link — passwords are not shown in admin.`
+        ? `Account linked for ${userEmail}. Share the Auth activation / password-reset link - passwords are not shown in admin.`
         : "Existing user assigned as gym staff. Platform profile role was not changed.",
   });
 }

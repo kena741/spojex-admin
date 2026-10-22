@@ -1,4 +1,4 @@
-/** Matches mobile create_service_screen.dart — ids are UUIDs. */
+/** Matches mobile create_service_screen.dart - ids are UUIDs. */
 
 export type ServiceCategorySeed = {
   slug: string;

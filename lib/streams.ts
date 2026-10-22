@@ -29,7 +29,7 @@ export function streamPlaybackUrl(row: { stream_url?: string | null; website_url
 }
 
 export function streamStatusLabel(status?: string | null) {
-  return streamStatuses.find((item) => item.id === status)?.label ?? status ?? "—";
+  return streamStatuses.find((item) => item.id === status)?.label ?? status ?? "-";
 }
 
 export function streamHealthLabel(status?: string | null) {
@@ -46,7 +46,7 @@ export function slugifyStream(name: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-/** Client-side shape check only — server validates SSRF / DNS. */
+/** Client-side shape check only - server validates SSRF / DNS. */
 export function looksLikeStreamUrl(url: string) {
   const raw = url.trim();
   if (!raw) return false;

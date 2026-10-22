@@ -96,7 +96,7 @@ export async function GET() {
   const coinsPerBirr =
     Number.isFinite(etbPerCoin) && etbPerCoin > 0 ? 1 / etbPerCoin : 10;
 
-  // Never return payment secrets to the browser — only readiness flags.
+  // Never return payment secrets to the browser - only readiness flags.
   const appRows = (settingsRes.data ?? []).map((row: { id: string; data: unknown }) => {
     if (row.id !== "payment") return row;
     const data = parseObject(row.data);
