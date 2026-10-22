@@ -31,6 +31,7 @@ import {
   type PersonalizationUser,
   type UserFeedDetail,
 } from "@/lib/feed-insights";
+import { adminFetch } from "@/lib/hooks";
 import { cn, formatDateTime } from "@/lib/utils";
 
 type Tab = "performance" | "personalization" | "delivery";
@@ -219,43 +220,51 @@ function FeedInsightsPageInner() {
           qs.set("start", customStart);
           qs.set("end", customEnd);
         }
-        const res = await fetch(`/api/admin/feed-insights/performance?${qs}`, {
-          credentials: "same-origin",
+        const res = await adminFetch(`/api/admin/feed-insights/performance?${qs}`, {
           cache: "no-store",
         });
-        const payload = (await res.json()) as PerformanceReport & { error?: string };
-        if (!res.ok) throw new Error(payload.error || "Failed to load performance");
+        const payload = (await res.json()) as PerformanceReport & {
+          error?: string;
+          message?: string;
+        };
+        if (!res.ok) {
+          throw new Error(payload.message || payload.error || "Failed to load performance");
+        }
         setPerf(payload);
       } else if (tab === "personalization") {
         const qs = new URLSearchParams();
         if (q) qs.set("q", q);
         qs.set("page", String(page));
         qs.set("page_size", "40");
-        const res = await fetch(`/api/admin/feed-insights/personalization?${qs}`, {
-          credentials: "same-origin",
+        const res = await adminFetch(`/api/admin/feed-insights/personalization?${qs}`, {
           cache: "no-store",
         });
-        const payload = (await res.json()) as PersonalizationReport;
-        if (!res.ok) throw new Error(payload.error || "Failed to load personalization");
+        const payload = (await res.json()) as PersonalizationReport & { message?: string };
+        if (!res.ok) {
+          throw new Error(payload.message || payload.error || "Failed to load personalization");
+        }
         setPers(payload);
         if (userId) {
-          const dres = await fetch(`/api/admin/feed-insights/users/${encodeURIComponent(userId)}`, {
-            credentials: "same-origin",
-            cache: "no-store",
-          });
-          const dpayload = (await dres.json()) as UserFeedDetail;
-          if (!dres.ok) throw new Error(dpayload.error || "Failed to load user detail");
+          const dres = await adminFetch(
+            `/api/admin/feed-insights/users/${encodeURIComponent(userId)}`,
+            { cache: "no-store" },
+          );
+          const dpayload = (await dres.json()) as UserFeedDetail & { message?: string };
+          if (!dres.ok) {
+            throw new Error(dpayload.message || dpayload.error || "Failed to load user detail");
+          }
           setDetail(dpayload);
         } else {
           setDetail(null);
         }
       } else {
-        const res = await fetch("/api/admin/feed-insights/delivery", {
-          credentials: "same-origin",
+        const res = await adminFetch("/api/admin/feed-insights/delivery", {
           cache: "no-store",
         });
-        const payload = (await res.json()) as DeliveryHealth;
-        if (!res.ok) throw new Error(payload.error || "Failed to load delivery health");
+        const payload = (await res.json()) as DeliveryHealth & { message?: string; error?: string };
+        if (!res.ok) {
+          throw new Error(payload.message || payload.error || "Failed to load delivery health");
+        }
         setDelivery(payload);
       }
       setUpdatedAt(new Date().toISOString());

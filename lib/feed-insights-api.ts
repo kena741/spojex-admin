@@ -24,12 +24,15 @@ export async function proxyFeedInsights(
   });
   const payload = await res.json().catch(() => ({}));
   if (!res.ok) {
+    const message =
+      (payload as { message?: string }).message ||
+      (payload as { error?: string }).error ||
+      (payload as { detail?: string }).detail ||
+      "Request failed";
     return NextResponse.json(
       {
-        error:
-          (payload as { error?: string; message?: string }).error ||
-          (payload as { message?: string }).message ||
-          "Request failed",
+        error: message,
+        message,
         code: (payload as { code?: string }).code,
       },
       { status: res.status },
