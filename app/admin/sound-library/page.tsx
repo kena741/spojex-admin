@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -11,6 +11,7 @@ import {
   AdminTableShell,
 } from "@/components/admin-layout";
 import { SoundClipEditor } from "@/components/sound-clip-editor";
+import { SharedAudioPlayer } from "@/components/shared-audio-player";
 import { deleteAdmin, patchAdmin, postAdminResponse } from "@/lib/hooks";
 import { newsLibrarySoundAccept, validateLibrarySound } from "@/lib/news-media";
 import {
@@ -23,6 +24,7 @@ import {
 import { toBackendMediaUrl } from "@/lib/spojex-media";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { formatDate } from "@/lib/utils";
+import Link from "next/link";
 
 async function uploadLibrarySound(file: File) {
   const invalid = validateLibrarySound(file.type, file.name, file.size);
@@ -55,7 +57,7 @@ async function uploadLibrarySound(file: File) {
 
 export default function SoundLibraryPage() {
   const { can } = useAdminPermissions();
-  const canWrite = can("news:write");
+  const canWrite = can("news:write") || can("sounds:write");
   const [rows, setRows] = useState<SportNewsSoundRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,17 +75,6 @@ export default function SoundLibraryPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [renaming, setRenaming] = useState(false);
-  const [playingId, setPlayingId] = useState<string | null>(null);
-  const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
-
-  useEffect(() => {
-    return () => {
-      audioRefs.current.forEach((el) => {
-        el.pause();
-      });
-      audioRefs.current.clear();
-    };
-  }, []);
 
   const load = async () => {
     const libRes = await fetch("/api/admin/news-sounds", {
@@ -120,13 +111,6 @@ export default function SoundLibraryPage() {
     setAudioUrl("");
     setDurationSeconds(null);
     setExtractedFromVideo(false);
-  };
-
-  const playOnly = (id: string) => {
-    audioRefs.current.forEach((el, key) => {
-      if (key !== id) el.pause();
-    });
-    setPlayingId(id);
   };
 
   const onUpload = async (file: File) => {
@@ -249,22 +233,30 @@ export default function SoundLibraryPage() {
     <>
       <AdminPageHeader
         title="Sound library"
-        description="Upload → process/extract → trim → preview → save. Same display names are allowed; assets stay distinct by ID."
+        description="Upload → extract → trim → save. Prefer Media Library for browsing all asset types."
         breadcrumbs={[
           { label: "Content", href: "/admin/content" },
-          { label: "Media Library", href: "/admin/media-library" },
+          { label: "Media Library", href: "/admin/media-library?type=sound" },
           { label: "Sounds" },
         ]}
         actions={
-          canWrite ? (
-            <button
-              type="button"
-              onClick={() => setUploadOpen(true)}
-              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/admin/media-library?type=sound"
+              className="rounded-md border border-border px-3 py-2 text-sm"
             >
-              Upload sound
-            </button>
-          ) : null
+              Open Media Library
+            </Link>
+            {canWrite ? (
+              <button
+                type="button"
+                onClick={() => setUploadOpen(true)}
+                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+              >
+                Upload sound
+              </button>
+            ) : null}
+          </div>
         }
       />
       {error ? <AdminErrorAlert message={error} /> : null}
@@ -410,7 +402,7 @@ export default function SoundLibraryPage() {
           <table className="min-w-full text-left text-sm">
             <thead className="border-b border-border text-text-secondary">
               <tr>
-                <th className="px-3 py-2 font-medium">Name / ID</th>
+                <th className="px-3 py-2 font-medium">Name</th>
                 <th className="px-3 py-2 font-medium">Kind</th>
                 <th className="px-3 py-2 font-medium">Preview</th>
                 <th className="px-3 py-2 font-medium">Created</th>
@@ -453,28 +445,22 @@ export default function SoundLibraryPage() {
                         <span className="block max-w-[14rem] truncate" title={row.name}>
                           {displaySoundTitle(row.name)}
                         </span>
-                        <p className="mt-0.5 font-mono text-[10px] text-text-hint">{row.id}</p>
+                        {row.duration_seconds != null ? (
+                          <p className="mt-0.5 text-[11px] text-text-hint">
+                            {row.duration_seconds}s stored
+                          </p>
+                        ) : null}
                       </div>
                     )}
                   </td>
                   <td className="px-3 py-3 text-text-secondary">
                     {newsSoundKindLabel(row.kind)}
-                    {row.duration_seconds != null ? (
-                      <p className="text-[11px] text-text-hint">{row.duration_seconds}s</p>
-                    ) : null}
                   </td>
                   <td className="px-3 py-3">
                     {row.audio_url ? (
-                      <audio
-                        ref={(el) => {
-                          if (el) audioRefs.current.set(row.id, el);
-                          else audioRefs.current.delete(row.id);
-                        }}
-                        src={toBackendMediaUrl(row.audio_url)}
-                        controls
-                        preload="none"
-                        className="h-8 max-w-[220px]"
-                        onPlay={() => playOnly(row.id)}
+                      <SharedAudioPlayer
+                        src={row.audio_url}
+                        storedDurationSeconds={row.duration_seconds}
                       />
                     ) : (
                       "—"

@@ -9,6 +9,7 @@ import {
   type SoundtrackCatalogItem,
   type SportNewsSoundRow,
 } from "@/lib/news-sounds";
+import { MediaPicker } from "@/components/media-picker";
 import { patchAdmin } from "@/lib/hooks";
 import { toBackendMediaUrl } from "@/lib/spojex-media";
 
@@ -17,10 +18,12 @@ export function NewsSoundPicker({
   audioUrl = "",
   disabled,
   onSelect,
+  organizationId,
 }: {
   soundId: string;
   audioUrl?: string;
   disabled?: boolean;
+  organizationId?: string | null;
   /** Return false / error string when the parent failed to persist the choice. */
   onSelect: (
     sound: SportNewsSoundRow | null,
@@ -34,6 +37,7 @@ export function NewsSoundPicker({
   const [error, setError] = useState<string | null>(null);
   const [kind, setKind] = useState("all");
   const [query, setQuery] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const load = async () => {
     const response = await fetch("/api/admin/news-sounds/catalog", {
@@ -188,23 +192,60 @@ export function NewsSoundPicker({
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium text-text-secondary">Image soundtrack</p>
           <p className="truncate text-[11px] text-text-hint">
-            Sound library ({rows.length}) · add tracks under Sound library
+            Library ({rows.length}) · select from Media Library or browse below
           </p>
         </div>
-        <select
-          value={kind}
-          disabled={disabled || loading}
-          onChange={(e) => setKind(e.target.value)}
-          className="h-8 max-w-[7rem] shrink-0 rounded-md border border-border bg-card px-2 text-xs"
-        >
-          <option value="all">All kinds</option>
-          {NEWS_SOUND_KINDS.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.label}
-            </option>
-          ))}
-        </select>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            disabled={disabled || loading}
+            onClick={() => setPickerOpen(true)}
+            className="h-8 rounded-md border border-border bg-card px-2 text-xs font-medium text-primary"
+          >
+            Browse library
+          </button>
+          <select
+            value={kind}
+            disabled={disabled || loading}
+            onChange={(e) => setKind(e.target.value)}
+            className="h-8 max-w-[7rem] rounded-md border border-border bg-card px-2 text-xs"
+          >
+            <option value="all">All kinds</option>
+            {NEWS_SOUND_KINDS.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
+
+      <MediaPicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        types={["sound"]}
+        organizationId={organizationId}
+        title="Choose soundtrack"
+        onSelect={(item) => {
+          if (!item.soundId) {
+            setError("That asset is not a library sound yet.");
+            return;
+          }
+          void applySelection({
+            id: item.soundId,
+            name: shortSoundTitle(item.displayName),
+            kind: "general",
+            audio_url: item.deliveryUrl,
+            duration_seconds: item.durationSeconds != null ? Math.round(item.durationSeconds) : null,
+            sort_order: 0,
+            is_active: true,
+            created_at: "",
+            updated_at: "",
+          }).catch((err) =>
+            setError(err instanceof Error ? err.message : "Could not select sound"),
+          );
+        }}
+      />
 
       <input
         value={query}
