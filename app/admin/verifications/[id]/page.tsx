@@ -6,8 +6,11 @@ import { useParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { patchAdmin } from "@/lib/hooks";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useApplyAdminSnapshot } from "@/lib/use-admin-snapshot";
 import type { IdentityVerificationRequestRow } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 import { verificationDocLabel, verificationStatusLabel } from "@/lib/verification";
@@ -19,29 +22,44 @@ export default function VerificationDetailPage() {
   const { can } = useAdminPermissions();
   const canVerify = can("users:verify");
   const [row, setRow] = useState<IdentityVerificationRequestRow | null>(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [note, setNote] = useState("");
 
-  const load = async () => {
-    const response = await fetch(`/api/admin/verifications/${id}`, { credentials: "same-origin" });
-    const payload = (await response.json()) as {
-      error?: string;
-      data?: IdentityVerificationRequestRow;
-    };
-    if (!response.ok) throw new Error(payload.error || "Failed to load");
-    setRow(payload.data ?? null);
-    setNote(payload.data?.review_note ?? "");
-  };
+  const {
+    data: snapshot,
+    loading,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<{ row: IdentityVerificationRequestRow | null }>({
+    key: adminCacheKey(["verifications", "detail", id]),
+    fetcher: async () => {
+      const response = await fetch(`/api/admin/verifications/${id}`, { credentials: "same-origin" });
+      const payload = (await response.json()) as {
+        error?: string;
+        data?: IdentityVerificationRequestRow;
+      };
+      if (!response.ok) throw new Error(payload.error || "Failed to load");
+      return { row: payload.data ?? null };
+    },
+  });
+
+  useApplyAdminSnapshot(snapshot, (snap) => {
+    setRow(snap.row);
+    setNote(snap.row?.review_note ?? "");
+  });
 
   useEffect(() => {
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+    if (loadError) setError(loadError);
+  }, [loadError]);
+
+  /** Soft reload after a review; also drops the parent list cache. */
+  const load = async () => {
+    invalidateAdminCache(adminCacheKey(["verifications", "list"]));
+    const next = await refresh();
+    if (!next) throw new Error("Failed to reload request");
+  };
 
   const review = async (status: "approved" | "rejected") => {
     if (!canVerify) return;

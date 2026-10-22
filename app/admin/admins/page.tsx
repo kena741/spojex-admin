@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -17,9 +17,11 @@ import {
   type AdminRowMenuItem,
 } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { deleteAdmin, patchAdmin } from "@/lib/hooks";
 import { generateStadiumManagerPassword } from "@/lib/stadiums";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import type { AdminRoleRow, AdminRow } from "@/lib/admin-permissions";
 import { formatDate, formatStatusLabel } from "@/lib/utils";
 
@@ -41,15 +43,14 @@ type Credentials = {
   name: string;
 };
 
+type AdminsListData = { rows: AdminRow[]; roles: AdminRoleRow[] };
+
 const fieldClass = "h-10 w-full rounded-lg border border-border px-3 text-sm";
 
 export default function AdminsPage() {
   const { can, staff } = useAdminPermissions();
   const canWrite = can("admins:write") || can("admins:invite");
-  const [rows, setRows] = useState<AdminRow[]>([]);
-  const [roles, setRoles] = useState<AdminRoleRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
@@ -78,46 +79,46 @@ export default function AdminsPage() {
     role: "viewer",
   });
 
-  const load = useCallback(async () => {
-    const [adminsRes, rolesRes] = await Promise.all([
-      fetch("/api/admin/admins"),
-      fetch("/api/admin/roles"),
-    ]);
-    const adminsPayload = (await adminsRes.json()) as { data?: AdminRow[]; error?: string };
-    const rolesPayload = (await rolesRes.json()) as { data?: AdminRoleRow[]; error?: string };
-    if (!adminsRes.ok) throw new Error(adminsPayload.error || "Failed to load admins");
-    setRows(adminsPayload.data ?? []);
-    if (rolesRes.ok) {
-      const list = rolesPayload.data ?? [];
-      setRoles(list);
-      const defaultRole = list.find((r) => r.slug === "viewer")?.slug || list[0]?.slug || "viewer";
-      setCreateForm((prev) => ({
-        ...prev,
-        role: list.some((r) => r.slug === prev.role) ? prev.role : defaultRole,
-      }));
-      setAttachRole((prev) => (list.some((r) => r.slug === prev) ? prev : defaultRole));
-      setInviteForm((prev) => ({
-        ...prev,
-        role: list.some((r) => r.slug === prev.role) ? prev.role : defaultRole,
-      }));
-    }
-  }, []);
+  const {
+    data: listData,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<AdminsListData>({
+    key: adminCacheKey(["admins", "list"]),
+    fetcher: async () => {
+      const [adminsRes, rolesRes] = await Promise.all([
+        fetch("/api/admin/admins"),
+        fetch("/api/admin/roles"),
+      ]);
+      const adminsPayload = (await adminsRes.json()) as { data?: AdminRow[]; error?: string };
+      const rolesPayload = (await rolesRes.json()) as { data?: AdminRoleRow[]; error?: string };
+      if (!adminsRes.ok) throw new Error(adminsPayload.error || "Failed to load admins");
+      return {
+        rows: adminsPayload.data ?? [],
+        roles: rolesRes.ok ? (rolesPayload.data ?? []) : [],
+      };
+    },
+  });
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }, [load]);
+  const rows = useMemo(() => listData?.rows ?? [], [listData]);
+  const roles = useMemo(() => listData?.roles ?? [], [listData]);
+  const error = actionError ?? loadError;
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    if (!roles.length) return;
+    const defaultRole = roles.find((r) => r.slug === "viewer")?.slug || roles[0]?.slug || "viewer";
+    setCreateForm((prev) => ({
+      ...prev,
+      role: roles.some((r) => r.slug === prev.role) ? prev.role : defaultRole,
+    }));
+    setAttachRole((prev) => (roles.some((r) => r.slug === prev) ? prev : defaultRole));
+    setInviteForm((prev) => ({
+      ...prev,
+      role: roles.some((r) => r.slug === prev.role) ? prev.role : defaultRole,
+    }));
+  }, [roles]);
 
   useEffect(() => {
     if (!createOpen || tab !== "attach") return;
@@ -215,6 +216,7 @@ export default function AdminsPage() {
         error?: string;
       };
       if (!res.ok) throw new Error(payload.error || "Create failed");
+      invalidateAdminCache("admins");
       if (payload.password) {
         setCredentials({
           email: createForm.email.trim().toLowerCase(),
@@ -255,6 +257,7 @@ export default function AdminsPage() {
       });
       const payload = (await res.json()) as { error?: string; message?: string };
       if (!res.ok) throw new Error(payload.error || "Attach failed");
+      invalidateAdminCache("admins");
       setNotice(payload.message || `Granted ${formatStatusLabel(attachRole)} to ${attachUser.email || attachUser.display_name}.`);
       setCreateOpen(false);
       await refresh();
@@ -280,6 +283,7 @@ export default function AdminsPage() {
         error?: string;
       };
       if (!res.ok) throw new Error(payload.error || "Invite failed");
+      invalidateAdminCache("admins");
       if (payload.data?.token) setInviteToken(payload.data.token);
       await refresh();
     } catch (err) {
@@ -343,7 +347,11 @@ export default function AdminsPage() {
         description="Create staff with a role and password, or grant access to an existing SpoJex account."
         actions={
           <div className="flex flex-wrap gap-2">
-            <AdminReloadButton loading={loading} onClick={() => void refresh()} />
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
+              onClick={() => void refresh()}
+            />
             {canWrite ? (
               <button
                 type="button"

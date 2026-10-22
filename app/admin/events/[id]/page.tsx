@@ -40,9 +40,13 @@ import {
   normalizeTicketCode,
   ticketIsInside,
 } from "@/lib/events";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { adminFetch, deleteAdmin, patchAdmin, postAdminResponse } from "@/lib/hooks";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useApplyAdminSnapshot } from "@/lib/use-admin-snapshot";
+import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import type {
   EventManagerRow,
   EventRow,
@@ -51,6 +55,14 @@ import type {
   EventTicketTierRow,
 } from "@/lib/types";
 import { formatDateTime } from "@/lib/utils";
+
+type EventSnapshot = {
+  event: EventRow | null;
+  tickets: EventTicketRow[];
+  managers: EventManagerRow[];
+  tiers: EventTicketTierRow[];
+  rsvps: EventRsvpRow[];
+};
 
 const tabs = [
   { id: "overview", label: "Overview" },
@@ -71,13 +83,12 @@ export default function EventDetailPage() {
   const canWrite = can("events:write");
   const coverInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
-  const [tab, setTab] = useState<TabId>("overview");
+  const [tab, setTab] = useAdminUiState<TabId>(`events:detail:${id}:tab`, "overview");
   const [event, setEvent] = useState<EventRow | null>(null);
   const [tickets, setTickets] = useState<EventTicketRow[]>([]);
   const [tiers, setTiers] = useState<EventTicketTierRow[]>([]);
   const [rsvps, setRsvps] = useState<EventRsvpRow[]>([]);
   const [managers, setManagers] = useState<EventManagerRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [code, setCode] = useState("");
@@ -115,35 +126,55 @@ export default function EventDetailPage() {
   });
   const [createdLogin, setCreatedLogin] = useState<{ email: string; message: string } | null>(null);
 
-  const load = async () => {
-    const spojex = getSpojexClient();
-    const [eventRes, ticketRes, managerRes, tiersRes, rsvpsRes] = await Promise.all([
-      spojex.from("events").select("*").eq("id", id).maybeSingle(),
-      adminFetch(`/api/admin/events/${id}/tickets`),
-      adminFetch(`/api/admin/events/${id}/managers`),
-      adminFetch(`/api/admin/events/${id}/tiers`),
-      adminFetch(`/api/admin/events/${id}/rsvps`),
-    ]);
-    if (eventRes.error) throw eventRes.error;
-    setEvent(eventRes.data as EventRow | null);
-    const ticketPayload = (await ticketRes.json()) as { data?: EventTicketRow[]; error?: string };
-    if (!ticketRes.ok) throw new Error(ticketPayload.error || "Failed to load tickets");
-    setTickets(ticketPayload.data ?? []);
-    const managerPayload = (await managerRes.json()) as { data?: EventManagerRow[]; error?: string };
-    if (!managerRes.ok) throw new Error(managerPayload.error || "Failed to load managers");
-    setManagers(managerPayload.data ?? []);
-    const tiersPayload = (await tiersRes.json()) as { data?: EventTicketTierRow[]; error?: string };
-    setTiers(tiersRes.ok ? tiersPayload.data ?? [] : []);
-    const rsvpsPayload = (await rsvpsRes.json()) as { data?: EventRsvpRow[]; error?: string };
-    setRsvps(rsvpsRes.ok ? rsvpsPayload.data ?? [] : []);
-  };
+  const {
+    data: snapshot,
+    loading,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<EventSnapshot>({
+    key: adminCacheKey(["events", "detail", id]),
+    fetcher: async () => {
+      const spojex = getSpojexClient();
+      const [eventRes, ticketRes, managerRes, tiersRes, rsvpsRes] = await Promise.all([
+        spojex.from("events").select("*").eq("id", id).maybeSingle(),
+        adminFetch(`/api/admin/events/${id}/tickets`),
+        adminFetch(`/api/admin/events/${id}/managers`),
+        adminFetch(`/api/admin/events/${id}/tiers`),
+        adminFetch(`/api/admin/events/${id}/rsvps`),
+      ]);
+      if (eventRes.error) throw eventRes.error;
+      const ticketPayload = (await ticketRes.json()) as { data?: EventTicketRow[]; error?: string };
+      if (!ticketRes.ok) throw new Error(ticketPayload.error || "Failed to load tickets");
+      const managerPayload = (await managerRes.json()) as { data?: EventManagerRow[]; error?: string };
+      if (!managerRes.ok) throw new Error(managerPayload.error || "Failed to load managers");
+      const tiersPayload = (await tiersRes.json()) as { data?: EventTicketTierRow[]; error?: string };
+      const rsvpsPayload = (await rsvpsRes.json()) as { data?: EventRsvpRow[]; error?: string };
+      return {
+        event: eventRes.data as EventRow | null,
+        tickets: ticketPayload.data ?? [],
+        managers: managerPayload.data ?? [],
+        tiers: tiersRes.ok ? tiersPayload.data ?? [] : [],
+        rsvps: rsvpsRes.ok ? rsvpsPayload.data ?? [] : [],
+      };
+    },
+  });
+
+  useApplyAdminSnapshot(snapshot, (snap) => {
+    setEvent(snap.event);
+    setTickets(snap.tickets);
+    setManagers(snap.managers);
+    setTiers(snap.tiers);
+    setRsvps(snap.rsvps);
+  });
 
   useEffect(() => {
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+    if (loadError) setError(loadError);
+  }, [loadError]);
+
+  const load = async () => {
+    invalidateAdminCache(adminCacheKey(["events", "list"]));
+    await refresh();
+  };
 
   useEffect(() => {
     if (!settingsDirty) return;
@@ -475,7 +506,7 @@ export default function EventDetailPage() {
     }
   };
 
-  if (loading) return <AdminLoadingRow label="Loading event…" />;
+  if (loading && !event) return <AdminLoadingRow label="Loading event…" />;
   if (!event) {
     return (
       <AdminErrorAlert

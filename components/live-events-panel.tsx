@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -18,7 +18,10 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { formatEventWhen } from "@/lib/events";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { adminFetch, postAdminResponse } from "@/lib/hooks";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import {
   allowedLifecycleActions,
   canManageLiveEvents,
@@ -116,18 +119,17 @@ export default function LiveEventsPanel() {
   const { can } = useAdminPermissions();
   const canWrite = canWriteLiveEvents(can);
 
-  const [rows, setRows] = useState<LiveEventRow[]>([]);
-  const [orgs, setOrgs] = useState<OrgOption[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [kind, setKind] = useState("all");
-  const [lane, setLane] = useState(searchParams.get("lane") || "all");
-  const [status, setStatus] = useState(searchParams.get("status") || "all");
+  const [query, setQuery] = useAdminUiState("live-events:query", "");
+  const [kind, setKind] = useAdminUiState("live-events:kind", "all");
+  const [lane, setLane] = useAdminUiState("live-events:lane", searchParams.get("lane") || "all");
+  const [status, setStatus] = useAdminUiState(
+    "live-events:status",
+    searchParams.get("status") || "all",
+  );
   const [busyId, setBusyId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
-  const [laneCounts, setLaneCounts] = useState<Record<string, number>>({});
 
   const [createOpen, setCreateOpen] = useState(false);
   const [step, setStep] = useState(0);
@@ -139,47 +141,55 @@ export default function LiveEventsPanel() {
   const [createdId, setCreatedId] = useState<string | null>(null);
 
   const devSources = isDevelopmentBuild || showDevSources;
+  const canManage = canManageLiveEvents(can);
 
-  const load = useCallback(async (activeLane = lane) => {
-    const params = new URLSearchParams();
-    if (activeLane && activeLane !== "all") params.set("lane", activeLane);
-    const qs = params.toString();
-    const response = await adminFetch(`/api/admin/live-events${qs ? `?${qs}` : ""}`);
-    const payload = (await response.json().catch(() => ({}))) as {
-      data?: LiveEventRow[];
-      lanes?: Record<string, number>;
-      error?: string;
-    };
-    if (!response.ok) throw new Error(payload.error || "Failed to load");
-    setRows(payload.data ?? []);
-    if (payload.lanes) setLaneCounts(payload.lanes);
-  }, [lane]);
+  type LiveListData = {
+    rows: LiveEventRow[];
+    lanes: Record<string, number>;
+  };
 
-  useEffect(() => {
-    if (!canManageLiveEvents(can)) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    load(lane)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-    // Refetch when lane changes; search/kind/status filter client-side.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [can, lane]);
+  const {
+    data: listData,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<LiveListData>({
+    key: canManage ? adminCacheKey(["live-events", "list", lane]) : null,
+    enabled: canManage,
+    fetcher: async () => {
+      const params = new URLSearchParams();
+      if (lane && lane !== "all") params.set("lane", lane);
+      const qs = params.toString();
+      const response = await adminFetch(`/api/admin/live-events${qs ? `?${qs}` : ""}`);
+      const payload = (await response.json().catch(() => ({}))) as {
+        data?: LiveEventRow[];
+        lanes?: Record<string, number>;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(payload.error || "Failed to load");
+      return { rows: payload.data ?? [], lanes: payload.lanes ?? {} };
+    },
+  });
 
-  useEffect(() => {
-    getSpojexClient()
-      .from("organizations")
-      .select("id, name, public_id, is_platform")
-      .order("is_platform", { ascending: false })
-      .order("name")
-      .limit(300)
-      .then(({ data, error: orgError }) => {
-        if (!orgError) setOrgs((data ?? []) as OrgOption[]);
-      });
-  }, []);
+  const rows = listData?.rows ?? [];
+  const laneCounts = listData?.lanes ?? {};
+  const error = actionError ?? loadError;
+
+  const { data: orgsData } = useAdminQuery<OrgOption[]>({
+    key: adminCacheKey(["live-events", "orgs"]),
+    fetcher: async () => {
+      const { data, error: orgError } = await getSpojexClient()
+        .from("organizations")
+        .select("id, name, public_id, is_platform")
+        .order("is_platform", { ascending: false })
+        .order("name")
+        .limit(300);
+      if (orgError) throw new Error(orgError.message);
+      return (data ?? []) as OrgOption[];
+    },
+  });
+  const orgs = orgsData ?? [];
 
   // URL: write tab=live (old links used tab=video - the hub accepts both).
   useEffect(() => {
@@ -197,11 +207,8 @@ export default function LiveEventsPanel() {
   }, [lane, status]);
 
   const reload = () => {
-    setLoading(true);
     setError(null);
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
+    void refresh();
   };
 
   useEffect(() => {
@@ -254,7 +261,8 @@ export default function LiveEventsPanel() {
         reason,
       });
       setNotice(`${row.name}: ${action.label} applied.`);
-      await load();
+      invalidateAdminCache("live-events");
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
     } finally {
@@ -384,7 +392,8 @@ export default function LiveEventsPanel() {
       });
       const created = payload.data as LiveEventRow | undefined;
       if (!created?.id) {
-        await load();
+        invalidateAdminCache("live-events");
+        await refresh();
         setCreateOpen(false);
         return;
       }
@@ -429,7 +438,8 @@ export default function LiveEventsPanel() {
 
       if (warnings.length > 0) {
         setCreateError(warnings.join(" "));
-        await load();
+        invalidateAdminCache("live-events");
+        await refresh();
         return;
       }
       setCreateOpen(false);
@@ -508,7 +518,7 @@ export default function LiveEventsPanel() {
                 ))}
               </AdminSelect>
             ) : null}
-            <AdminReloadButton onClick={reload} loading={loading} />
+            <AdminReloadButton onClick={reload} loading={loading} refreshing={refreshing} />
           </div>
         </AdminFilterPanel>
         {canWrite ? (

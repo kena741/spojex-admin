@@ -1,17 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
   AdminErrorAlert,
+  AdminReloadButton,
   AdminTableLoading,
   AdminTableShell,
 } from "@/components/admin-layout";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
 import { slugifyCategory } from "@/lib/service-categories";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import type { ServiceCategory, ServiceSubcategory } from "@/lib/types";
 
 type CategoryDraft = {
@@ -24,10 +27,7 @@ type CategoryDraft = {
 export default function ServiceSettingsPage() {
   const { can } = useAdminPermissions();
   const canWrite = can("catalog:write") || can("services:write");
-  const [rows, setRows] = useState<ServiceCategory[]>([]);
-  const [subs, setSubs] = useState<ServiceSubcategory[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [label, setLabel] = useState("");
   const [slug, setSlug] = useState("");
   const [emoji, setEmoji] = useState("");
@@ -39,35 +39,43 @@ export default function ServiceSettingsPage() {
   const [subLabel, setSubLabel] = useState("");
   const [subEmoji, setSubEmoji] = useState("");
 
+  const {
+    data,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<{ rows: ServiceCategory[]; subs: ServiceSubcategory[] }>({
+    key: adminCacheKey(["services", "settings", "categories"]),
+    fetcher: async () => {
+      const spojex = getSpojexClient();
+      const { data: categoryRows, error: queryError } = await spojex
+        .from("service_categories")
+        .select("*")
+        .order("sort_order");
+      if (queryError) throw queryError;
+      const { data: subRows, error: subError } = await spojex
+        .from("service_subcategories")
+        .select("*")
+        .order("sort_order");
+      return {
+        rows: (categoryRows ?? []) as ServiceCategory[],
+        subs: subError ? [] : ((subRows ?? []) as ServiceSubcategory[]),
+      };
+    },
+  });
+  const rows = data?.rows ?? [];
+  const subs = data?.subs ?? [];
+  const error = actionError ?? loadError;
+
   const selected = rows.find((row) => row.id === selectedId) ?? null;
   const selectedSubs = subs
     .filter((row) => row.category_id === selectedId)
     .sort((a, b) => a.sort_order - b.sort_order);
 
   const load = async () => {
-    const spojex = getSpojexClient();
-    const { data, error: loadError } = await spojex
-      .from("service_categories")
-      .select("*")
-      .order("sort_order");
-    if (loadError) throw loadError;
-    setRows((data ?? []) as ServiceCategory[]);
-    const { data: subRows, error: subError } = await spojex
-      .from("service_subcategories")
-      .select("*")
-      .order("sort_order");
-    if (subError) {
-      setSubs([]);
-      return;
-    }
-    setSubs((subRows ?? []) as ServiceSubcategory[]);
+    await refresh();
   };
-
-  useEffect(() => {
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-  }, []);
 
   const create = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -180,6 +188,16 @@ export default function ServiceSettingsPage() {
           { label: "Services", href: "/admin/services" },
           { label: "Settings" },
         ]}
+        actions={
+          <AdminReloadButton
+            loading={loading}
+            refreshing={refreshing}
+            onClick={() => {
+              setError(null);
+              void refresh();
+            }}
+          />
+        }
       />
       {error ? <AdminErrorAlert message={error} /> : null}
       {canWrite ? (
@@ -244,7 +262,7 @@ export default function ServiceSettingsPage() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
+                {loading && rows.length === 0 ? (
                   <AdminTableLoading colSpan={canWrite ? 5 : 4} label="Loading service categories…" />
                 ) : rows.map((row) => {
                   const isEditing = editingId === row.id && draft;

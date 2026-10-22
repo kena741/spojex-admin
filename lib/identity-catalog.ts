@@ -54,7 +54,19 @@ function fallbackCatalog(): IdentityCatalog {
   return { groups, roles, fromDatabase: false };
 }
 
-export async function fetchIdentityCatalog(): Promise<IdentityCatalog> {
+let identityCatalogCache: IdentityCatalog | null = null;
+let identityCatalogInflight: Promise<IdentityCatalog> | null = null;
+
+export function peekIdentityCatalogCache() {
+  return identityCatalogCache;
+}
+
+export function clearIdentityCatalogCache() {
+  identityCatalogCache = null;
+  identityCatalogInflight = null;
+}
+
+async function loadIdentityCatalog(): Promise<IdentityCatalog> {
   const client = getSpojexClient();
   const [{ data: groups, error: groupError }, { data: roles, error: roleError }] = await Promise.all([
     client.from("identity_role_groups").select("*").order("sort_order"),
@@ -85,6 +97,22 @@ export async function fetchIdentityCatalog(): Promise<IdentityCatalog> {
     roles: roles as IdentityRole[],
     fromDatabase: true,
   };
+}
+
+/** Session-deduped catalog fetch (cleared on logout). */
+export async function fetchIdentityCatalog(): Promise<IdentityCatalog> {
+  if (identityCatalogCache) return identityCatalogCache;
+  if (!identityCatalogInflight) {
+    identityCatalogInflight = loadIdentityCatalog()
+      .then((data) => {
+        identityCatalogCache = data;
+        return data;
+      })
+      .finally(() => {
+        identityCatalogInflight = null;
+      });
+  }
+  return identityCatalogInflight;
 }
 
 export function roleOptionsFromCatalog(catalog: IdentityCatalog) {

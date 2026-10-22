@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { adminFetch, deleteAdmin, postAdminResponse } from "@/lib/hooks";
 import { getSpojexClient } from "@/lib/spojex/client";
 import {
@@ -17,6 +18,9 @@ import {
   streamStatuses,
 } from "@/lib/streams";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useApplyAdminSnapshot } from "@/lib/use-admin-snapshot";
+import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import type { OrganizationRow, RadioStreamRow } from "@/lib/types";
 
 const tabs = [
@@ -160,14 +164,13 @@ export default function StreamDetailPage() {
   const { can } = useAdminPermissions();
   const canWrite = can("streams:write");
 
-  const [tab, setTab] = useState<TabId>("overview");
+  const [tab, setTab] = useAdminUiState<TabId>(`streams:detail:${id}:tab`, "overview");
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [orgs, setOrgs] = useState<OrgOption[]>([]);
   const [form, setForm] = useState<SettingsForm | null>(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [checking, setChecking] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
@@ -176,42 +179,51 @@ export default function StreamDetailPage() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const intendedPlayRef = useRef(false);
   const [preview, setPreview] = useState<PreviewState>("idle");
+  const dirtyEditRef = useRef(false);
+
+  type StreamSnapshot = { workspace: Workspace; orgs: OrgOption[] };
+
+  const {
+    data: snapshot,
+    loading,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<StreamSnapshot>({
+    key: adminCacheKey(["streams", "detail", id]),
+    fetcher: async () => {
+      const response = await adminFetch(`/api/admin/streams/${id}/workspace`);
+      const payload = (await response.json().catch(() => ({}))) as Workspace;
+      if (!response.ok) throw new Error(payload.error || "Failed to load station");
+      const { data, error: orgError } = await getSpojexClient()
+        .from("organizations")
+        .select("id, name, public_id")
+        .order("name")
+        .limit(500);
+      return {
+        workspace: payload,
+        orgs: orgError ? [] : ((data ?? []) as OrgOption[]),
+      };
+    },
+  });
+
+  useApplyAdminSnapshot(snapshot, (snap) => {
+    setWorkspace(snap.workspace);
+    setOrgs(snap.orgs);
+    if (!dirtyEditRef.current) {
+      setForm(formFromStation(snap.workspace.station));
+    }
+  });
+
+  useEffect(() => {
+    if (loadError) setError(loadError);
+  }, [loadError]);
 
   const loadWorkspace = useCallback(async () => {
-    const response = await adminFetch(`/api/admin/streams/${id}/workspace`);
-    const payload = (await response.json().catch(() => ({}))) as Workspace;
-    if (!response.ok) throw new Error(payload.error || "Failed to load station");
-    setWorkspace(payload);
-    return payload;
-  }, [id]);
-
-  useEffect(() => {
-    let cancelled = false;
-    loadWorkspace()
-      .then((payload) => {
-        if (!cancelled) setForm(formFromStation(payload.station));
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load station");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [loadWorkspace]);
-
-  useEffect(() => {
-    getSpojexClient()
-      .from("organizations")
-      .select("id, name, public_id")
-      .order("name")
-      .limit(500)
-      .then(({ data, error: orgError }) => {
-        if (!orgError) setOrgs((data ?? []) as OrgOption[]);
-      });
-  }, []);
+    invalidateAdminCache(adminCacheKey(["streams", "overview"]));
+    const next = await refresh();
+    if (!next) throw new Error("Failed to reload station");
+    return next.workspace;
+  }, [refresh]);
 
   const dirty =
     editing &&
@@ -219,6 +231,7 @@ export default function StreamDetailPage() {
     workspace !== null &&
     JSON.stringify({ ...form, reason: "" }) !==
       JSON.stringify({ ...formFromStation(workspace.station), reason: "" });
+  dirtyEditRef.current = dirty;
 
   useEffect(() => {
     if (!dirty) return;
@@ -442,7 +455,7 @@ export default function StreamDetailPage() {
     />
   );
 
-  if (loading) {
+  if (loading && !workspace) {
     return (
       <>
         {audioElement}

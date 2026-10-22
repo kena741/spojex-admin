@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from "react";
 import { RefreshCw, Search } from "lucide-react";
+import AdminRoutePersistence from "@/components/admin-route-persistence";
 import Sidebar from "@/components/sidebar";
 import AdminTopBar from "@/components/admin-topbar";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
       <Sidebar />
       <main className={adminPageMainClassName}>
         <AdminTopBar />
+        <AdminRoutePersistence />
         <div className={adminPageContentClassName}>{children}</div>
       </main>
     </div>
@@ -142,19 +144,24 @@ export function AdminTableLoading({
 export function AdminReloadButton({
   onClick,
   loading = false,
+  refreshing = false,
   label = "Reload",
   className,
 }: {
   onClick: () => void;
+  /** Full-page initial load (no cached data). Prefer passing `refreshing` for soft reloads. */
   loading?: boolean;
+  /** Soft refresh while previous content stays visible. */
+  refreshing?: boolean;
   label?: string;
   className?: string;
 }) {
+  const busy = loading || refreshing;
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={loading}
+      disabled={busy}
       title={label}
       aria-label={label}
       className={cn(
@@ -162,7 +169,7 @@ export function AdminReloadButton({
         className,
       )}
     >
-      <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} aria-hidden />
+      <RefreshCw className={cn("h-3.5 w-3.5", busy && "animate-spin")} aria-hidden />
       <span className="hidden sm:inline">{label}</span>
     </button>
   );

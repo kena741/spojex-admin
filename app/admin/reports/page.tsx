@@ -14,13 +14,16 @@ import {
   AdminErrorAlert,
   AdminFilterPanel,
   AdminLoadingRow,
+  AdminReloadButton,
   AdminTableLoading,
   AdminSearchInput,
   AdminSelect,
   AdminTableShell,
 } from "@/components/admin-layout";
 import { UserAvatar } from "@/components/user-avatar";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import { cn, formatDateTime } from "@/lib/utils";
 
 type ReportItem = {
@@ -116,11 +119,6 @@ function ReportsPageInner() {
   const page = Math.max(1, Number(searchParams.get("page") || "1") || 1);
   const selectedId = searchParams.get("id") || "";
 
-  const [payload, setPayload] = useState<ListPayload | null>(null);
-  const [detail, setDetail] = useState<DetailPayload | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [searchDraft, setSearchDraft] = useState(q);
   const [busy, setBusy] = useState(false);
@@ -140,73 +138,64 @@ function ReportsPageInner() {
     [pathname, router, searchParams],
   );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setErrorCode(null);
-    try {
+  const {
+    data: payload,
+    loading,
+    refreshing,
+    error,
+    refresh: load,
+  } = useAdminQuery<ListPayload>({
+    key: adminCacheKey(["reports", "list", status, targetType, q, page]),
+    fetcher: async () => {
+      setErrorCode(null);
       const qs = new URLSearchParams();
       qs.set("status", status);
       if (targetType !== "all") qs.set("target_type", targetType);
       if (q) qs.set("q", q);
       qs.set("page", String(page));
       qs.set("page_size", "40");
-      const res = await fetch(`/api/admin/reports?${qs}`, {
-        credentials: "same-origin",
-        cache: "no-store",
-      });
+      let res: Response;
+      try {
+        res = await fetch(`/api/admin/reports?${qs}`, {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+      } catch {
+        setErrorCode("network_error");
+        throw new Error("Couldn't load reports.");
+      }
       const body = (await res.json()) as ListPayload;
       if (!res.ok) {
-        setError(body.error || "Couldn't load reports.");
         setErrorCode(body.code || String(res.status));
-        setPayload(null);
-        return;
+        throw new Error(body.error || "Couldn't load reports.");
       }
-      setPayload(body);
-    } catch {
-      setError("Couldn't load reports.");
-      setErrorCode("network_error");
-      setPayload(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [status, targetType, q, page]);
+      return body;
+    },
+  });
 
-  const loadDetail = useCallback(async (id: string) => {
-    setDetailLoading(true);
-    setActionError(null);
-    try {
-      const res = await fetch(`/api/admin/reports/${encodeURIComponent(id)}`, {
+  const {
+    data: detailData,
+    loading: detailLoading,
+    error: detailError,
+    replace: replaceDetail,
+  } = useAdminQuery<DetailPayload>({
+    key: selectedId ? adminCacheKey(["reports", "detail", selectedId]) : null,
+    enabled: Boolean(selectedId),
+    fetcher: async () => {
+      const res = await fetch(`/api/admin/reports/${encodeURIComponent(selectedId)}`, {
         credentials: "same-origin",
         cache: "no-store",
       });
       const body = (await res.json()) as DetailPayload;
-      if (!res.ok) {
-        setActionError(body.error || "Couldn't load case.");
-        setDetail(null);
-        return;
-      }
-      setDetail(body);
-    } catch {
-      setActionError("Couldn't load case.");
-      setDetail(null);
-    } finally {
-      setDetailLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+      if (!res.ok) throw new Error(body.error || "Couldn't load case.");
+      return body;
+    },
+  });
+  const detail = selectedId && detailData?.id === selectedId ? detailData : null;
 
   useEffect(() => {
     setSearchDraft(q);
   }, [q]);
-
-  useEffect(() => {
-    if (selectedId) void loadDetail(selectedId);
-    else setDetail(null);
-  }, [selectedId, loadDetail]);
 
   const rows = payload?.items ?? [];
   const emptyGenuine = !loading && !error && rows.length === 0 && !q;
@@ -223,7 +212,8 @@ function ReportsPageInner() {
       });
       const body = (await res.json()) as { error?: string; report?: DetailPayload };
       if (!res.ok) throw new Error(body.error || "Claim failed");
-      if (body.report) setDetail(body.report);
+      invalidateAdminCache("reports");
+      if (body.report) replaceDetail(body.report);
       await load();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Claim failed");
@@ -257,7 +247,8 @@ function ReportsPageInner() {
       if (body.enforcement && body.enforcement.applied === false && body.enforcement.error) {
         setActionError(`Decision recorded issue: ${body.enforcement.error}`);
       }
-      if (body.report) setDetail(body.report);
+      invalidateAdminCache("reports");
+      if (body.report) replaceDetail(body.report);
       setDecisionNote("");
       await load();
     } catch (err) {
@@ -283,13 +274,12 @@ function ReportsPageInner() {
                 {payload.unresolved_count} unresolved
               </span>
             ) : null}
-            <button
-              type="button"
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
+              label="Refresh"
               onClick={() => void load()}
-              className="inline-flex h-9 items-center rounded-lg border border-border bg-card px-3 text-xs font-medium"
-            >
-              Refresh
-            </button>
+            />
             <Link
               href="/admin/radio-chat?tab=reports"
               className="inline-flex h-9 items-center rounded-lg border border-border bg-card px-3 text-xs font-medium"
@@ -510,7 +500,9 @@ function ReportsPageInner() {
               </button>
             </div>
             {detailLoading ? <AdminLoadingRow label="Loading case…" fill /> : null}
-            {actionError ? <AdminErrorAlert message={actionError} /> : null}
+            {actionError || detailError ? (
+              <AdminErrorAlert message={actionError || detailError || ""} />
+            ) : null}
             {detail ? (
               <div className="space-y-3 text-sm">
                 <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">

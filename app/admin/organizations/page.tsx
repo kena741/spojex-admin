@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
@@ -16,16 +16,35 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge, verifiedTone } from "@/components/status-badge";
 import { organizationTypeLabel, organizationTypes } from "@/lib/catalog";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import { loadOrgLiveGiftTotals } from "@/lib/coin-wallets";
 import { adminFetch, postAdminResponse, useIdentityCatalog } from "@/lib/hooks";
 import { generateStadiumManagerPassword } from "@/lib/stadiums";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import type { OrganizationRow, UserRow } from "@/lib/types";
 import { formatCoins, formatDate, locationLabel } from "@/lib/utils";
 
 const fieldClass = "h-10 w-full rounded-lg border border-border px-3 text-sm";
 
 type OwnerOption = Pick<UserRow, "id" | "display_name" | "email" | "role" | "city">;
+
+type OrganizationsSummary = {
+  total: number;
+  verified: number;
+  unverified: number;
+  by_type: Record<string, number>;
+  missing_owner: number;
+  trashed?: number;
+};
+
+type OrganizationsListData = {
+  rows: OrganizationRow[];
+  total: number;
+  memberCounts: Record<string, number>;
+  liveGiftTotals: Record<string, number>;
+  summary: OrganizationsSummary | null;
+};
 
 const createTypeOptions = [
   ...organizationTypes.filter((item) => item.id === "club" || item.id === "academy"),
@@ -41,32 +60,21 @@ export default function OrganizationsPage() {
   const { can } = useAdminPermissions();
   const canWrite = can("organizations:write");
   const canVerify = can("organizations:verify");
-  const [rows, setRows] = useState<OrganizationRow[]>([]);
-  const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
-  const [liveGiftTotals, setLiveGiftTotals] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [query, setQuery] = useState(searchParams.get("q") || "");
   const [debouncedQuery, setDebouncedQuery] = useState(searchParams.get("q") || "");
+  const [debouncedCity, setDebouncedCity] = useState(searchParams.get("city") || "");
+  const [debouncedCountry, setDebouncedCountry] = useState(searchParams.get("country") || "");
   const [type, setType] = useState(searchParams.get("type") || "all");
   const [verified, setVerified] = useState(searchParams.get("verified") || "all");
   const [city, setCity] = useState(searchParams.get("city") || "");
   const [country, setCountry] = useState(searchParams.get("country") || "");
   const [trash, setTrash] = useState(searchParams.get("trash") === "yes" ? "yes" : "");
   const [page, setPage] = useState(Math.max(1, Number(searchParams.get("page") || 1) || 1));
-  const [total, setTotal] = useState(0);
   const pageSize = 40;
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [creatingPlatform, setCreatingPlatform] = useState(false);
-  const [listSummary, setListSummary] = useState<{
-    total: number;
-    verified: number;
-    unverified: number;
-    by_type: Record<string, number>;
-    missing_owner: number;
-    trashed?: number;
-  } | null>(null);
   const [createIdempotencyKey, setCreateIdempotencyKey] = useState(() => crypto.randomUUID());
   const [ownerQuery, setOwnerQuery] = useState("");
   const [ownerOptions, setOwnerOptions] = useState<OwnerOption[]>([]);
@@ -100,64 +108,74 @@ export default function OrganizationsPage() {
     verification_reason: "",
   });
 
-  const load = useCallback(async () => {
-    const params = new URLSearchParams({
-      page: String(page),
-      page_size: String(pageSize),
-      sort: "updated_at",
-      order: "desc",
-    });
-    if (query.trim()) params.set("q", query.trim());
-    if (type !== "all") params.set("type", type);
-    if (verified !== "all") params.set("verified", verified);
-    if (city.trim()) params.set("city", city.trim());
-    if (country.trim()) params.set("country", country.trim());
-    if (trash === "yes") params.set("trash", "yes");
-    const response = await adminFetch(`/api/admin/organizations?${params}`);
-    const payload = (await response.json()) as {
-      data?: OrganizationRow[];
-      total?: number;
-      member_counts?: Record<string, number>;
-      live_gift_totals?: Record<string, number>;
-      summary?: {
-        total: number;
-        verified: number;
-        unverified: number;
-        by_type: Record<string, number>;
-        missing_owner: number;
-        trashed?: number;
+  const {
+    data: listData,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<OrganizationsListData>({
+    key: adminCacheKey([
+      "organizations",
+      "list",
+      page,
+      debouncedQuery.trim(),
+      type,
+      verified,
+      debouncedCity.trim(),
+      debouncedCountry.trim(),
+      trash,
+    ]),
+    fetcher: async () => {
+      const params = new URLSearchParams({
+        page: String(page),
+        page_size: String(pageSize),
+        sort: "updated_at",
+        order: "desc",
+      });
+      if (debouncedQuery.trim()) params.set("q", debouncedQuery.trim());
+      if (type !== "all") params.set("type", type);
+      if (verified !== "all") params.set("verified", verified);
+      if (debouncedCity.trim()) params.set("city", debouncedCity.trim());
+      if (debouncedCountry.trim()) params.set("country", debouncedCountry.trim());
+      if (trash === "yes") params.set("trash", "yes");
+      const response = await adminFetch(`/api/admin/organizations?${params}`);
+      const payload = (await response.json()) as {
+        data?: OrganizationRow[];
+        total?: number;
+        member_counts?: Record<string, number>;
+        live_gift_totals?: Record<string, number>;
+        summary?: OrganizationsSummary;
+        error?: string;
       };
-      error?: string;
-    };
-    if (!response.ok) throw new Error(payload.error || "Failed to load organizations");
-    const orgs = payload.data ?? [];
-    setRows(orgs);
-    setTotal(payload.total ?? orgs.length);
-    setMemberCounts(payload.member_counts ?? {});
-    setListSummary(payload.summary ?? null);
-    if (payload.live_gift_totals) {
-      setLiveGiftTotals(payload.live_gift_totals);
-    } else {
-      setLiveGiftTotals(await loadOrgLiveGiftTotals(orgs.map((o) => o.id)));
-    }
-  }, [query, type, verified, city, country, trash, page, pageSize]);
+      if (!response.ok) throw new Error(payload.error || "Failed to load organizations");
+      const orgs = payload.data ?? [];
+      return {
+        rows: orgs,
+        total: payload.total ?? orgs.length,
+        memberCounts: payload.member_counts ?? {},
+        liveGiftTotals:
+          payload.live_gift_totals ?? (await loadOrgLiveGiftTotals(orgs.map((o) => o.id))),
+        summary: payload.summary ?? null,
+      };
+    },
+  });
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }, [load]);
+  const rows = useMemo(() => listData?.rows ?? [], [listData]);
+  const total = listData?.total ?? 0;
+  const memberCounts = listData?.memberCounts ?? {};
+  const liveGiftTotals = listData?.liveGiftTotals ?? {};
+  const listSummary = listData?.summary ?? null;
+  const error = actionError ?? loadError;
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedQuery(query), 300);
+    const timer = window.setTimeout(() => {
+      setDebouncedQuery(query);
+      setDebouncedCity(city);
+      setDebouncedCountry(country);
+    }, 300);
     return () => window.clearTimeout(timer);
-  }, [query]);
+  }, [query, city, country]);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -171,12 +189,6 @@ export default function OrganizationsPage() {
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [debouncedQuery, type, verified, city, country, trash, page, pathname, router]);
-
-  // Fetch once on mount and when page changes. Filters apply on Reload.
-  useEffect(() => {
-    void refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
 
   useEffect(() => {
     if (!createOpen) return;
@@ -399,7 +411,11 @@ export default function OrganizationsPage() {
         stackOnSmall
         actions={
           <div className="flex flex-wrap gap-2">
-            <AdminReloadButton loading={loading} onClick={() => void refresh()} />
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
+              onClick={() => void refresh()}
+            />
             {canWrite ? (
               <>
               {!loading ? (

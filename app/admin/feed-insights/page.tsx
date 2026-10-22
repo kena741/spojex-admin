@@ -15,6 +15,7 @@ import {
   AdminErrorAlert,
   AdminFilterPanel,
   AdminLoadingRow,
+  AdminReloadButton,
   AdminSearchInput,
   AdminSelect,
   AdminTableShell,
@@ -31,10 +32,22 @@ import {
   type PersonalizationUser,
   type UserFeedDetail,
 } from "@/lib/feed-insights";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import { adminFetch } from "@/lib/hooks";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import { cn, formatDateTime } from "@/lib/utils";
 
 type Tab = "performance" | "personalization" | "delivery";
+
+type FeedInsightsCache =
+  | { kind: "performance"; perf: PerformanceReport; fetchedAt: string }
+  | {
+      kind: "personalization";
+      pers: PersonalizationReport;
+      detail: UserFeedDetail | null;
+      fetchedAt: string;
+    }
+  | { kind: "delivery"; delivery: DeliveryHealth; fetchedAt: string };
 
 function MetricCard({
   title,
@@ -183,13 +196,6 @@ function FeedInsightsPageInner() {
   const page = Math.max(1, Number(searchParams.get("page") || "1") || 1);
   const userId = searchParams.get("user") || "";
 
-  const [perf, setPerf] = useState<PerformanceReport | null>(null);
-  const [pers, setPers] = useState<PersonalizationReport | null>(null);
-  const [delivery, setDelivery] = useState<DeliveryHealth | null>(null);
-  const [detail, setDetail] = useState<UserFeedDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [searchDraft, setSearchDraft] = useState(q);
 
   const writeParams = useCallback(
@@ -208,10 +214,26 @@ function FeedInsightsPageInner() {
     [pathname, router, searchParams],
   );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const {
+    data: cache,
+    loading,
+    refreshing,
+    error,
+    refresh,
+  } = useAdminQuery<FeedInsightsCache>({
+    key: adminCacheKey([
+      "feed-insights",
+      tab,
+      range,
+      customStart,
+      customEnd,
+      surface,
+      q,
+      page,
+      userId,
+    ]),
+    fetcher: async () => {
+      const fetchedAt = new Date().toISOString();
       if (tab === "performance") {
         const qs = new URLSearchParams();
         qs.set("range", range);
@@ -230,8 +252,9 @@ function FeedInsightsPageInner() {
         if (!res.ok) {
           throw new Error(payload.message || payload.error || "Failed to load performance");
         }
-        setPerf(payload);
-      } else if (tab === "personalization") {
+        return { kind: "performance", perf: payload, fetchedAt };
+      }
+      if (tab === "personalization") {
         const qs = new URLSearchParams();
         if (q) qs.set("q", q);
         qs.set("page", String(page));
@@ -243,7 +266,7 @@ function FeedInsightsPageInner() {
         if (!res.ok) {
           throw new Error(payload.message || payload.error || "Failed to load personalization");
         }
-        setPers(payload);
+        let detail: UserFeedDetail | null = null;
         if (userId) {
           const dres = await adminFetch(
             `/api/admin/feed-insights/users/${encodeURIComponent(userId)}`,
@@ -253,31 +276,27 @@ function FeedInsightsPageInner() {
           if (!dres.ok) {
             throw new Error(dpayload.message || dpayload.error || "Failed to load user detail");
           }
-          setDetail(dpayload);
-        } else {
-          setDetail(null);
+          detail = dpayload;
         }
-      } else {
-        const res = await adminFetch("/api/admin/feed-insights/delivery", {
-          cache: "no-store",
-        });
-        const payload = (await res.json()) as DeliveryHealth & { message?: string; error?: string };
-        if (!res.ok) {
-          throw new Error(payload.message || payload.error || "Failed to load delivery health");
-        }
-        setDelivery(payload);
+        return { kind: "personalization", pers: payload, detail, fetchedAt };
       }
-      setUpdatedAt(new Date().toISOString());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }, [tab, range, surface, customStart, customEnd, q, page, userId]);
+      const res = await adminFetch("/api/admin/feed-insights/delivery", {
+        cache: "no-store",
+      });
+      const payload = (await res.json()) as DeliveryHealth & { message?: string; error?: string };
+      if (!res.ok) {
+        throw new Error(payload.message || payload.error || "Failed to load delivery health");
+      }
+      return { kind: "delivery", delivery: payload, fetchedAt };
+    },
+  });
+  const load = refresh;
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const perf = cache?.kind === "performance" ? cache.perf : null;
+  const pers = cache?.kind === "personalization" ? cache.pers : null;
+  const detail = cache?.kind === "personalization" ? cache.detail : null;
+  const delivery = cache?.kind === "delivery" ? cache.delivery : null;
+  const updatedAt = cache?.fetchedAt ?? null;
 
   useEffect(() => {
     setSearchDraft(q);
@@ -338,13 +357,12 @@ function FeedInsightsPageInner() {
                 {perf?.timezone || delivery ? ` · ${perf?.timezone || "Africa/Addis_Ababa"}` : ""}
               </span>
             ) : null}
-            <button
-              type="button"
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
               onClick={() => void load()}
-              className="inline-flex h-9 items-center rounded-lg border border-border bg-card px-3 text-xs font-medium"
-            >
-              Refresh
-            </button>
+              label="Refresh"
+            />
           </div>
         }
       />
@@ -450,10 +468,10 @@ function FeedInsightsPageInner() {
         </div>
       </AdminFilterPanel>
 
-      {loading ? <AdminLoadingRow label="Loading feed insights…" /> : null}
+      {loading && !cache ? <AdminLoadingRow label="Loading feed insights…" /> : null}
       {error ? <AdminErrorAlert message={error} /> : null}
 
-      {!loading && tab === "performance" && perf ? (
+      {tab === "performance" && perf ? (
         <div className="space-y-4">
           {perf.period?.note ? (
             <p className="text-xs text-text-secondary">{perf.period.note}</p>
@@ -571,7 +589,7 @@ function FeedInsightsPageInner() {
         </div>
       ) : null}
 
-      {!loading && tab === "personalization" && pers ? (
+      {tab === "personalization" && pers ? (
         <div className="space-y-4">
           <p className="text-xs text-text-secondary">{pers.snapshot_note}</p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -837,7 +855,7 @@ function FeedInsightsPageInner() {
         </div>
       ) : null}
 
-      {!loading && tab === "delivery" && delivery ? (
+      {tab === "delivery" && delivery ? (
         <div className="space-y-4">
           {delivery.stale_warning ? (
             <AdminErrorAlert message={delivery.stale_warning} />

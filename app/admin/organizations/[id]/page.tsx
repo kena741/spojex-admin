@@ -8,9 +8,13 @@ import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
 import { StatusBadge, verifiedTone } from "@/components/status-badge";
 import { organizationTypeLabel, organizationTypes } from "@/lib/catalog";
 import { loadCoinWalletsByUserIds, loadOrgLiveGiftTotals } from "@/lib/coin-wallets";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { adminFetch, deleteAdmin, patchAdmin } from "@/lib/hooks";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useApplyAdminSnapshot } from "@/lib/use-admin-snapshot";
+import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import type { CoinWalletRow, OrganizationRow } from "@/lib/types";
 import { cn, formatCoins, formatDate, locationLabel } from "@/lib/utils";
 
@@ -57,12 +61,27 @@ type AuditRow = {
 
 type Tab = "overview" | "people" | "activity" | "settings";
 
+type OrgSnapshot = {
+  org: OrganizationRow | null;
+  members: MemberRow[];
+  ownerCoinWallet: CoinWalletRow | null;
+  liveGiftsReceived: number;
+  linkedGyms: LinkedGym[];
+  invites: InviteRow[];
+  auditLogs: AuditRow[];
+  newsCount: number;
+};
+
 export default function OrganizationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const tab = (searchParams.get("tab") as Tab) || "overview";
+  const [rememberedTab, setRememberedTab] = useAdminUiState<Tab>(
+    `organizations:detail:${id}:tab`,
+    "overview",
+  );
+  const tab = (searchParams.get("tab") as Tab) || rememberedTab;
   const { can } = useAdminPermissions();
   const canWrite = can("organizations:write");
   const canVerify = can("organizations:verify");
@@ -77,7 +96,6 @@ export default function OrganizationDetailPage() {
   const [invites, setInvites] = useState<InviteRow[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditRow[]>([]);
   const [newsCount, setNewsCount] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -106,13 +124,14 @@ export default function OrganizationDetailPage() {
   const [deps, setDeps] = useState<Record<string, number | null> | null>(null);
 
   const setTab = (next: Tab) => {
+    setRememberedTab(next);
     const params = new URLSearchParams(searchParams.toString());
     if (next === "overview") params.delete("tab");
     else params.set("tab", next);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
-  const load = async () => {
+  const fetchSnapshot = async (): Promise<OrgSnapshot> => {
     const { data, error: loadError } = await getSpojexClient()
       .from("organizations")
       .select(
@@ -120,26 +139,20 @@ export default function OrganizationDetailPage() {
       )
       .eq("id", id)
       .maybeSingle();
-    if (loadError) throw loadError;
+    if (loadError) throw new Error(loadError.message);
     const next = data as OrganizationRow | null;
-    setOrg(next);
     if (!next) {
-      setOwnerCoinWallet(null);
-      setLiveGiftsReceived(0);
-      setMembers([]);
-      setLinkedGyms([]);
-      return;
+      return {
+        org: null,
+        members: [],
+        ownerCoinWallet: null,
+        liveGiftsReceived: 0,
+        linkedGyms: [],
+        invites: [],
+        auditLogs: [],
+        newsCount: 0,
+      };
     }
-    setDraft({
-      name: next.name || "",
-      name_am: next.name_am || "",
-      organization_type: next.organization_type || "club",
-      city: next.city || "",
-      country: next.country || "",
-      currency: next.currency || "ETB",
-      website: next.website || "",
-      description: next.description || "",
-    });
     const client = getSpojexClient();
     const [wallets, liveTotals, membersRes, gymsRes, invitesRes, newsRes, auditRes] =
       await Promise.all([
@@ -177,21 +190,62 @@ export default function OrganizationDetailPage() {
           .order("created_at", { ascending: false })
           .limit(30),
       ]);
-    setOwnerCoinWallet(wallets[next.user_id] ?? null);
-    setLiveGiftsReceived(liveTotals[next.id] ?? 0);
-    setMembers((membersRes.data ?? []) as MemberRow[]);
-    setLinkedGyms((gymsRes.data ?? []) as LinkedGym[]);
-    setInvites((invitesRes.data ?? []) as InviteRow[]);
-    setNewsCount(newsRes.count ?? 0);
-    setAuditLogs((auditRes.data ?? []) as AuditRow[]);
+    return {
+      org: next,
+      members: (membersRes.data ?? []) as MemberRow[],
+      ownerCoinWallet: wallets[next.user_id] ?? null,
+      liveGiftsReceived: liveTotals[next.id] ?? 0,
+      linkedGyms: (gymsRes.data ?? []) as LinkedGym[],
+      invites: (invitesRes.data ?? []) as InviteRow[],
+      auditLogs: (auditRes.data ?? []) as AuditRow[],
+      newsCount: newsRes.count ?? 0,
+    };
   };
 
+  const {
+    data: snapshot,
+    loading,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<OrgSnapshot>({
+    key: adminCacheKey(["organizations", "detail", id]),
+    fetcher: fetchSnapshot,
+  });
+
+  useApplyAdminSnapshot(snapshot, (snap) => {
+    setOrg(snap.org);
+    setMembers(snap.members);
+    setOwnerCoinWallet(snap.ownerCoinWallet);
+    setLiveGiftsReceived(snap.liveGiftsReceived);
+    setLinkedGyms(snap.linkedGyms);
+    setInvites(snap.invites);
+    setAuditLogs(snap.auditLogs);
+    setNewsCount(snap.newsCount);
+    const next = snap.org;
+    if (next) {
+      setDraft({
+        name: next.name || "",
+        name_am: next.name_am || "",
+        organization_type: next.organization_type || "club",
+        city: next.city || "",
+        country: next.country || "",
+        currency: next.currency || "ETB",
+        website: next.website || "",
+        description: next.description || "",
+      });
+    }
+  });
+
   useEffect(() => {
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+    if (loadError) setError(loadError);
+  }, [loadError]);
+
+  /** Soft reload after a mutation; also drops the parent list cache. */
+  const load = async () => {
+    invalidateAdminCache(adminCacheKey(["organizations", "list"]));
+    const next = await refresh();
+    if (!next) throw new Error("Failed to reload organization");
+  };
 
   const people = useMemo(() => {
     if (!org) return { active: [] as MemberRow[], former: [] as MemberRow[] };
@@ -393,6 +447,7 @@ export default function OrganizationDetailPage() {
     try {
       await deleteAdmin(`/api/admin/organizations/${id}`);
       setNotice("Moved to Trash. Linked content was preserved.");
+      invalidateAdminCache(adminCacheKey(["organizations"]));
       router.replace("/admin/organizations?trash=yes");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Move to Trash failed");
@@ -452,6 +507,7 @@ export default function OrganizationDetailPage() {
       });
       const payload = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(payload.error || "Permanent delete failed");
+      invalidateAdminCache(adminCacheKey(["organizations"]));
       router.replace("/admin/organizations?trash=yes");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Permanent delete failed");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
@@ -23,8 +23,18 @@ import {
   type BookingRow,
   type BookingSummary,
 } from "@/lib/bookings";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import { cn, formatDateTime, formatStatusLabel } from "@/lib/utils";
+
+type BookingsListData = {
+  rows: BookingRow[];
+  total: number;
+  summary: BookingSummary;
+  summaryHrefs: Record<string, string>;
+  definitions: Record<string, string>;
+};
 
 function PersonCell({
   person,
@@ -76,17 +86,9 @@ export default function RequestsPage() {
   const page = Number(searchParams.get("page") || 1) || 1;
   const deepId = searchParams.get("id") || "";
 
-  const [rows, setRows] = useState<BookingRow[]>([]);
-  const [total, setTotal] = useState(0);
-  const [summary, setSummary] = useState<BookingSummary>({});
-  const [summaryHrefs, setSummaryHrefs] = useState<Record<string, string>>({});
-  const [definitions, setDefinitions] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
-  const [ok, setOk] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const loadGen = useRef(0);
 
   const writeParams = useCallback(
     (patch: Record<string, string | null | undefined>) => {
@@ -100,12 +102,28 @@ export default function RequestsPage() {
     [pathname, router, searchParams],
   );
 
-  const load = useCallback(async () => {
-    const gen = ++loadGen.current;
-    setLoading(true);
-    setError(null);
-    setOk(false);
-    try {
+  const {
+    data: listData,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<BookingsListData>({
+    key: adminCacheKey([
+      "marketplace",
+      "bookings",
+      "list",
+      page,
+      q,
+      status,
+      schedule,
+      event,
+      dateFrom,
+      dateTo,
+      paymentStatus,
+      scheduled,
+    ]),
+    fetcher: async () => {
       const params = new URLSearchParams({
         page: String(page),
         page_size: "40",
@@ -129,26 +147,24 @@ export default function RequestsPage() {
         definitions?: Record<string, string>;
         error?: string;
       };
-      if (gen !== loadGen.current) return;
       if (!res.ok) throw new Error(payload.error || "Failed to load bookings");
-      setRows(payload.data ?? []);
-      setTotal(payload.total ?? 0);
-      setSummary(payload.summary_scope?.global ?? {});
-      setSummaryHrefs(payload.summary_hrefs ?? {});
-      setDefinitions(payload.definitions ?? {});
-      setOk(true);
-    } catch (err) {
-      if (gen !== loadGen.current) return;
-      setError(err instanceof Error ? err.message : "Failed to load");
-      setRows([]);
-    } finally {
-      if (gen === loadGen.current) setLoading(false);
-    }
-  }, [page, q, status, schedule, event, dateFrom, dateTo, paymentStatus, scheduled]);
+      return {
+        rows: payload.data ?? [],
+        total: payload.total ?? 0,
+        summary: payload.summary_scope?.global ?? {},
+        summaryHrefs: payload.summary_hrefs ?? {},
+        definitions: payload.definitions ?? {},
+      };
+    },
+  });
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const rows = useMemo(() => listData?.rows ?? [], [listData]);
+  const total = listData?.total ?? 0;
+  const summary = listData?.summary ?? {};
+  const summaryHrefs = listData?.summaryHrefs ?? {};
+  const definitions = listData?.definitions ?? {};
+  const error = actionError ?? loadError;
+  const ok = listData != null && !loadError;
 
   // Marketplace Overview `id=` drill-down → open detail
   useEffect(() => {
@@ -198,7 +214,8 @@ export default function RequestsPage() {
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error || payload.detail || "Update failed");
       setNotice(payload.message || `${actionVerb(next, row.allowed_actions)} applied.`);
-      await load();
+      invalidateAdminCache("marketplace");
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
     } finally {
@@ -236,7 +253,9 @@ export default function RequestsPage() {
       <AdminPageHeader
         title="Bookings"
         description="Manage service appointments and requests. Booking status and payment status stay separate."
-        actions={<AdminReloadButton loading={loading} onClick={() => void load()} />}
+        actions={
+          <AdminReloadButton loading={loading} refreshing={refreshing} onClick={() => void refresh()} />
+        }
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -274,7 +293,7 @@ export default function RequestsPage() {
           <AdminErrorAlert message={error} />
           <button
             type="button"
-            onClick={() => void load()}
+            onClick={() => void refresh()}
             className="rounded-md border border-border bg-card px-3 py-2 text-xs font-medium"
           >
             Retry

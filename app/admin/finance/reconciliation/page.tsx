@@ -1,10 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
-import { AdminEmpty, AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
+import {
+  AdminEmpty,
+  AdminErrorAlert,
+  AdminLoadingRow,
+  AdminReloadButton,
+} from "@/components/admin-layout";
+import { adminCacheKey } from "@/lib/admin-session-cache";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import { cn, formatDateTime } from "@/lib/utils";
 
 type IssueItem = {
@@ -62,15 +68,15 @@ export default function FinanceReconciliationPage() {
   const searchParams = useSearchParams();
   const issue = searchParams.get("issue") || "";
 
-  const [data, setData] = useState<Payload | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const {
+    data: result,
+    loading,
+    refreshing,
+    error,
+    refresh,
+  } = useAdminQuery<{ payload: Payload; fetchedAt: string }>({
+    key: adminCacheKey(["finance", "reconciliation", issue]),
+    fetcher: async () => {
       const qs = new URLSearchParams();
       if (issue) qs.set("issue", issue);
       const res = await fetch(`/api/admin/finance/reconciliation?${qs}`, {
@@ -78,19 +84,12 @@ export default function FinanceReconciliationPage() {
       });
       const payload = (await res.json()) as Payload;
       if (!res.ok) throw new Error(payload.error || "Failed to load reconciliation");
-      setData(payload);
-      setUpdatedAt(new Date().toISOString());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [issue]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+      return { payload, fetchedAt: new Date().toISOString() };
+    },
+  });
+  const data = result?.payload ?? null;
+  const updatedAt = result?.fetchedAt ?? null;
+  const load = refresh;
 
   const groups = data?.issues ?? [];
 
@@ -101,13 +100,11 @@ export default function FinanceReconciliationPage() {
         description="Coverage diagnostics for verified payments, ledger gaps, and payout reservations. Read-only - no silent balance changes."
         actions={
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
               onClick={() => void load()}
-              className="inline-flex h-9 items-center rounded-lg border border-border bg-card px-3 text-xs font-medium"
-            >
-              Refresh
-            </button>
+            />
             <Link
               href="/admin/finance/transactions?view=business"
               className="inline-flex h-9 items-center rounded-lg border border-border bg-card px-3 text-xs font-medium"
@@ -173,7 +170,7 @@ export default function FinanceReconciliationPage() {
 
       {loading ? <AdminLoadingRow label="Running reconciliation diagnostics…" /> : null}
 
-      {!loading && !error ? (
+      {!loading && !(error && !data) ? (
         <>
           <div className="space-y-4">
             {groups.length === 0 ? (

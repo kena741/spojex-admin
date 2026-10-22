@@ -19,6 +19,7 @@ import SendPushForm from "@/components/send-push-form";
 import { allRoles, extraProfileTable, roleLabel } from "@/lib/catalog";
 import { professionalProfileCopy } from "@/lib/identity-catalog";
 import { UserDeleteModal, UserPasswordResetModal } from "@/components/user-account-modals";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { patchAdmin, postAdmin, postAdminResponse, deleteAdmin, useIdentityCatalog } from "@/lib/hooks";
 import { userProfileSelect } from "@/lib/query-embeds";
 import { getSpojexClient } from "@/lib/spojex/client";
@@ -42,6 +43,8 @@ import {
 import { formatCoins, formatDate, formatDateTime, formatMoney, formatStatusLabel, locationLabel } from "@/lib/utils";
 import { verificationStatusLabel } from "@/lib/verification";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useApplyAdminSnapshot } from "@/lib/use-admin-snapshot";
 
 type FeedInterestDetail = {
   preferences: {
@@ -52,6 +55,20 @@ type FeedInterestDetail = {
   topics: { topic: string; score: number; recent_score: number; updated_at: string | null }[];
   creators: { creator_key: string; score: number; recent_score: number; updated_at: string | null }[];
   feedback: { id: string; content_key: string; action: string; created_at: string }[];
+};
+
+type UserSnapshot = {
+  user: UserRow | null;
+  orgs: OrganizationRow[];
+  mediaItems: ProfileMediaRow[];
+  verificationId: string | null;
+  verificationStatus: string | null;
+  coinWallet: CoinWalletRow | null;
+  services: ServiceRow[];
+  wallet: WalletRow | null;
+  withdrawals: WithdrawalRow[];
+  bookings: ServiceRequestRow[];
+  feedInterest: FeedInterestDetail | null;
 };
 
 export default function UserDetailPage() {
@@ -71,7 +88,6 @@ export default function UserDetailPage() {
   const [verificationId, setVerificationId] = useState<string | null>(null);
   const [verificationStatus, setVerificationStatus] = useState<string | null>(null);
   const [feedInterest, setFeedInterest] = useState<FeedInterestDetail | null>(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [accountBusy, setAccountBusy] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
@@ -82,8 +98,7 @@ export default function UserDetailPage() {
   const { catalog, roleOptions, roleLabel: catalogRoleLabel, extraProfileTable: catalogExtraProfileTable } =
     useIdentityCatalog();
 
-  const load = async () => {
-    setError(null);
+  const fetchSnapshot = async (): Promise<UserSnapshot> => {
     const [
       { data, error: userError },
       orgRes,
@@ -119,23 +134,19 @@ export default function UserDetailPage() {
       loadCoinWalletsByUserIds([id]),
       fetch(`/api/admin/users/${id}/feed-interests`, { credentials: "same-origin" }),
     ]);
-    if (userError) throw userError;
-    if (orgRes.error) throw orgRes.error;
+    if (userError) throw new Error(userError.message);
+    if (orgRes.error) throw new Error(orgRes.error.message);
     if (serviceRes.error) throw new Error(serviceRes.error);
     if (verificationRes.error && !/does not exist|schema cache/i.test(verificationRes.error.message)) {
-      throw verificationRes.error;
+      throw new Error(verificationRes.error.message);
     }
     if (mediaRes.error && !/does not exist|schema cache/i.test(mediaRes.error.message)) {
-      throw mediaRes.error;
+      throw new Error(mediaRes.error.message);
     }
-    setUser(data as UserRow | null);
-    setOrgs((orgRes.data ?? []) as OrganizationRow[]);
-    setMediaItems((mediaRes.data ?? []) as ProfileMediaRow[]);
-    setVerificationId(verificationRes.data?.id ?? null);
-    setVerificationStatus(verificationRes.data?.status ?? null);
-    setCoinWallet(coinMap[id] ?? null);
-
     let nextServices = (serviceRes.data ?? []) as ServiceRow[];
+    let wallet: WalletRow | null = null;
+    let withdrawals: WithdrawalRow[] = [];
+    let bookings: ServiceRequestRow[] = [];
     if (marketRes.ok) {
       const market = (await marketRes.json()) as {
         services?: ServiceRow[];
@@ -144,31 +155,72 @@ export default function UserDetailPage() {
         bookings?: ServiceRequestRow[];
       };
       if (Array.isArray(market.services)) nextServices = market.services;
-      setWallet(market.wallet ?? null);
-      setWithdrawals(market.withdrawals ?? []);
-      setBookings(market.bookings ?? []);
+      wallet = market.wallet ?? null;
+      withdrawals = market.withdrawals ?? [];
+      bookings = market.bookings ?? [];
     }
-    setServices(nextServices);
 
+    let feedInterest: FeedInterestDetail | null = null;
     if (feedRes.ok) {
       const feed = (await feedRes.json()) as FeedInterestDetail;
-      setFeedInterest({
+      feedInterest = {
         preferences: feed.preferences ?? null,
         topics: feed.topics ?? [],
         creators: feed.creators ?? [],
         feedback: feed.feedback ?? [],
-      });
-    } else {
-      setFeedInterest(null);
+      };
     }
+
+    return {
+      user: data as UserRow | null,
+      orgs: (orgRes.data ?? []) as OrganizationRow[],
+      mediaItems: (mediaRes.data ?? []) as ProfileMediaRow[],
+      verificationId: verificationRes.data?.id ?? null,
+      verificationStatus: verificationRes.data?.status ?? null,
+      coinWallet: coinMap[id] ?? null,
+      services: nextServices,
+      wallet,
+      withdrawals,
+      bookings,
+      feedInterest,
+    };
   };
 
+  const {
+    data: snapshot,
+    loading,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<UserSnapshot>({
+    key: adminCacheKey(["people", "detail", id]),
+    fetcher: fetchSnapshot,
+  });
+
+  useApplyAdminSnapshot(snapshot, (snap) => {
+    setUser(snap.user);
+    setOrgs(snap.orgs);
+    setMediaItems(snap.mediaItems);
+    setVerificationId(snap.verificationId);
+    setVerificationStatus(snap.verificationStatus);
+    setCoinWallet(snap.coinWallet);
+    setServices(snap.services);
+    setWallet(snap.wallet);
+    setWithdrawals(snap.withdrawals);
+    setBookings(snap.bookings);
+    setFeedInterest(snap.feedInterest);
+  });
+
   useEffect(() => {
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load user"))
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+    if (loadError) setError(loadError);
+  }, [loadError]);
+
+  /** Soft reload after a mutation; also drops the parent list cache. */
+  const load = async () => {
+    setError(null);
+    invalidateAdminCache(adminCacheKey(["people", "list"]));
+    const next = await refresh();
+    if (!next) throw new Error("Failed to reload user");
+  };
 
   const save = async (patch: Partial<UserRow>) => {
     if (!user) return;
@@ -255,6 +307,7 @@ export default function UserDetailPage() {
     setError(null);
     try {
       await deleteAdmin(`/api/admin/users/${user.id}`);
+      invalidateAdminCache(adminCacheKey(["people"]));
       router.push("/admin/people");
     } catch (err) {
       setModalError(err instanceof Error ? err.message : "Delete failed");

@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
-import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
+import { AdminErrorAlert, AdminLoadingRow, AdminReloadButton } from "@/components/admin-layout";
+import { adminCacheKey } from "@/lib/admin-session-cache";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import { cn, formatDateTime } from "@/lib/utils";
 
 type Metric = {
@@ -85,13 +87,6 @@ export default function ContentOverviewPage() {
   const customStart = searchParams.get("start") || "";
   const customEnd = searchParams.get("end") || "";
 
-  const [data, setData] = useState<Overview | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [ok, setOk] = useState(false);
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
-  const loadSeq = useRef(0);
-
   const writeParams = useCallback(
     (patch: Record<string, string | null>) => {
       const next = new URLSearchParams(searchParams.toString());
@@ -105,12 +100,15 @@ export default function ContentOverviewPage() {
     [pathname, router, searchParams],
   );
 
-  const load = useCallback(async () => {
-    const seq = ++loadSeq.current;
-    setLoading(true);
-    setError(null);
-    setOk(false);
-    try {
+  const {
+    data: result,
+    loading,
+    refreshing,
+    error,
+    refresh,
+  } = useAdminQuery<{ overview: Overview; fetchedAt: string }>({
+    key: adminCacheKey(["content", "overview", rangeDays, range, customStart, customEnd]),
+    fetcher: async () => {
       const qs = new URLSearchParams();
       qs.set("range_days", String(rangeDays));
       if (range) qs.set("range", range);
@@ -120,23 +118,13 @@ export default function ContentOverviewPage() {
       }
       const res = await fetch(`/api/admin/content/overview?${qs}`, { cache: "no-store" });
       const payload = (await res.json()) as Overview;
-      if (seq !== loadSeq.current) return;
       if (!res.ok) throw new Error(payload.error || "Failed to load");
-      setData(payload);
-      setOk(true);
-      setUpdatedAt(new Date().toISOString());
-    } catch (err) {
-      if (seq !== loadSeq.current) return;
-      setError(err instanceof Error ? err.message : "Failed to load");
-      setData(null);
-    } finally {
-      if (seq === loadSeq.current) setLoading(false);
-    }
-  }, [customEnd, customStart, range, rangeDays]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+      return { overview: payload, fetchedAt: new Date().toISOString() };
+    },
+  });
+  const data = result?.overview ?? null;
+  const updatedAt = result?.fetchedAt ?? null;
+  const load = refresh;
 
   const m = data?.metrics ?? {};
   const drills = data?.drilldowns ?? {};
@@ -162,13 +150,12 @@ export default function ContentOverviewPage() {
         title="Content overview"
         description="Publishing health for Sport News, media, banners, and moderation - snapshots stay separate from period activity."
         actions={
-          <button
-            type="button"
+          <AdminReloadButton
+            loading={loading}
+            refreshing={refreshing}
             onClick={() => void load()}
-            className="inline-flex h-9 items-center rounded-lg border border-border bg-card px-3 text-xs font-medium"
-          >
-            Refresh
-          </button>
+            label="Refresh"
+          />
         }
       />
 
@@ -272,9 +259,9 @@ export default function ContentOverviewPage() {
         </div>
       ) : null}
 
-      {loading ? <AdminLoadingRow label="Loading content overview…" /> : null}
+      {loading && !data ? <AdminLoadingRow label="Loading content overview…" /> : null}
 
-      {!loading && ok ? (
+      {data ? (
         <>
           <section className="space-y-3">
             <h2 className="font-heading text-sm font-semibold">Publishing summary</h2>

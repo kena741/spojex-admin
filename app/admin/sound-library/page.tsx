@@ -1,18 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
   AdminErrorAlert,
   AdminTableLoading,
   AdminModal,
+  AdminReloadButton,
   AdminRowMenu,
   AdminSearchInput,
   AdminTableShell,
 } from "@/components/admin-layout";
 import { SoundClipEditor } from "@/components/sound-clip-editor";
 import { SharedAudioPlayer } from "@/components/shared-audio-player";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import { deleteAdmin, patchAdmin, postAdminResponse } from "@/lib/hooks";
 import { newsLibrarySoundAccept, validateLibrarySound } from "@/lib/news-media";
 import {
@@ -24,6 +26,8 @@ import {
 } from "@/lib/news-sounds";
 import { toBackendMediaUrl } from "@/lib/spojex-media";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import { formatDate } from "@/lib/utils";
 import Link from "next/link";
 
@@ -62,12 +66,10 @@ async function uploadLibrarySound(file: File) {
 export default function SoundLibraryPage() {
   const { can } = useAdminPermissions();
   const canWrite = can("news:write") || can("sounds:write");
-  const [rows, setRows] = useState<SportNewsSoundRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [filterKind, setFilterKind] = useState("all");
-  const [query, setQuery] = useState("");
+  const [filterKind, setFilterKind] = useAdminUiState("sound-library:kind", "all");
+  const [query, setQuery] = useAdminUiState("sound-library:query", "");
   const [uploadOpen, setUploadOpen] = useState(false);
   const [name, setName] = useState("");
   const [kind, setKind] = useState("stadium");
@@ -80,26 +82,29 @@ export default function SoundLibraryPage() {
   const [editName, setEditName] = useState("");
   const [renaming, setRenaming] = useState(false);
 
-  const load = async () => {
-    const libRes = await fetch("/api/admin/news-sounds", {
-      credentials: "same-origin",
-    });
-    const libPayload = (await libRes.json()) as {
-      data?: SportNewsSoundRow[];
-      error?: string;
-    };
-    if (!libRes.ok)
-      throw new Error(libPayload.error || "Failed to load sounds");
-    setRows(libPayload.data ?? []);
-  };
-
-  useEffect(() => {
-    load()
-      .catch((err) =>
-        setError(err instanceof Error ? err.message : "Failed to load"),
-      )
-      .finally(() => setLoading(false));
-  }, []);
+  const {
+    data,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<SportNewsSoundRow[]>({
+    key: adminCacheKey(["news-sounds", "list"]),
+    fetcher: async () => {
+      const libRes = await fetch("/api/admin/news-sounds", {
+        credentials: "same-origin",
+      });
+      const libPayload = (await libRes.json()) as {
+        data?: SportNewsSoundRow[];
+        error?: string;
+      };
+      if (!libRes.ok)
+        throw new Error(libPayload.error || "Failed to load sounds");
+      return libPayload.data ?? [];
+    },
+  });
+  const rows = useMemo(() => data ?? [], [data]);
+  const error = actionError || loadError;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -185,7 +190,7 @@ export default function SoundLibraryPage() {
           ? "That audio URL is already in the library - reused existing track (names are not merged)."
           : "Sound added to the library.",
       );
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save sound");
     } finally {
@@ -200,7 +205,7 @@ export default function SoundLibraryPage() {
       await patchAdmin(`/api/admin/news-sounds/${row.id}`, {
         is_active: !row.is_active,
       });
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update sound");
     }
@@ -231,7 +236,7 @@ export default function SoundLibraryPage() {
       await patchAdmin(`/api/admin/news-sounds/${row.id}`, { name: next });
       setNotice(`Renamed to “${next}”.`);
       cancelRename();
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not rename sound");
     } finally {
@@ -250,7 +255,7 @@ export default function SoundLibraryPage() {
     setError(null);
     try {
       await deleteAdmin(`/api/admin/news-sounds/${row.id}`);
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not delete sound");
     }
@@ -268,6 +273,11 @@ export default function SoundLibraryPage() {
         ]}
         actions={
           <div className="flex flex-wrap gap-2">
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
+              onClick={() => void refresh()}
+            />
             <Link
               href="/admin/media-library?type=sound"
               className="rounded-md border border-border px-3 py-2 text-sm"
@@ -440,7 +450,7 @@ export default function SoundLibraryPage() {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
+            {loading && rows.length === 0 ? (
               <AdminTableLoading colSpan={6} label="Loading sounds…" />
             ) : filtered.length === 0 ? (
               <tr>

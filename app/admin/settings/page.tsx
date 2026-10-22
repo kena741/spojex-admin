@@ -14,15 +14,21 @@ import {
   PercentCircle,
   Plus,
   Receipt,
-  RefreshCw,
   Save,
   Shield,
   Smartphone,
   Trash2,
 } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
-import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
-import { adminFetch, postAdminResponse } from "@/lib/hooks";
+import { AdminErrorAlert, AdminLoadingRow, AdminReloadButton } from "@/components/admin-layout";
+import {
+  ADMIN_SETTINGS_CACHE_KEY,
+  fetchAdminSettingsPayload,
+  type AdminSettingsPayload,
+} from "@/lib/admin-settings-query";
+import { postAdminResponse } from "@/lib/hooks";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { cn } from "@/lib/utils";
 
@@ -103,10 +109,9 @@ function labelClassName() {
 export default function GlobalSettingsPage() {
   const { can } = useAdminPermissions();
   const canWrite = can("settings:write");
-  const [tab, setTab] = useState<TabId>("app");
-  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useAdminUiState<TabId>("settings:global:tab", "app");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const [appSettings, setAppSettings] = useState<Record<string, unknown>>({});
@@ -155,26 +160,19 @@ export default function GlobalSettingsPage() {
 
   const chapa = asObject(payment.chapa);
 
-  const load = async () => {
-    setError(null);
-    const response = await adminFetch("/api/admin/settings");
-    const payload = (await response.json()) as {
-      error?: string;
-      appRows?: Array<{ id: string; data: unknown }>;
-      languageRows?: LanguageRow[];
-      taxRows?: Array<{
-        id: number;
-        country: string;
-        name: string;
-        value: number;
-        type: string;
-        is_fix?: boolean;
-        active: boolean;
-      }>;
-      coinSettings?: { etb_per_coin?: number; coins_per_birr?: number };
-    };
-    if (!response.ok) throw new Error(payload.error || "Failed to load settings");
+  const {
+    data: settingsData,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<AdminSettingsPayload>({
+    key: ADMIN_SETTINGS_CACHE_KEY,
+    fetcher: fetchAdminSettingsPayload,
+  });
+  const error = actionError ?? loadError;
 
+  const hydrate = (payload: AdminSettingsPayload) => {
     const perBirr = Number(payload.coinSettings?.coins_per_birr);
     if (Number.isFinite(perBirr) && perBirr > 0) {
       setCoinsPerBirr(
@@ -278,15 +276,18 @@ export default function GlobalSettingsPage() {
   };
 
   useEffect(() => {
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-  }, []);
+    if (settingsData) hydrate(settingsData);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsData]);
+
+  const load = async () => {
+    await refresh();
+  };
 
   const save = async () => {
     if (!canWrite) return;
     setSaving(true);
-    setError(null);
+    setActionError(null);
     setNotice(null);
     try {
       const rate = Number(coinsPerBirr);
@@ -315,7 +316,7 @@ export default function GlobalSettingsPage() {
       setNotice("Settings saved.");
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save settings");
+      setActionError(err instanceof Error ? err.message : "Could not save settings");
     } finally {
       setSaving(false);
     }
@@ -324,7 +325,7 @@ export default function GlobalSettingsPage() {
   const saveTaxes = async () => {
     if (!canWrite) return;
     setSaving(true);
-    setError(null);
+    setActionError(null);
     setNotice(null);
     try {
       await postAdminResponse("/api/admin/settings/tax", {
@@ -334,7 +335,7 @@ export default function GlobalSettingsPage() {
       setNotice("Country tax saved.");
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save tax");
+      setActionError(err instanceof Error ? err.message : "Could not save tax");
     } finally {
       setSaving(false);
     }
@@ -351,21 +352,14 @@ export default function GlobalSettingsPage() {
         ]}
         actions={
           <div className="flex items-center gap-2">
-            <button
-              type="button"
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
               onClick={() => {
-                setLoading(true);
-                load()
-                  .catch((err) =>
-                    setError(err instanceof Error ? err.message : "Failed to load"),
-                  )
-                  .finally(() => setLoading(false));
+                setActionError(null);
+                void refresh();
               }}
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm"
-            >
-              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-              Refresh
-            </button>
+            />
             {canWrite && (
               <button
                 type="button"

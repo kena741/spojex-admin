@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
   AdminErrorAlert,
   AdminFilterPanel,
+  AdminReloadButton,
   AdminTableLoading,
   AdminSearchInput,
   AdminSelect,
@@ -14,7 +15,10 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
 import { UserAvatar } from "@/components/user-avatar";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import { formatDateTime } from "@/lib/utils";
 
 type Recipient = {
@@ -67,12 +71,8 @@ function recipientLabel(row: NotificationRow): string {
 
 export default function NotificationsPage() {
   const { can } = useAdminPermissions();
-  const [rows, setRows] = useState<NotificationRow[]>([]);
-  const [scopeNote, setScopeNote] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [kindFilter, setKindFilter] = useState("all");
+  const [query, setQuery] = useAdminUiState("notifications:query", "");
+  const [kindFilter, setKindFilter] = useAdminUiState("notifications:kind", "all");
   const [composerOpen, setComposerOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -81,10 +81,15 @@ export default function NotificationsPage() {
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<BroadcastResult | null>(null);
 
-  const load = async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const {
+    data,
+    loading,
+    refreshing,
+    error,
+    refresh,
+  } = useAdminQuery<{ rows: NotificationRow[]; scopeNote: string | null }>({
+    key: adminCacheKey(["notifications", "list"]),
+    fetcher: async () => {
       const response = await fetch("/api/admin/notifications", {
         credentials: "same-origin",
         cache: "no-store",
@@ -92,19 +97,11 @@ export default function NotificationsPage() {
       const payload = (await response.json()) as ListPayload;
       if (!response.ok)
         throw new Error(payload.error || "Failed to load notifications");
-      setRows(payload.data ?? []);
-      setScopeNote(payload.scope_note ?? null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void load();
-  }, []);
+      return { rows: payload.data ?? [], scopeNote: payload.scope_note ?? null };
+    },
+  });
+  const rows = useMemo(() => data?.rows ?? [], [data]);
+  const scopeNote = data?.scopeNote ?? null;
 
   const kindOptions = useMemo(() => {
     const set = new Set<string>();
@@ -178,7 +175,8 @@ export default function NotificationsPage() {
       setBody("");
       setAudienceConfirm(false);
       setComposerOpen(false);
-      await load();
+      invalidateAdminCache("notifications");
+      await refresh();
     } catch {
       setResult({
         ok: false,
@@ -203,18 +201,25 @@ export default function NotificationsPage() {
           { label: "Notifications" },
         ]}
         actions={
-          can("notifications:write") ? (
-            <button
-              type="button"
-              onClick={() => {
-                setComposerOpen((v) => !v);
-                setResult(null);
-              }}
-              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
-            >
-              {composerOpen ? "Close composer" : "Create notification"}
-            </button>
-          ) : null
+          <div className="flex flex-wrap items-center gap-2">
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
+              onClick={() => void refresh()}
+            />
+            {can("notifications:write") ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setComposerOpen((v) => !v);
+                  setResult(null);
+                }}
+                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+              >
+                {composerOpen ? "Close composer" : "Create notification"}
+              </button>
+            ) : null}
+          </div>
         }
       />
 
@@ -372,7 +377,7 @@ export default function NotificationsPage() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {loading && rows.length === 0 ? (
                 <AdminTableLoading
                   colSpan={7}
                   label="Loading notification history…"

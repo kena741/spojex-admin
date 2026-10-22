@@ -1,18 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
   AdminErrorAlert,
   AdminFilterPanel,
+  AdminReloadButton,
   AdminTableLoading,
   AdminSearchInput,
   AdminSelect,
   AdminTableShell,
 } from "@/components/admin-layout";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import { deleteAdmin } from "@/lib/hooks";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { ProfileMediaRow } from "@/lib/types";
 import { formatDateTime } from "@/lib/utils";
@@ -27,32 +31,33 @@ function isVideo(item: ProfileMediaRow) {
 export default function ProfileMediaPage() {
   const { can } = useAdminPermissions();
   const canWrite = can("users:write");
-  const [rows, setRows] = useState<ProfileMediaRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [kind, setKind] = useState("all");
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [query, setQuery] = useAdminUiState("profile-media:query", "");
+  const [kind, setKind] = useAdminUiState("profile-media:kind", "all");
 
-  const load = async () => {
-    const response = await fetch("/api/admin/profile-media", {
-      credentials: "same-origin",
-    });
-    const payload = (await response.json()) as {
-      data?: ProfileMediaRow[];
-      error?: string;
-    };
-    if (!response.ok)
-      throw new Error(payload.error || "Failed to load profile media");
-    setRows(payload.data ?? []);
-  };
-
-  useEffect(() => {
-    load()
-      .catch((err) =>
-        setError(err instanceof Error ? err.message : "Failed to load"),
-      )
-      .finally(() => setLoading(false));
-  }, []);
+  const {
+    data,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<ProfileMediaRow[]>({
+    key: adminCacheKey(["profile-media", "list"]),
+    fetcher: async () => {
+      const response = await fetch("/api/admin/profile-media", {
+        credentials: "same-origin",
+      });
+      const payload = (await response.json()) as {
+        data?: ProfileMediaRow[];
+        error?: string;
+      };
+      if (!response.ok)
+        throw new Error(payload.error || "Failed to load profile media");
+      return payload.data ?? [];
+    },
+  });
+  const rows = useMemo(() => data ?? [], [data]);
+  const error = actionError || loadError;
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -68,12 +73,12 @@ export default function ProfileMediaPage() {
 
   const remove = async (id: string) => {
     if (!window.confirm("Remove this photo or clip from the profile?")) return;
-    setError(null);
+    setActionError(null);
     try {
       await deleteAdmin(`/api/admin/profile-media/${id}`);
-      await load();
+      await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Delete failed");
+      setActionError(err instanceof Error ? err.message : "Delete failed");
     }
   };
 
@@ -82,6 +87,13 @@ export default function ProfileMediaPage() {
       <AdminPageHeader
         title="Photos & clips"
         description="Profile photos and highlight videos uploaded in the app"
+        actions={
+          <AdminReloadButton
+            loading={loading}
+            refreshing={refreshing}
+            onClick={() => void refresh()}
+          />
+        }
       />
       {error ? <AdminErrorAlert message={error} /> : null}
       <AdminFilterPanel>
@@ -111,7 +123,7 @@ export default function ProfileMediaPage() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {loading && rows.length === 0 ? (
                 <AdminTableLoading colSpan={5} label="Loading media…" />
               ) : filtered.length === 0 ? (
                 <tr>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
@@ -11,6 +11,7 @@ import {
   AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone, type StatusTone } from "@/components/status-badge";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { adminFetch, patchAdmin, uploadAdmin } from "@/lib/hooks";
 import {
   APPLICATION_TRANSITIONS,
@@ -34,6 +35,8 @@ import {
   type OpportunityRow,
 } from "@/lib/opportunities";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useApplyAdminSnapshot } from "@/lib/use-admin-snapshot";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 
 const fieldClass =
@@ -238,7 +241,6 @@ export default function OpportunityDetailPage() {
   const [revenue, setRevenue] = useState<OpportunityRevenue | null>(null);
   const [audit, setAudit] = useState<AuditRow[]>([]);
   const [lastScheduleRun, setLastScheduleRun] = useState<ScheduleRun | null>(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -247,11 +249,13 @@ export default function OpportunityDetailPage() {
   const [applicantFacing, setApplicantFacing] = useState("");
   const [internalNote, setInternalNote] = useState("");
   const [listReturn, setListReturn] = useState("/admin/opportunities");
+  const dirtyRef = useRef(false);
 
   const dirty = useMemo(
     () => baseline !== "" && JSON.stringify(draft) !== baseline,
     [draft, baseline],
   );
+  dirtyRef.current = dirty;
 
   useEffect(() => {
     try {
@@ -274,40 +278,77 @@ export default function OpportunityDetailPage() {
     [pathname, router, searchParams],
   );
 
-  const load = useCallback(async () => {
-    const response = await adminFetch(`/api/admin/opportunities/${id}`);
-    const payload = (await response.json()) as {
-      data?: OpportunityRow;
-      applications?: ApplicationRow[];
-      payments?: PaymentRow[];
-      waitlist?: WaitlistRow[];
-      overview?: Overview;
-      revenue?: OpportunityRevenue;
-      audit?: AuditRow[];
-      last_schedule_run?: ScheduleRun | null;
-      error?: string;
-    };
-    if (response.status === 403) throw new Error("Permission denied");
-    if (!response.ok) throw new Error(payload.error || "Failed to load");
-    if (!payload.data) throw new Error("Opportunity not found");
-    setRow(payload.data);
-    const d = rowToDraft(payload.data);
-    setDraft(d);
-    setBaseline(JSON.stringify(d));
-    setApplications(payload.applications ?? []);
-    setPayments(payload.payments ?? []);
-    setWaitlist(payload.waitlist ?? []);
-    setOverview(payload.overview ?? null);
-    setRevenue(payload.revenue ?? null);
-    setAudit(payload.audit ?? []);
-    setLastScheduleRun(payload.last_schedule_run ?? null);
-  }, [id]);
+  type OpportunitySnapshot = {
+    data: OpportunityRow;
+    applications: ApplicationRow[];
+    payments: PaymentRow[];
+    waitlist: WaitlistRow[];
+    overview: Overview | null;
+    revenue: OpportunityRevenue | null;
+    audit: AuditRow[];
+    last_schedule_run: ScheduleRun | null;
+  };
+
+  const {
+    data: snapshot,
+    loading,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<OpportunitySnapshot>({
+    key: adminCacheKey(["opportunities", "detail", id]),
+    fetcher: async () => {
+      const response = await adminFetch(`/api/admin/opportunities/${id}`);
+      const payload = (await response.json()) as {
+        data?: OpportunityRow;
+        applications?: ApplicationRow[];
+        payments?: PaymentRow[];
+        waitlist?: WaitlistRow[];
+        overview?: Overview;
+        revenue?: OpportunityRevenue;
+        audit?: AuditRow[];
+        last_schedule_run?: ScheduleRun | null;
+        error?: string;
+      };
+      if (response.status === 403) throw new Error("Permission denied");
+      if (!response.ok) throw new Error(payload.error || "Failed to load");
+      if (!payload.data) throw new Error("Opportunity not found");
+      return {
+        data: payload.data,
+        applications: payload.applications ?? [],
+        payments: payload.payments ?? [],
+        waitlist: payload.waitlist ?? [],
+        overview: payload.overview ?? null,
+        revenue: payload.revenue ?? null,
+        audit: payload.audit ?? [],
+        last_schedule_run: payload.last_schedule_run ?? null,
+      };
+    },
+  });
+
+  useApplyAdminSnapshot(snapshot, (snap) => {
+    setRow(snap.data);
+    setApplications(snap.applications);
+    setPayments(snap.payments);
+    setWaitlist(snap.waitlist);
+    setOverview(snap.overview);
+    setRevenue(snap.revenue);
+    setAudit(snap.audit);
+    setLastScheduleRun(snap.last_schedule_run);
+    if (!dirtyRef.current) {
+      const d = rowToDraft(snap.data);
+      setDraft(d);
+      setBaseline(JSON.stringify(d));
+    }
+  });
 
   useEffect(() => {
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-  }, [load]);
+    if (loadError) setError(loadError);
+  }, [loadError]);
+
+  const load = useCallback(async () => {
+    invalidateAdminCache(adminCacheKey(["opportunities", "list"]));
+    await refresh();
+  }, [refresh]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -463,7 +504,7 @@ export default function OpportunityDetailPage() {
     }
   };
 
-  if (loading) {
+  if (loading && !row) {
     return (
       <>
         <AdminPageHeader title="Opportunity" description="Loading…" backHref={listReturn} />

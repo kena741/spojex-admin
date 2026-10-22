@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -10,11 +10,12 @@ import {
   Dumbbell,
   HeartHandshake,
   Radio,
-  RefreshCw,
 } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
-import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
+import { AdminErrorAlert, AdminLoadingRow, AdminReloadButton } from "@/components/admin-layout";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import { cn, formatDateTime } from "@/lib/utils";
 
 type Metric = {
@@ -172,12 +173,6 @@ export default function NativeAppsOverviewPage() {
   const start = searchParams.get("start") || "";
   const end = searchParams.get("end") || "";
 
-  const [data, setData] = useState<OverviewPayload | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const requestId = useRef(0);
-
   const writeParams = useCallback(
     (patch: Record<string, string | null>) => {
       const next = new URLSearchParams(searchParams.toString());
@@ -190,43 +185,31 @@ export default function NativeAppsOverviewPage() {
     [pathname, router, searchParams],
   );
 
-  const load = useCallback(
-    async (opts?: { soft?: boolean }) => {
-      const id = ++requestId.current;
-      if (opts?.soft) setRefreshing(true);
-      else setLoading(true);
-      setError(null);
-      try {
-        const params = new URLSearchParams();
-        params.set("range", range);
-        if (range === "custom" && start && end) {
-          params.set("start", start);
-          params.set("end", end);
-        }
-        const res = await fetch(`/api/admin/native-apps/overview?${params}`, {
-          cache: "no-store",
-        });
-        const payload = (await res.json()) as OverviewPayload;
-        if (id !== requestId.current) return;
-        if (!res.ok) throw new Error(payload.error || "Failed to load overview");
-        setData(payload);
-      } catch (err) {
-        if (id !== requestId.current) return;
-        setError(err instanceof Error ? err.message : "Failed to load");
-      } finally {
-        if (id === requestId.current) {
-          setLoading(false);
-          setRefreshing(false);
-        }
+  const {
+    data,
+    loading,
+    refreshing,
+    error,
+    refresh,
+  } = useAdminQuery<OverviewPayload>({
+    key: adminCacheKey(["native-apps", "overview", range, start, end]),
+    enabled: !permsLoading,
+    fetcher: async () => {
+      const params = new URLSearchParams();
+      params.set("range", range);
+      if (range === "custom" && start && end) {
+        params.set("start", start);
+        params.set("end", end);
       }
+      const res = await fetch(`/api/admin/native-apps/overview?${params}`, {
+        cache: "no-store",
+      });
+      const payload = (await res.json()) as OverviewPayload;
+      if (!res.ok) throw new Error(payload.error || "Failed to load overview");
+      return payload;
     },
-    [range, start, end],
-  );
-
-  useEffect(() => {
-    if (permsLoading) return;
-    void load();
-  }, [load, permsLoading]);
+  });
+  const load = refresh;
 
   const modules = data?.modules ?? {};
   const attention = data?.attention ?? [];
@@ -246,15 +229,12 @@ export default function NativeAppsOverviewPage() {
         title="Native Apps"
         description="Operations hub for venues, gyms, events, donations, and streams"
         actions={
-          <button
-            type="button"
-            onClick={() => void load({ soft: true })}
-            disabled={loading || refreshing}
-            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
-          >
-            <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
-            Refresh
-          </button>
+          <AdminReloadButton
+            loading={loading}
+            refreshing={refreshing}
+            onClick={() => void load()}
+            label="Refresh"
+          />
         }
       />
 
@@ -321,9 +301,11 @@ export default function NativeAppsOverviewPage() {
         </div>
       ) : null}
 
-      {loading || permsLoading ? <AdminLoadingRow label="Loading Native Apps overview…" /> : null}
+      {(loading && !data) || permsLoading ? (
+        <AdminLoadingRow label="Loading Native Apps overview…" />
+      ) : null}
 
-      {!loading && !permsLoading ? (
+      {data && !permsLoading ? (
         <>
           {/* Needs attention */}
           <section className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
@@ -378,7 +360,7 @@ export default function NativeAppsOverviewPage() {
                       </p>
                       <button
                         type="button"
-                        onClick={() => void load({ soft: true })}
+                        onClick={() => void load()}
                         className="mt-2 text-xs font-medium text-primary hover:underline"
                       >
                         Retry

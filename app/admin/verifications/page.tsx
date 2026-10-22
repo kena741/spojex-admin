@@ -8,12 +8,16 @@ import {
   AdminEmpty,
   AdminErrorAlert,
   AdminLoadingRow,
+  AdminReloadButton,
   AdminSearchInput,
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { UserAvatar } from "@/components/user-avatar";
 import VerificationRequirementsEditor from "@/components/verification-requirements-editor";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import { patchAdmin } from "@/lib/hooks";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import type { IdentityVerificationRequestRow } from "@/lib/types";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
@@ -100,21 +104,20 @@ export default function VerificationCenterPage() {
   const roleFilter = searchParams.get("role") || "all";
   const page = Math.max(1, Number(searchParams.get("page") || 1) || 1);
 
-  const [rows, setRows] = useState<QueueRow[]>([]);
-  const [counts, setCounts] = useState<QueueCounts>({});
-  const [total, setTotal] = useState(0);
-  const [countsScope, setCountsScope] = useState("global");
-  const [selected, setSelected] = useState<DetailRow | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [loadState, setLoadState] = useState<"idle" | "ok" | "empty" | "denied" | "failed">("idle");
+  const [actionError, setError] = useState<string | null>(null);
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [query, setQuery] = useState(searchParams.get("q") || "");
+  const [query, setQuery] = useAdminUiState("verifications:query", searchParams.get("q") || "");
+  const [debouncedQuery, setDebouncedQuery] = useState(query);
   const [applicantNote, setApplicantNote] = useState("");
   const [internalNote, setInternalNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [mobileDetail, setMobileDetail] = useState(false);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedQuery(query), 250);
+    return () => window.clearTimeout(handle);
+  }, [query]);
 
   const writeParams = useCallback(
     (patch: Record<string, string | null | undefined>) => {
@@ -128,16 +131,28 @@ export default function VerificationCenterPage() {
     [pathname, router, searchParams],
   );
 
-  const loadQueue = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setLoadState("idle");
-    try {
+  const trimmedQuery = debouncedQuery.trim();
+  const {
+    data: queueData,
+    loading,
+    refreshing,
+    error: queueError,
+    refresh: loadQueue,
+  } = useAdminQuery<{
+    rows: QueueRow[];
+    total: number;
+    counts: QueueCounts;
+    countsScope: string;
+  }>({
+    key: adminCacheKey(["verifications", "queue", statusFilter, page, trimmedQuery, roleFilter]),
+    enabled: tab === "requests",
+    fetcher: async () => {
+      setErrorStatus(null);
       const params = new URLSearchParams();
       params.set("status", statusFilter);
       params.set("page", String(page));
       params.set("page_size", "40");
-      if (query.trim()) params.set("q", query.trim());
+      if (trimmedQuery) params.set("q", trimmedQuery);
       if (roleFilter !== "all") params.set("role", roleFilter);
 
       const response = await fetch(`/api/admin/verifications?${params}`, {
@@ -153,44 +168,49 @@ export default function VerificationCenterPage() {
       };
 
       if (response.status === 401 || response.status === 403) {
-        setLoadState("denied");
-        setError(payload.error || "Permission denied");
-        setRows([]);
-        return;
+        setErrorStatus(response.status);
+        throw new Error(payload.error || "Permission denied");
       }
       if (!response.ok) {
-        setLoadState("failed");
-        setError(payload.error || "Failed to load verification queue");
-        setRows([]);
-        return;
+        setErrorStatus(response.status);
+        throw new Error(payload.error || "Failed to load verification queue");
       }
 
       const data = payload.data ?? [];
-      setRows(data);
-      setTotal(payload.total ?? data.length);
-      setCounts(payload.counts ?? {});
-      setCountsScope(payload.counts_scope || "global");
-      setLoadState(data.length === 0 ? "empty" : "ok");
-    } catch (err) {
-      setLoadState("failed");
-      setError(err instanceof Error ? err.message : "Failed to load");
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [statusFilter, page, query, roleFilter]);
+      return {
+        rows: data,
+        total: payload.total ?? data.length,
+        counts: payload.counts ?? {},
+        countsScope: payload.counts_scope || "global",
+      };
+    },
+  });
+  const rows = useMemo(() => (queueError ? [] : (queueData?.rows ?? [])), [queueData, queueError]);
+  const total = queueError ? 0 : (queueData?.total ?? 0);
+  const counts: QueueCounts = queueData?.counts ?? {};
+  const countsScope = queueData?.countsScope ?? "global";
+  const loadState: "idle" | "ok" | "empty" | "denied" | "failed" = queueError
+    ? errorStatus === 401 || errorStatus === 403
+      ? "denied"
+      : "failed"
+    : queueData
+      ? rows.length === 0
+        ? "empty"
+        : "ok"
+      : "idle";
 
-  useEffect(() => {
-    if (tab !== "requests") return;
-    const handle = window.setTimeout(() => void loadQueue(), query ? 250 : 0);
-    return () => window.clearTimeout(handle);
-  }, [loadQueue, tab, query]);
-
-  const loadDetail = useCallback(async (id: string) => {
-    setDetailLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`/api/admin/verifications/${id}`, { credentials: "same-origin" });
+  const {
+    data: detailData,
+    loading: detailLoading,
+    error: detailError,
+    refresh: loadDetail,
+  } = useAdminQuery<DetailRow | null>({
+    key: selectedId ? adminCacheKey(["verifications", "detail", selectedId]) : null,
+    enabled: tab === "requests" && Boolean(selectedId),
+    fetcher: async () => {
+      const response = await fetch(`/api/admin/verifications/${selectedId}`, {
+        credentials: "same-origin",
+      });
       const payload = (await response.json()) as {
         error?: string;
         data?: DetailRow;
@@ -199,27 +219,25 @@ export default function VerificationCenterPage() {
         throw new Error(payload.error || "Permission denied");
       }
       if (!response.ok) throw new Error(payload.error || "Failed to load request");
-      setSelected(payload.data ?? null);
-      setApplicantNote(payload.data?.applicant_feedback || payload.data?.review_note || "");
-      setInternalNote(payload.data?.internal_notes || payload.data?.notes || "");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load request");
-      setSelected(null);
-    } finally {
-      setDetailLoading(false);
-    }
-  }, []);
+      return payload.data ?? null;
+    },
+  });
+  const selected =
+    tab === "requests" && selectedId && detailData?.id === selectedId && !detailError
+      ? detailData
+      : null;
+  const error = actionError || queueError || detailError;
+
+  // Seed note editors whenever a (new or refreshed) detail payload arrives.
+  useEffect(() => {
+    setApplicantNote(selected?.applicant_feedback || selected?.review_note || "");
+    setInternalNote(selected?.internal_notes || selected?.notes || "");
+  }, [selected]);
 
   useEffect(() => {
     if (tab !== "requests") return;
-    if (selectedId) {
-      setMobileDetail(true);
-      void loadDetail(selectedId);
-      return;
-    }
-    setSelected(null);
-    setMobileDetail(false);
-  }, [selectedId, tab, loadDetail]);
+    setMobileDetail(Boolean(selectedId));
+  }, [selectedId, tab]);
 
   const review = async (status: "approved" | "rejected" | "pending") => {
     if (!canVerify || !selected) return;
@@ -248,8 +266,7 @@ export default function VerificationCenterPage() {
             ? "Request rejected."
             : "Additional information requested. Status remains pending.",
       );
-      await loadQueue();
-      await loadDetail(selected.id);
+      await Promise.all([loadQueue(), loadDetail()]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Review failed");
     } finally {
@@ -268,8 +285,7 @@ export default function VerificationCenterPage() {
         expected_updated_at: selected.updated_at,
       });
       setNotice("Review claimed.");
-      await loadQueue();
-      await loadDetail(selected.id);
+      await Promise.all([loadQueue(), loadDetail()]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Claim failed");
     } finally {
@@ -295,6 +311,13 @@ export default function VerificationCenterPage() {
         description="Identity and role-document review. Org and gym verification stay in their own directories."
         actions={
           <div className="flex flex-wrap gap-1.5">
+            {tab === "requests" ? (
+              <AdminReloadButton
+                loading={loading}
+                refreshing={refreshing}
+                onClick={() => void loadQueue()}
+              />
+            ) : null}
             <button
               type="button"
               onClick={() => writeParams({ tab: "requests", id: selectedId || null })}

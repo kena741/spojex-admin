@@ -7,6 +7,7 @@ import AdminPageHeader from "@/components/admin-header";
 import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { formatEventWhen } from "@/lib/events";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { adminFetch, deleteAdmin, postAdminResponse } from "@/lib/hooks";
 import {
   STREAMS_LIVE_HREF,
@@ -33,6 +34,9 @@ import {
 } from "@/lib/live-events";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useApplyAdminSnapshot } from "@/lib/use-admin-snapshot";
+import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import type { LiveEventRow, OrganizationRow } from "@/lib/types";
 
 const tabs = [
@@ -276,7 +280,8 @@ function LiveEventDetail() {
   const thumbInputRef = useRef<HTMLInputElement>(null);
 
   const initialTab = searchParams.get("tab");
-  const [tab, setTab] = useState<TabId>(
+  const [tab, setTab] = useAdminUiState<TabId>(
+    `live-events:detail:${id}:tab`,
     tabs.some((item) => item.id === initialTab) ? (initialTab as TabId) : "overview",
   );
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
@@ -284,7 +289,6 @@ function LiveEventDetail() {
   const [form, setForm] = useState<SettingsForm | null>(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
@@ -293,6 +297,7 @@ function LiveEventDetail() {
   const [notifying, setNotifying] = useState(false);
   const [showDevSources, setShowDevSources] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const dirtyEditRef = useRef(false);
 
   // Lifecycle (Broadcast tab) - separate from score controls.
   const [pending, setPending] = useState<LiveLifecycleAction | null>(null);
@@ -334,43 +339,51 @@ function LiveEventDetail() {
     });
   }, []);
 
+  type LiveSnapshot = { workspace: Workspace; orgs: OrgOption[] };
+
+  const {
+    data: snapshot,
+    loading,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<LiveSnapshot>({
+    key: adminCacheKey(["live-events", "detail", id]),
+    fetcher: async () => {
+      const response = await adminFetch(`/api/admin/live-events/${id}/workspace`);
+      const payload = (await response.json().catch(() => ({}))) as Workspace;
+      if (!response.ok) throw new Error(payload.error || "Failed to load live event");
+      const { data, error: orgError } = await getSpojexClient()
+        .from("organizations")
+        .select("id, name, public_id, is_platform")
+        .order("is_platform", { ascending: false })
+        .order("name")
+        .limit(300);
+      return {
+        workspace: payload,
+        orgs: orgError ? [] : ((data ?? []) as OrgOption[]),
+      };
+    },
+  });
+
+  useApplyAdminSnapshot(snapshot, (snap) => {
+    setWorkspace(snap.workspace);
+    setOrgs(snap.orgs);
+    syncBoards(snap.workspace.event);
+    if (!dirtyEditRef.current) {
+      setForm(formFromEvent(snap.workspace.event));
+    }
+  });
+
+  useEffect(() => {
+    if (loadError) setError(loadError);
+  }, [loadError]);
+
   const loadWorkspace = useCallback(async () => {
-    const response = await adminFetch(`/api/admin/live-events/${id}/workspace`);
-    const payload = (await response.json().catch(() => ({}))) as Workspace;
-    if (!response.ok) throw new Error(payload.error || "Failed to load live event");
-    setWorkspace(payload);
-    syncBoards(payload.event);
-    return payload;
-  }, [id, syncBoards]);
-
-  useEffect(() => {
-    let cancelled = false;
-    loadWorkspace()
-      .then((payload) => {
-        if (!cancelled) setForm(formFromEvent(payload.event));
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load live event");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [loadWorkspace]);
-
-  useEffect(() => {
-    getSpojexClient()
-      .from("organizations")
-      .select("id, name, public_id, is_platform")
-      .order("is_platform", { ascending: false })
-      .order("name")
-      .limit(300)
-      .then(({ data, error: orgError }) => {
-        if (!orgError) setOrgs((data ?? []) as OrgOption[]);
-      });
-  }, []);
+    invalidateAdminCache(adminCacheKey(["streams", "overview"]));
+    const next = await refresh();
+    if (!next) throw new Error("Failed to reload live event");
+    return next.workspace;
+  }, [refresh]);
 
   const status = workspace?.lifecycle?.status || workspace?.event.status || "";
   useEffect(() => {
@@ -386,6 +399,7 @@ function LiveEventDetail() {
       JSON.stringify({ ...formFromEvent(workspace.event), reason: "" })
     );
   }, [editing, form, workspace]);
+  dirtyEditRef.current = dirty;
 
   useEffect(() => {
     if (!dirty) return;
@@ -662,7 +676,7 @@ function LiveEventDetail() {
     }
   };
 
-  if (loading) return <AdminLoadingRow label="Loading live event…" />;
+  if (loading && !workspace) return <AdminLoadingRow label="Loading live event…" />;
   if (!workspace || !form) return <AdminErrorAlert message={error || "Event not found"} />;
 
   const event = workspace.event;

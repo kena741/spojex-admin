@@ -13,7 +13,10 @@ import {
   type BookingAction,
   type BookingRow,
 } from "@/lib/bookings";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useApplyAdminSnapshot } from "@/lib/use-admin-snapshot";
 import { cn, formatDateTime, formatStatusLabel } from "@/lib/utils";
 
 type DetailPayload = {
@@ -39,7 +42,6 @@ export default function BookingDetailPage() {
   const canWrite = can("requests:write");
 
   const [payload, setPayload] = useState<DetailPayload | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -55,16 +57,23 @@ export default function BookingDetailPage() {
     }
   }, []);
 
-  const load = useCallback(async () => {
-    setError(null);
-    const res = await fetch(`/api/admin/marketplace/bookings/${id}`, { cache: "no-store" });
-    const body = (await res.json()) as DetailPayload;
-    if (res.status === 404) {
-      setPayload(null);
-      setError(body.error || "Booking not found");
-      return;
-    }
-    if (!res.ok) throw new Error(body.error || "Failed to load booking");
+  const {
+    data: snapshot,
+    loading,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<DetailPayload>({
+    key: adminCacheKey(["requests", "detail", id]),
+    fetcher: async () => {
+      const res = await fetch(`/api/admin/marketplace/bookings/${id}`, { cache: "no-store" });
+      const body = (await res.json()) as DetailPayload;
+      if (res.status === 404) throw new Error(body.error || "Booking not found");
+      if (!res.ok) throw new Error(body.error || "Failed to load booking");
+      return body;
+    },
+  });
+
+  useApplyAdminSnapshot(snapshot, (body) => {
     setPayload(body);
     const at = body.data?.requested_at;
     if (at) {
@@ -78,14 +87,19 @@ export default function BookingDetailPage() {
       setScheduleAt("");
     }
     setScheduleDirty(false);
-  }, [id]);
+  });
 
   useEffect(() => {
-    setLoading(true);
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-  }, [load]);
+    if (loadError) setError(loadError);
+  }, [loadError]);
+
+  /** Soft reload after a mutation; also drops the parent list cache. */
+  const load = useCallback(async () => {
+    setError(null);
+    invalidateAdminCache(adminCacheKey(["requests", "list"]));
+    const next = await refresh();
+    if (!next) throw new Error("Failed to reload booking");
+  }, [refresh]);
 
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {

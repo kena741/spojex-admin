@@ -15,11 +15,15 @@ import {
   AdminErrorAlert,
   AdminFilterPanel,
   AdminLoadingRow,
+  AdminReloadButton,
   AdminSearchInput,
   AdminSelect,
   AdminTableShell,
 } from "@/components/admin-layout";
 import { UserAvatar } from "@/components/user-avatar";
+import { adminCacheKey } from "@/lib/admin-session-cache";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import { cn, formatDateTime } from "@/lib/utils";
 
 type Participant = {
@@ -151,16 +155,9 @@ function MessagesPageInner() {
   const selectedId = searchParams.get("id") || "";
   const page = Math.max(1, Number(searchParams.get("page") || "1") || 1);
 
-  const [items, setItems] = useState<ConversationItem[]>([]);
-  const [total, setTotal] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const [detail, setDetail] = useState<DetailPayload | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [detailLoading, setDetailLoading] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [searchDraft, setSearchDraft] = useState(q);
-  const [showDetails, setShowDetails] = useState(false);
+  const [showDetails, setShowDetails] = useAdminUiState("messages:show-details", false);
 
   const writeParams = useCallback(
     (patch: Record<string, string | null>) => {
@@ -175,10 +172,15 @@ function MessagesPageInner() {
     [pathname, router, searchParams],
   );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const {
+    data: listData,
+    loading,
+    refreshing,
+    error: listError,
+    refresh,
+  } = useAdminQuery<{ items: ConversationItem[]; total: number; hasMore: boolean }>({
+    key: adminCacheKey(["messages", "list", typeFilter, q, page]),
+    fetcher: async () => {
       const qs = new URLSearchParams();
       if (typeFilter !== "all") qs.set("type", typeFilter);
       if (q) qs.set("q", q);
@@ -195,66 +197,73 @@ function MessagesPageInner() {
         error?: string;
       };
       if (!res.ok) throw new Error(body.error || "Couldn't load messages.");
-      setItems(body.items ?? []);
-      setTotal(body.total ?? 0);
-      setHasMore(Boolean(body.has_more));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't load messages.");
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [typeFilter, q, page]);
+      return {
+        items: body.items ?? [],
+        total: body.total ?? 0,
+        hasMore: Boolean(body.has_more),
+      };
+    },
+  });
+  const items = listData?.items ?? [];
+  const total = listData?.total ?? 0;
+  const hasMore = listData?.hasMore ?? false;
 
-  const loadDetail = useCallback(async (id: string, before?: string | null) => {
-    if (before) setLoadingOlder(true);
-    else setDetailLoading(true);
-    try {
+  const {
+    data: detailData,
+    loading: detailLoading,
+    error: detailError,
+    replace: replaceDetail,
+  } = useAdminQuery<DetailPayload>({
+    key: selectedId ? adminCacheKey(["messages", "detail", selectedId]) : null,
+    enabled: Boolean(selectedId),
+    fetcher: async () => {
       const qs = new URLSearchParams({ limit: "50" });
-      if (before) qs.set("before", before);
-      const res = await fetch(`/api/admin/messages/${encodeURIComponent(id)}?${qs}`, {
+      const res = await fetch(`/api/admin/messages/${encodeURIComponent(selectedId)}?${qs}`, {
         credentials: "same-origin",
         cache: "no-store",
       });
       const body = (await res.json()) as DetailPayload;
       if (!res.ok) throw new Error(body.error || "Couldn't load conversation.");
-      if (before) {
-        setDetail((prev) => {
-          if (!prev || prev.id !== id) return body;
-          const seen = new Set(prev.messages?.map((m) => m.id));
-          const older = (body.messages ?? []).filter((m) => !seen.has(m.id));
-          return {
-            ...prev,
-            ...body,
-            messages: [...older, ...(prev.messages ?? [])],
-          };
-        });
-      } else {
-        setDetail(body);
-      }
-    } catch (err) {
-      if (!before) {
-        setDetail(null);
-        setError(err instanceof Error ? err.message : "Couldn't load conversation.");
-      }
-    } finally {
-      setDetailLoading(false);
-      setLoadingOlder(false);
-    }
-  }, []);
+      return body;
+    },
+  });
+  const detail = selectedId && detailData?.id === selectedId ? detailData : null;
+  const error = listError || detailError;
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const loadOlder = useCallback(
+    async (id: string, before: string) => {
+      setLoadingOlder(true);
+      try {
+        const qs = new URLSearchParams({ limit: "50", before });
+        const res = await fetch(`/api/admin/messages/${encodeURIComponent(id)}?${qs}`, {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        const body = (await res.json()) as DetailPayload;
+        if (!res.ok) throw new Error(body.error || "Couldn't load conversation.");
+        if (!detailData || detailData.id !== id) {
+          replaceDetail(body);
+          return;
+        }
+        const seen = new Set(detailData.messages?.map((m) => m.id));
+        const older = (body.messages ?? []).filter((m) => !seen.has(m.id));
+        replaceDetail({
+          ...detailData,
+          ...body,
+          messages: [...older, ...(detailData.messages ?? [])],
+        });
+      } catch {
+        /* older page failures are non-blocking */
+      } finally {
+        setLoadingOlder(false);
+      }
+    },
+    [detailData, replaceDetail],
+  );
 
   useEffect(() => {
     setSearchDraft(q);
   }, [q]);
-
-  useEffect(() => {
-    if (selectedId) void loadDetail(selectedId);
-    else setDetail(null);
-  }, [selectedId, loadDetail]);
 
   const timeline = useMemo(() => {
     const messages = detail?.messages ?? [];
@@ -290,6 +299,13 @@ function MessagesPageInner() {
           { label: "Network", href: "/admin/network" },
           { label: "Messages" },
         ]}
+        actions={
+          <AdminReloadButton
+            loading={loading}
+            refreshing={refreshing}
+            onClick={() => void refresh()}
+          />
+        }
       />
 
       {error ? <AdminErrorAlert message={error} /> : null}
@@ -466,7 +482,7 @@ function MessagesPageInner() {
                     className="text-xs font-medium text-primary hover:underline disabled:opacity-50"
                     onClick={() => {
                       const oldest = detail.messages?.[0]?.created_at;
-                      if (oldest) void loadDetail(detail.id, oldest);
+                      if (oldest) void loadOlder(detail.id, oldest);
                     }}
                   >
                     {loadingOlder ? "Loading…" : "Load older messages"}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
 import AdminPageHeader from "@/components/admin-header";
 import {
@@ -12,8 +12,11 @@ import {
   AdminTableLoading,
   AdminTableShell,
 } from "@/components/admin-layout";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import { getSpojexClient } from "@/lib/spojex/client";
 import type { ServiceReviewRow } from "@/lib/types";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import { formatDate } from "@/lib/utils";
 
 type ReviewListRow = ServiceReviewRow & {
@@ -22,98 +25,58 @@ type ReviewListRow = ServiceReviewRow & {
   provider?: { id: string; display_name: string } | null;
 };
 
-export default function ReviewsPage() {
-  const [rows, setRows] = useState<ReviewListRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [rating, setRating] = useState("all");
+async function fetchReviews(): Promise<ReviewListRow[]> {
+  const client = getSpojexClient();
+  const withProvider = await client
+    .from("service_reviews")
+    .select(
+      "*, services:service_id(id, title), reviewer:reviewer_id(id, display_name), provider:provider_id(id, display_name)",
+    )
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (!withProvider.error) return (withProvider.data ?? []) as ReviewListRow[];
+  const withNames = await client
+    .from("service_reviews")
+    .select("*, services:service_id(id, title), reviewer:reviewer_id(id, display_name)")
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (!withNames.error) return (withNames.data ?? []) as ReviewListRow[];
+  const plain = await client
+    .from("service_reviews")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (plain.error) throw new Error(plain.error.message);
+  return (plain.data ?? []) as ReviewListRow[];
+}
 
-  useEffect(() => {
-    const load = async () => {
-      const client = getSpojexClient();
-      const withProvider = await client
-        .from("service_reviews")
-        .select(
-          "*, services:service_id(id, title), reviewer:reviewer_id(id, display_name), provider:provider_id(id, display_name)",
-        )
-        .order("created_at", { ascending: false })
-        .limit(500);
-      if (!withProvider.error) {
-        setRows((withProvider.data ?? []) as ReviewListRow[]);
-        setLoading(false);
-        return;
-      }
-      const withNames = await client
-        .from("service_reviews")
-        .select("*, services:service_id(id, title), reviewer:reviewer_id(id, display_name)")
-        .order("created_at", { ascending: false })
-        .limit(500);
-      if (!withNames.error) {
-        setRows((withNames.data ?? []) as ReviewListRow[]);
-        setLoading(false);
-        return;
-      }
-      const plain = await client
-        .from("service_reviews")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(500);
-      if (plain.error) setError(plain.error.message);
-      else setRows((plain.data ?? []) as ReviewListRow[]);
-      setLoading(false);
-    };
-    load();
-  }, []);
+export default function ReviewsPage() {
+  const [rating, setRating] = useAdminUiState("reviews:rating", "all");
+  const {
+    data,
+    loading,
+    refreshing,
+    error,
+    refresh,
+  } = useAdminQuery<ReviewListRow[]>({
+    key: adminCacheKey(["reviews", "list"]),
+    fetcher: fetchReviews,
+  });
+  const rows = useMemo(() => data ?? [], [data]);
 
   const filtered = useMemo(() => {
     if (rating === "all") return rows;
     return rows.filter((row) => String(row.rating) === rating);
   }, [rating, rows]);
 
-  const refresh = () => {
-    setLoading(true);
-    setError(null);
-    void (async () => {
-      const client = getSpojexClient();
-      const withProvider = await client
-        .from("service_reviews")
-        .select(
-          "*, services:service_id(id, title), reviewer:reviewer_id(id, display_name), provider:provider_id(id, display_name)",
-        )
-        .order("created_at", { ascending: false })
-        .limit(500);
-      if (!withProvider.error) {
-        setRows((withProvider.data ?? []) as ReviewListRow[]);
-        setLoading(false);
-        return;
-      }
-      const withNames = await client
-        .from("service_reviews")
-        .select("*, services:service_id(id, title), reviewer:reviewer_id(id, display_name)")
-        .order("created_at", { ascending: false })
-        .limit(500);
-      if (!withNames.error) {
-        setRows((withNames.data ?? []) as ReviewListRow[]);
-        setLoading(false);
-        return;
-      }
-      const plain = await client
-        .from("service_reviews")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(500);
-      if (plain.error) setError(plain.error.message);
-      else setRows((plain.data ?? []) as ReviewListRow[]);
-      setLoading(false);
-    })();
-  };
-
   return (
     <>
       <AdminPageHeader
         title="Reviews"
         description="Ratings left after a completed booking"
-        actions={<AdminReloadButton loading={loading} onClick={refresh} />}
+        actions={
+          <AdminReloadButton loading={loading} refreshing={refreshing} onClick={() => void refresh()} />
+        }
       />
       <AdminFilterPanel>
         <div className="max-w-xs">

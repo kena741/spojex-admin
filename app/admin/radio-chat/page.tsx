@@ -16,18 +16,21 @@ import {
   AdminErrorAlert,
   AdminFilterPanel,
   AdminLoadingRow,
+  AdminReloadButton,
   AdminRowMenu,
   AdminSearchInput,
   AdminSelect,
   type AdminRowMenuItem,
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { adminFetch, postAdminResponse } from "@/lib/hooks";
 import {
   canModerateRadioChat,
   canReadRadioChat,
 } from "@/lib/admin-permissions";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import {
   REPORT_QUEUE_STATUSES,
   initials,
@@ -114,13 +117,9 @@ function RadioChatPage() {
     (tab === "reports" ? searchParams.get("status") || "unresolved" : "unresolved");
   const openReport = searchParams.get("report") || "";
 
-  const [stations, setStations] = useState<RadioChatStation[]>([]);
-  const [messagesPayload, setMessagesPayload] = useState<MessagesResponse | null>(null);
-  const [reportsPayload, setReportsPayload] = useState<ReportsResponse | null>(null);
   const [contextMessages, setContextMessages] = useState<RadioChatMessage[] | null>(null);
   const [detail, setDetail] = useState<RadioChatReportDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [conn, setConn] = useState<ConnState>("idle");
   const [pendingNew, setPendingNew] = useState<RadioChatMessage[]>([]);
@@ -136,6 +135,8 @@ function RadioChatPage() {
   const readingOlderRef = useRef(false);
   const newestCursorRef = useRef<{ created_at: string; id: string } | null>(null);
   const visibleRef = useRef(true);
+  const messagesDataRef = useRef<MessagesResponse | null>(null);
+  const messagesReplaceRef = useRef<(value: MessagesResponse) => void>(() => {});
 
   const writeParams = useCallback(
     (patch: Record<string, string | null>, opts?: { resetPage?: boolean }) => {
@@ -153,61 +154,93 @@ function RadioChatPage() {
     [pathname, router, searchParams],
   );
 
+  const isHistoricalSearch = Boolean(
+    q || reported || dateFrom || dateTo || (msgStatus && msgStatus !== "all") || focusMessage,
+  );
+
+  const canLoad = canRead && !permLoading;
+
+  const stationsQuery = useAdminQuery<RadioChatStation[]>({
+    key: canLoad ? adminCacheKey(["radio-chat", "stations"]) : null,
+    enabled: canLoad,
+    fetcher: async () => {
+      const res = await adminFetch("/api/admin/radio-chat/stations");
+      const data = (await res.json()) as { stations?: RadioChatStation[]; error?: string };
+      if (!res.ok) throw new Error(data.error || "Failed to load stations");
+      return data.stations ?? [];
+    },
+  });
+
+  const messagesQuery = useAdminQuery<MessagesResponse>({
+    key:
+      canLoad && tab === "messages" && !focusMessage
+        ? adminCacheKey([
+            "radio-chat",
+            "messages",
+            streamId,
+            q,
+            msgStatus,
+            reported,
+            dateFrom,
+            dateTo,
+            page,
+          ])
+        : null,
+    enabled: canLoad && tab === "messages" && !focusMessage,
+    fetcher: async () => {
+      const params = new URLSearchParams();
+      if (streamId) params.set("stream_id", streamId);
+      if (q) params.set("q", q);
+      if (msgStatus && msgStatus !== "all") params.set("status", msgStatus);
+      if (reported === "1") params.set("reported", "1");
+      if (dateFrom) params.set("date_from", dateFrom);
+      if (dateTo) params.set("date_to", dateTo);
+      params.set("page", String(page));
+      params.set("page_size", "40");
+      const res = await adminFetch(`/api/admin/radio-chat/messages?${params}`);
+      const data = (await res.json()) as MessagesResponse;
+      if (!res.ok) throw new Error(data.error || "Failed to load messages");
+      return data;
+    },
+  });
+
+  const reportsQuery = useAdminQuery<ReportsResponse>({
+    key:
+      canLoad && tab === "reports"
+        ? adminCacheKey(["radio-chat", "reports", streamId, q, reportStatus, page])
+        : null,
+    enabled: canLoad && tab === "reports",
+    fetcher: async () => {
+      const params = new URLSearchParams();
+      if (streamId) params.set("stream_id", streamId);
+      if (q) params.set("q", q);
+      params.set("status", reportStatus || "unresolved");
+      params.set("page", String(page));
+      params.set("page_size", "40");
+      const res = await adminFetch(`/api/admin/radio-chat/reports?${params}`);
+      const data = (await res.json()) as ReportsResponse;
+      if (!res.ok) throw new Error(data.error || "Failed to load reports");
+      return data;
+    },
+  });
+
+  const stations = stationsQuery.data ?? [];
+  const messagesPayload = messagesQuery.data;
+  const reportsPayload = reportsQuery.data;
+  messagesDataRef.current = messagesPayload;
+  messagesReplaceRef.current = messagesQuery.replace;
+
   const selectedStation = useMemo(
     () => stations.find((s) => s.id === streamId) ?? null,
     [stations, streamId],
   );
 
-  const isHistoricalSearch = Boolean(
-    q || reported || dateFrom || dateTo || (msgStatus && msgStatus !== "all") || focusMessage,
-  );
-
-  const loadStations = useCallback(async () => {
-    const res = await adminFetch("/api/admin/radio-chat/stations");
-    const data = (await res.json()) as { stations?: RadioChatStation[]; error?: string };
-    if (!res.ok) throw new Error(data.error || "Failed to load stations");
-    setStations(data.stations ?? []);
-  }, []);
-
-  const loadMessages = useCallback(async () => {
-    const params = new URLSearchParams();
-    if (streamId) params.set("stream_id", streamId);
-    if (q) params.set("q", q);
-    if (msgStatus && msgStatus !== "all") params.set("status", msgStatus);
-    if (reported === "1") params.set("reported", "1");
-    if (dateFrom) params.set("date_from", dateFrom);
-    if (dateTo) params.set("date_to", dateTo);
-    params.set("page", String(page));
-    params.set("page_size", "40");
-    const res = await adminFetch(`/api/admin/radio-chat/messages?${params}`);
-    const data = (await res.json()) as MessagesResponse;
-    if (!res.ok) {
-      setMessagesPayload(null);
-      throw new Error(data.error || "Failed to load messages");
-    }
-    setMessagesPayload(data);
-    const first = data.messages[0];
+  useEffect(() => {
+    const first = messagesPayload?.messages[0];
     if (first?.created_at) {
       newestCursorRef.current = { created_at: first.created_at, id: first.id };
     }
-    setPendingNew([]);
-  }, [streamId, q, msgStatus, reported, dateFrom, dateTo, page]);
-
-  const loadReports = useCallback(async () => {
-    const params = new URLSearchParams();
-    if (streamId) params.set("stream_id", streamId);
-    if (q) params.set("q", q);
-    params.set("status", reportStatus || "unresolved");
-    params.set("page", String(page));
-    params.set("page_size", "40");
-    const res = await adminFetch(`/api/admin/radio-chat/reports?${params}`);
-    const data = (await res.json()) as ReportsResponse;
-    if (!res.ok) {
-      setReportsPayload(null);
-      throw new Error(data.error || "Failed to load reports");
-    }
-    setReportsPayload(data);
-  }, [streamId, q, reportStatus, page]);
+  }, [messagesPayload]);
 
   const loadContext = useCallback(async (messageId: string) => {
     const res = await adminFetch(
@@ -231,53 +264,82 @@ function RadioChatPage() {
     setDetail(data);
   }, []);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      await loadStations();
-      if (tab === "messages") {
-        if (focusMessage) await loadContext(focusMessage);
-        else {
-          setContextMessages(null);
-          await loadMessages();
-        }
-      } else {
-        await loadReports();
-        if (openReport) {
-          await loadDetail({ reportId: openReport });
-        } else if (focusMessage) {
-          await loadDetail({ messageId: focusMessage });
-        }
-      }
-      setConn(isHistoricalSearch ? "idle" : "live");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-      setConn("error");
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (!canLoad) return;
+    if (tab === "messages" && focusMessage) {
+      void loadContext(focusMessage).catch((err) =>
+        setActionError(err instanceof Error ? err.message : "Failed to load conversation"),
+      );
+    } else {
+      setContextMessages(null);
     }
+  }, [canLoad, tab, focusMessage, loadContext]);
+
+  useEffect(() => {
+    if (!canLoad || tab !== "reports") return;
+    if (openReport) {
+      void loadDetail({ reportId: openReport }).catch((err) =>
+        setActionError(err instanceof Error ? err.message : "Failed to load report"),
+      );
+    } else if (focusMessage) {
+      void loadDetail({ messageId: focusMessage }).catch((err) =>
+        setActionError(err instanceof Error ? err.message : "Failed to load report"),
+      );
+    } else {
+      setDetail(null);
+    }
+  }, [canLoad, tab, openReport, focusMessage, loadDetail]);
+
+  useEffect(() => {
+    if (permLoading) return;
+    if (!canRead) return;
+    setConn(isHistoricalSearch ? "idle" : "live");
+  }, [permLoading, canRead, isHistoricalSearch, tab, streamId, page]);
+
+  const loading =
+    stationsQuery.loading ||
+    (tab === "messages" && !focusMessage && messagesQuery.loading) ||
+    (tab === "reports" && reportsQuery.loading);
+  const refreshing =
+    stationsQuery.refreshing ||
+    messagesQuery.refreshing ||
+    reportsQuery.refreshing;
+  const error =
+    (!canRead && !permLoading
+      ? "Insufficient permission to view Radio Chat."
+      : null) ||
+    actionError ||
+    stationsQuery.error ||
+    (tab === "messages" && !focusMessage ? messagesQuery.error : null) ||
+    (tab === "reports" ? reportsQuery.error : null);
+
+  const refreshStations = stationsQuery.refresh;
+  const refreshMessages = messagesQuery.refresh;
+  const refreshReports = reportsQuery.refresh;
+
+  const refresh = useCallback(async () => {
+    setActionError(null);
+    await refreshStations();
+    if (tab === "messages") {
+      if (focusMessage) await loadContext(focusMessage);
+      else await refreshMessages();
+    } else {
+      await refreshReports();
+      if (openReport) await loadDetail({ reportId: openReport });
+      else if (focusMessage) await loadDetail({ messageId: focusMessage });
+    }
+    setConn(isHistoricalSearch ? "idle" : "live");
   }, [
-    loadStations,
-    loadMessages,
-    loadReports,
-    loadContext,
-    loadDetail,
+    refreshStations,
+    refreshMessages,
+    refreshReports,
     tab,
     focusMessage,
     openReport,
     isHistoricalSearch,
+    loadContext,
+    loadDetail,
   ]);
-
-  useEffect(() => {
-    if (permLoading) return;
-    if (!canRead) {
-      setLoading(false);
-      setError("Insufficient permission to view Radio Chat.");
-      return;
-    }
-    void refresh();
-  }, [permLoading, canRead, refresh]);
 
   // Visibility: pause polling when hidden
   useEffect(() => {
@@ -321,12 +383,12 @@ function RadioChatPage() {
             listRef.current.scrollHeight - listRef.current.scrollTop - listRef.current.clientHeight <
               80;
           if (atBottom && !readingOlderRef.current) {
-            setMessagesPayload((prev) => {
-              if (!prev) return prev;
+            const prev = messagesDataRef.current;
+            if (prev) {
               const seen = new Set(prev.messages.map((m) => m.id));
               const merged = [...incoming.filter((m) => !seen.has(m.id)), ...prev.messages];
-              return { ...prev, messages: merged };
-            });
+              messagesReplaceRef.current({ ...prev, messages: merged });
+            }
             const top = incoming[0];
             if (top.created_at) newestCursorRef.current = { created_at: top.created_at, id: top.id };
           } else {
@@ -353,12 +415,12 @@ function RadioChatPage() {
 
   const applyPending = () => {
     if (!pendingNew.length) return;
-    setMessagesPayload((prev) => {
-      if (!prev) return prev;
+    const prev = messagesDataRef.current;
+    if (prev) {
       const seen = new Set(prev.messages.map((m) => m.id));
       const merged = [...pendingNew.filter((m) => !seen.has(m.id)), ...prev.messages];
-      return { ...prev, messages: merged };
-    });
+      messagesReplaceRef.current({ ...prev, messages: merged });
+    }
     const top = pendingNew[0];
     if (top?.created_at) newestCursorRef.current = { created_at: top.created_at, id: top.id };
     setPendingNew([]);
@@ -376,12 +438,13 @@ function RadioChatPage() {
 
   const runAction = async (fn: () => Promise<void>) => {
     setBusy(true);
-    setError(null);
+    setActionError(null);
     try {
       await fn();
+      invalidateAdminCache("radio-chat");
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Action failed");
+      setActionError(err instanceof Error ? err.message : "Action failed");
     } finally {
       setBusy(false);
     }
@@ -568,14 +631,13 @@ function RadioChatPage() {
                     ? "Historical search"
                     : "Idle"}
           </span>
-          <button
-            type="button"
+          <AdminReloadButton
+            loading={loading}
+            refreshing={refreshing}
             onClick={() => void refresh()}
-            className="text-primary hover:underline"
-            disabled={loading || busy}
-          >
-            Refresh
-          </button>
+            label="Refresh"
+            className="h-8"
+          />
           <Link href="/admin/streams?tab=radio" className="text-primary hover:underline">
             Manage stations in Streams
           </Link>
@@ -802,7 +864,7 @@ function RadioChatPage() {
             onScroll={onListScroll}
             className="max-h-[70vh] overflow-y-auto rounded-xl border border-border bg-card"
           >
-            {loading ? (
+            {loading && !messagesPayload && !contextMessages ? (
               <AdminLoadingRow label="Loading messages…" compact className="py-10" />
             ) : displayMessages.length === 0 ? (
               <AdminEmpty
@@ -924,7 +986,7 @@ function RadioChatPage() {
             </AdminFilterPanel>
 
             <div className="rounded-xl border border-border bg-card">
-              {loading ? (
+              {loading && !reportsPayload ? (
                 <AdminLoadingRow label="Loading reports…" compact className="py-10" />
               ) : (reportsPayload?.groups.length ?? 0) === 0 ? (
                 <AdminEmpty

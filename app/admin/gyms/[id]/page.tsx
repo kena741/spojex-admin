@@ -58,6 +58,7 @@ import {
   type GymStaffRow,
   type GymWorkspace,
 } from "@/lib/gyms";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import {
   adminFetch,
   deleteAdmin,
@@ -67,6 +68,8 @@ import {
 } from "@/lib/hooks";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useApplyAdminSnapshot } from "@/lib/use-admin-snapshot";
 import {
   cn,
   formatDate,
@@ -683,7 +686,6 @@ function GymWorkspaceView() {
   const [fallbackGym, setFallbackGym] = useState<GymRow | null>(null);
   const [wsError, setWsError] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<GymCategoryRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -708,67 +710,86 @@ function GymWorkspaceView() {
     [],
   );
 
-  const loadWorkspace = useCallback(async () => {
-    const res = await adminFetch(`/api/admin/gyms/${id}/workspace`);
-    const payload = await readJson<Partial<GymWorkspace>>(res);
-    if (res.ok && payload.data) {
-      setWs(payload as GymWorkspace);
-      setFallbackGym(null);
-      setWsError(null);
-      return;
-    }
-    const reason = payload.error || "Workspace summary unavailable";
-    const fb = await adminFetch(`/api/admin/gyms/${id}`);
-    const fbPayload = await readJson<{ data?: GymRow }>(fb);
-    if (!fb.ok || !fbPayload.data) {
-      throw new Error(fbPayload.error || reason);
-    }
-    setWs(null);
-    setFallbackGym(fbPayload.data);
-    setWsError(reason);
-  }, [id]);
+  type GymDetailSnapshot = {
+    ws: GymWorkspace | null;
+    fallbackGym: GymRow | null;
+    wsError: string | null;
+    catalog: GymCategoryRow[];
+  };
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    void (async () => {
-      try {
-        const [, categoriesRes] = await Promise.all([
-          loadWorkspace(),
-          getSpojexClient().from("gym_categories").select("*").order("sort_order"),
-        ]);
-        if (cancelled) return;
-        if (!categoriesRes.error && (categoriesRes.data?.length ?? 0) > 0) {
-          setCatalog(categoriesRes.data as GymCategoryRow[]);
-        } else {
-          setCatalog(
-            gymCategories.map((item) => ({
+  const {
+    data: snapshot,
+    loading,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<GymDetailSnapshot>({
+    key: adminCacheKey(["gyms", "detail", id]),
+    fetcher: async () => {
+      const categoriesPromise = getSpojexClient()
+        .from("gym_categories")
+        .select("*")
+        .order("sort_order");
+
+      const res = await adminFetch(`/api/admin/gyms/${id}/workspace`);
+      const payload = await readJson<Partial<GymWorkspace>>(res);
+      let nextWs: GymWorkspace | null = null;
+      let nextFallback: GymRow | null = null;
+      let nextWsError: string | null = null;
+
+      if (res.ok && payload.data) {
+        nextWs = payload as GymWorkspace;
+      } else {
+        const reason = payload.error || "Workspace summary unavailable";
+        const fb = await adminFetch(`/api/admin/gyms/${id}`);
+        const fbPayload = await readJson<{ data?: GymRow }>(fb);
+        if (!fb.ok || !fbPayload.data) {
+          throw new Error(fbPayload.error || reason);
+        }
+        nextFallback = fbPayload.data;
+        nextWsError = reason;
+      }
+
+      const categoriesRes = await categoriesPromise;
+      const nextCatalog =
+        !categoriesRes.error && (categoriesRes.data?.length ?? 0) > 0
+          ? (categoriesRes.data as GymCategoryRow[])
+          : gymCategories.map((item) => ({
               id: item.id,
               slug: item.id,
               label: item.label,
               emoji: item.emoji ?? "",
               sort_order: 0,
-            })),
-          );
-        }
-      } catch (err) {
-        if (!cancelled) setError(errorMessage(err, "Failed to load gym"));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [loadWorkspace]);
+            }));
+
+      return {
+        ws: nextWs,
+        fallbackGym: nextFallback,
+        wsError: nextWsError,
+        catalog: nextCatalog,
+      };
+    },
+  });
+
+  useApplyAdminSnapshot(snapshot, (snap) => {
+    setWs(snap.ws);
+    setFallbackGym(snap.fallbackGym);
+    setWsError(snap.wsError);
+    setCatalog(snap.catalog);
+  });
+
+  useEffect(() => {
+    if (loadError) setError(loadError);
+  }, [loadError]);
 
   const reload = useCallback(async () => {
     try {
-      await loadWorkspace();
+      invalidateAdminCache(adminCacheKey(["gyms", "list"]));
+      const next = await refresh();
+      if (!next) throw new Error("Failed to refresh gym");
     } catch (err) {
       setError(errorMessage(err, "Failed to refresh gym"));
     }
-  }, [loadWorkspace]);
+  }, [refresh]);
 
   // Unsaved-profile protection for hard navigation (refresh / close tab).
   useEffect(() => {
@@ -845,7 +866,7 @@ function GymWorkspaceView() {
     }
   };
 
-  if (loading) return <AdminLoadingRow label="Loading gym…" />;
+  if (loading && !ws && !fallbackGym) return <AdminLoadingRow label="Loading gym…" />;
   if (!gym) return <AdminErrorAlert message={error || "Gym not found"} />;
 
   const ownerName =

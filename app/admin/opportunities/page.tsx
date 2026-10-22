@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
@@ -19,6 +19,7 @@ import {
   AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { adminFetch, deleteAdmin, postAdmin, postAdminResponse } from "@/lib/hooks";
 import { toBackendMediaUrl } from "@/lib/spojex-media";
 import {
@@ -33,6 +34,7 @@ import {
   type OpportunityRow,
 } from "@/lib/opportunities";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import { formatDateTime } from "@/lib/utils";
 
 const fieldClass =
@@ -61,6 +63,13 @@ type SummaryScope = {
   };
 };
 
+type OpportunitiesListData = {
+  rows: ListRow[];
+  total: number;
+  summary: SummaryScope;
+  definitions: Record<string, string>;
+};
+
 export default function OpportunitiesPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -78,13 +87,7 @@ export default function OpportunitiesPage() {
   const page = Math.max(1, Number(searchParams.get("page") || 1) || 1);
   const summaryMode = searchParams.get("summary") === "filtered" ? "filtered" : "global";
 
-  const [rows, setRows] = useState<ListRow[]>([]);
-  const [total, setTotal] = useState(0);
-  const [summary, setSummary] = useState<SummaryScope>({});
-  const [definitions, setDefinitions] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
-  const [ok, setOk] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [draft, setDraft] = useState<OpportunityDraft>(emptyOpportunityDraft());
   const [saving, setSaving] = useState(false);
@@ -104,11 +107,26 @@ export default function OpportunitiesPage() {
     [pathname, router, searchParams],
   );
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setOk(false);
-    try {
+  const {
+    data: listData,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<OpportunitiesListData>({
+    key: adminCacheKey([
+      "opportunities",
+      "list",
+      page,
+      q,
+      status,
+      published,
+      category,
+      organizer,
+      country,
+      deadline,
+    ]),
+    fetcher: async () => {
       const params = new URLSearchParams({
         page: String(page),
         page_size: "40",
@@ -132,24 +150,21 @@ export default function OpportunitiesPage() {
         error?: string;
       };
       if (!response.ok) throw new Error(payload.error || "Failed to load");
-      setRows(payload.data ?? []);
-      setTotal(payload.total ?? 0);
-      setSummary(payload.summary_scope ?? {});
-      setDefinitions(payload.definitions ?? {});
-      setOk(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [page, q, status, published, category, organizer, country, deadline]);
+      return {
+        rows: payload.data ?? [],
+        total: payload.total ?? 0,
+        summary: payload.summary_scope ?? {},
+        definitions: payload.definitions ?? {},
+      };
+    },
+  });
 
-  // Fetch once on mount and when page changes. Filters apply on Reload.
-  useEffect(() => {
-    void refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  const rows = useMemo(() => (loadError ? [] : (listData?.rows ?? [])), [listData, loadError]);
+  const total = listData?.total ?? 0;
+  const summary = listData?.summary ?? {};
+  const definitions = listData?.definitions ?? {};
+  const error = actionError ?? loadError;
+  const ok = listData != null && !loadError;
 
   const openCreate = () => {
     setDraft(emptyOpportunityDraft());
@@ -189,6 +204,7 @@ export default function OpportunitiesPage() {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Create failed");
+      invalidateAdminCache("opportunities");
       setModalOpen(false);
       const created = payload.data;
       if (created?.id) {
@@ -265,7 +281,11 @@ export default function OpportunitiesPage() {
         description="Trials, jobs, and scouting listings - publication, applications, and interest waitlists are separate"
         actions={
           <div className="flex flex-wrap gap-2">
-            <AdminReloadButton loading={loading} onClick={() => void refresh()} />
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
+              onClick={() => void refresh()}
+            />
             {canWrite ? (
               <>
               <button

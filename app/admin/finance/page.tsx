@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
-import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
+import { AdminErrorAlert, AdminLoadingRow, AdminReloadButton } from "@/components/admin-layout";
+import { adminCacheKey } from "@/lib/admin-session-cache";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import { cn, formatDateTime } from "@/lib/utils";
 
 type CurrencySummary = {
@@ -104,12 +106,6 @@ export default function FinanceOverviewPage() {
   const customStart = searchParams.get("start") || "";
   const customEnd = searchParams.get("end") || "";
 
-  const [summary, setSummary] = useState<SummaryPayload | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [ok, setOk] = useState(false);
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
-
   const writeParams = useCallback(
     (patch: Record<string, string | null>) => {
       const next = new URLSearchParams(searchParams.toString());
@@ -123,11 +119,15 @@ export default function FinanceOverviewPage() {
     [pathname, router, searchParams],
   );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setOk(false);
-    try {
+  const {
+    data: result,
+    loading,
+    refreshing,
+    error,
+    refresh,
+  } = useAdminQuery<{ summary: SummaryPayload; fetchedAt: string }>({
+    key: adminCacheKey(["finance", "overview", range, customStart, customEnd]),
+    fetcher: async () => {
       const qs = new URLSearchParams();
       qs.set("range", range);
       if (range === "custom" && customStart && customEnd) {
@@ -139,20 +139,13 @@ export default function FinanceOverviewPage() {
       });
       const payload = (await res.json()) as SummaryPayload;
       if (!res.ok) throw new Error(payload.error || "Failed to load finance overview");
-      setSummary(payload);
-      setOk(true);
-      setUpdatedAt(new Date().toISOString());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-      setSummary(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [range, customStart, customEnd]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+      return { summary: payload, fetchedAt: new Date().toISOString() };
+    },
+  });
+  const summary = result?.summary ?? null;
+  const updatedAt = result?.fetchedAt ?? null;
+  const ok = summary != null;
+  const load = refresh;
 
   const moneyRows = (summary?.by_currency ?? []).filter((c) => c.currency !== "COIN");
   const prevMoney = (summary?.previous_by_currency ?? []).filter((c) => c.currency !== "COIN");
@@ -187,13 +180,11 @@ export default function FinanceOverviewPage() {
         description="Verified collections vs platform revenue, refunds, recipient earnings, and payouts - money and coins kept separate."
         actions={
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
               onClick={() => void load()}
-              className="inline-flex h-9 items-center rounded-lg border border-border bg-card px-3 text-xs font-medium"
-            >
-              Refresh
-            </button>
+            />
             <Link
               href={rangeHref("/admin/finance/transactions?view=business")}
               className="inline-flex h-9 items-center rounded-lg border border-border bg-card px-3 text-xs font-medium"

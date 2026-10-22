@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -11,13 +11,14 @@ import {
   ClipboardList,
   HelpCircle,
   LayoutGrid,
-  RefreshCw,
   Store,
   Users,
 } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
-import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
+import { AdminErrorAlert, AdminLoadingRow, AdminReloadButton } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
+import { adminCacheKey } from "@/lib/admin-session-cache";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import { cn, formatDateTime } from "@/lib/utils";
 
 type Metric = {
@@ -152,12 +153,7 @@ export default function MarketplaceOverviewPage() {
   const customStart = searchParams.get("start") || "";
   const customEnd = searchParams.get("end") || "";
 
-  const [data, setData] = useState<Overview | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [ok, setOk] = useState(false);
   const [defsOpen, setDefsOpen] = useState(false);
-  const requestId = useRef(0);
 
   const writeRange = useCallback(
     (patch: Record<string, string | null>) => {
@@ -171,12 +167,15 @@ export default function MarketplaceOverviewPage() {
     [pathname, router, searchParams],
   );
 
-  const load = useCallback(async () => {
-    const id = ++requestId.current;
-    setLoading(true);
-    setError(null);
-    setOk(false);
-    try {
+  const {
+    data,
+    loading,
+    refreshing,
+    error,
+    refresh,
+  } = useAdminQuery<Overview>({
+    key: adminCacheKey(["marketplace", "overview", rangeDays, customStart, customEnd]),
+    fetcher: async () => {
       const params = new URLSearchParams();
       if (customStart && customEnd) {
         params.set("start", customStart);
@@ -188,21 +187,11 @@ export default function MarketplaceOverviewPage() {
         cache: "no-store",
       });
       const payload = (await res.json()) as Overview;
-      if (id !== requestId.current) return; // stale
       if (!res.ok) throw new Error(payload.error || "Failed to load overview");
-      setData(payload);
-      setOk(true);
-    } catch (err) {
-      if (id !== requestId.current) return;
-      setError(err instanceof Error ? err.message : "Failed to load");
-    } finally {
-      if (id === requestId.current) setLoading(false);
-    }
-  }, [rangeDays, customStart, customEnd]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+      return payload;
+    },
+  });
+  const load = refresh;
 
   const m = data?.metrics ?? {};
   const queues = data?.queues ?? {};
@@ -230,14 +219,12 @@ export default function MarketplaceOverviewPage() {
             >
               Metric definitions
             </button>
-            <button
-              type="button"
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
               onClick={() => void load()}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              Refresh
-            </button>
+              label="Refresh"
+            />
           </div>
         }
       />
@@ -348,7 +335,7 @@ export default function MarketplaceOverviewPage() {
         </div>
       ) : null}
 
-      {!loading && ok ? (
+      {data ? (
         <>
           {/* Primary summary */}
           <section>

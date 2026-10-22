@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   AdminEmpty,
@@ -18,8 +18,11 @@ import {
   type AdminRowMenuItem,
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { adminFetch, deleteAdmin, postAdminResponse } from "@/lib/hooks";
 import { getSpojexClient } from "@/lib/spojex/client";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import {
   looksLikeStreamUrl,
   slugifyStream,
@@ -184,23 +187,19 @@ export default function RadioStreamsPanel() {
   const { can } = useAdminPermissions();
   const canWrite = can("streams:write");
 
-  const [rows, setRows] = useState<RadioListRow[]>([]);
-  const [total, setTotal] = useState(0);
-  const [orgs, setOrgs] = useState<OrgOption[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useAdminUiState("radio-streams:query", "");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [status, setStatus] = useState("all");
-  const [genre, setGenre] = useState("all");
-  const [organization, setOrganization] = useState("");
-  const [health, setHealth] = useState("all");
-  const [featured, setFeatured] = useState("all");
-  const [sort, setSort] = useState<string>("sort_order");
-  const [order, setOrder] = useState<"asc" | "desc">("asc");
-  const [page, setPage] = useState(1);
+  const [status, setStatus] = useAdminUiState("radio-streams:status", "all");
+  const [genre, setGenre] = useAdminUiState("radio-streams:genre", "all");
+  const [organization, setOrganization] = useAdminUiState("radio-streams:organization", "");
+  const [health, setHealth] = useAdminUiState("radio-streams:health", "all");
+  const [featured, setFeatured] = useAdminUiState("radio-streams:featured", "all");
+  const [sort, setSort] = useAdminUiState("radio-streams:sort", "sort_order");
+  const [order, setOrder] = useAdminUiState<"asc" | "desc">("radio-streams:order", "asc");
+  const [page, setPage] = useAdminUiState("radio-streams:page", 1);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -216,66 +215,85 @@ export default function RadioStreamsPanel() {
   const [importResult, setImportResult] = useState<ImportPayload | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
 
-  const [reloadKey, setReloadKey] = useState(0);
-  const load = useCallback(async () => {
-    setReloadKey((key) => key + 1);
-  }, []);
-
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 300);
     return () => window.clearTimeout(timer);
   }, [query]);
 
-  // Any filter change returns to page 1.
+  // Any filter change returns to page 1 (skip identical remount restores).
+  const filterSig = `${debouncedQuery}|${status}|${genre}|${organization}|${health}|${featured}|${sort}|${order}`;
+  const lastFilterSig = useRef(filterSig);
   useEffect(() => {
+    if (lastFilterSig.current === filterSig) return;
+    lastFilterSig.current = filterSig;
     setPage(1);
-  }, [debouncedQuery, status, genre, organization, health, featured, sort, order]);
+  }, [filterSig, setPage]);
 
-  useEffect(() => {
-    getSpojexClient()
-      .from("organizations")
-      .select("id, name, public_id, is_platform")
-      .order("is_platform", { ascending: false })
-      .order("name")
-      .limit(500)
-      .then(({ data, error: orgError }) => {
-        if (!orgError) setOrgs((data ?? []) as OrgOption[]);
-      });
-  }, []);
+  const { data: orgsData } = useAdminQuery<OrgOption[]>({
+    key: adminCacheKey(["radio-streams", "orgs"]),
+    fetcher: async () => {
+      const { data, error: orgError } = await getSpojexClient()
+        .from("organizations")
+        .select("id, name, public_id, is_platform")
+        .order("is_platform", { ascending: false })
+        .order("name")
+        .limit(500);
+      if (orgError) throw new Error(orgError.message);
+      return (data ?? []) as OrgOption[];
+    },
+  });
+  const orgs = orgsData ?? [];
 
-  useEffect(() => {
-    let cancelled = false;
-    const params = new URLSearchParams();
-    if (debouncedQuery) params.set("q", debouncedQuery);
-    if (status !== "all") params.set("status", status);
-    if (genre !== "all") params.set("genre", genre);
-    if (organization) params.set("organization", organization);
-    if (health !== "all") params.set("health", health);
-    if (featured !== "all") params.set("featured", featured);
-    params.set("page", String(page));
-    params.set("page_size", String(PAGE_SIZE));
-    params.set("sort", sort);
-    params.set("order", order);
-    setLoading(true);
-    adminFetch(`/api/admin/streams/radio?${params}`)
-      .then(async (response) => {
-        const payload = (await response.json().catch(() => ({}))) as ListPayload;
-        if (cancelled) return;
-        if (!response.ok) throw new Error(payload.error || "Failed to load stations");
-        setRows(payload.data ?? []);
-        setTotal(payload.total ?? payload.data?.length ?? 0);
-        setError(null);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load stations");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [debouncedQuery, status, genre, organization, health, featured, sort, order, page, reloadKey]);
+  type RadioListData = { rows: RadioListRow[]; total: number };
+  const {
+    data: listData,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<RadioListData>({
+    key: adminCacheKey([
+      "radio-streams",
+      "list",
+      debouncedQuery,
+      status,
+      genre,
+      organization,
+      health,
+      featured,
+      sort,
+      order,
+      page,
+    ]),
+    fetcher: async () => {
+      const params = new URLSearchParams();
+      if (debouncedQuery) params.set("q", debouncedQuery);
+      if (status !== "all") params.set("status", status);
+      if (genre !== "all") params.set("genre", genre);
+      if (organization) params.set("organization", organization);
+      if (health !== "all") params.set("health", health);
+      if (featured !== "all") params.set("featured", featured);
+      params.set("page", String(page));
+      params.set("page_size", String(PAGE_SIZE));
+      params.set("sort", sort);
+      params.set("order", order);
+      const response = await adminFetch(`/api/admin/streams/radio?${params}`);
+      const payload = (await response.json().catch(() => ({}))) as ListPayload;
+      if (!response.ok) throw new Error(payload.error || "Failed to load stations");
+      return {
+        rows: payload.data ?? [],
+        total: payload.total ?? payload.data?.length ?? 0,
+      };
+    },
+  });
+  const rows = listData?.rows ?? [];
+  const total = listData?.total ?? 0;
+  const error = actionError ?? loadError;
+
+  const load = useCallback(async () => {
+    invalidateAdminCache("radio-streams");
+    await refresh();
+  }, [refresh]);
 
   const orgName = useCallback(
     (row: RadioListRow) =>
@@ -500,7 +518,8 @@ export default function RadioStreamsPanel() {
       <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
         <AdminReloadButton
           loading={loading}
-          onClick={() => setReloadKey((key) => key + 1)}
+          refreshing={refreshing}
+          onClick={() => void refresh()}
         />
         {canWrite ? (
           <>

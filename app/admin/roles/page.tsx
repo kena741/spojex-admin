@@ -1,14 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
   AdminErrorAlert,
   AdminLoadingRow,
+  AdminReloadButton,
   AdminTableShell,
 } from "@/components/admin-layout";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import { deleteAdmin, postAdmin } from "@/lib/hooks";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import {
   groupPermissionsByCategory,
   PERMISSION_DEFINITIONS,
@@ -25,29 +29,31 @@ function sensitiveCount(perms: string[]) {
 export default function RolesPage() {
   const { can } = useAdminPermissions();
   const canWrite = can("roles:write");
-  const [rows, setRows] = useState<AdminRoleRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [description, setDescription] = useState("");
   const [permissions, setPermissions] = useState<string[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useAdminUiState<string | null>("roles:selected", null);
   const grouped = useMemo(() => groupPermissionsByCategory(PERMISSION_DEFINITIONS), []);
+  const {
+    data,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<AdminRoleRow[]>({
+    key: adminCacheKey(["roles", "list"]),
+    fetcher: async () => {
+      const response = await fetch("/api/admin/roles");
+      const payload = (await response.json()) as { data?: AdminRoleRow[]; error?: string };
+      if (!response.ok) throw new Error(payload.error || "Failed to load roles");
+      return payload.data ?? [];
+    },
+  });
+  const rows = useMemo(() => data ?? [], [data]);
+  const error = actionError || loadError;
   const selected = rows.find((r) => r.id === selectedId) ?? null;
-
-  const load = async () => {
-    const response = await fetch("/api/admin/roles");
-    const payload = (await response.json()) as { data?: AdminRoleRow[]; error?: string };
-    if (!response.ok) throw new Error(payload.error || "Failed to load roles");
-    setRows(payload.data ?? []);
-  };
-
-  useEffect(() => {
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-  }, []);
 
   const togglePermission = (key: string) => {
     setPermissions((current) =>
@@ -64,7 +70,7 @@ export default function RolesPage() {
       setSlug("");
       setDescription("");
       setPermissions([]);
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
     }
@@ -79,7 +85,7 @@ export default function RolesPage() {
       });
       const payload = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(payload.error || "Update failed");
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
     }
@@ -88,7 +94,7 @@ export default function RolesPage() {
   const remove = async (id: string) => {
     try {
       await deleteAdmin(`/api/admin/roles?id=${id}`);
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
     }
@@ -99,6 +105,13 @@ export default function RolesPage() {
       <AdminPageHeader
         title="Roles & permissions"
         description="System and custom roles. Custom roles do not silently receive newly introduced permissions."
+        actions={
+          <AdminReloadButton
+            loading={loading}
+            refreshing={refreshing}
+            onClick={() => void refresh()}
+          />
+        }
       />
       {error ? <AdminErrorAlert message={error} /> : null}
 
@@ -155,7 +168,7 @@ export default function RolesPage() {
       ) : null}
 
       <AdminTableShell>
-        {loading ? (
+        {loading && rows.length === 0 ? (
           <AdminLoadingRow label="Loading roles…" compact className="py-10" />
         ) : rows.length === 0 ? (
           <AdminEmpty title="No roles" description="Run 016_admins.sql to seed Super Admin, Operations, Identity, Marketplace, Support, and Viewer." />

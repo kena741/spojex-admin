@@ -25,8 +25,12 @@ import {
   formatDonationAmount,
   sanitizeDonorMessage,
 } from "@/lib/donations";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { adminFetch, deleteAdmin, patchAdmin, postAdminResponse } from "@/lib/hooks";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useApplyAdminSnapshot } from "@/lib/use-admin-snapshot";
+import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import type { DonationCampaignRow, DonationContributionRow } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 
@@ -247,43 +251,75 @@ export default function DonationDetailPage() {
   const coverInputRef = useRef<HTMLInputElement>(null);
   const thumbInputRef = useRef<HTMLInputElement>(null);
 
-  const [tab, setTab] = useState<TabId>("overview");
+  const [tab, setTab] = useAdminUiState<TabId>(`donations:detail:${id}:tab`, "overview");
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [form, setForm] = useState<SettingsForm | null>(null);
   const [editing, setEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [uploadingKind, setUploadingKind] = useState<ImageKind | null>(null);
 
-  const [contribs, setContribs] = useState<DonationContributionRow[]>([]);
-  const [contribTotal, setContribTotal] = useState(0);
   const [contribPage, setContribPage] = useState(1);
   const [contribQ, setContribQ] = useState("");
+  const [contribQDebounced, setContribQDebounced] = useState("");
   const [contribStatus, setContribStatus] = useState("all");
-  const [contribLoading, setContribLoading] = useState(false);
+  const dirtyRef = useRef(false);
+  dirtyRef.current = dirty;
 
-  const campaign = workspace?.campaign ?? null;
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      setContribQDebounced(contribQ);
+      setContribPage(1);
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [contribQ]);
 
-  const loadWorkspace = async () => {
-    const res = await adminFetch(`/api/admin/donations/${id}/workspace`);
-    const payload = (await res.json()) as Workspace & { error?: string };
-    if (!res.ok) throw new Error(payload.error || "Failed to load workspace");
+  const {
+    data: snapshot,
+    loading,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<Workspace>({
+    key: adminCacheKey(["donations", "detail", id]),
+    fetcher: async () => {
+      const res = await adminFetch(`/api/admin/donations/${id}/workspace`);
+      const payload = (await res.json()) as Workspace & { error?: string };
+      if (!res.ok) throw new Error(payload.error || "Failed to load workspace");
+      return payload;
+    },
+  });
+
+  useApplyAdminSnapshot(snapshot, (payload) => {
     setWorkspace(payload);
-    if (!dirty) {
+    if (!dirtyRef.current) {
       setForm(formFromCampaign(payload.campaign));
       setEditing(false);
     }
-  };
+  });
 
-  const loadContributions = async () => {
-    setContribLoading(true);
-    try {
+  useEffect(() => {
+    if (loadError) setError(loadError);
+  }, [loadError]);
+
+  const contribsQuery = useAdminQuery<{ data: DonationContributionRow[]; total: number }>({
+    key:
+      tab === "contributions"
+        ? adminCacheKey([
+            "donations",
+            "contributions",
+            id,
+            contribPage,
+            contribQDebounced.trim(),
+            contribStatus,
+          ])
+        : null,
+    enabled: tab === "contributions",
+    fetcher: async () => {
       const params = new URLSearchParams();
-      if (contribQ.trim()) params.set("q", contribQ.trim());
+      if (contribQDebounced.trim()) params.set("q", contribQDebounced.trim());
       if (contribStatus !== "all") params.set("status", contribStatus);
       params.set("page", String(contribPage));
       params.set("page_size", "40");
@@ -294,37 +330,26 @@ export default function DonationDetailPage() {
         error?: string;
       };
       if (!res.ok) throw new Error(payload.error || "Failed to load contributions");
-      setContribs(payload.data ?? []);
-      setContribTotal(payload.total ?? 0);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load contributions");
-    } finally {
-      setContribLoading(false);
-    }
+      return { data: payload.data ?? [], total: payload.total ?? 0 };
+    },
+  });
+
+  const contribs = contribsQuery.data?.data ?? [];
+  const contribTotal = contribsQuery.data?.total ?? 0;
+  const contribLoading = contribsQuery.loading && !contribsQuery.data;
+
+  useEffect(() => {
+    if (contribsQuery.error) setError(contribsQuery.error);
+  }, [contribsQuery.error]);
+
+  const campaign = workspace?.campaign ?? null;
+
+  const loadWorkspace = async () => {
+    invalidateAdminCache(adminCacheKey(["donations", "list"]));
+    invalidateAdminCache(adminCacheKey(["donations", "contributions", id]));
+    const next = await refresh();
+    if (!next) throw new Error("Failed to reload workspace");
   };
-
-  useEffect(() => {
-    setLoading(true);
-    loadWorkspace()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
-
-  useEffect(() => {
-    if (tab === "contributions") void loadContributions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, contribPage, contribStatus]);
-
-  useEffect(() => {
-    if (tab !== "contributions") return;
-    const t = window.setTimeout(() => {
-      if (contribPage !== 1) setContribPage(1);
-      else void loadContributions();
-    }, 300);
-    return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contribQ]);
 
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -479,7 +504,7 @@ export default function DonationDetailPage() {
     }
   };
 
-  if (loading) return <AdminLoadingRow label="Loading campaign…" />;
+  if (loading && !workspace) return <AdminLoadingRow label="Loading campaign…" />;
   if (!campaign || !form || !workspace) {
     return <AdminErrorAlert message={error || "Campaign not found"} />;
   }

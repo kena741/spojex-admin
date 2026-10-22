@@ -6,17 +6,21 @@ import {
   AdminEmpty,
   AdminErrorAlert,
   AdminLoadingRow,
+  AdminReloadButton,
   AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
 import {
+  clearIdentityCatalogCache,
   fetchIdentityCatalog,
   type IdentityCatalog,
   type IdentityRole,
 } from "@/lib/identity-catalog";
 import { slugifyIdentity } from "@/lib/identity-catalog-seeds";
 import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
 
 type RoleDraft = {
   group_id: string;
@@ -29,9 +33,7 @@ type RoleDraft = {
 export default function CategoriesPage() {
   const { can } = useAdminPermissions();
   const canWrite = can("profiles:write");
-  const [catalog, setCatalog] = useState<IdentityCatalog | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [groupId, setGroupId] = useState("");
   const [label, setLabel] = useState("");
   const [slug, setSlug] = useState("");
@@ -40,17 +42,27 @@ export default function CategoriesPage() {
   const [draft, setDraft] = useState<RoleDraft | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const load = async () => {
-    const next = await fetchIdentityCatalog();
-    setCatalog(next);
-    if (!groupId && next.groups[0]) setGroupId(next.groups[0].id);
-  };
+  const {
+    data: catalog,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<IdentityCatalog>({
+    key: adminCacheKey(["people", "settings", "identity-catalog"]),
+    fetcher: fetchIdentityCatalog,
+  });
+  const error = actionError ?? loadError;
 
   useEffect(() => {
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-  }, []);
+    if (!groupId && catalog?.groups[0]) setGroupId(catalog.groups[0].id);
+  }, [catalog, groupId]);
+
+  /** Force a fresh catalog (module-level identity cache is bypassed after edits / reload). */
+  const load = async () => {
+    clearIdentityCatalogCache();
+    await refresh();
+  };
 
   const groupedRoles = useMemo(() => {
     if (!catalog) return [];
@@ -145,6 +157,16 @@ export default function CategoriesPage() {
           { label: "People", href: "/admin/people" },
           { label: "Profile settings" },
         ]}
+        actions={
+          <AdminReloadButton
+            loading={loading}
+            refreshing={refreshing}
+            onClick={() => {
+              setError(null);
+              void load();
+            }}
+          />
+        }
       />
       {error ? <AdminErrorAlert message={error} /> : null}
 
@@ -196,7 +218,7 @@ export default function CategoriesPage() {
       ) : null}
 
       <AdminTableShell>
-        {loading ? (
+        {loading && !catalog ? (
           <AdminLoadingRow label="Loading account roles…" compact className="py-10" />
         ) : !catalog || groupedRoles.every((item) => item.roles.length === 0) ? (
           <AdminEmpty

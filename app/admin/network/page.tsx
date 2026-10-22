@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
@@ -20,7 +20,9 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { UserAvatar } from "@/components/user-avatar";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import { deleteAdmin, patchAdmin } from "@/lib/hooks";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { networkUserLabel, networkUserSecondary } from "@/lib/network-identity";
 import type { BlockRow, FollowRow, NetworkConnectionItem, NetworkUserBrief } from "@/lib/types";
@@ -89,21 +91,8 @@ function NetworkPageInner() {
   );
   const [query, setQuery] = useState(() => searchParams.get("q") || "");
 
-  const [items, setItems] = useState<NetworkConnectionItem[]>([]);
-  const [follows, setFollows] = useState<FollowRow[]>([]);
-  const [blocks, setBlocks] = useState<BlockRow[]>([]);
-  const [counts, setCounts] = useState({
-    pending: 0,
-    accepted: 0,
-    declined: 0,
-    total: 0,
-    follows: 0,
-    blocks: 0,
-  });
-  const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [note, setNote] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
 
   const syncUrl = useCallback(
     (nextTab: TabId, nextStatus: StatusFilter, nextQuery: string) => {
@@ -117,35 +106,60 @@ function NetworkPageInner() {
     [pathname, router],
   );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const {
+    data,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh: load,
+  } = useAdminQuery<{
+    items: NetworkConnectionItem[];
+    follows: FollowRow[];
+    blocks: BlockRow[];
+    note: string | null;
+    counts: {
+      pending: number;
+      accepted: number;
+      declined: number;
+      total: number;
+      follows: number;
+      blocks: number;
+    };
+  }>({
+    key: adminCacheKey(["network", "overview"]),
+    fetcher: async () => {
       const response = await fetch("/api/admin/network", { credentials: "same-origin" });
       const payload = (await response.json()) as NetworkPayload;
       if (!response.ok) throw new Error(payload.error || "Failed to load connections");
-      setItems(payload.items ?? []);
-      setFollows(payload.follows ?? []);
-      setBlocks(payload.blocks ?? []);
-      setNote(payload.note ?? null);
-      setCounts({
-        pending: payload.counts?.pending ?? 0,
-        accepted: payload.counts?.accepted ?? 0,
-        declined: payload.counts?.declined ?? 0,
-        total: payload.counts?.total ?? 0,
-        follows: payload.counts?.follows ?? payload.follows?.length ?? 0,
-        blocks: payload.counts?.blocks ?? payload.blocks?.length ?? 0,
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+      return {
+        items: payload.items ?? [],
+        follows: payload.follows ?? [],
+        blocks: payload.blocks ?? [],
+        note: payload.note ?? null,
+        counts: {
+          pending: payload.counts?.pending ?? 0,
+          accepted: payload.counts?.accepted ?? 0,
+          declined: payload.counts?.declined ?? 0,
+          total: payload.counts?.total ?? 0,
+          follows: payload.counts?.follows ?? payload.follows?.length ?? 0,
+          blocks: payload.counts?.blocks ?? payload.blocks?.length ?? 0,
+        },
+      };
+    },
+  });
+  const items = useMemo(() => data?.items ?? [], [data]);
+  const follows = useMemo(() => data?.follows ?? [], [data]);
+  const blocks = useMemo(() => data?.blocks ?? [], [data]);
+  const note = data?.note ?? null;
+  const counts = data?.counts ?? {
+    pending: 0,
+    accepted: 0,
+    declined: 0,
+    total: 0,
+    follows: 0,
+    blocks: 0,
+  };
+  const error = actionError || loadError;
 
   const filteredItems = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -300,7 +314,7 @@ function NetworkPageInner() {
           { label: "Network", href: "/admin/network" },
           { label: "Connections" },
         ]}
-        actions={<AdminReloadButton loading={loading} onClick={() => void load()} />}
+        actions={<AdminReloadButton loading={loading} refreshing={refreshing} onClick={() => void load()} />}
       />
 
       {error ? <AdminErrorAlert message={error} /> : null}

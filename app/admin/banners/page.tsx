@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import {
@@ -17,8 +17,10 @@ import {
   AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { adminFetch, deleteAdmin, patchAdmin, postAdmin, uploadAdmin } from "@/lib/hooks";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
 
 const fieldClass = "h-10 w-full rounded-lg border border-border px-3 text-sm";
 
@@ -47,9 +49,7 @@ export default function BannersPage() {
   const canWrite = can("banners:write") || can("services:write");
   const imageInputRef = useRef<HTMLInputElement>(null);
 
-  const [rows, setRows] = useState<BannerRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const query = searchParams.get("q") || "";
   const status = searchParams.get("status") || "all";
   const missingImage = searchParams.get("missing_image") === "1";
@@ -78,29 +78,26 @@ export default function BannersPage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const load = useCallback(async () => {
-    const response = await fetch("/api/admin/banners", { credentials: "same-origin" });
-    const payload = (await response.json()) as { data?: BannerRow[]; error?: string };
-    if (!response.ok) throw new Error(payload.error || "Failed to load banners");
-    setRows(payload.data ?? []);
-  }, []);
+  // Single cached fetch (list is filtered client-side). Reload to refetch.
+  const {
+    data: listData,
+    setData: setListData,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<BannerRow[]>({
+    key: adminCacheKey(["banners", "list"]),
+    fetcher: async () => {
+      const response = await fetch("/api/admin/banners", { credentials: "same-origin" });
+      const payload = (await response.json()) as { data?: BannerRow[]; error?: string };
+      if (!response.ok) throw new Error(payload.error || "Failed to load banners");
+      return payload.data ?? [];
+    },
+  });
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }, [load]);
-
-  // Single fetch on mount (list is filtered client-side). Reload to refetch.
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  const rows = useMemo(() => listData ?? [], [listData]);
+  const error = actionError ?? loadError;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -197,8 +194,8 @@ export default function BannersPage() {
       const payload = await uploadAdmin(`/api/admin/banners/${editingId}/image`, file);
       const next = (payload.image_url ?? "").trim();
       setEditingImage(next);
-      setRows((prev) =>
-        prev.map((row) => (row.id === editingId ? { ...row, image_url: next } : row)),
+      setListData((prev) =>
+        (prev ?? []).map((row) => (row.id === editingId ? { ...row, image_url: next } : row)),
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
@@ -219,9 +216,10 @@ export default function BannersPage() {
       const payload = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(payload.error || "Remove failed");
       setEditingImage("");
-      setRows((prev) =>
-        prev.map((row) => (row.id === editingId ? { ...row, image_url: "" } : row)),
+      setListData((prev) =>
+        (prev ?? []).map((row) => (row.id === editingId ? { ...row, image_url: "" } : row)),
       );
+      invalidateAdminCache("banners");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Remove failed");
     } finally {
@@ -281,7 +279,9 @@ export default function BannersPage() {
           { label: "Content", href: "/admin/content" },
           { label: "Banners" },
         ]}
-        actions={<AdminReloadButton loading={loading} onClick={() => void refresh()} />}
+        actions={
+          <AdminReloadButton loading={loading} refreshing={refreshing} onClick={() => void refresh()} />
+        }
       />
       {error ? <AdminErrorAlert message={error} /> : null}
 

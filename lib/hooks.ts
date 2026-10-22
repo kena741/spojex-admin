@@ -2,13 +2,18 @@
 
 import { useEffect, useState } from "react";
 import {
+  clearIdentityCatalogCache,
   fetchIdentityCatalog,
+  peekIdentityCatalogCache,
   roleLabelFromCatalog,
   roleOptionsFromCatalog,
   extraProfileTableForSlug,
   type IdentityCatalog,
 } from "@/lib/identity-catalog";
+import { invalidateAdminCache } from "@/lib/admin-session-cache";
 import { getSpojexClient } from "@/lib/spojex/client";
+
+export { clearIdentityCatalogCache };
 
 async function adminHeaders(extra?: HeadersInit) {
   const headers = new Headers(extra);
@@ -26,13 +31,35 @@ export async function adminFetch(path: string, init: RequestInit = {}) {
   });
 }
 
+/** Map API paths to session-cache prefixes invalidated after mutations. */
+function invalidateForPath(path: string) {
+  try {
+    const url = path.startsWith("http") ? new URL(path) : new URL(path, "http://local");
+    const parts = url.pathname.split("/").filter(Boolean);
+    // /api/admin/people/… → people ; /api/admin/finance/transactions → finance
+    const adminIdx = parts.indexOf("admin");
+    if (adminIdx >= 0 && parts[adminIdx + 1]) {
+      invalidateAdminCache(parts[adminIdx + 1]);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 export function useIdentityCatalog() {
-  const [catalog, setCatalog] = useState<IdentityCatalog | null>(null);
-  const [loading, setLoading] = useState(true);
+  const hit = peekIdentityCatalogCache();
+  const [catalog, setCatalog] = useState<IdentityCatalog | null>(() => hit);
+  const [loading, setLoading] = useState(() => !hit);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
+    const cached = peekIdentityCatalogCache();
+    if (cached) {
+      setCatalog(cached);
+      setLoading(false);
+      return;
+    }
     fetchIdentityCatalog()
       .then((data) => {
         if (mounted) setCatalog(data);
@@ -69,6 +96,7 @@ export async function patchAdmin(path: string, body: Record<string, unknown>) {
   });
   const payload = (await response.json()) as { error?: string; data?: unknown };
   if (!response.ok) throw new Error(payload.error || "Update failed");
+  invalidateForPath(path);
   return payload.data;
 }
 
@@ -86,6 +114,7 @@ export async function putAdmin(path: string, body: Record<string, unknown>) {
   });
   const payload = (await response.json()) as { error?: string; data?: unknown };
   if (!response.ok) throw new Error(payload.error || "Update failed");
+  invalidateForPath(path);
   return payload.data;
 }
 
@@ -108,6 +137,7 @@ export async function postAdminResponse<T extends object = AdminPostPayload>(
   });
   const payload = (await response.json()) as T & AdminPostPayload;
   if (!response.ok) throw new Error(payload.error || "Create failed");
+  invalidateForPath(path);
   return payload;
 }
 
@@ -127,6 +157,7 @@ export async function deleteAdmin(path: string, body?: Record<string, unknown>) 
     data?: unknown;
   };
   if (!response.ok) throw new Error(payload.error || "Delete failed");
+  invalidateForPath(path);
   return payload;
 }
 
@@ -146,5 +177,6 @@ export async function uploadAdmin(path: string, file: File, fieldName = "file") 
     logo_url?: string;
   };
   if (!response.ok) throw new Error(payload.error || "Upload failed");
+  invalidateForPath(path);
   return payload;
 }

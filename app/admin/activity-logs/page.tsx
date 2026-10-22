@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
 import {
@@ -23,7 +23,10 @@ import {
   AUDIT_OUTCOMES,
   AUDIT_RESOURCE_REGISTRY,
 } from "@/lib/audit-event-registry";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import { adminFetch } from "@/lib/hooks";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 
 const PAGE_SIZE = 30;
@@ -43,27 +46,33 @@ export default function ActivityLogsPage() {
   const canRead = can("logs:read");
   const canExport = can("logs:export");
 
-  const [logs, setLogs] = useState<AdminActivityLog[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [actionFilter, setActionFilter] = useState("");
-  const [resourceFilter, setResourceFilter] = useState("");
-  const [outcomeFilter, setOutcomeFilter] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
+  const [query, setQuery] = useAdminUiState("activity-logs:query", "");
+  const [actionFilter, setActionFilter] = useAdminUiState("activity-logs:action", "");
+  const [resourceFilter, setResourceFilter] = useAdminUiState("activity-logs:resource", "");
+  const [outcomeFilter, setOutcomeFilter] = useAdminUiState("activity-logs:outcome", "");
+  const [currentPage, setCurrentPage] = useAdminUiState("activity-logs:page", 1);
+  const [expandedLogId, setExpandedLogId] = useAdminUiState<string | null>(
+    "activity-logs:expanded",
+    null,
+  );
 
-  const load = useCallback(async () => {
-    if (permsLoading) return;
-    if (!canRead) {
-      setLoading(false);
-      setError("You need logs:read permission to view activity logs.");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
+  const {
+    data,
+    loading,
+    refreshing,
+    error,
+    refresh,
+  } = useAdminQuery<{ logs: AdminActivityLog[]; total: number }>({
+    key: adminCacheKey([
+      "activity-logs",
+      "list",
+      currentPage,
+      actionFilter,
+      resourceFilter,
+      outcomeFilter,
+    ]),
+    enabled: !permsLoading && canRead,
+    fetcher: async () => {
       const offset = (currentPage - 1) * PAGE_SIZE;
       const params = new URLSearchParams({
         limit: String(PAGE_SIZE),
@@ -80,24 +89,20 @@ export default function ActivityLogsPage() {
         error?: string;
       };
       if (!res.ok) throw new Error(payload.error || "Failed to load activity logs");
-      setLogs(payload.data ?? []);
-      setTotal(payload.total ?? 0);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load activity logs");
-      setLogs([]);
-      setTotal(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [actionFilter, canRead, currentPage, outcomeFilter, permsLoading, resourceFilter]);
+      return { logs: payload.data ?? [], total: payload.total ?? 0 };
+    },
+  });
+  const logs = useMemo(() => data?.logs ?? [], [data]);
+  const total = data?.total ?? 0;
 
+  // Reset to page 1 when filters change (not on remount, so restored page survives).
+  const filterSignature = `${actionFilter}|${resourceFilter}|${outcomeFilter}|${query}`;
+  const lastFilterSignature = useRef(filterSignature);
   useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
+    if (lastFilterSignature.current === filterSignature) return;
+    lastFilterSignature.current = filterSignature;
     setCurrentPage(1);
-  }, [actionFilter, resourceFilter, outcomeFilter, query]);
+  }, [filterSignature, setCurrentPage]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return logs;
@@ -116,10 +121,6 @@ export default function ActivityLogsPage() {
   }, [logs, query]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-
-  const refresh = () => {
-    void load();
-  };
 
   if (permsLoading) {
     return (
@@ -152,7 +153,11 @@ export default function ActivityLogsPage() {
         description={`${total} entries · times shown in your browser local timezone`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <AdminReloadButton loading={loading} onClick={refresh} />
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
+              onClick={() => void refresh()}
+            />
             {canExport ? (
               <a
                 href={`/api/admin/activity-logs/export?${new URLSearchParams({

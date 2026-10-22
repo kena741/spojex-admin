@@ -1,17 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Download,
   ExternalLink,
   HelpCircle,
-  RefreshCw,
   X,
 } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
-import { AdminErrorAlert } from "@/components/admin-layout";
+import { AdminErrorAlert, AdminReloadButton } from "@/components/admin-layout";
 import { AnalyticsDateFilter } from "@/components/analytics/date-range-filter";
 import { ChartCard, DualLineChart, SeriesAreaChart, SimpleBarChart } from "@/components/analytics/charts";
 import { KpiCard, KpiSkeleton } from "@/components/analytics/kpi-card";
@@ -25,6 +24,8 @@ import {
   type AnalyticsQuery,
   type RangeKey,
 } from "@/lib/analytics";
+import { adminCacheKey } from "@/lib/admin-session-cache";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import { cn } from "@/lib/utils";
 
 type TabKey = "overview" | "users" | "gyms" | "content";
@@ -69,16 +70,9 @@ export default function AdminDashboardPage() {
   const activeTab: TabKey = TABS.some((t) => t.key === section) ? section : "overview";
   const query = useMemo(() => parseRangeFromSearch(searchParams), [searchParams]);
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [overview, setOverview] = useState<Record<string, any> | null>(null);
-  const [users, setUsers] = useState<Record<string, any> | null>(null);
-  const [gyms, setGyms] = useState<Record<string, any> | null>(null);
-  const [content, setContent] = useState<Record<string, any> | null>(null);
   const [detail, setDetail] = useState<Record<string, any> | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [gymQ, setGymQ] = useState(query.q || "");
-  const abortRef = useRef<AbortController | null>(null);
 
   const writeParams = useCallback(
     (patch: Record<string, string | null | undefined>) => {
@@ -100,50 +94,41 @@ export default function AdminDashboardPage() {
     });
   };
 
-  const load = useCallback(async () => {
-    abortRef.current?.abort();
-    const ac = new AbortController();
-    abortRef.current = ac;
-    setLoading(true);
-    setError(null);
-    try {
+  const analyticsKey = adminCacheKey([
+    "dashboard",
+    "analytics",
+    activeTab,
+    query.range,
+    query.start,
+    query.end,
+    activeTab === "gyms" ? gymQ || query.q || "" : query.q || "",
+    activeTab === "content" ? query.tab || "trending_now" : "",
+    activeTab === "gyms" ? query.sort || "" : "",
+    activeTab === "gyms" ? query.order || "" : "",
+  ]);
+
+  const {
+    data,
+    loading,
+    refreshing,
+    error,
+    refresh,
+  } = useAdminQuery<Record<string, any>>({
+    key: analyticsKey,
+    fetcher: async () => {
       const q: AnalyticsQuery = {
         ...query,
         q: activeTab === "gyms" ? gymQ || query.q : query.q,
         tab: activeTab === "content" ? query.tab || "trending_now" : undefined,
       };
-      if (activeTab === "overview") {
-        const data = await fetchAnalytics<Record<string, any>>("overview", q, ac.signal);
-        if (!ac.signal.aborted) setOverview(data);
-      } else if (activeTab === "users") {
-        const data = await fetchAnalytics<Record<string, any>>("users", q, ac.signal);
-        if (!ac.signal.aborted) setUsers(data);
-      } else if (activeTab === "gyms") {
-        const data = await fetchAnalytics<Record<string, any>>("gyms", q, ac.signal);
-        if (!ac.signal.aborted) setGyms(data);
-      } else {
-        const data = await fetchAnalytics<Record<string, any>>("content", q, ac.signal);
-        if (!ac.signal.aborted) setContent(data);
-      }
-    } catch (err) {
-      if ((err as Error).name === "AbortError") return;
-      setError(err instanceof Error ? err.message : "Failed to load analytics");
-    } finally {
-      if (!ac.signal.aborted) setLoading(false);
-    }
-  }, [activeTab, query, gymQ]);
+      if (activeTab === "overview") return fetchAnalytics<Record<string, any>>("overview", q);
+      if (activeTab === "users") return fetchAnalytics<Record<string, any>>("users", q);
+      if (activeTab === "gyms") return fetchAnalytics<Record<string, any>>("gyms", q);
+      return fetchAnalytics<Record<string, any>>("content", q);
+    },
+  });
 
-  useEffect(() => {
-    void load();
-    return () => abortRef.current?.abort();
-  }, [load]);
-
-  const meta =
-    (activeTab === "overview" && overview?.meta) ||
-    (activeTab === "users" && users?.meta) ||
-    (activeTab === "gyms" && gyms?.meta) ||
-    (activeTab === "content" && content?.meta) ||
-    null;
+  const meta = data?.meta ?? null;
 
   const openContent = async (row: Record<string, any>) => {
     setDetailOpen(true);
@@ -164,14 +149,12 @@ export default function AdminDashboardPage() {
         description="User growth, gym growth, and sports content performance"
         actions={
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void load()}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-medium text-text-secondary hover:text-foreground"
-            >
-              <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
-              Refresh
-            </button>
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
+              onClick={() => void refresh()}
+              label="Refresh"
+            />
             {activeTab !== "overview" ? (
               <a
                 href={exportAnalyticsUrl(
@@ -227,7 +210,7 @@ export default function AdminDashboardPage() {
           <AdminErrorAlert message={error} />
           <button
             type="button"
-            onClick={() => void load()}
+            onClick={() => void refresh()}
             className="text-xs font-medium text-primary hover:underline"
           >
             Retry
@@ -238,18 +221,18 @@ export default function AdminDashboardPage() {
       {activeTab === "overview" ? (
         <OverviewPanel
           loading={loading}
-          data={overview}
+          data={data}
           onOpenUsers={() => writeParams({ section: "users" })}
           onOpenGyms={() => writeParams({ section: "gyms" })}
           onOpenContent={() => writeParams({ section: "content", tab: "trending_now" })}
           onOpenRow={openContent}
         />
       ) : null}
-      {activeTab === "users" ? <UsersPanel loading={loading} data={users} /> : null}
+      {activeTab === "users" ? <UsersPanel loading={loading} data={data} /> : null}
       {activeTab === "gyms" ? (
         <GymsPanel
           loading={loading}
-          data={gyms}
+          data={data}
           q={gymQ}
           onQChange={setGymQ}
           onSearch={() => writeParams({ q: gymQ || null, section: "gyms" })}
@@ -259,7 +242,7 @@ export default function AdminDashboardPage() {
       {activeTab === "content" ? (
         <ContentPanel
           loading={loading}
-          data={content}
+          data={data}
           tab={query.tab || "trending_now"}
           onTab={(tab) => writeParams({ section: "content", tab })}
           onOpenRow={openContent}

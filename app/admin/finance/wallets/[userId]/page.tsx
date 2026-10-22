@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
+import { adminCacheKey } from "@/lib/admin-session-cache";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import { formatDateTime, formatStatusLabel } from "@/lib/utils";
 
 type LedgerRow = {
@@ -46,29 +47,15 @@ function money(amount: number | null | undefined, currency = "ETB") {
 
 export default function WalletDetailPage() {
   const { userId } = useParams<{ userId: string }>();
-  const [data, setData] = useState<Payload | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    fetch(`/api/admin/wallets/${userId}`, { cache: "no-store" })
-      .then(async (res) => {
-        const payload = (await res.json()) as Payload;
-        if (!res.ok) throw new Error(payload.error || "Failed to load wallet");
-        if (!cancelled) setData(payload);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
+  const { data, loading, error } = useAdminQuery<Payload>({
+    key: adminCacheKey(["finance", "wallets", "detail", userId]),
+    fetcher: async () => {
+      const res = await fetch(`/api/admin/wallets/${userId}`, { cache: "no-store" });
+      const payload = (await res.json()) as Payload;
+      if (!res.ok) throw new Error(payload.error || "Failed to load wallet");
+      return payload;
+    },
+  });
 
   if (loading) return <AdminLoadingRow label="Loading wallet…" />;
   if (error || !data?.wallet) {

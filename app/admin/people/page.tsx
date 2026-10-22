@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Settings2, X } from "lucide-react";
@@ -16,7 +16,9 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone, verifiedTone } from "@/components/status-badge";
 import { UserAvatar } from "@/components/user-avatar";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import { useIdentityCatalog } from "@/lib/hooks";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { cn, formatDate, formatStatusLabel } from "@/lib/utils";
 import { verificationStatusLabel } from "@/lib/verification";
@@ -76,14 +78,7 @@ export default function PeopleDirectoryPage() {
   const { can } = useAdminPermissions();
   const { roleLabel } = useIdentityCatalog();
 
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [rows, setRows] = useState<PersonRow[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
-  const [preview, setPreview] = useState<PreviewPayload | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
 
   const q = searchParams.get("q") || "";
   const profile = searchParams.get("profile") || "all";
@@ -104,10 +99,18 @@ export default function PeopleDirectoryPage() {
     [pathname, router, searchParams],
   );
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  type PeopleListData = { rows: PersonRow[]; total: number; summary: Summary | null };
+
+  const listKey = adminCacheKey(["people", "list", page, profile, verified, status, q]);
+  const {
+    data: listData,
+    loading,
+    refreshing,
+    error,
+    refresh,
+  } = useAdminQuery<PeopleListData>({
+    key: listKey,
+    fetcher: async () => {
       const params = new URLSearchParams({
         page: String(page),
         page_size: String(PAGE_SIZE),
@@ -124,46 +127,32 @@ export default function PeopleDirectoryPage() {
         error?: string;
       };
       if (!res.ok) throw new Error(payload.error || "Failed to load people");
-      setSummary(payload.summary ?? null);
-      setRows(payload.data ?? []);
-      setTotal(payload.total ?? 0);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [page, profile, q, status, verified]);
+      return {
+        rows: payload.data ?? [],
+        total: payload.total ?? 0,
+        summary: payload.summary ?? null,
+      };
+    },
+  });
 
-  // Fetch once on mount and when page changes. Filters apply on Reload.
-  useEffect(() => {
-    void refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  const rows = listData?.rows ?? [];
+  const total = listData?.total ?? 0;
+  const summary = listData?.summary ?? null;
 
-  useEffect(() => {
-    if (!previewId) {
-      setPreview(null);
-      return;
-    }
-    let cancelled = false;
-    setPreviewLoading(true);
-    fetch(`/api/admin/people/${previewId}/preview`, { cache: "no-store" })
-      .then(async (res) => {
-        const payload = await res.json();
-        if (!res.ok) throw new Error(payload.error || "Preview failed");
-        if (!cancelled) setPreview(payload.data as PreviewPayload);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Preview failed");
-      })
-      .finally(() => {
-        if (!cancelled) setPreviewLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [previewId]);
+  const previewKey = previewId ? adminCacheKey(["people", "preview", previewId]) : null;
+  const {
+    data: preview,
+    loading: previewLoading,
+  } = useAdminQuery<PreviewPayload>({
+    key: previewKey,
+    enabled: Boolean(previewId),
+    fetcher: async () => {
+      const res = await fetch(`/api/admin/people/${previewId}/preview`, { cache: "no-store" });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error || "Preview failed");
+      return payload.data as PreviewPayload;
+    },
+  });
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -191,7 +180,11 @@ export default function PeopleDirectoryPage() {
         description="Directory of Spojex accounts and role profiles"
         actions={
           <div className="flex flex-wrap gap-2">
-            <AdminReloadButton loading={loading} onClick={() => void refresh()} />
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
+              onClick={() => void refresh()}
+            />
             {can("profiles:read") ? (
               <Link
                 href="/admin/people/settings"

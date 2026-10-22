@@ -20,7 +20,9 @@ import { SharedAudioPlayer } from "@/components/shared-audio-player";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { SoundClipEditor } from "@/components/sound-clip-editor";
 import { AdminModal } from "@/components/admin-layout";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { adminFetch, postAdminResponse } from "@/lib/hooks";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import {
   formatBytes,
   formatDuration,
@@ -107,10 +109,7 @@ function MediaLibraryPage() {
           : "grid";
   const layoutView: DirectoryView = view === "grid" ? "cards" : "list";
 
-  const [payload, setPayload] = useState<MediaLibraryListResponse | null>(null);
-  const [detail, setDetail] = useState<MediaAssetDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [name, setName] = useState("");
@@ -140,10 +139,27 @@ function MediaLibraryPage() {
     [pathname, router, searchParams],
   );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const {
+    data: payload,
+    loading,
+    refreshing,
+    error: listError,
+    refresh: load,
+  } = useAdminQuery<MediaLibraryListResponse>({
+    key: adminCacheKey([
+      "media-library",
+      "list",
+      typeFilter,
+      q,
+      status,
+      soundCategory,
+      usage,
+      dateFrom,
+      dateTo,
+      page,
+    ]),
+    enabled: canRead,
+    fetcher: async () => {
       const params = new URLSearchParams();
       if (typeFilter !== "all") params.set("type", typeFilter);
       if (q) params.set("q", q);
@@ -156,43 +172,29 @@ function MediaLibraryPage() {
       params.set("page_size", "40");
       const res = await adminFetch(`/api/admin/media-library?${params}`);
       const data = (await res.json()) as MediaLibraryListResponse;
-      if (!res.ok) {
-        setPayload(null);
-        throw new Error(data.error || "Failed to load media library");
-      }
-      setPayload(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }, [typeFilter, q, status, soundCategory, usage, dateFrom, dateTo, page]);
+      if (!res.ok) throw new Error(data.error || "Failed to load media library");
+      return data;
+    },
+  });
 
-  const loadDetail = useCallback(async (id: string) => {
-    const res = await adminFetch(`/api/admin/media-library/${id}`);
-    const data = (await res.json()) as MediaAssetDetail;
-    if (!res.ok) throw new Error(data.error || "Failed to load asset");
-    setDetail(data);
-  }, []);
-
-  useEffect(() => {
-    if (!canRead) {
-      setLoading(false);
-      setError("Insufficient permission to view the Media Library.");
-      return;
-    }
-    void load();
-  }, [canRead, load]);
-
-  useEffect(() => {
-    if (!assetId) {
-      setDetail(null);
-      return;
-    }
-    loadDetail(assetId).catch((err) =>
-      setError(err instanceof Error ? err.message : "Failed to load asset"),
-    );
-  }, [assetId, loadDetail]);
+  const {
+    data: detailData,
+    error: detailError,
+    refresh: loadDetail,
+  } = useAdminQuery<MediaAssetDetail>({
+    key: assetId ? adminCacheKey(["media-library", "detail", assetId]) : null,
+    enabled: Boolean(assetId) && canRead,
+    fetcher: async () => {
+      const res = await adminFetch(`/api/admin/media-library/${assetId}`);
+      const data = (await res.json()) as MediaAssetDetail;
+      if (!res.ok) throw new Error(data.error || "Failed to load asset");
+      return data;
+    },
+  });
+  const detail = assetId && detailData?.asset?.id === assetId ? detailData : null;
+  const error = !canRead
+    ? "Insufficient permission to view the Media Library."
+    : actionError || listError || detailError;
 
   const runBackfill = async () => {
     setBusy(true);
@@ -214,7 +216,7 @@ function MediaLibraryPage() {
     try {
       await postAdminResponse(`/api/admin/media-library/${id}/actions`, { action, patch });
       await load();
-      if (assetId === id) await loadDetail(id);
+      if (assetId === id) await loadDetail();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
     } finally {
@@ -302,6 +304,7 @@ function MediaLibraryPage() {
       setUploadOpen(false);
       resetUpload();
       setNotice("Sound saved to the library.");
+      invalidateAdminCache("media-library");
       writeParams({ type: "sound" });
       await load();
     } catch (err) {
@@ -340,7 +343,11 @@ function MediaLibraryPage() {
         ]}
         actions={
           <div className="flex flex-wrap gap-2">
-            <AdminReloadButton loading={loading} onClick={() => void load()} />
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
+              onClick={() => void load()}
+            />
             {canWrite ? (
               <button
                 type="button"

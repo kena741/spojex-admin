@@ -1,15 +1,17 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Info, Radio, Tv } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
 import { AdminLoadingRow } from "@/components/admin-layout";
 import LiveEventsPanel from "@/components/live-events-panel";
 import RadioStreamsPanel from "@/components/radio-streams-panel";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import { adminFetch } from "@/lib/hooks";
 import { canManageLiveEvents } from "@/lib/live-events";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import { cn } from "@/lib/utils";
 
 /** `live` is canonical; `video` is accepted from old bookmarks and links. */
@@ -74,28 +76,19 @@ function SummaryCard({
 }
 
 function StreamsOverviewCards({ enabled }: { enabled: boolean }) {
-  const [overview, setOverview] = useState<Overview | null>(null);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    if (!enabled) return;
-    let cancelled = false;
-    adminFetch("/api/admin/streams/overview")
-      .then(async (res) => {
-        const payload = (await res.json().catch(() => ({}))) as Overview;
-        if (!res.ok) throw new Error("overview");
-        if (!cancelled) setOverview(payload);
-      })
-      .catch(() => {
-        if (!cancelled) setFailed(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled]);
+  const { data: overview, error } = useAdminQuery<Overview>({
+    key: enabled ? adminCacheKey(["streams", "overview"]) : null,
+    enabled,
+    fetcher: async () => {
+      const res = await adminFetch("/api/admin/streams/overview");
+      const payload = (await res.json().catch(() => ({}))) as Overview;
+      if (!res.ok) throw new Error("overview");
+      return payload;
+    },
+  });
 
   if (!enabled) return null;
-  if (failed) {
+  if (error) {
     return (
       <p className="mb-4 text-xs text-text-secondary">Summary is unavailable right now.</p>
     );

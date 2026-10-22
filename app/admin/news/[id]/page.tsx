@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
@@ -25,8 +25,12 @@ import {
   type NewsStoryMedia,
   type NewsUploadKind,
 } from "@/lib/news-media";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { adminFetch, deleteAdmin, postAdminResponse } from "@/lib/hooks";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useApplyAdminSnapshot } from "@/lib/use-admin-snapshot";
+import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import { cn, formatDate } from "@/lib/utils";
 
 type EditorTab = "article" | "media" | "publishing" | "insights" | "activity";
@@ -145,45 +149,54 @@ export default function NewsDetailPage() {
   const [workspace, setWorkspace] = useState<NewsWorkspace | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [baseline, setBaseline] = useState<string>("");
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState<EditorTab>("article");
+  const [tab, setTab] = useAdminUiState<EditorTab>(`news:detail:${id}:tab`, "article");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [uploading, setUploading] = useState<NewsUploadKind | null>(null);
   const [pickedKind, setPickedKind] = useState<NewsStoryMedia | null>(null);
-  const [recentSources, setRecentSources] = useState<Array<{ source?: string | null }>>([]);
 
-  const load = useCallback(async () => {
-    const res = await adminFetch(`/api/admin/news/${id}/workspace`);
-    const json = (await res.json()) as NewsWorkspace & { error?: string };
-    if (!res.ok) throw new Error(json.error || "Failed to load article");
+  const detailKey = adminCacheKey(["news", "detail", id]);
+  const {
+    data: snapshot,
+    loading,
+    error: loadError,
+    replace: replaceSnapshot,
+  } = useAdminQuery<NewsWorkspace>({
+    key: detailKey,
+    fetcher: async () => {
+      const res = await adminFetch(`/api/admin/news/${id}/workspace`);
+      const json = (await res.json()) as NewsWorkspace & { error?: string };
+      if (!res.ok) throw new Error(json.error || "Failed to load article");
+      return json;
+    },
+  });
+
+  useApplyAdminSnapshot(snapshot, (json) => {
     const nextDraft = draftFromWorkspace(json);
     setWorkspace(json);
     setDraft(nextDraft);
     setBaseline(JSON.stringify(nextDraft));
-    return json;
-  }, [id]);
+  });
 
   useEffect(() => {
-    setLoading(true);
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-  }, [load]);
+    if (loadError) setError(loadError);
+  }, [loadError]);
 
-  useEffect(() => {
-    void (async () => {
+  const { data: recentSourcesData } = useAdminQuery<Array<{ source?: string | null }>>({
+    key: adminCacheKey(["news", "recent-sources"]),
+    fetcher: async () => {
       try {
         const res = await adminFetch("/api/admin/news?page_size=40&sort=created&order=desc");
         const json = (await res.json()) as { data?: Array<{ source?: string | null }> };
-        if (res.ok) setRecentSources(json.data ?? []);
+        return res.ok ? (json.data ?? []) : [];
       } catch {
-        setRecentSources([]);
+        return [];
       }
-    })();
-  }, []);
+    },
+  });
+  const recentSources = recentSourcesData ?? [];
 
   const dirty = useMemo(() => {
     if (!draft) return false;
@@ -200,6 +213,8 @@ export default function NewsDetailPage() {
     setWorkspace(ws);
     setDraft(nextDraft);
     setBaseline(JSON.stringify(nextDraft));
+    invalidateAdminCache(adminCacheKey(["news", "list"]));
+    replaceSnapshot(ws);
   };
 
   const saveChanges = async (opts?: { quiet?: boolean }) => {
@@ -365,6 +380,8 @@ export default function NewsDetailPage() {
     setError(null);
     try {
       await deleteAdmin(`/api/admin/news/${id}`);
+      invalidateAdminCache(adminCacheKey(["news", "list"]));
+      invalidateAdminCache(detailKey);
       router.replace("/admin/news");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");

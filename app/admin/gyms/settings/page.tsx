@@ -1,17 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
   AdminErrorAlert,
+  AdminReloadButton,
   AdminTableLoading,
   AdminTableShell,
 } from "@/components/admin-layout";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
 import { slugifyCategory } from "@/lib/service-categories";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
 
 export type GymCategoryRow = {
   id: string;
@@ -30,9 +33,7 @@ type CategoryDraft = {
 export default function GymCategoriesPage() {
   const { can } = useAdminPermissions();
   const canWrite = can("gyms:write");
-  const [rows, setRows] = useState<GymCategoryRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [label, setLabel] = useState("");
   const [slug, setSlug] = useState("");
   const [emoji, setEmoji] = useState("");
@@ -40,21 +41,30 @@ export default function GymCategoriesPage() {
   const [draft, setDraft] = useState<CategoryDraft | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const load = async () => {
-    const spojex = getSpojexClient();
-    const { data, error: loadError } = await spojex
-      .from("gym_categories")
-      .select("*")
-      .order("sort_order");
-    if (loadError) throw loadError;
-    setRows((data ?? []) as GymCategoryRow[]);
-  };
+  const {
+    data,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<GymCategoryRow[]>({
+    key: adminCacheKey(["gyms", "settings", "categories"]),
+    fetcher: async () => {
+      const spojex = getSpojexClient();
+      const { data: rows, error: queryError } = await spojex
+        .from("gym_categories")
+        .select("*")
+        .order("sort_order");
+      if (queryError) throw queryError;
+      return (rows ?? []) as GymCategoryRow[];
+    },
+  });
+  const rows = data ?? [];
+  const error = actionError ?? loadError;
 
-  useEffect(() => {
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-  }, []);
+  const load = async () => {
+    await refresh();
+  };
 
   const create = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -131,6 +141,16 @@ export default function GymCategoriesPage() {
           { label: "Gyms", href: "/admin/gyms" },
           { label: "Settings" },
         ]}
+        actions={
+          <AdminReloadButton
+            loading={loading}
+            refreshing={refreshing}
+            onClick={() => {
+              setError(null);
+              void refresh();
+            }}
+          />
+        }
       />
       {error ? <AdminErrorAlert message={error} /> : null}
       {canWrite ? (
@@ -189,7 +209,7 @@ export default function GymCategoriesPage() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
+                {loading && rows.length === 0 ? (
                   <AdminTableLoading colSpan={canWrite ? 5 : 4} label="Loading gym categories…" />
                 ) : rows.map((row) => {
                   const isEditing = editingId === row.id && draft;

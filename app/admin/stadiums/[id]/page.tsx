@@ -10,6 +10,7 @@ import { StadiumEditModal } from "@/components/stadium-edit-modal";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { VisiblePassword } from "@/components/visible-password";
 import { formatStadiumArea } from "@/lib/addis-ababa-locations";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { deleteAdmin, patchAdmin, postAdmin, postAdminResponse } from "@/lib/hooks";
 import {
   formatPrice,
@@ -38,6 +39,9 @@ import {
 } from "@/lib/stadiums";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useApplyAdminSnapshot } from "@/lib/use-admin-snapshot";
+import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import type {
   StadiumBookingAnalytics,
   StadiumBookingRow,
@@ -63,7 +67,7 @@ export default function StadiumDetailPage() {
   const { can, staff } = useAdminPermissions();
   const canWrite = can("stadiums:write");
   const [listReturn, setListReturn] = useState("/admin/stadiums");
-  const [tab, setTab] = useState<TabId>("overview");
+  const [tab, setTab] = useAdminUiState<TabId>(`stadiums:detail:${id}:tab`, "overview");
   const [reconciling, setReconciling] = useState(false);
 
   useEffect(() => {
@@ -91,7 +95,6 @@ export default function StadiumDetailPage() {
     Pick<StadiumPaymentRow, "amount" | "currency" | "status" | "paid_at" | "created_at">[]
   >([]);
   const [managers, setManagers] = useState<StadiumManagerRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [passQuery, setPassQuery] = useState("");
@@ -120,100 +123,138 @@ export default function StadiumDetailPage() {
     notes: "Emergency",
   });
 
-  const load = async () => {
-    const spojex = getSpojexClient();
-    const [stadiumRes, bookingsRes, subsRes, paymentsRes, revenueRes, managersRes, hoursRes] = await Promise.all([
-      spojex
-        .from("stadiums")
-        .select("*, users:owner_user_id(id, display_name, email)")
-        .eq("id", id)
-        .maybeSingle(),
-      fetch(`/api/admin/stadiums/${id}/bookings`, { credentials: "same-origin" }),
-      spojex
-        .from("stadium_subscriptions")
-        .select("*, users:user_id(id, display_name)")
-        .eq("stadium_id", id)
-        .order("created_at", { ascending: false })
-        .limit(200),
-      spojex
-        .from("stadium_payments")
-        .select("*, users:user_id(id, display_name)")
-        .eq("stadium_id", id)
-        .order("created_at", { ascending: false })
-        .limit(50),
-      spojex
-        .from("stadium_payments")
-        .select("amount, currency, status, paid_at, created_at")
-        .eq("stadium_id", id)
-        .eq("status", "completed")
-        .limit(2000),
-      fetch(`/api/admin/stadiums/${id}/managers`, { credentials: "same-origin" }),
-      fetch(`/api/admin/stadiums/${id}/availability`, { credentials: "same-origin" }),
-    ]);
-    if (stadiumRes.error) throw stadiumRes.error;
-    setStadium(stadiumRes.data as StadiumRow | null);
-    setPricing(parseStadiumPricing((stadiumRes.data as StadiumRow | null)?.pricing));
-    const bookingsPayload = (await bookingsRes.json()) as {
-      data?: StadiumBookingRow[];
-      analytics?: StadiumBookingAnalytics;
-      error?: string;
-    };
-    if (bookingsRes.ok) {
-      setBookings(bookingsPayload.data ?? []);
-      setBookingAnalytics(bookingsPayload.analytics ?? null);
-    } else {
-      setBookings([]);
-      setBookingAnalytics(null);
-      if (bookingsPayload.error) setError(bookingsPayload.error);
-    }
-    setSubscriptions((subsRes.data ?? []) as StadiumSubscriptionRow[]);
-    setPayments((paymentsRes.data ?? []) as StadiumPaymentRow[]);
-    setRevenuePayments(
-      (revenueRes.data ?? paymentsRes.data ?? []) as Pick<
-        StadiumPaymentRow,
-        "amount" | "currency" | "status" | "paid_at" | "created_at"
-      >[],
-    );
-    const managersPayload = (await managersRes.json()) as { data?: StadiumManagerRow[]; error?: string };
-    if (managersRes.ok) {
-      setManagers(managersPayload.data ?? []);
-    } else {
-      setManagers([]);
-      if (managersPayload.error) {
-        setError(
-          managersPayload.error.includes("login_password")
-            ? "Run migrations/033_stadium_manager_login_password.sql so manager passwords can be stored and shown."
-            : managersPayload.error,
-        );
+  type StadiumSnapshot = {
+    stadium: StadiumRow | null;
+    pricing: StadiumPricing;
+    bookings: StadiumBookingRow[];
+    bookingAnalytics: StadiumBookingAnalytics | null;
+    subscriptions: StadiumSubscriptionRow[];
+    payments: StadiumPaymentRow[];
+    revenuePayments: Pick<StadiumPaymentRow, "amount" | "currency" | "status" | "paid_at" | "created_at">[];
+    managers: StadiumManagerRow[];
+    weekHours: StadiumWeekHour[];
+    blocks: StadiumAvailabilityBlock[];
+    softError: string | null;
+  };
+
+  const {
+    data: snapshot,
+    loading,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<StadiumSnapshot>({
+    key: adminCacheKey(["stadiums", "detail", id]),
+    fetcher: async () => {
+      const spojex = getSpojexClient();
+      const [stadiumRes, bookingsRes, subsRes, paymentsRes, revenueRes, managersRes, hoursRes] = await Promise.all([
+        spojex
+          .from("stadiums")
+          .select("*, users:owner_user_id(id, display_name, email)")
+          .eq("id", id)
+          .maybeSingle(),
+        fetch(`/api/admin/stadiums/${id}/bookings`, { credentials: "same-origin" }),
+        spojex
+          .from("stadium_subscriptions")
+          .select("*, users:user_id(id, display_name)")
+          .eq("stadium_id", id)
+          .order("created_at", { ascending: false })
+          .limit(200),
+        spojex
+          .from("stadium_payments")
+          .select("*, users:user_id(id, display_name)")
+          .eq("stadium_id", id)
+          .order("created_at", { ascending: false })
+          .limit(50),
+        spojex
+          .from("stadium_payments")
+          .select("amount, currency, status, paid_at, created_at")
+          .eq("stadium_id", id)
+          .eq("status", "completed")
+          .limit(2000),
+        fetch(`/api/admin/stadiums/${id}/managers`, { credentials: "same-origin" }),
+        fetch(`/api/admin/stadiums/${id}/availability`, { credentials: "same-origin" }),
+      ]);
+      if (stadiumRes.error) throw stadiumRes.error;
+      let softError: string | null = null;
+      const bookingsPayload = (await bookingsRes.json()) as {
+        data?: StadiumBookingRow[];
+        analytics?: StadiumBookingAnalytics;
+        error?: string;
+      };
+      const bookings = bookingsRes.ok ? bookingsPayload.data ?? [] : [];
+      const bookingAnalytics = bookingsRes.ok ? bookingsPayload.analytics ?? null : null;
+      if (!bookingsRes.ok && bookingsPayload.error) softError = bookingsPayload.error;
+
+      const managersPayload = (await managersRes.json()) as { data?: StadiumManagerRow[]; error?: string };
+      let managers: StadiumManagerRow[] = [];
+      if (managersRes.ok) {
+        managers = managersPayload.data ?? [];
+      } else if (managersPayload.error) {
+        softError = managersPayload.error.includes("login_password")
+          ? "Run migrations/033_stadium_manager_login_password.sql so manager passwords can be stored and shown."
+          : managersPayload.error;
       }
-    }
-    const hoursPayload = (await hoursRes.json()) as {
-      weekly?: StadiumWeekHour[];
-      blocks?: StadiumAvailabilityBlock[];
-      error?: string;
-    };
-    if (hoursRes.ok) {
-      setWeekHours(normalizeStadiumWeekHours(hoursPayload.weekly));
-      setBlocks(hoursPayload.blocks ?? []);
-    } else if (hoursPayload.error) {
-      setWeekHours(emptyStadiumWeekHours());
-      setBlocks([]);
-      setError(
-        hoursPayload.error.includes("weekly_uniq")
+
+      const hoursPayload = (await hoursRes.json()) as {
+        weekly?: StadiumWeekHour[];
+        blocks?: StadiumAvailabilityBlock[];
+        error?: string;
+      };
+      let weekHours = emptyStadiumWeekHours();
+      let blocks: StadiumAvailabilityBlock[] = [];
+      if (hoursRes.ok) {
+        weekHours = normalizeStadiumWeekHours(hoursPayload.weekly);
+        blocks = hoursPayload.blocks ?? [];
+      } else if (hoursPayload.error) {
+        softError = hoursPayload.error.includes("weekly_uniq")
           ? `${hoursPayload.error} Run migrations/040_stadium_multi_slots.sql so a day can have more than one slot.`
           : hoursPayload.error.includes("permission") || hoursPayload.error.includes("policy")
             ? `${hoursPayload.error} Run migrations/037_stadium_admin_hours.sql.`
-            : hoursPayload.error,
-      );
-    }
-  };
+            : hoursPayload.error;
+      }
+
+      const stadium = stadiumRes.data as StadiumRow | null;
+      return {
+        stadium,
+        pricing: parseStadiumPricing(stadium?.pricing),
+        bookings,
+        bookingAnalytics,
+        subscriptions: (subsRes.data ?? []) as StadiumSubscriptionRow[],
+        payments: (paymentsRes.data ?? []) as StadiumPaymentRow[],
+        revenuePayments: (revenueRes.data ?? paymentsRes.data ?? []) as Pick<
+          StadiumPaymentRow,
+          "amount" | "currency" | "status" | "paid_at" | "created_at"
+        >[],
+        managers,
+        weekHours,
+        blocks,
+        softError,
+      };
+    },
+  });
+
+  useApplyAdminSnapshot(snapshot, (snap) => {
+    setStadium(snap.stadium);
+    setPricing(snap.pricing);
+    setBookings(snap.bookings);
+    setBookingAnalytics(snap.bookingAnalytics);
+    setSubscriptions(snap.subscriptions);
+    setPayments(snap.payments);
+    setRevenuePayments(snap.revenuePayments);
+    setManagers(snap.managers);
+    setWeekHours(snap.weekHours);
+    setBlocks(snap.blocks);
+    if (snap.softError) setError(snap.softError);
+  });
 
   useEffect(() => {
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+    if (loadError) setError(loadError);
+  }, [loadError]);
+
+  const load = async () => {
+    invalidateAdminCache(adminCacheKey(["stadiums", "list"]));
+    await refresh();
+  };
 
   const saveStadium = async (patch: Record<string, unknown>) => {
     setError(null);
@@ -505,7 +546,7 @@ export default function StadiumDetailPage() {
     return ["completed", "paid", "success", "verified"].includes(s);
   };
 
-  if (loading) return <AdminLoadingRow label="Loading stadium…" />;
+  if (loading && !stadium) return <AdminLoadingRow label="Loading stadium…" />;
   if (!stadium) return <AdminErrorAlert message={error || "Stadium not found"} />;
 
   return (

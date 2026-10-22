@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
@@ -34,8 +34,10 @@ import {
   formatEventPrice,
   formatEventWhenCompact,
 } from "@/lib/events";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { deleteAdmin, patchAdmin, postAdminResponse, adminFetch } from "@/lib/hooks";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import type { EventRow } from "@/lib/types";
 
 const fieldClass = "h-10 w-full rounded-lg border border-border px-3 text-sm";
@@ -53,18 +55,17 @@ type DirectoryEvent = EventRow & {
   organizer_name?: string;
 };
 
+type EventsListData = { rows: DirectoryEvent[]; total: number };
+
 export default function EventsPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { can } = useAdminPermissions();
   const canWrite = can("events:write");
-  const [rows, setRows] = useState<DirectoryEvent[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(Number(searchParams.get("page") || "1") || 1);
   const [pageSize] = useState(40);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [query, setQuery] = useState(searchParams.get("q") || "");
   const [status, setStatus] = useState(searchParams.get("status") || "all");
   const [lifecycle, setLifecycle] = useState(searchParams.get("lifecycle") || "all");
@@ -114,74 +115,70 @@ export default function EventsPage() {
     setCoverFile(file);
   };
 
-  const load = useCallback(async () => {
-    const params = new URLSearchParams();
-    if (query.trim()) params.set("q", query.trim());
-    if (status !== "all") params.set("status", status);
-    if (lifecycle !== "all") params.set("lifecycle", lifecycle);
-    if (visibility !== "all") params.set("visibility", visibility);
-    if (salesFilter !== "all") params.set("sales", salesFilter);
-    if (venueFilter.trim()) params.set("venue", venueFilter.trim());
-    if (organizerFilter.trim()) params.set("organizer", organizerFilter.trim());
-    if (windowFilter) params.set("window", windowFilter);
-    if (startsFrom) params.set("starts_from", startsFrom);
-    if (startsTo) params.set("starts_to", startsTo);
-    params.set("page", String(page));
-    params.set("page_size", String(pageSize));
-    params.set("sort", "starts_at");
-    params.set("order", "desc");
+  const {
+    data: listData,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<EventsListData>({
+    key: adminCacheKey([
+      "events",
+      "list",
+      page,
+      pageSize,
+      query.trim(),
+      status,
+      lifecycle,
+      visibility,
+      salesFilter,
+      venueFilter.trim(),
+      organizerFilter.trim(),
+      windowFilter,
+      startsFrom,
+      startsTo,
+    ]),
+    fetcher: async () => {
+      const params = new URLSearchParams();
+      if (query.trim()) params.set("q", query.trim());
+      if (status !== "all") params.set("status", status);
+      if (lifecycle !== "all") params.set("lifecycle", lifecycle);
+      if (visibility !== "all") params.set("visibility", visibility);
+      if (salesFilter !== "all") params.set("sales", salesFilter);
+      if (venueFilter.trim()) params.set("venue", venueFilter.trim());
+      if (organizerFilter.trim()) params.set("organizer", organizerFilter.trim());
+      if (windowFilter) params.set("window", windowFilter);
+      if (startsFrom) params.set("starts_from", startsFrom);
+      if (startsTo) params.set("starts_to", startsTo);
+      params.set("page", String(page));
+      params.set("page_size", String(pageSize));
+      params.set("sort", "starts_at");
+      params.set("order", "desc");
 
-    const response = await adminFetch(`/api/admin/events?${params}`);
-    const payload = (await response.json()) as {
-      data?: DirectoryEvent[];
-      total?: number;
-      error?: string;
-      message?: string;
-      detail?: string;
-    };
-    if (!response.ok) {
-      const msg =
-        payload.message ||
-        payload.detail ||
-        (payload.error && !payload.error.includes("_") ? payload.error : null) ||
-        payload.error ||
-        "Failed to load events";
-      throw new Error(msg === "not_found" ? "Events API unavailable. Retry in a moment." : msg);
-    }
-    setRows(payload.data ?? []);
-    setTotal(Number(payload.total ?? 0));
-  }, [
-    query,
-    status,
-    lifecycle,
-    visibility,
-    salesFilter,
-    venueFilter,
-    organizerFilter,
-    windowFilter,
-    startsFrom,
-    startsTo,
-    page,
-    pageSize,
-  ]);
+      const response = await adminFetch(`/api/admin/events?${params}`);
+      const payload = (await response.json()) as {
+        data?: DirectoryEvent[];
+        total?: number;
+        error?: string;
+        message?: string;
+        detail?: string;
+      };
+      if (!response.ok) {
+        const msg =
+          payload.message ||
+          payload.detail ||
+          (payload.error && !payload.error.includes("_") ? payload.error : null) ||
+          payload.error ||
+          "Failed to load events";
+        throw new Error(msg === "not_found" ? "Events API unavailable. Retry in a moment." : msg);
+      }
+      return { rows: payload.data ?? [], total: Number(payload.total ?? 0) };
+    },
+  });
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }, [load]);
-
-  // Fetch once on mount and when page changes. Filters apply on Reload.
-  useEffect(() => {
-    void refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  const rows = useMemo(() => listData?.rows ?? [], [listData]);
+  const total = listData?.total ?? 0;
+  const error = actionError ?? loadError;
 
   useEffect(() => {
     const next = new URLSearchParams();
@@ -257,6 +254,7 @@ export default function EventsPage() {
         if (!uploadRes.ok) {
           throw new Error(uploadPayload.error || "Event created, but cover upload failed.");
         }
+        invalidateAdminCache("events");
       }
       setForm({ name: "", venue_name: "", location: "", starts_at: "", ticket_price: "250", capacity: "0" });
       clearCover();
@@ -317,7 +315,11 @@ export default function EventsPage() {
         description="Listings, tickets, and gate codes"
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <AdminReloadButton loading={loading} onClick={() => void refresh()} />
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
+              onClick={() => void refresh()}
+            />
             {canWrite ? (
               <button
                 type="button"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import {
@@ -9,6 +9,7 @@ import {
   AdminFilterPanel,
   AdminModal,
   AdminModalFooter,
+  AdminReloadButton,
   AdminSearchInput,
   AdminSelect,
   AdminTableActions,
@@ -16,9 +17,12 @@ import {
   AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import { adminFetch, deleteAdmin, patchAdmin, postAdmin, uploadAdmin } from "@/lib/hooks";
 import { miniAppCategories, slugifyMiniApp } from "@/lib/miniapps";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import type { MiniAppRow } from "@/lib/types";
 
 const fieldClass = "h-10 w-full rounded-lg border border-border px-3 text-sm";
@@ -56,10 +60,8 @@ export default function MiniAppsPage() {
   const { can } = useAdminPermissions();
   const canWrite = can("miniapps:write");
   const logoInputRef = useRef<HTMLInputElement>(null);
-  const [rows, setRows] = useState<MiniAppRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
+  const [actionError, setError] = useState<string | null>(null);
+  const [query, setQuery] = useAdminUiState("miniapps:query", "");
   const [status, setStatus] = useState(searchParams.get("status") || "all");
   const [name, setName] = useState("");
   const [url, setUrl] = useState("https://www.zemenservice.com/");
@@ -71,25 +73,36 @@ export default function MiniAppsPage() {
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
-  const [notes, setNotes] = useState<string[]>([]);
+  const {
+    data,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+    setData,
+  } = useAdminQuery<{ rows: MiniAppRow[]; notes: string[] }>({
+    key: adminCacheKey(["miniapps", "list"]),
+    fetcher: async () => {
+      const response = await adminFetch("/api/admin/miniapps");
+      const payload = (await response.json()) as {
+        data?: MiniAppRow[];
+        error?: string;
+        notes?: string[];
+      };
+      if (!response.ok) throw new Error(payload.error || "Failed to load mini apps");
+      return { rows: payload.data ?? [], notes: payload.notes ?? [] };
+    },
+  });
+  const rows = useMemo(() => data?.rows ?? [], [data]);
+  const notes = data?.notes ?? [];
+  const error = actionError || loadError;
 
-  const load = async () => {
-    const response = await adminFetch("/api/admin/miniapps");
-    const payload = (await response.json()) as {
-      data?: MiniAppRow[];
-      error?: string;
-      notes?: string[];
-    };
-    if (!response.ok) throw new Error(payload.error || "Failed to load mini apps");
-    setRows(payload.data ?? []);
-    setNotes(payload.notes ?? []);
-  };
-
-  useEffect(() => {
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-  }, []);
+  const patchRow = (id: string, patch: Partial<MiniAppRow>) =>
+    setData((prev) =>
+      prev
+        ? { ...prev, rows: prev.rows.map((row) => (row.id === id ? { ...row, ...patch } : row)) }
+        : prev,
+    );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -119,7 +132,7 @@ export default function MiniAppsPage() {
       });
       setName("");
       setUrl("https://");
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
     } finally {
@@ -151,9 +164,7 @@ export default function MiniAppsPage() {
       const payload = await uploadAdmin(`/api/admin/miniapps/${editingId}/image`, file);
       const next = (payload.logo_url ?? "").trim();
       setEditingLogo(next);
-      setRows((prev) =>
-        prev.map((row) => (row.id === editingId ? { ...row, logo_url: next } : row)),
-      );
+      patchRow(editingId, { logo_url: next });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -173,9 +184,7 @@ export default function MiniAppsPage() {
       const payload = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(payload.error || "Remove failed");
       setEditingLogo("");
-      setRows((prev) =>
-        prev.map((row) => (row.id === editingId ? { ...row, logo_url: "" } : row)),
-      );
+      patchRow(editingId, { logo_url: "" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Remove failed");
     } finally {
@@ -198,7 +207,7 @@ export default function MiniAppsPage() {
         sort_order: draft.sort_order,
       });
       closeEdit();
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -212,7 +221,7 @@ export default function MiniAppsPage() {
     try {
       await deleteAdmin(`/api/admin/miniapps/${row.id}`);
       if (editingId === row.id) closeEdit();
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
     }
@@ -223,6 +232,13 @@ export default function MiniAppsPage() {
       <AdminPageHeader
         title="Mini apps"
         description="HTTPS partner sites that open inside the Spojex WebView. Unpublished apps stay out of the public mobile catalog."
+        actions={
+          <AdminReloadButton
+            loading={loading}
+            refreshing={refreshing}
+            onClick={() => void refresh()}
+          />
+        }
       />
       {error ? <AdminErrorAlert message={error} /> : null}
       {notes.length > 0 && !error ? (
@@ -283,7 +299,7 @@ export default function MiniAppsPage() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {loading && rows.length === 0 ? (
                 <AdminTableLoading
                   colSpan={canWrite ? 5 : 4}
                   label="Loading mini apps…"

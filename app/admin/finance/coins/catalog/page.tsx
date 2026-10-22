@@ -6,12 +6,15 @@ import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
   AdminErrorAlert,
+  AdminReloadButton,
   AdminTableLoading,
   AdminTableShell,
 } from "@/components/admin-layout";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import { adminFetch, deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
 
 type CoinPackageRow = {
   id: string;
@@ -50,6 +53,14 @@ type ChapaStatus = {
   hasSecretKey: boolean;
 };
 
+type CatalogBundle = {
+  packages: CoinPackageRow[];
+  gifts: CoinGiftRow[];
+  purchases: CoinPurchaseRow[];
+  chapa: ChapaStatus;
+  settings: Record<string, unknown> | null;
+};
+
 function slugify(value: string) {
   return value
     .trim()
@@ -58,24 +69,81 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, "");
 }
 
+async function fetchCatalogBundle(): Promise<CatalogBundle> {
+  const spojex = getSpojexClient();
+  const [packRes, giftRes, settingsHttp, purchaseRes, appSettingsRes] =
+    await Promise.all([
+      spojex.from("coin_packages").select("*").order("sort_order"),
+      spojex.from("coin_gifts").select("*").order("sort_order"),
+      adminFetch("/api/admin/coin-settings"),
+      spojex
+        .from("coin_purchases")
+        .select(
+          "id,user_id,coins,price_etb,status,provider_ref,paid_at,created_at",
+        )
+        .order("created_at", { ascending: false })
+        .limit(25),
+      spojex
+        .from("app_settings")
+        .select("id,data")
+        .eq("id", "payment")
+        .maybeSingle(),
+    ]);
+  if (packRes.error) throw packRes.error;
+  if (giftRes.error) throw giftRes.error;
+  let settings: Record<string, unknown> | null = null;
+  if (settingsHttp.ok) {
+    settings = (await settingsHttp.json()) as Record<string, unknown>;
+  } else {
+    const fallback = await spojex
+      .from("coin_settings")
+      .select(
+        "etb_per_coin,min_redemption_coins,max_redemption_coins,max_pending_redemptions",
+      )
+      .eq("id", 1)
+      .maybeSingle();
+    if (fallback.data) {
+      settings = fallback.data as Record<string, unknown>;
+    }
+  }
+  const paymentData =
+    appSettingsRes.data?.data &&
+    typeof appSettingsRes.data.data === "object" &&
+    !Array.isArray(appSettingsRes.data.data)
+      ? (appSettingsRes.data.data as Record<string, unknown>)
+      : {};
+  const chapaCfg =
+    paymentData.chapa && typeof paymentData.chapa === "object"
+      ? (paymentData.chapa as Record<string, unknown>)
+      : {};
+  // Prefer secretConfigured when present; otherwise check secretKey.
+  // Server-managed secrets may live outside app_settings.secretKey.
+  const chapa: ChapaStatus = {
+    enabled: Boolean(chapaCfg.enable || chapaCfg.isActive),
+    hasPublicKey: Boolean(String(chapaCfg.publicKey || "").trim()),
+    hasSecretKey: Boolean(
+      chapaCfg.secretConfigured === true ||
+      String(chapaCfg.secretKey || "").trim(),
+    ),
+  };
+  return {
+    packages: (packRes.data ?? []) as CoinPackageRow[],
+    gifts: (giftRes.data ?? []) as CoinGiftRow[],
+    purchases: purchaseRes.error ? [] : ((purchaseRes.data ?? []) as CoinPurchaseRow[]),
+    chapa,
+    settings,
+  };
+}
+
 export default function CoinCatalogPage() {
   const { can } = useAdminPermissions();
   const canWrite = can("coins:write") || can("donations:write");
-  const [packages, setPackages] = useState<CoinPackageRow[]>([]);
-  const [gifts, setGifts] = useState<CoinGiftRow[]>([]);
-  const [purchases, setPurchases] = useState<CoinPurchaseRow[]>([]);
-  const [chapa, setChapa] = useState<ChapaStatus>({
-    enabled: false,
-    hasPublicKey: false,
-    hasSecretKey: false,
-  });
   /** Primary admin knob: how many coins 1 Birr buys (default 10). */
   const [coinsPerBirr, setCoinsPerBirr] = useState("10");
   const [minRedeem, setMinRedeem] = useState("100");
   const [maxRedeem, setMaxRedeem] = useState("50000");
   const [maxPending, setMaxPending] = useState("3");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const [packName, setPackName] = useState("");
@@ -108,80 +176,34 @@ export default function CoinCatalogPage() {
     }
   };
 
-  const load = async () => {
-    const spojex = getSpojexClient();
-    const [packRes, giftRes, settingsHttp, purchaseRes, appSettingsRes] =
-      await Promise.all([
-        spojex.from("coin_packages").select("*").order("sort_order"),
-        spojex.from("coin_gifts").select("*").order("sort_order"),
-        adminFetch("/api/admin/coin-settings"),
-        spojex
-          .from("coin_purchases")
-          .select(
-            "id,user_id,coins,price_etb,status,provider_ref,paid_at,created_at",
-          )
-          .order("created_at", { ascending: false })
-          .limit(25),
-        spojex
-          .from("app_settings")
-          .select("id,data")
-          .eq("id", "payment")
-          .maybeSingle(),
-      ]);
-    if (packRes.error) throw packRes.error;
-    if (giftRes.error) throw giftRes.error;
-    setPackages((packRes.data ?? []) as CoinPackageRow[]);
-    setGifts((giftRes.data ?? []) as CoinGiftRow[]);
-    if (!purchaseRes.error) {
-      setPurchases((purchaseRes.data ?? []) as CoinPurchaseRow[]);
-    }
-    if (settingsHttp.ok) {
-      const settingsPayload = (await settingsHttp.json()) as Record<
-        string,
-        unknown
-      >;
-      applySettingsPayload(settingsPayload);
-    } else {
-      const fallback = await spojex
-        .from("coin_settings")
-        .select(
-          "etb_per_coin,min_redemption_coins,max_redemption_coins,max_pending_redemptions",
-        )
-        .eq("id", 1)
-        .maybeSingle();
-      if (fallback.data) {
-        applySettingsPayload(fallback.data as Record<string, unknown>);
-      }
-    }
-    const paymentData =
-      appSettingsRes.data?.data &&
-      typeof appSettingsRes.data.data === "object" &&
-      !Array.isArray(appSettingsRes.data.data)
-        ? (appSettingsRes.data.data as Record<string, unknown>)
-        : {};
-    const chapaCfg =
-      paymentData.chapa && typeof paymentData.chapa === "object"
-        ? (paymentData.chapa as Record<string, unknown>)
-        : {};
-    // Prefer secretConfigured when present; otherwise check secretKey.
-    // Server-managed secrets may live outside app_settings.secretKey.
-    setChapa({
-      enabled: Boolean(chapaCfg.enable || chapaCfg.isActive),
-      hasPublicKey: Boolean(String(chapaCfg.publicKey || "").trim()),
-      hasSecretKey: Boolean(
-        chapaCfg.secretConfigured === true ||
-        String(chapaCfg.secretKey || "").trim(),
-      ),
-    });
+  const {
+    data: bundle,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<CatalogBundle>({
+    key: adminCacheKey(["finance", "coins", "catalog"]),
+    fetcher: fetchCatalogBundle,
+  });
+  const error = actionError ?? loadError;
+  const packages = bundle?.packages ?? [];
+  const gifts = bundle?.gifts ?? [];
+  const purchases = bundle?.purchases ?? [];
+  const chapa: ChapaStatus = bundle?.chapa ?? {
+    enabled: false,
+    hasPublicKey: false,
+    hasSecretKey: false,
   };
 
   useEffect(() => {
-    load()
-      .catch((err) =>
-        setError(err instanceof Error ? err.message : "Failed to load"),
-      )
-      .finally(() => setLoading(false));
-  }, []);
+    if (bundle) applySettingsPayload(bundle.settings);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bundle]);
+
+  const load = async () => {
+    await refresh();
+  };
 
   const etbPerCoin = (() => {
     const perBirr = Number(coinsPerBirr);
@@ -377,6 +399,14 @@ export default function CoinCatalogPage() {
         ]}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
+              onClick={() => {
+                setError(null);
+                void refresh();
+              }}
+            />
             <Link
               href="/admin/finance/transactions?module=coins&type=customer_payment&asset=money"
               className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"

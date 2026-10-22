@@ -1,17 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
   AdminErrorAlert,
   AdminFilterPanel,
+  AdminReloadButton,
   AdminSearchInput,
   AdminTableLoading,
   AdminTableShell,
 } from "@/components/admin-layout";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import type { WalletRow } from "@/lib/types";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import { formatDate, formatStatusLabel } from "@/lib/utils";
 
 function money(amount: number | null | undefined, currency = "ETB") {
@@ -20,21 +23,24 @@ function money(amount: number | null | undefined, currency = "ETB") {
 }
 
 export default function WalletsPage() {
-  const [rows, setRows] = useState<WalletRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
 
-  useEffect(() => {
-    fetch("/api/admin/wallets", { credentials: "same-origin" })
-      .then(async (response) => {
-        const payload = (await response.json()) as { data?: WalletRow[]; error?: string };
-        if (!response.ok) throw new Error(payload.error || "Failed to load wallets");
-        setRows(payload.data ?? []);
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-  }, []);
+  const {
+    data,
+    loading,
+    refreshing,
+    error,
+    refresh,
+  } = useAdminQuery<WalletRow[]>({
+    key: adminCacheKey(["finance", "wallets", "list"]),
+    fetcher: async () => {
+      const response = await fetch("/api/admin/wallets", { credentials: "same-origin" });
+      const payload = (await response.json()) as { data?: WalletRow[]; error?: string };
+      if (!response.ok) throw new Error(payload.error || "Failed to load wallets");
+      return payload.data ?? [];
+    },
+  });
+  const rows = data ?? [];
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -52,6 +58,9 @@ export default function WalletsPage() {
         title="Wallets & Ledgers"
         description="Provider ETB wallet ownership and purpose. Open a wallet for chronological ledger - available may exceed lifetime earned when adjustments exist. Coin wallets live under Coins & Gifts activity in Transactions."
         breadcrumbs={[{ label: "Finance", href: "/admin/finance" }, { label: "Wallets & Ledgers" }]}
+        actions={
+          <AdminReloadButton loading={loading} refreshing={refreshing} onClick={() => void refresh()} />
+        }
       />
       <AdminFilterPanel>
         <AdminSearchInput value={query} onChange={setQuery} placeholder="Search provider" />

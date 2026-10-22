@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
@@ -40,8 +40,10 @@ import {
   writeStoredDirectoryView,
   type DirectoryView,
 } from "@/lib/directory-view";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import { adminFetch, deleteAdmin, postAdmin } from "@/lib/hooks";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import type { DonationCampaignRow } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 
@@ -56,6 +58,8 @@ type Totals = {
   note?: string;
 };
 
+type DonationsListData = { rows: DirectoryRow[]; total: number; totals: Totals };
+
 const DONATIONS_VIEW_KEY = "spojex_admin_donations_view";
 
 export default function DonationsPage() {
@@ -65,13 +69,9 @@ export default function DonationsPage() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const [rows, setRows] = useState<DirectoryRow[]>([]);
-  const [total, setTotal] = useState(0);
-  const [totals, setTotals] = useState<Totals>({});
   const [page, setPage] = useState(Number(searchParams.get("page") || "1") || 1);
   const [pageSize] = useState(40);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [query, setQuery] = useState(searchParams.get("q") || "");
   const [status, setStatus] = useState(searchParams.get("status") || "all");
   const [asset, setAsset] = useState(searchParams.get("asset") || "all");
@@ -100,47 +100,57 @@ export default function DonationsPage() {
   const [beneficiaryId, setBeneficiaryId] = useState("");
   const [createStatus, setCreateStatus] = useState("draft");
 
-  const load = useCallback(async () => {
-    const params = new URLSearchParams();
-    if (query.trim()) params.set("q", query.trim());
-    if (status !== "all") params.set("status", status);
-    if (asset !== "all") params.set("asset", asset);
-    if (featured !== "all") params.set("featured", featured);
-    if (beneficiary.trim()) params.set("beneficiary", beneficiary.trim());
-    params.set("page", String(page));
-    params.set("page_size", String(pageSize));
-    params.set("sort", sort);
-    params.set("order", order);
-    const res = await adminFetch(`/api/admin/donations?${params}`);
-    const payload = (await res.json()) as {
-      data?: DirectoryRow[];
-      total?: number;
-      totals?: Totals;
-      error?: string;
-    };
-    if (!res.ok) throw new Error(payload.error || "Failed to load");
-    setRows(payload.data ?? []);
-    setTotal(payload.total ?? 0);
-    setTotals(payload.totals ?? {});
-  }, [query, status, asset, featured, beneficiary, page, pageSize, sort, order]);
+  const {
+    data: listData,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<DonationsListData>({
+    key: adminCacheKey([
+      "donations",
+      "list",
+      page,
+      pageSize,
+      query.trim(),
+      status,
+      asset,
+      featured,
+      beneficiary.trim(),
+      sort,
+      order,
+    ]),
+    fetcher: async () => {
+      const params = new URLSearchParams();
+      if (query.trim()) params.set("q", query.trim());
+      if (status !== "all") params.set("status", status);
+      if (asset !== "all") params.set("asset", asset);
+      if (featured !== "all") params.set("featured", featured);
+      if (beneficiary.trim()) params.set("beneficiary", beneficiary.trim());
+      params.set("page", String(page));
+      params.set("page_size", String(pageSize));
+      params.set("sort", sort);
+      params.set("order", order);
+      const res = await adminFetch(`/api/admin/donations?${params}`);
+      const payload = (await res.json()) as {
+        data?: DirectoryRow[];
+        total?: number;
+        totals?: Totals;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(payload.error || "Failed to load");
+      return {
+        rows: payload.data ?? [],
+        total: payload.total ?? 0,
+        totals: payload.totals ?? {},
+      };
+    },
+  });
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }, [load]);
-
-  // Fetch once on mount and when page changes. Filters apply on Reload.
-  useEffect(() => {
-    void refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  const rows = useMemo(() => listData?.rows ?? [], [listData]);
+  const total = listData?.total ?? 0;
+  const totals = listData?.totals ?? {};
+  const error = actionError ?? loadError;
 
   useEffect(() => {
     const next = new URLSearchParams();
@@ -255,7 +265,11 @@ export default function DonationsPage() {
         description={`${rows.length} of ${total} · fundraising campaigns (ETB and coins tracked separately)`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <AdminReloadButton loading={loading} onClick={() => void refresh()} />
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
+              onClick={() => void refresh()}
+            />
             <AdminCardsListToggle value={view} onChange={setDirectoryView} />
             {canWrite ? (
               <button

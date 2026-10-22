@@ -12,6 +12,7 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { clipboardImageFile } from "@/lib/clipboard-image";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { adminFetch, deleteAdmin, patchAdmin, postAdminResponse } from "@/lib/hooks";
 import {
   DELIVERY_MODES,
@@ -30,6 +31,9 @@ import {
 import { serviceImageUrls } from "@/lib/services-media";
 import type { ServiceCategory, ServiceRequestRow, ServiceRow, ServiceSubcategory } from "@/lib/types";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
+import { useApplyAdminSnapshot } from "@/lib/use-admin-snapshot";
+import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import { cn, formatDate, formatDateTime, formatMoney, formatStatusLabel, locationLabel } from "@/lib/utils";
 
 const MAX_PHOTOS = 5;
@@ -72,6 +76,15 @@ type DetailService = ServiceRow & {
   updated_at?: string;
 };
 
+type ServiceSnapshot = {
+  data: DetailService;
+  categories: ServiceCategory[];
+  subcategories: ServiceSubcategory[];
+  bookings: BookingRow[];
+  metrics: { booking_count?: number; payment_count?: number };
+  definitions: Record<string, string>;
+};
+
 export default function ServiceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -81,8 +94,16 @@ export default function ServiceDetailPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const tabParam = searchParams.get("tab");
+  const [rememberedTab, setRememberedTab] = useAdminUiState<TabId>(
+    `services:detail:${id}:tab`,
+    "overview",
+  );
   const tab: TabId =
-    tabParam === "bookings" || tabParam === "settings" ? tabParam : "overview";
+    tabParam === "bookings" || tabParam === "settings"
+      ? tabParam
+      : tabParam === null
+        ? rememberedTab
+        : "overview";
 
   const [service, setService] = useState<DetailService | null>(null);
   const [bookings, setBookings] = useState<BookingRow[]>([]);
@@ -91,7 +112,6 @@ export default function ServiceDetailPage() {
   const [metrics, setMetrics] = useState<{ booking_count?: number; payment_count?: number }>({});
   const [definitions, setDefinitions] = useState<Record<string, string>>({});
   const [photos, setPhotos] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -122,6 +142,7 @@ export default function ServiceDetailPage() {
   }, []);
 
   const setTab = (next: TabId) => {
+    setRememberedTab(next);
     const params = new URLSearchParams(searchParams.toString());
     if (next === "overview") params.delete("tab");
     else params.set("tab", next);
@@ -145,42 +166,66 @@ export default function ServiceDetailPage() {
     setDirty(false);
   };
 
-  const load = useCallback(async () => {
-    setLoadError(null);
-    const response = await fetch(`/api/admin/services/${id}`, { credentials: "same-origin" });
-    const payload = (await response.json()) as {
-      data?: DetailService;
-      categories?: ServiceCategory[];
-      subcategories?: ServiceSubcategory[];
-      bookings?: BookingRow[];
-      metrics?: { booking_count?: number; payment_count?: number };
-      definitions?: Record<string, string>;
-      error?: string;
-    };
-    if (response.status === 404) {
-      setService(null);
-      setLoadError(payload.error || "Service not found");
-      return;
-    }
-    if (!response.ok) throw new Error(payload.error || "Failed to load service");
-    setCategories(payload.categories ?? []);
-    setSubcategories(payload.subcategories ?? []);
-    setBookings(payload.bookings ?? []);
-    setMetrics(payload.metrics ?? {});
-    setDefinitions(payload.definitions ?? {});
-    if (payload.data) applyService(payload.data);
-    else {
-      setService(null);
-      setLoadError("Service not found");
-    }
-  }, [id]);
+  const detailKey = adminCacheKey(["services", "detail", id]);
+  const {
+    data: snapshot,
+    loading,
+    error: queryError,
+    refresh,
+    replace: replaceSnapshot,
+  } = useAdminQuery<ServiceSnapshot>({
+    key: detailKey,
+    fetcher: async () => {
+      const response = await fetch(`/api/admin/services/${id}`, { credentials: "same-origin" });
+      const payload = (await response.json()) as {
+        data?: DetailService;
+        categories?: ServiceCategory[];
+        subcategories?: ServiceSubcategory[];
+        bookings?: BookingRow[];
+        metrics?: { booking_count?: number; payment_count?: number };
+        definitions?: Record<string, string>;
+        error?: string;
+      };
+      if (response.status === 404) throw new Error(payload.error || "Service not found");
+      if (!response.ok) throw new Error(payload.error || "Failed to load service");
+      if (!payload.data) throw new Error("Service not found");
+      return {
+        data: payload.data,
+        categories: payload.categories ?? [],
+        subcategories: payload.subcategories ?? [],
+        bookings: payload.bookings ?? [],
+        metrics: payload.metrics ?? {},
+        definitions: payload.definitions ?? {},
+      };
+    },
+  });
+
+  useApplyAdminSnapshot(snapshot, (snap) => {
+    setCategories(snap.categories);
+    setSubcategories(snap.subcategories);
+    setBookings(snap.bookings);
+    setMetrics(snap.metrics);
+    setDefinitions(snap.definitions);
+    applyService(snap.data);
+  });
 
   useEffect(() => {
-    setLoading(true);
-    load()
-      .catch((err) => setLoadError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-  }, [load]);
+    setLoadError(queryError);
+  }, [queryError]);
+
+  /** Soft reload after a mutation; also drops the parent list cache. */
+  const load = useCallback(async () => {
+    setLoadError(null);
+    invalidateAdminCache(adminCacheKey(["services", "list"]));
+    await refresh();
+  }, [refresh]);
+
+  /** PATCH returned the fresh row: apply it and keep the session cache in sync. */
+  const applySavedService = (next: DetailService) => {
+    applyService(next);
+    invalidateAdminCache(adminCacheKey(["services", "list"]));
+    if (snapshot) replaceSnapshot({ ...snapshot, data: next });
+  };
 
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -217,7 +262,7 @@ export default function ServiceDetailPage() {
       images: trimmed,
       expected_updated_at: current.updated_at,
     })) as DetailService | undefined;
-    if (data) applyService(data);
+    if (data) applySavedService(data);
     else await load();
   };
 
@@ -330,7 +375,7 @@ export default function ServiceDetailPage() {
         images: photos,
         expected_updated_at: service.updated_at,
       })) as DetailService | undefined;
-      if (data) applyService(data);
+      if (data) applySavedService(data);
       else await load();
       setEditing(false);
       setNotice("Listing saved.");
@@ -386,6 +431,7 @@ export default function ServiceDetailPage() {
     try {
       const result = await deleteAdmin(`/api/admin/services/${service.id}`);
       if (result?.deleted) {
+        invalidateAdminCache(adminCacheKey(["services"]));
         router.push(backHref);
         return;
       }
@@ -412,14 +458,7 @@ export default function ServiceDetailPage() {
           </Link>
           <button
             type="button"
-            onClick={() => {
-              setLoading(true);
-              load()
-                .catch((err) =>
-                  setLoadError(err instanceof Error ? err.message : "Failed to load"),
-                )
-                .finally(() => setLoading(false));
-            }}
+            onClick={() => void load()}
             className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
           >
             Retry

@@ -27,8 +27,10 @@ import {
   type NewsDirectoryResponse,
   type NewsDirectoryRow,
 } from "@/lib/news";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import { adminFetch, deleteAdmin, postAdminResponse } from "@/lib/hooks";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import { formatDate } from "@/lib/utils";
 
 export default function NewsPage() {
@@ -52,9 +54,7 @@ export default function NewsPage() {
   const sort = searchParams.get("sort") || "recency";
   const order = searchParams.get("order") || "desc";
 
-  const [payload, setPayload] = useState<NewsDirectoryResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
 
@@ -77,7 +77,30 @@ export default function NewsPage() {
     router.replace(`/admin/news/new?organization_id=${encodeURIComponent(launchOrg)}`);
   }, [launchOrg, router]);
 
-  const load = useCallback(async () => {
+  const {
+    data: listData,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<NewsDirectoryResponse>({
+    key: adminCacheKey([
+      "news",
+      "list",
+      page,
+      pageSize,
+      query.trim(),
+      status,
+      category,
+      organizationId,
+      mediaType,
+      featuredFilter,
+      publishedFrom,
+      publishedTo,
+      sort,
+      order,
+    ]),
+    fetcher: async () => {
       const params = new URLSearchParams();
       if (query.trim()) params.set("q", query.trim());
       if (status !== "all") params.set("status", status);
@@ -94,40 +117,12 @@ export default function NewsPage() {
       const res = await adminFetch(`/api/admin/news?${params}`);
       const json = (await res.json()) as NewsDirectoryResponse & { error?: string };
       if (!res.ok) throw new Error(json.error || "Failed to load news");
-      setPayload(json);
-  }, [
-    category,
-    featuredFilter,
-    mediaType,
-    order,
-    organizationId,
-    page,
-    pageSize,
-    publishedFrom,
-    publishedTo,
-    query,
-    sort,
-    status,
-  ]);
+      return json;
+    },
+  });
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-      setPayload(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [load]);
-
-  // Fetch once on mount and when page changes. Filters apply on Reload.
-  useEffect(() => {
-    void refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  const payload = loadError ? null : listData;
+  const error = actionError ?? loadError;
 
   const rows = payload?.data ?? [];
   const totals = payload?.totals ?? {};
@@ -297,7 +292,11 @@ export default function NewsPage() {
         ]}
         actions={
           <div className="flex flex-wrap gap-2">
-            <AdminReloadButton loading={loading} onClick={() => void refresh()} />
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
+              onClick={() => void refresh()}
+            />
             {canWrite ? (
               <Link
                 href="/admin/news/new"

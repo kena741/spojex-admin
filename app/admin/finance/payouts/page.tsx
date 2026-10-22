@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
@@ -9,13 +9,16 @@ import {
   AdminErrorAlert,
   AdminFilterPanel,
   AdminLoadingRow,
+  AdminReloadButton,
   AdminSearchInput,
   AdminSelect,
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { patchAdmin } from "@/lib/hooks";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 
 type PayoutRow = {
@@ -68,10 +71,7 @@ export default function FinancePayoutsPage() {
   const statusFilter = searchParams.get("status") || "all";
   const q = searchParams.get("q") || "";
 
-  const [rows, setRows] = useState<PayoutRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [ok, setOk] = useState(false);
+  const [actionError, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [selected, setSelected] = useState<PayoutRow | null>(null);
 
@@ -87,11 +87,15 @@ export default function FinancePayoutsPage() {
     [pathname, router, searchParams],
   );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setOk(false);
-    try {
+  const {
+    data,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<PayoutRow[]>({
+    key: adminCacheKey(["finance", "payouts", "list"]),
+    fetcher: async () => {
       const client = getSpojexClient();
       const [wRes, cRes] = await Promise.all([
         client
@@ -150,23 +154,19 @@ export default function FinancePayoutsPage() {
           users: (r.users as PayoutRow["users"]) ?? null,
         }),
       );
-      setRows(
-        [...withdrawals, ...redemptions].sort((a, b) =>
-          b.created_at.localeCompare(a.created_at),
-        ),
+      return [...withdrawals, ...redemptions].sort((a, b) =>
+        b.created_at.localeCompare(a.created_at),
       );
-      setOk(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load payouts");
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+  });
+  const rows = data ?? [];
+  const error = actionError ?? loadError;
+  const ok = data != null;
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const load = useCallback(async () => {
+    setError(null);
+    await refresh();
+  }, [refresh]);
 
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -203,6 +203,7 @@ export default function FinancePayoutsPage() {
           admin_note: `Transfer ref: ${ref.trim()}`,
         });
       }
+      invalidateAdminCache("finance");
       await load();
       setSelected(null);
     } catch (err) {
@@ -232,6 +233,7 @@ export default function FinancePayoutsPage() {
           admin_note: reason.trim(),
         });
       }
+      invalidateAdminCache("finance");
       await load();
       setSelected(null);
     } catch (err) {
@@ -246,6 +248,13 @@ export default function FinancePayoutsPage() {
       <AdminPageHeader
         title="Payouts"
         description="Provider money withdrawals and creator coin redemptions - manually recorded transfers"
+        actions={
+          <AdminReloadButton
+            loading={loading}
+            refreshing={refreshing}
+            onClick={() => void load()}
+          />
+        }
       />
 
       <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-text-secondary">

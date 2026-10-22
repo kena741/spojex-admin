@@ -2,10 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Eye, EyeOff, RefreshCw, Save } from "lucide-react";
+import { Eye, EyeOff, Save } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
-import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
-import { adminFetch, postAdminResponse } from "@/lib/hooks";
+import { AdminErrorAlert, AdminLoadingRow, AdminReloadButton } from "@/components/admin-layout";
+import {
+  ADMIN_SETTINGS_CACHE_KEY,
+  fetchAdminSettingsPayload,
+  type AdminSettingsPayload,
+} from "@/lib/admin-settings-query";
+import { postAdminResponse } from "@/lib/hooks";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { cn } from "@/lib/utils";
 
@@ -34,9 +40,8 @@ function asObject(value: unknown): Record<string, string | boolean | number | un
 export default function PaymentSettingsPage() {
   const { can } = useAdminPermissions();
   const canWrite = can("settings:write");
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; variant: "success" | "error" } | null>(
     null,
   );
@@ -52,23 +57,23 @@ export default function PaymentSettingsPage() {
     secretKey: String(paymentSettings.chapa?.secretKey || ""),
   };
 
-  const load = async () => {
-    setError(null);
-    const response = await adminFetch("/api/admin/settings");
-    const payload = (await response.json()) as {
-      error?: string;
-      appRows?: Array<{ id: string; data: unknown }>;
-    };
-    if (!response.ok) throw new Error(payload.error || "Failed to load payment settings");
-    const paymentRow = (payload.appRows ?? []).find((row) => row.id === "payment");
-    setPaymentSettings(asObject(paymentRow?.data) as PaymentSettings);
-  };
+  const {
+    data: settingsData,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<AdminSettingsPayload>({
+    key: ADMIN_SETTINGS_CACHE_KEY,
+    fetcher: fetchAdminSettingsPayload,
+  });
+  const error = actionError ?? loadError;
 
   useEffect(() => {
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-  }, []);
+    if (!settingsData) return;
+    const paymentRow = (settingsData.appRows ?? []).find((row) => row.id === "payment");
+    setPaymentSettings(asObject(paymentRow?.data) as PaymentSettings);
+  }, [settingsData]);
 
   useEffect(() => {
     if (!toast) return;
@@ -97,13 +102,13 @@ export default function PaymentSettingsPage() {
   const handleSave = async () => {
     if (!canWrite) return;
     setSaving(true);
-    setError(null);
+    setActionError(null);
     try {
       await postAdminResponse("/api/admin/settings", {
         paymentSettings,
       });
       setToast({ message: "Payment settings saved successfully.", variant: "success" });
-      await load();
+      await refresh();
     } catch (err) {
       setToast({
         message: err instanceof Error ? err.message : "Failed to save payment settings.",
@@ -140,21 +145,14 @@ export default function PaymentSettingsPage() {
         ]}
         actions={
           <div className="flex items-center gap-2">
-            <button
-              type="button"
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
               onClick={() => {
-                setLoading(true);
-                load()
-                  .catch((err) =>
-                    setError(err instanceof Error ? err.message : "Failed to load"),
-                  )
-                  .finally(() => setLoading(false));
+                setActionError(null);
+                void refresh();
               }}
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm"
-            >
-              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-              Refresh
-            </button>
+            />
             {canWrite ? (
               <button
                 type="button"

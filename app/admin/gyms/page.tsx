@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -46,9 +46,11 @@ import {
   type GymCategoryRow,
   type GymRow,
 } from "@/lib/gyms";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { adminFetch, patchAdmin, postAdminResponse } from "@/lib/hooks";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import type { UserRow } from "@/lib/types";
 import { formatDate, locationLabel } from "@/lib/utils";
 
@@ -133,6 +135,7 @@ async function uploadGymImage(gymId: string, file: File, kind: ImageKind) {
     image_url?: string;
   };
   if (!response.ok) throw new Error(payload.error || "Upload failed");
+  invalidateAdminCache("gyms");
   return payload;
 }
 
@@ -146,6 +149,7 @@ async function removeGymImage(gymId: string, kind: ImageKind) {
     cover_url?: string;
   };
   if (!response.ok) throw new Error(payload.error || "Remove failed");
+  invalidateAdminCache("gyms");
   return payload;
 }
 
@@ -382,6 +386,8 @@ function GymActionsMenu({
   );
 }
 
+type GymsListData = { rows: GymRow[]; total: number; catalog: GymCategoryRow[] };
+
 /* ─── Main Page ─── */
 
 export default function GymsAdminPage() {
@@ -395,10 +401,7 @@ export default function GymsAdminPage() {
   const editLogoRef = useRef<HTMLInputElement>(null);
   const editCoverRef = useRef<HTMLInputElement>(null);
 
-  const [rows, setRows] = useState<GymRow[]>([]);
-  const [catalog, setCatalog] = useState<GymCategoryRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [query, setQuery] = useState(searchParams.get("q") || "");
   const [status, setStatus] = useState(searchParams.get("status") || "all");
   const [verification, setVerification] = useState(
@@ -413,7 +416,6 @@ export default function GymsAdminPage() {
   );
   const [page, setPage] = useState(Number(searchParams.get("page") || "1") || 1);
   const [pageSize] = useState(40);
-  const [total, setTotal] = useState(0);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [sort] = useState("created_at");
   const [order] = useState("desc");
@@ -437,63 +439,73 @@ export default function GymsAdminPage() {
   const [saving, setSaving] = useState(false);
   const [uploadingKind, setUploadingKind] = useState<ImageKind | null>(null);
 
-  const load = useCallback(async () => {
-    const params = new URLSearchParams();
-    if (query.trim()) params.set("q", query.trim());
-    if (status !== "all") params.set("status", status);
-    if (verification !== "all") params.set("verification", verification);
-    if (category !== "all") params.set("category", category);
-    if (locationFilter.trim()) params.set("location", locationFilter.trim());
-    if (featuredFilter !== "all") params.set("featured", featuredFilter);
-    params.set("page", String(page));
-    params.set("page_size", String(pageSize));
-    params.set("sort", sort);
-    params.set("order", order);
+  const {
+    data: listData,
+    setData: setListData,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<GymsListData>({
+    key: adminCacheKey([
+      "gyms",
+      "list",
+      page,
+      pageSize,
+      query.trim(),
+      status,
+      verification,
+      category,
+      locationFilter.trim(),
+      featuredFilter,
+      sort,
+      order,
+    ]),
+    fetcher: async () => {
+      const params = new URLSearchParams();
+      if (query.trim()) params.set("q", query.trim());
+      if (status !== "all") params.set("status", status);
+      if (verification !== "all") params.set("verification", verification);
+      if (category !== "all") params.set("category", category);
+      if (locationFilter.trim()) params.set("location", locationFilter.trim());
+      if (featuredFilter !== "all") params.set("featured", featuredFilter);
+      params.set("page", String(page));
+      params.set("page_size", String(pageSize));
+      params.set("sort", sort);
+      params.set("order", order);
 
-    const [gymsRes, categoriesRes] = await Promise.all([
-      fetch(`/api/admin/gyms?${params}`, { credentials: "same-origin", cache: "no-store" }),
-      getSpojexClient().from("gym_categories").select("*").order("sort_order"),
-    ]);
-    const payload = (await gymsRes.json().catch(() => ({}))) as {
-      data?: GymRow[];
-      total?: number;
-      error?: string;
-    };
-    if (!gymsRes.ok) throw new Error(payload.error || "Failed to load gyms");
-    setRows((payload.data ?? []) as GymRow[]);
-    setTotal(Number(payload.total ?? 0));
-    if (!categoriesRes.error && (categoriesRes.data?.length ?? 0) > 0) {
-      setCatalog(categoriesRes.data as GymCategoryRow[]);
-    } else {
-      setCatalog(
-        gymCategories.map((item) => ({
-          id: item.id,
-          slug: item.id,
-          label: item.label,
-          emoji: item.emoji ?? "",
-          sort_order: 0,
-        })),
-      );
-    }
-  }, [query, status, verification, category, locationFilter, featuredFilter, page, pageSize, sort, order]);
+      const [gymsRes, categoriesRes] = await Promise.all([
+        fetch(`/api/admin/gyms?${params}`, { credentials: "same-origin", cache: "no-store" }),
+        getSpojexClient().from("gym_categories").select("*").order("sort_order"),
+      ]);
+      const payload = (await gymsRes.json().catch(() => ({}))) as {
+        data?: GymRow[];
+        total?: number;
+        error?: string;
+      };
+      if (!gymsRes.ok) throw new Error(payload.error || "Failed to load gyms");
+      const catalog =
+        !categoriesRes.error && (categoriesRes.data?.length ?? 0) > 0
+          ? (categoriesRes.data as GymCategoryRow[])
+          : gymCategories.map((item) => ({
+              id: item.id,
+              slug: item.id,
+              label: item.label,
+              emoji: item.emoji ?? "",
+              sort_order: 0,
+            }));
+      return {
+        rows: (payload.data ?? []) as GymRow[],
+        total: Number(payload.total ?? 0),
+        catalog,
+      };
+    },
+  });
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }, [load]);
-
-  // Fetch once on mount and when page changes. Filters apply on Reload.
-  useEffect(() => {
-    void refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  const rows = useMemo(() => listData?.rows ?? [], [listData]);
+  const total = listData?.total ?? 0;
+  const catalog = useMemo(() => listData?.catalog ?? [], [listData]);
+  const error = actionError ?? loadError;
 
   // Apply URL filters on browser back/forward and deep links (e.g. verification=queue).
   useEffect(() => {
@@ -739,7 +751,11 @@ export default function GymsAdminPage() {
   };
 
   const applyImageToRows = (id: string, patch: Partial<Pick<GymRow, "logo_url" | "cover_url">>) => {
-    setRows((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+    setListData((prev) =>
+      prev
+        ? { ...prev, rows: prev.rows.map((row) => (row.id === id ? { ...row, ...patch } : row)) }
+        : prev,
+    );
   };
 
   const uploadEditImage = async (kind: ImageKind, file: File) => {
@@ -867,7 +883,11 @@ export default function GymsAdminPage() {
         description={`${filtered.length} of ${rows.length} · venues and fitness centers`}
         actions={
           <div className="flex flex-wrap gap-2">
-            <AdminReloadButton loading={loading} onClick={() => void refresh()} />
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
+              onClick={() => void refresh()}
+            />
             <Link
               href="/admin/gyms/settings"
               className="inline-flex h-9 items-center rounded-md border border-border bg-card px-3 text-xs font-medium text-text-secondary hover:text-foreground"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
@@ -21,6 +21,7 @@ import {
 } from "@/components/admin-layout";
 import type { DirectoryView } from "@/lib/directory-view";
 import { StatusBadge, requestTone } from "@/components/status-badge";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import { deleteAdmin, postAdminResponse } from "@/lib/hooks";
 import {
   DELIVERY_MODES,
@@ -37,6 +38,7 @@ import {
 import { serviceCoverUrl } from "@/lib/services-media";
 import type { ServiceCategory, ServiceRow, ServiceSubcategory } from "@/lib/types";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
 
 type ListRow = ServiceRow & {
   href?: string;
@@ -51,6 +53,15 @@ type ListRow = ServiceRow & {
 type SummaryScope = {
   global?: { services?: number; published?: number; pending?: number; label?: string };
   filtered?: { services?: number; pending?: number; label?: string };
+};
+
+type ServicesListData = {
+  rows: ListRow[];
+  total: number;
+  categories: ServiceCategory[];
+  subcategories: ServiceSubcategory[];
+  summary: SummaryScope;
+  definitions: Record<string, string>;
 };
 
 function catalogLabel(
@@ -83,19 +94,10 @@ export default function ServicesPage() {
     searchParams.get("view") === "table" ? "list" : "cards";
   const view = layoutView === "list" ? "table" : "list";
 
-  const [rows, setRows] = useState<ListRow[]>([]);
-  const [total, setTotal] = useState(0);
-  const [summary, setSummary] = useState<SummaryScope>({});
-  const [definitions, setDefinitions] = useState<Record<string, string>>({});
-  const [categories, setCategories] = useState<ServiceCategory[]>([]);
-  const [subcategories, setSubcategories] = useState<ServiceSubcategory[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [listOk, setListOk] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const loadGen = useRef(0);
 
   const writeParams = useCallback(
     (patch: Record<string, string | null | undefined>) => {
@@ -110,59 +112,66 @@ export default function ServicesPage() {
     [pathname, router, searchParams],
   );
 
-  const load = useCallback(async () => {
-    const gen = ++loadGen.current;
-    setListOk(false);
-    setError(null);
-    const params = new URLSearchParams();
-    if (query) params.set("q", query);
-    if (category !== "all") params.set("category", category);
-    if (subcategory !== "all") params.set("subcategory", subcategory);
-    if (published !== "all") params.set("published", published);
-    if (delivery !== "all") params.set("delivery", delivery);
-    if (pricingType !== "all") params.set("pricing_type", pricingType);
-    params.set("page", String(page));
-    params.set("page_size", "40");
+  const {
+    data: listData,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<ServicesListData>({
+    key: adminCacheKey([
+      "services",
+      "list",
+      page,
+      query,
+      category,
+      subcategory,
+      published,
+      delivery,
+      pricingType,
+    ]),
+    fetcher: async () => {
+      const params = new URLSearchParams();
+      if (query) params.set("q", query);
+      if (category !== "all") params.set("category", category);
+      if (subcategory !== "all") params.set("subcategory", subcategory);
+      if (published !== "all") params.set("published", published);
+      if (delivery !== "all") params.set("delivery", delivery);
+      if (pricingType !== "all") params.set("pricing_type", pricingType);
+      params.set("page", String(page));
+      params.set("page_size", "40");
 
-    const response = await fetch(`/api/admin/services?${params}`, {
-      credentials: "same-origin",
-    });
-    const payload = (await response.json()) as {
-      data?: ListRow[];
-      total?: number;
-      categories?: ServiceCategory[];
-      subcategories?: ServiceSubcategory[];
-      summary_scope?: SummaryScope;
-      definitions?: Record<string, string>;
-      error?: string;
-    };
-    if (gen !== loadGen.current) return;
-    if (!response.ok) throw new Error(payload.error || "Failed to load services");
-    setRows(payload.data ?? []);
-    setTotal(payload.total ?? payload.data?.length ?? 0);
-    setCategories(payload.categories ?? []);
-    setSubcategories(payload.subcategories ?? []);
-    setSummary(payload.summary_scope ?? {});
-    setDefinitions(payload.definitions ?? {});
-    setListOk(true);
-  }, [category, delivery, page, pricingType, published, query, subcategory]);
+      const response = await fetch(`/api/admin/services?${params}`, {
+        credentials: "same-origin",
+      });
+      const payload = (await response.json()) as {
+        data?: ListRow[];
+        total?: number;
+        categories?: ServiceCategory[];
+        subcategories?: ServiceSubcategory[];
+        summary_scope?: SummaryScope;
+        definitions?: Record<string, string>;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(payload.error || "Failed to load services");
+      return {
+        rows: payload.data ?? [],
+        total: payload.total ?? payload.data?.length ?? 0,
+        categories: payload.categories ?? [],
+        subcategories: payload.subcategories ?? [],
+        summary: payload.summary_scope ?? {},
+        definitions: payload.definitions ?? {},
+      };
+    },
+  });
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }, [load]);
-
-  // Fetch once on mount and when page changes. Filters apply on Reload.
-  useEffect(() => {
-    void refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  const rows = useMemo(() => listData?.rows ?? [], [listData]);
+  const total = listData?.total ?? 0;
+  const summary = listData?.summary ?? {};
+  const categories = listData?.categories ?? [];
+  const subcategories = listData?.subcategories ?? [];
+  const error = actionError ?? loadError;
+  const listOk = listData != null && !loadError;
 
   const categorySubs = subcategories.filter((s) =>
     category === "all" ? true : s.category_id === category,
@@ -338,7 +347,11 @@ export default function ServicesPage() {
         stackOnSmall
         actions={
           <div className="flex flex-wrap gap-2">
-            <AdminReloadButton loading={loading} onClick={() => void refresh()} />
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
+              onClick={() => void refresh()}
+            />
             <Link
               href="/admin/services/settings"
               className="inline-flex h-9 items-center rounded-md border border-border bg-card px-3 text-xs font-medium text-text-secondary hover:text-foreground"

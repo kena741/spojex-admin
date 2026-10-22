@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, Download, X } from "lucide-react";
@@ -10,11 +10,14 @@ import {
   AdminErrorAlert,
   AdminFilterPanel,
   AdminLoadingRow,
+  AdminReloadButton,
   AdminSearchInput,
   AdminSelect,
 } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
+import { useAdminQuery } from "@/lib/use-admin-query";
 import { cn, formatDate, formatDateTime, formatStatusLabel } from "@/lib/utils";
 
 type Person = {
@@ -93,6 +96,14 @@ type DetailPayload = {
   notes?: string[];
 };
 
+type ListPayload = {
+  data?: TxRow[];
+  total?: number;
+  business_total?: number;
+  ledger_total?: number;
+  source?: string;
+};
+
 const PAGE_SIZE = 40;
 
 function money(amount: string | null | undefined, currency = "ETB") {
@@ -138,19 +149,6 @@ export default function FinanceTransactionsPage() {
   const page = Math.max(Number(searchParams.get("page") || 1) || 1, 1);
   const selectedId = searchParams.get("id") || "";
 
-  const [summary, setSummary] = useState<SummaryPayload | null>(null);
-  const [rows, setRows] = useState<TxRow[]>([]);
-  const [total, setTotal] = useState(0);
-  const [businessTotal, setBusinessTotal] = useState(0);
-  const [ledgerTotal, setLedgerTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [summaryLoading, setSummaryLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [listOk, setListOk] = useState(false);
-  const [dataSource, setDataSource] = useState<string | null>(null);
-  const [detail, setDetail] = useState<DetailPayload | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-
   const writeParams = useCallback(
     (patch: Record<string, string | null | undefined>) => {
       const next = new URLSearchParams(searchParams.toString());
@@ -172,29 +170,40 @@ export default function FinanceTransactionsPage() {
     return p;
   }, [range, rangeStart, rangeEnd]);
 
-  const loadSummary = useCallback(async () => {
-    setSummaryLoading(true);
-    try {
+  const summaryQuery = useAdminQuery<SummaryPayload & { source?: string }>({
+    key: adminCacheKey(["finance", "transactions", "summary", windowParams.toString()]),
+    fetcher: async () => {
       const res = await fetch(`/api/admin/finance/transactions/summary?${windowParams}`, {
         cache: "no-store",
       });
       const payload = (await res.json()) as SummaryPayload & { error?: string; source?: string };
       if (!res.ok) throw new Error(payload.error || "Summary failed");
-      setSummary(payload);
-      if (payload.source) setDataSource(payload.source);
-    } catch (err) {
-      // Summary failure is soft - list error is the primary signal.
-      console.warn(err);
-    } finally {
-      setSummaryLoading(false);
-    }
-  }, [windowParams]);
+      return payload;
+    },
+  });
+  // Summary failure is soft - list error is the primary signal.
+  const summary = summaryQuery.data;
+  const summaryLoading = summaryQuery.loading;
 
-  const loadList = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setListOk(false);
-    try {
+  const listQuery = useAdminQuery<ListPayload>({
+    key: adminCacheKey([
+      "finance",
+      "transactions",
+      "list",
+      range,
+      rangeStart,
+      rangeEnd,
+      page,
+      assetClass,
+      module,
+      status,
+      txType,
+      provider,
+      currency,
+      view,
+      q,
+    ]),
+    fetcher: async () => {
       const params = new URLSearchParams({
         range,
         page: String(page),
@@ -215,15 +224,7 @@ export default function FinanceTransactionsPage() {
       if (view && view !== "all") params.set("view", view);
       if (q) params.set("q", q);
       const res = await fetch(`/api/admin/finance/transactions?${params}`, { cache: "no-store" });
-      const payload = (await res.json()) as {
-        data?: TxRow[];
-        total?: number;
-        business_total?: number;
-        ledger_total?: number;
-        error?: string;
-        source?: string;
-        code?: string;
-      };
+      const payload = (await res.json()) as ListPayload & { error?: string; code?: string };
       if (!res.ok) {
         const err = new Error(payload.error || "Failed to load transactions") as Error & {
           code?: string;
@@ -231,54 +232,43 @@ export default function FinanceTransactionsPage() {
         err.code = payload.code || (res.status === 403 ? "permission_denied" : "api_error");
         throw err;
       }
-      setRows(payload.data ?? []);
-      setTotal(payload.total ?? 0);
-      setBusinessTotal(payload.business_total ?? 0);
-      setLedgerTotal(payload.ledger_total ?? 0);
-      setListOk(true);
-      if (payload.source) setDataSource(payload.source);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-      setRows([]);
-      setListOk(false);
-    } finally {
-      setLoading(false);
-    }
-  }, [assetClass, currency, module, page, provider, q, range, rangeStart, rangeEnd, status, txType, view]);
+      return payload;
+    },
+  });
+  const loading = listQuery.loading;
+  const listData = listQuery.data;
+  const rows = listData?.data ?? [];
+  const total = listData?.total ?? 0;
+  const businessTotal = listData?.business_total ?? 0;
+  const ledgerTotal = listData?.ledger_total ?? 0;
+  const listOk = listData != null;
+  const dataSource = listData?.source ?? summary?.source ?? null;
 
-  useEffect(() => {
-    void loadSummary();
-  }, [loadSummary]);
-
-  useEffect(() => {
-    void loadList();
-  }, [loadList]);
-
-  useEffect(() => {
-    if (!selectedId) {
-      setDetail(null);
-      return;
-    }
-    let cancelled = false;
-    setDetailLoading(true);
-    fetch(`/api/admin/finance/transactions/${encodeURIComponent(selectedId)}`, {
-      cache: "no-store",
-    })
-      .then(async (res) => {
-        const payload = await res.json();
-        if (!res.ok) throw new Error(payload.error || "Detail failed");
-        if (!cancelled) setDetail(payload as DetailPayload);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Detail failed");
-      })
-      .finally(() => {
-        if (!cancelled) setDetailLoading(false);
+  const detailQuery = useAdminQuery<DetailPayload>({
+    key: selectedId
+      ? adminCacheKey(["finance", "transactions", "detail", selectedId])
+      : null,
+    enabled: Boolean(selectedId),
+    fetcher: async () => {
+      const res = await fetch(`/api/admin/finance/transactions/${encodeURIComponent(selectedId)}`, {
+        cache: "no-store",
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedId]);
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error || "Detail failed");
+      return payload as DetailPayload;
+    },
+  });
+  const detail = selectedId ? detailQuery.data : null;
+  const detailLoading = detailQuery.loading;
+
+  const error = listQuery.error ?? detailQuery.error;
+  const refreshing = listQuery.refreshing || summaryQuery.refreshing || detailQuery.refreshing;
+
+  const reloadAll = useCallback(() => {
+    void summaryQuery.refresh();
+    void listQuery.refresh();
+    if (selectedId) void detailQuery.refresh();
+  }, [summaryQuery, listQuery, detailQuery, selectedId]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const moneySummaries = (summary?.by_currency ?? []).filter((c) => c.currency !== "COIN");
@@ -309,6 +299,11 @@ export default function FinanceTransactionsPage() {
         description="Unified money and coin history across Spojex products"
         actions={
           <div className="flex flex-wrap gap-2">
+            <AdminReloadButton
+              loading={loading || summaryLoading}
+              refreshing={refreshing}
+              onClick={reloadAll}
+            />
             <button
               type="button"
               onClick={() =>
@@ -341,10 +336,7 @@ export default function FinanceTransactionsPage() {
           <AdminErrorAlert message={error} />
           <button
             type="button"
-            onClick={() => {
-              void loadSummary();
-              void loadList();
-            }}
+            onClick={reloadAll}
             className="rounded-md border border-border bg-card px-3 py-2 text-xs font-medium hover:bg-muted"
           >
             Retry
