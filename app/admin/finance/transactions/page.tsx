@@ -133,6 +133,7 @@ export default function FinanceTransactionsPage() {
   const txType = searchParams.get("type") || "";
   const provider = searchParams.get("provider") || "";
   const currency = searchParams.get("currency") || "";
+  const view = searchParams.get("view") || "all";
   const q = searchParams.get("q") || "";
   const page = Math.max(Number(searchParams.get("page") || 1) || 1, 1);
   const selectedId = searchParams.get("id") || "";
@@ -140,6 +141,8 @@ export default function FinanceTransactionsPage() {
   const [summary, setSummary] = useState<SummaryPayload | null>(null);
   const [rows, setRows] = useState<TxRow[]>([]);
   const [total, setTotal] = useState(0);
+  const [businessTotal, setBusinessTotal] = useState(0);
+  const [ledgerTotal, setLedgerTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -209,11 +212,14 @@ export default function FinanceTransactionsPage() {
       if (txType) params.set("tx_type", txType);
       if (provider) params.set("provider", provider);
       if (currency) params.set("currency", currency);
+      if (view && view !== "all") params.set("view", view);
       if (q) params.set("q", q);
       const res = await fetch(`/api/admin/finance/transactions?${params}`, { cache: "no-store" });
       const payload = (await res.json()) as {
         data?: TxRow[];
         total?: number;
+        business_total?: number;
+        ledger_total?: number;
         error?: string;
         source?: string;
         code?: string;
@@ -227,6 +233,8 @@ export default function FinanceTransactionsPage() {
       }
       setRows(payload.data ?? []);
       setTotal(payload.total ?? 0);
+      setBusinessTotal(payload.business_total ?? 0);
+      setLedgerTotal(payload.ledger_total ?? 0);
       setListOk(true);
       if (payload.source) setDataSource(payload.source);
     } catch (err) {
@@ -236,7 +244,7 @@ export default function FinanceTransactionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [assetClass, currency, module, page, provider, q, range, rangeStart, rangeEnd, status, txType]);
+  }, [assetClass, currency, module, page, provider, q, range, rangeStart, rangeEnd, status, txType, view]);
 
   useEffect(() => {
     void loadSummary();
@@ -462,13 +470,34 @@ export default function FinanceTransactionsPage() {
         </section>
       ) : null}
 
+      {listOk ? (
+        <p className="text-xs text-text-secondary">
+          Showing {total.toLocaleString()} rows
+          {view === "all"
+            ? ` · business ${businessTotal.toLocaleString()} · ledger ${ledgerTotal.toLocaleString()}`
+            : ""}
+          {view === "business" ? " (business transactions only — not ledger echoes)" : ""}
+          {view === "ledger" ? " (ledger entries only)" : ""}
+        </p>
+      ) : null}
+
       <AdminFilterPanel>
-        <div className="grid gap-2 md:grid-cols-[1fr_120px_130px_130px_130px_120px]">
+        <div className="grid gap-2 md:grid-cols-[1fr_120px_120px_130px_130px_130px_120px]">
           <AdminSearchInput
             value={q}
             onChange={(value) => writeParams({ q: value || null, page: "1" })}
             placeholder="Search ref, purpose, payer…"
           />
+          <AdminSelect
+            value={view || "all"}
+            onChange={(value) =>
+              writeParams({ view: value === "all" ? null : value, page: "1" })
+            }
+          >
+            <option value="all">All records</option>
+            <option value="business">Business txns</option>
+            <option value="ledger">Ledger entries</option>
+          </AdminSelect>
           <AdminSelect
             value={assetClass || "all"}
             onChange={(value) =>
@@ -491,6 +520,7 @@ export default function FinanceTransactionsPage() {
             <option value="stadium">Stadiums</option>
             <option value="event">Events</option>
             <option value="coins">Coins</option>
+            <option value="gifts">Gifts</option>
             <option value="donations">Donations</option>
             <option value="wallet">Wallet</option>
             <option value="mini_app">Mini apps</option>
@@ -523,6 +553,7 @@ export default function FinanceTransactionsPage() {
             <option value="withdrawal">Withdrawal</option>
             <option value="refund">Refund</option>
             <option value="donation">Donation</option>
+            <option value="gift">Gift</option>
             <option value="coin_redemption">Coin redemption</option>
             <option value="adjustment">Adjustment</option>
           </AdminSelect>

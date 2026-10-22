@@ -36,8 +36,10 @@ import {
   Coins,
   CreditCard,
   Receipt,
+  Scale,
   Settings,
   ScrollText,
+  Scale,
   Dumbbell,
   Images,
   LogOut,
@@ -182,10 +184,10 @@ const financeItems: NavItem[] = [
     visible: (can) => can("finance:read") || can("wallets:read") || can("payments:read"),
   },
   {
-    href: "/admin/wallets",
-    label: "Wallets",
+    href: "/admin/finance/wallets",
+    label: "Wallets & Ledgers",
     icon: Wallet,
-    visible: (can) => can("wallets:read") || can("requests:read"),
+    visible: (can) => can("wallets:read") || can("requests:read") || can("finance:read"),
   },
   {
     href: "/admin/finance/payouts",
@@ -199,6 +201,12 @@ const financeItems: NavItem[] = [
     label: "Coins & Gifts",
     icon: Coins,
     visible: (can) => can("coins:read") || can("donations:read"),
+  },
+  {
+    href: "/admin/finance/reconciliation",
+    label: "Reconciliation",
+    icon: Scale,
+    visible: (can) => can("finance:read") || can("wallets:read"),
   },
   {
     href: "/admin/finance/payment-settings",

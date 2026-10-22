@@ -633,9 +633,17 @@ export default function StadiumDetailPage() {
             />
           ) : null}
           <section className="rounded-2xl border border-border bg-card p-4 sm:p-6">
-            <div className="mb-5 flex items-baseline justify-between gap-3">
+            <div className="mb-5 flex flex-wrap items-baseline justify-between gap-3">
               <h2 className="font-heading text-sm font-semibold">Revenue</h2>
-              <p className="text-xs text-text-hint">Completed payments</p>
+              <div className="flex items-center gap-3">
+                <p className="text-xs text-text-hint">Completed payments</p>
+                <Link
+                  href={`/admin/finance/transactions?module=stadium&view=business&q=${encodeURIComponent(id)}`}
+                  className="text-xs font-medium text-primary hover:underline"
+                >
+                  Open in Finance
+                </Link>
+              </div>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-border">
               {[

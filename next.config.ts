@@ -23,7 +23,10 @@ const nextConfig: NextConfig = {
         destination: "/admin/finance/payouts?type=coin_redemption",
         permanent: false,
       },
-      { source: "/admin/coin-catalog", destination: "/admin/finance/coins?tab=packs", permanent: false },
+      { source: "/admin/coin-catalog", destination: "/admin/finance/coins/catalog", permanent: false },
+      { source: "/admin/wallets", destination: "/admin/finance/wallets", permanent: false },
+      { source: "/admin/wallets/:userId", destination: "/admin/finance/wallets/:userId", permanent: false },
+      { source: "/admin/finance/overview", destination: "/admin/finance", permanent: false },
       {
         source: "/admin/feed-interests",
         destination: "/admin/feed-insights",

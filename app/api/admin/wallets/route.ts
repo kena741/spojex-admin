@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
-import { requireAdminPermission } from "@/lib/admin-auth";
+import { requireAnyAdminPermission } from "@/lib/admin-auth";
 
 export async function GET() {
-  const auth = await requireAdminPermission("requests:read");
+  const auth = await requireAnyAdminPermission([
+    "wallets:read",
+    "finance:read",
+    "requests:read",
+  ]);
   if (!auth.ok) return auth.error;
   const { data, error } = await auth.context.client
     .from("wallets")

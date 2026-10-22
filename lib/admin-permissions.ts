@@ -366,13 +366,22 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
   if (pathname.startsWith("/admin/finance/transactions")) {
     return can("finance:read") || can("wallets:read") || can("payments:read");
   }
+  if (
+    pathname.startsWith("/admin/finance/wallets") ||
+    pathname.startsWith("/admin/wallets")
+  ) {
+    return can("wallets:read") || can("requests:read") || can("finance:read");
+  }
   if (pathname.startsWith("/admin/finance/payouts")) {
     return (
       can("withdrawals:read") || can("coins:read") || can("requests:read") || can("donations:read")
     );
   }
-  if (pathname.startsWith("/admin/finance/coins")) {
+  if (pathname.startsWith("/admin/finance/coins") || pathname.startsWith("/admin/coin-catalog")) {
     return can("coins:read") || can("donations:read");
+  }
+  if (pathname.startsWith("/admin/finance/reconciliation")) {
+    return can("finance:read") || can("wallets:read");
   }
   if (pathname.startsWith("/admin/finance/payment-settings")) {
     return can("payments:read") || can("settings:read");

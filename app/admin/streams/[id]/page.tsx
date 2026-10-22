@@ -706,6 +706,12 @@ export default function StreamDetailPage() {
                   {workspace.gifts?.gift_count ?? 0} gifts ·{" "}
                   {workspace.gifts?.coins_sent ?? 0} coins received
                 </p>
+                <Link
+                  href={`/admin/finance/transactions?module=gifts&q=${encodeURIComponent(id)}`}
+                  className="mt-1 inline-block text-xs font-medium text-primary hover:underline"
+                >
+                  Open gift activity in Finance
+                </Link>
                 {attribution?.note ? (
                   <p className="mt-1 text-xs text-text-secondary">{attribution.note}</p>
                 ) : null}
