@@ -348,7 +348,7 @@ async function localOverview(opts: {
       finance_service: financeServiceHref({ start: startDate, end: endDate }),
       opportunities: "/admin/opportunities?status=open",
       miniapps: "/admin/miniapps",
-      categories: "/admin/service-categories",
+      categories: "/admin/services/settings",
     },
     definitions: {
       upcoming_booking:

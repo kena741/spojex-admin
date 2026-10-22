@@ -667,7 +667,7 @@ export default function MarketplaceOverviewPage() {
             <FooterLink href={data?.links?.opportunities || "/admin/opportunities"} label="Opportunities" />
             <FooterLink href={data?.links?.miniapps || "/admin/miniapps"} label="Mini apps" />
             <FooterLink href={data?.links?.settings || "/admin/marketplace/settings"} label="Settings" />
-            <FooterLink href={data?.links?.categories || "/admin/service-categories"} label="Categories" />
+            <FooterLink href={data?.links?.categories || "/admin/services/settings"} label="Categories" />
           </div>
         </>
       ) : null}

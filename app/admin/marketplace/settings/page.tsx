@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** Categories live under marketplace settings; keep the existing editor. */
+/** Marketplace category settings live under Services → Settings. */
 export default function MarketplaceSettingsPage() {
-  redirect("/admin/service-categories");
+  redirect("/admin/services/settings");
 }

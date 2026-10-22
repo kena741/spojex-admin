@@ -281,8 +281,13 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
       can("catalog:read")
     );
   }
+  if (
+    pathname.startsWith("/admin/services/settings") ||
+    pathname.startsWith("/admin/service-categories")
+  ) {
+    return can("catalog:read") || can("services:read");
+  }
   if (pathname.startsWith("/admin/services")) return can("services:read");
-  if (pathname.startsWith("/admin/service-categories")) return can("catalog:read");
   if (pathname.startsWith("/admin/categories")) return can("profiles:read");
   if (pathname.startsWith("/admin/requests")) return can("requests:read");
   if (pathname.startsWith("/admin/wallets")) return can("wallets:read") || can("requests:read");

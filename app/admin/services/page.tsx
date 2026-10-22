@@ -291,6 +291,12 @@ export default function ServicesPage() {
         stackOnSmall
         actions={
           <div className="flex flex-wrap gap-2">
+            <Link
+              href="/admin/services/settings"
+              className="inline-flex h-9 items-center rounded-md border border-border bg-card px-3 text-xs font-medium text-text-secondary hover:text-foreground"
+            >
+              Settings
+            </Link>
             <button
               type="button"
               onClick={() =>
