@@ -1,17 +1,21 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, RefreshCw, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
 import {
+  AdminEmpty,
   AdminErrorAlert,
   AdminFilterPanel,
   AdminLoadingRow,
+  AdminReloadButton,
   AdminSearchInput,
   AdminSelect,
+  AdminTableLoading,
   AdminTableShell,
 } from "@/components/admin-layout";
 import { ActivityLogDetails } from "@/components/ActivityLogDetails";
+import { StatusBadge } from "@/components/status-badge";
 import { hasActivityDetails } from "@/lib/activity-log-changes";
 import type { AdminActivityLog } from "@/lib/activity-log";
 import {
@@ -21,7 +25,6 @@ import {
 } from "@/lib/audit-event-registry";
 import { adminFetch } from "@/lib/hooks";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
-import { StatusBadge } from "@/components/status-badge";
 
 const PAGE_SIZE = 30;
 
@@ -114,31 +117,42 @@ export default function ActivityLogsPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  const refresh = () => {
+    void load();
+  };
+
   if (permsLoading) {
     return (
-      <div>
-        <AdminPageHeader title="Activity Logs" description="Track actions performed by admin users" />
+      <>
+        <AdminPageHeader
+          title="Activity Logs"
+          description="Track actions performed by admin users"
+        />
         <AdminLoadingRow label="Checking permissions…" />
-      </div>
+      </>
     );
   }
 
   if (!canRead) {
     return (
-      <div>
-        <AdminPageHeader title="Activity Logs" description="Track actions performed by admin users" />
+      <>
+        <AdminPageHeader
+          title="Activity Logs"
+          description="Track actions performed by admin users"
+        />
         <AdminErrorAlert message="You need logs:read permission to view activity logs." />
-      </div>
+      </>
     );
   }
 
   return (
-    <div>
+    <>
       <AdminPageHeader
         title="Activity Logs"
-        description="Append-only audit of privileged admin actions. Times shown in your browser local timezone."
+        description={`${total} entries · times shown in your browser local timezone`}
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <AdminReloadButton loading={loading} onClick={refresh} />
             {canExport ? (
               <a
                 href={`/api/admin/activity-logs/export?${new URLSearchParams({
@@ -146,25 +160,19 @@ export default function ActivityLogsPage() {
                   ...(resourceFilter ? { resource_type: resourceFilter } : {}),
                   ...(outcomeFilter ? { outcome: outcomeFilter } : {}),
                 }).toString()}`}
-                className="inline-flex h-9 items-center rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted"
+                className="inline-flex h-9 items-center rounded-md border border-border bg-card px-3 text-sm font-medium text-text-secondary hover:text-foreground"
               >
                 Export
               </a>
             ) : null}
-            <button
-              type="button"
-              onClick={() => void load()}
-              className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted"
-            >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              Refresh
-            </button>
           </div>
         }
       />
 
+      {error ? <AdminErrorAlert message={error} /> : null}
+
       <AdminFilterPanel>
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <AdminSearchInput
             value={query}
             onChange={setQuery}
@@ -195,20 +203,13 @@ export default function ActivityLogsPage() {
             ))}
           </AdminSelect>
         </div>
-        <p className="mt-2 text-[11px] text-text-hint">
-          Filters use the canonical audit registry. Historical rows with other action names remain
-          searchable via the text box on the current page.
-        </p>
       </AdminFilterPanel>
-
-      {loading ? <AdminLoadingRow label="Loading activity logs…" /> : null}
-      {error ? <AdminErrorAlert message={error} /> : null}
 
       <AdminTableShell>
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+          <table className="min-w-full text-left text-sm">
+            <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+              <tr>
                 <th className="w-[60px] px-4 py-3 font-semibold">#</th>
                 <th className="px-4 py-3 font-semibold">Admin</th>
                 <th className="px-4 py-3 font-semibold">Action</th>
@@ -220,147 +221,149 @@ export default function ActivityLogsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((log, idx) => {
-                const isExpanded = expandedLogId === log.id;
-                const canExpand =
-                  hasActivityDetails(log.metadata) ||
-                  Boolean(log.resource_id) ||
-                  Boolean(log.route);
-                const outcome =
-                  log.outcome ||
-                  (typeof log.metadata?.outcome === "string" ? log.metadata.outcome : null);
-
-                return (
-                  <React.Fragment key={log.id}>
-                    <tr className="border-b border-border/70 align-top">
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {(currentPage - 1) * PAGE_SIZE + idx + 1}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-primary">
-                            {log.admin_name || "Unknown"}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {log.admin_email || "-"}
-                          </span>
-                          {log.admin_role ? (
-                            <span className="mt-1 inline-flex w-fit rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
-                              {log.admin_role}
-                            </span>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-                          {log.action}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col">
-                          <span className="font-medium text-foreground">
-                            {log.resource_type}
-                          </span>
-                          {log.resource_name ? (
-                            <span className="text-muted-foreground">{log.resource_name}</span>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge tone={outcomeTone(typeof outcome === "string" ? outcome : null)}>
-                          {typeof outcome === "string" && outcome ? outcome : "Not recorded"}
-                        </StatusBadge>
-                      </td>
-                      <td className="max-w-md px-4 py-3 text-muted-foreground">
-                        {log.display_summary || log.summary}
-                      </td>
-                      <td className="px-4 py-3">
-                        {canExpand ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setExpandedLogId(isExpanded ? null : log.id)
-                            }
-                            className="inline-flex h-8 items-center rounded-lg border border-primary/30 bg-card px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/5"
-                          >
-                            {isExpanded ? "Hide" : "View"}
-                          </button>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">-</span>
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-                        {new Date(log.created_at).toLocaleString()}
-                      </td>
-                    </tr>
-                    {isExpanded ? (
-                      <tr className="bg-muted/40">
-                        <td colSpan={8} className="px-4 py-4">
-                          <ActivityLogDetails
-                            metadata={log.metadata}
-                            resourceId={log.resource_id}
-                            route={log.route}
-                            env={log.env}
-                          />
-                        </td>
-                      </tr>
-                    ) : null}
-                  </React.Fragment>
-                );
-              })}
-              {filtered.length === 0 && !loading ? (
+              {loading ? (
+                <AdminTableLoading colSpan={8} label="Loading activity logs…" />
+              ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                        <Search className="h-8 w-8 text-muted-foreground" />
-                      </div>
-                      <p className="text-lg font-semibold text-foreground">
-                        No activity logs found
-                      </p>
-                      <p className="text-sm">
-                        Actions will appear here after admins make changes
-                      </p>
-                    </div>
+                  <td colSpan={8} className="p-0">
+                    <AdminEmpty
+                      title="No activity logs found"
+                      description="Privileged admin actions appear here after changes are made. Adjust filters and Reload."
+                    />
                   </td>
                 </tr>
-              ) : null}
+              ) : (
+                filtered.map((log, idx) => {
+                  const isExpanded = expandedLogId === log.id;
+                  const canExpand =
+                    hasActivityDetails(log.metadata) ||
+                    Boolean(log.resource_id) ||
+                    Boolean(log.route);
+                  const outcome =
+                    log.outcome ||
+                    (typeof log.metadata?.outcome === "string" ? log.metadata.outcome : null);
+
+                  return (
+                    <React.Fragment key={log.id}>
+                      <tr className="border-b border-border last:border-0 hover:bg-muted/40 align-top">
+                        <td className="px-4 py-3 text-text-secondary">
+                          {(currentPage - 1) * PAGE_SIZE + idx + 1}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex min-w-0 flex-col">
+                            <span className="font-medium text-text-primary">
+                              {log.admin_name || "Unknown"}
+                            </span>
+                            <span className="text-xs text-text-secondary">
+                              {log.admin_email || "-"}
+                            </span>
+                            {log.admin_role ? (
+                              <span className="mt-1 inline-flex w-fit rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-text-secondary">
+                                {log.admin_role}
+                              </span>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                            {log.action}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex min-w-0 flex-col">
+                            <span className="font-medium text-text-primary">
+                              {log.resource_type}
+                            </span>
+                            {log.resource_name ? (
+                              <span className="truncate text-xs text-text-secondary">
+                                {log.resource_name}
+                              </span>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <StatusBadge
+                            tone={outcomeTone(typeof outcome === "string" ? outcome : null)}
+                          >
+                            {typeof outcome === "string" && outcome
+                              ? outcome
+                              : "Not recorded"}
+                          </StatusBadge>
+                        </td>
+                        <td className="max-w-md px-4 py-3 text-text-secondary">
+                          {log.display_summary || log.summary}
+                        </td>
+                        <td className="px-4 py-3">
+                          {canExpand ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedLogId(isExpanded ? null : log.id)
+                              }
+                              className="inline-flex h-8 items-center rounded-md border border-border bg-card px-3 text-xs font-medium text-text-secondary hover:text-foreground"
+                            >
+                              {isExpanded ? "Hide" : "View"}
+                            </button>
+                          ) : (
+                            <span className="text-xs text-text-hint">-</span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-text-secondary">
+                          {new Date(log.created_at).toLocaleString()}
+                        </td>
+                      </tr>
+                      {isExpanded ? (
+                        <tr className="border-b border-border bg-muted/30">
+                          <td colSpan={8} className="px-4 py-4">
+                            <ActivityLogDetails
+                              metadata={log.metadata}
+                              resourceId={log.resource_id}
+                              route={log.route}
+                              env={log.env}
+                            />
+                          </td>
+                        </tr>
+                      ) : null}
+                    </React.Fragment>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
       </AdminTableShell>
 
       {total > 0 ? (
-        <div className="mt-4 flex items-center justify-between rounded-xl border border-border bg-card px-6 py-3 shadow-sm">
-          <p className="text-sm text-muted-foreground">
-            Total <span className="font-semibold text-foreground">{total}</span>{" "}
-            log entries
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-sm sm:px-6">
+          <p className="text-sm text-text-secondary">
+            Total <span className="font-semibold text-text-primary">{total}</span> log
+            entries
           </p>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              disabled={currentPage <= 1}
+              disabled={currentPage <= 1 || loading}
               onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-text-secondary transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="min-w-[80px] text-center text-sm font-medium text-foreground">
+            <span className="min-w-[80px] text-center text-sm font-medium text-text-primary">
               Page {currentPage} of {totalPages}
             </span>
             <button
               type="button"
-              disabled={currentPage >= totalPages}
+              disabled={currentPage >= totalPages || loading}
               onClick={() =>
                 setCurrentPage((page) => Math.min(totalPages, page + 1))
               }
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-text-secondary transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
         </div>
       ) : null}
-    </div>
+    </>
   );
 }
