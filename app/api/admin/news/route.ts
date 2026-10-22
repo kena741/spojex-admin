@@ -2,7 +2,61 @@ import { NextResponse } from "next/server";
 import type { SpojexClient } from "@/lib/api/client";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAdminPermission } from "@/lib/admin-auth";
-import { slugifyNews } from "@/lib/news";
+import { getSpojexApiBaseUrl } from "@/lib/env";
+import { classifyNewsMedia, slugifyNews } from "@/lib/news";
+import { requestAccessToken } from "@/lib/spojex/server";
+
+export const dynamic = "force-dynamic";
+
+/** Server-side Sport News directory (filters, pagination, totals) via Python admin API. */
+export async function GET(request: Request) {
+  const auth = await requireAdminPermission("news:read");
+  if (!auth.ok) return auth.error;
+
+  const token = await requestAccessToken();
+  if (!token) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const incoming = new URL(request.url);
+  const params = new URLSearchParams();
+  for (const key of [
+    "q",
+    "status",
+    "category",
+    "organization_id",
+    "media_type",
+    "featured",
+    "published_from",
+    "published_to",
+    "sort",
+    "order",
+    "page",
+    "page_size",
+  ]) {
+    const value = incoming.searchParams.get(key);
+    if (value) params.set(key, value);
+  }
+
+  const res = await fetch(
+    `${getSpojexApiBaseUrl()}/api/v1/admin/news?${params}`,
+    {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    },
+  );
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    return NextResponse.json(
+      {
+        error:
+          (payload as { error?: string; message?: string }).error ||
+          (payload as { message?: string }).message ||
+          "Failed to load news",
+      },
+      { status: res.status },
+    );
+  }
+  return NextResponse.json(payload);
+}
 
 type NewsInsert = {
   title: string;
@@ -116,6 +170,14 @@ export async function POST(request: Request) {
   const single = `${payload.image_url ?? payload.cover_url ?? ""}`.trim();
   const imageUrls = gallery.length > 0 ? gallery : single ? [single] : [];
   const image = imageUrls[0] ?? "";
+  const media = classifyNewsMedia({
+    video_url: video,
+    audio_url: audio,
+    sound_id: soundId,
+    image_url: image,
+    cover_url: image,
+    image_urls: imageUrls,
+  });
   const author =
     auth.context.staff.full_name?.trim() ||
     auth.context.staff.email?.trim() ||
@@ -137,8 +199,16 @@ export async function POST(request: Request) {
   const publishedAt =
     (typeof payload.published_at === "string" && payload.published_at.trim()) ||
     (status === "active" ? now : "");
+  const featured =
+    status === "archived" || status === "archive" || status === "hidden"
+      ? false
+      : (payload.is_featured ?? false);
 
-  const row: NewsInsert = {
+  const row: NewsInsert & {
+    media_type?: string;
+    has_soundtrack?: boolean;
+    archived_at?: string | null;
+  } = {
     title,
     slug,
     summary: payload.summary ?? "",
@@ -154,7 +224,7 @@ export async function POST(request: Request) {
       typeof payload.source === "string" ? payload.source.trim() : "",
     author,
     status,
-    is_featured: payload.is_featured ?? false,
+    is_featured: featured,
     sort_order: payload.sort_order ?? 0,
     created_at: now,
     updated_at: now,
@@ -162,7 +232,12 @@ export async function POST(request: Request) {
     comment_count: 0,
     save_count: 0,
     share_count: 0,
+    media_type: media.media_type,
+    has_soundtrack: media.has_soundtrack,
     ...(publishedAt ? { published_at: publishedAt } : {}),
+    ...(status === "archived" || status === "archive" || status === "hidden"
+      ? { archived_at: now }
+      : {}),
     organization_id: organizationId,
   };
 
@@ -171,22 +246,29 @@ export async function POST(request: Request) {
 
   let omitOrg = false;
   let omitImageUrls = false;
-  const stripOptional = (value: NewsInsert) => {
-    let next: NewsInsert = value;
-    if (omitOrg) {
-      const { organization_id: _organizationId, ...rest } = next;
-      next = rest as NewsInsert;
+  let omitMediaMeta = false;
+  const stripOptional = (value: typeof row) => {
+    let next: Record<string, unknown> = { ...value };
+    if (omitOrg) delete next.organization_id;
+    if (omitImageUrls) delete next.image_urls;
+    if (omitMediaMeta) {
+      delete next.media_type;
+      delete next.has_soundtrack;
+      delete next.archived_at;
     }
-    if (omitImageUrls) {
-      const { image_urls: _imageUrls, ...rest } = next as NewsInsert & {
-        image_urls?: string[];
-      };
-      next = rest as NewsInsert;
-    }
-    return next;
+    return next as NewsInsert;
   };
 
-  let result = await insertArticle(row);
+  let result = await insertArticle(row as NewsInsert);
+  if (
+    result.error &&
+    /media_type|has_soundtrack|archived_at|column .* does not exist/i.test(
+      result.error.message ?? "",
+    )
+  ) {
+    omitMediaMeta = true;
+    result = await insertArticle(stripOptional(row));
+  }
   if (result.error && organizationId && isMissingOrgColumn(result.error)) {
     omitOrg = true;
     result = await insertArticle(stripOptional(row));

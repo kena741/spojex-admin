@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
@@ -11,10 +11,12 @@ import {
   AdminLoadingRow,
   AdminModal,
   AdminModalFooter,
+  AdminRowMenu,
   AdminSearchInput,
   AdminSelect,
-  AdminTableActions,
+  AdminStatCard,
   AdminTableShell,
+  type AdminRowMenuItem,
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import {
@@ -30,12 +32,14 @@ import { NewsOrgPicker } from "@/components/news-org-picker";
 import { NewsSourceField } from "@/components/news-source-field";
 import { NewsTikTokPreview } from "@/components/news-tiktok-preview";
 import {
+  classifyNewsMedia,
   newsCategories,
-  newsRecency,
+  newsMediaTypes,
   newsStatusLabel,
-  newsStatusMatches,
   newsStatuses,
   normalizeNewsStatusFilter,
+  type NewsDirectoryResponse,
+  type NewsDirectoryRow,
 } from "@/lib/news";
 import { rememberNewsSource } from "@/lib/news-sources";
 import {
@@ -44,17 +48,9 @@ import {
   type NewsStoryMedia,
   type NewsUploadKind,
 } from "@/lib/news-media";
-import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
-import { getSpojexClient } from "@/lib/spojex/client";
+import { adminFetch, deleteAdmin, postAdmin, postAdminResponse } from "@/lib/hooks";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
-import type { SportNewsRow } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
-
-type NewsDraft = {
-  title: string;
-  category: string;
-  status: string;
-};
 
 export default function NewsPage() {
   const router = useRouter();
@@ -63,32 +59,33 @@ export default function NewsPage() {
   const { can, staff } = useAdminPermissions();
   const canWrite = can("news:write");
   const authorName = staff?.full_name?.trim() || staff?.email?.trim() || "";
-  const [rows, setRows] = useState<SportNewsRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+
   const status = normalizeNewsStatusFilter(searchParams.get("status"));
   const query = searchParams.get("q") || "";
+  const category = searchParams.get("category") || "all";
+  const organizationId = searchParams.get("organization_id") || "";
+  const mediaType = searchParams.get("media_type") || "all";
   const featuredFilter = searchParams.get("featured") || "all";
   const publishedFrom = searchParams.get("published_from") || "";
   const publishedTo = searchParams.get("published_to") || "";
+  const page = Math.max(1, Number(searchParams.get("page") || "1") || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(searchParams.get("page_size") || "40") || 40));
+  const sort = searchParams.get("sort") || "recency";
+  const order = searchParams.get("order") || "desc";
 
-  const writeParams = (patch: Record<string, string | null>) => {
-    const next = new URLSearchParams(searchParams.toString());
-    for (const [k, v] of Object.entries(patch)) {
-      if (v == null || v === "" || v === "all") next.delete(k);
-      else next.set(k, v);
-    }
-    const qs = next.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  };
-  const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("General");
-  const [creating, setCreating] = useState(false);
+  const [payload, setPayload] = useState<NewsDirectoryResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
   const [createOpen, setCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [title, setTitle] = useState("");
+  const [categoryValue, setCategoryValue] = useState("General");
   const [body, setBody] = useState("");
   const [source, setSource] = useState("");
-  const [organizationId, setOrganizationId] = useState("");
-  const [organizationName, setOrganizationName] = useState("");
+  const [orgId, setOrgId] = useState("");
+  const [orgName, setOrgName] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [videoUrl, setVideoUrl] = useState("");
@@ -98,73 +95,237 @@ export default function NewsPage() {
   const [uploading, setUploading] = useState<NewsUploadKind | null>(null);
   const [statusValue, setStatusValue] = useState("draft");
   const [featured, setFeatured] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<NewsDraft | null>(null);
-  const [saving, setSaving] = useState(false);
 
-  const load = async () => {
-    const { data, error: loadError } = await getSpojexClient()
-      .from("sport_news")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(500);
-    if (loadError) throw loadError;
-    setRows((data ?? []) as SportNewsRow[]);
-  };
+  const writeParams = useCallback(
+    (patch: Record<string, string | null>, opts?: { resetPage?: boolean }) => {
+      const next = new URLSearchParams(searchParams.toString());
+      for (const [k, v] of Object.entries(patch)) {
+        if (v == null || v === "" || v === "all") next.delete(k);
+        else next.set(k, v);
+      }
+      if (opts?.resetPage !== false && !("page" in patch)) next.delete("page");
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (query.trim()) params.set("q", query.trim());
+      if (status !== "all") params.set("status", status);
+      if (category !== "all") params.set("category", category);
+      if (organizationId) params.set("organization_id", organizationId);
+      if (mediaType !== "all") params.set("media_type", mediaType);
+      if (featuredFilter !== "all") params.set("featured", featuredFilter);
+      if (publishedFrom) params.set("published_from", publishedFrom);
+      if (publishedTo) params.set("published_to", publishedTo);
+      params.set("page", String(page));
+      params.set("page_size", String(pageSize));
+      params.set("sort", sort);
+      params.set("order", order);
+      const res = await adminFetch(`/api/admin/news?${params}`);
+      const json = (await res.json()) as NewsDirectoryResponse & { error?: string };
+      if (!res.ok) throw new Error(json.error || "Failed to load news");
+      setPayload(json);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load");
+      setPayload(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    category,
+    featuredFilter,
+    mediaType,
+    order,
+    organizationId,
+    page,
+    pageSize,
+    publishedFrom,
+    publishedTo,
+    query,
+    sort,
+    status,
+  ]);
 
   useEffect(() => {
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-  }, []);
+    void load();
+  }, [load]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const fromMs = publishedFrom ? new Date(`${publishedFrom}T00:00:00`).getTime() : null;
-    const toMs = publishedTo ? new Date(`${publishedTo}T23:59:59.999`).getTime() : null;
-    return rows
-      .filter((row) => {
-        if (!newsStatusMatches(row.status, status)) return false;
-        if (featuredFilter === "featured" && !row.is_featured) return false;
-        if (featuredFilter === "standard" && row.is_featured) return false;
-        if (fromMs != null || toMs != null) {
-          const t = newsRecency(row);
-          if (fromMs != null && t < fromMs) return false;
-          if (toMs != null && t > toMs) return false;
-        }
-        if (!q) return true;
-        if (row.id === q) return true;
-        return [row.title, row.slug, row.body, row.category, row.source, row.author]
-          .filter(Boolean)
-          .some((v) => String(v).toLowerCase().includes(q));
-      })
-      .sort((a, b) => newsRecency(b) - newsRecency(a));
-  }, [featuredFilter, publishedFrom, publishedTo, query, rows, status]);
+  const rows = payload?.data ?? [];
+  const totals = payload?.totals ?? {};
+  const filterMeta = payload?.filters;
+  const filteredTotal = payload?.filtered_total ?? payload?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(filteredTotal / pageSize));
 
-  const mediaTypeOf = (row: SportNewsRow) => {
-    if ((row.video_url || "").trim()) return "Video";
-    if ((row.audio_url || "").trim() || row.sound_id) return "Audio";
-    const gallery = Array.isArray(row.image_urls) ? row.image_urls.length : 0;
-    if (gallery > 1 || (row.image_url || "").trim()) return gallery > 1 ? "Gallery" : "Image";
-    return "Text";
+  const activeChips = useMemo(() => {
+    const chips: Array<{ key: string; label: string; clear: Record<string, string | null> }> = [];
+    if (status !== "all") {
+      chips.push({
+        key: "status",
+        label: `Status: ${newsStatusLabel(status)}`,
+        clear: { status: null },
+      });
+    }
+    if (category !== "all") {
+      chips.push({ key: "category", label: `Category: ${category}`, clear: { category: null } });
+    }
+    if (organizationId) {
+      const name =
+        filterMeta?.organizations?.find((o) => o.id === organizationId)?.name || organizationId;
+      chips.push({
+        key: "org",
+        label: `Org: ${name}`,
+        clear: { organization_id: null },
+      });
+    }
+    if (mediaType !== "all") {
+      const label = newsMediaTypes.find((m) => m.id === mediaType)?.label || mediaType;
+      chips.push({
+        key: "media",
+        label: `Media: ${label}`,
+        clear: { media_type: null },
+      });
+    }
+    if (featuredFilter !== "all") {
+      chips.push({
+        key: "featured",
+        label: featuredFilter === "featured" ? "Featured" : "Standard",
+        clear: { featured: null },
+      });
+    }
+    if (publishedFrom || publishedTo) {
+      chips.push({
+        key: "dates",
+        label: `Dates: ${publishedFrom || "…"} → ${publishedTo || "…"}`,
+        clear: { published_from: null, published_to: null },
+      });
+    }
+    if (query.trim()) {
+      chips.push({ key: "q", label: `Search: ${query.trim()}`, clear: { q: null } });
+    }
+    return chips;
+  }, [
+    category,
+    featuredFilter,
+    filterMeta?.organizations,
+    mediaType,
+    organizationId,
+    publishedFrom,
+    publishedTo,
+    query,
+    status,
+  ]);
+
+  const clearAllFilters = () => {
+    writeParams({
+      q: null,
+      status: null,
+      category: null,
+      organization_id: null,
+      media_type: null,
+      featured: null,
+      published_from: null,
+      published_to: null,
+      page: null,
+    });
   };
 
-  const thumbOf = (row: SportNewsRow) =>
-    (row.cover_url || row.image_url || (Array.isArray(row.image_urls) ? row.image_urls[0] : "") || "").trim();
+  const runAction = async (row: NewsDirectoryRow, action: string) => {
+    if (!canWrite) return;
+    setBusyId(row.id);
+    setError(null);
+    try {
+      await postAdminResponse(`/api/admin/news/${row.id}/actions`, { action });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Action failed");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const removeHard = async (row: NewsDirectoryRow) => {
+    if (!window.confirm(`Permanently delete "${row.title}"? This cannot be undone.`)) return;
+    setBusyId(row.id);
+    setError(null);
+    try {
+      await deleteAdmin(`/api/admin/news/${row.id}`);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const rowMenuItems = (row: NewsDirectoryRow): AdminRowMenuItem[] => {
+    const statusLower = String(row.status || "").toLowerCase();
+    const items: AdminRowMenuItem[] = [
+      { id: "open", label: "Open / Edit", href: row.href || `/admin/news/${row.id}` },
+    ];
+    if (!canWrite) return items;
+    if (statusLower === "draft") {
+      items.push({
+        id: "publish",
+        label: "Publish",
+        tone: "success",
+        onClick: () => void runAction(row, "publish"),
+      });
+    }
+    if (statusLower === "active" || statusLower === "published") {
+      items.push({
+        id: row.is_featured ? "unfeature" : "feature",
+        label: row.is_featured ? "Remove featured" : "Feature on home",
+        onClick: () => void runAction(row, row.is_featured ? "unfeature" : "feature"),
+      });
+    }
+    if (statusLower !== "archived" && statusLower !== "archive" && statusLower !== "hidden") {
+      items.push({
+        id: "archive",
+        label: "Archive",
+        onClick: () => void runAction(row, "archive"),
+      });
+    } else {
+      items.push({
+        id: "restore",
+        label: "Restore to draft",
+        onClick: () => void runAction(row, "restore_draft"),
+      });
+      items.push({
+        id: "republish",
+        label: "Publish again",
+        tone: "success",
+        onClick: () => void runAction(row, "publish"),
+      });
+    }
+    items.push({
+      id: "delete",
+      label: "Delete permanently",
+      tone: "danger",
+      separatorBefore: true,
+      onClick: () => void removeHard(row),
+    });
+    return items;
+  };
 
   const resetCreate = () => {
     setTitle("");
     setBody("");
     setSource("");
-    setOrganizationId("");
-    setOrganizationName("");
+    setOrgId("");
+    setOrgName("");
     setImageUrl("");
     setImageUrls([]);
     setVideoUrl("");
     setAudioUrl("");
     setSoundId("");
     setPickedKind("none");
-    setCategory("General");
+    setCategoryValue("General");
     setStatusValue("draft");
     setFeatured(false);
   };
@@ -185,13 +346,10 @@ export default function NewsPage() {
     setUploading(kind);
     setError(null);
     try {
-      const needsAutoCover =
-        kind === "video" && imageUrls.length === 0 && !imageUrl.trim();
-      // Capture from the local file before upload so we avoid CORS-tainted canvas.
+      const needsAutoCover = kind === "video" && imageUrls.length === 0 && !imageUrl.trim();
       const coverPromise = needsAutoCover
         ? captureVideoCoverFile(file).catch(() => null)
         : Promise.resolve(null);
-
       const publicUrl = await uploadNewsFile(null, file, kind, options);
       if (kind === "image") {
         setImageUrls((prev) => {
@@ -240,38 +398,9 @@ export default function NewsPage() {
     }
   };
 
-  const removeWatermark = async (options: {
-    preset: NewsWatermarkPreset;
-    mode: NewsWatermarkMode;
-  }) => {
-    if (!videoUrl.trim()) {
-      setError("Upload a video first.");
-      return;
-    }
-    setUploading("video");
-    setError(null);
-    try {
-      const publicUrl = await removeNewsVideoWatermark(null, videoUrl, options);
-      setVideoUrl(publicUrl);
-      setPickedKind("video");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Watermark removal failed");
-    } finally {
-      setUploading(null);
-    }
-  };
-
-  const trimVideo = async (result: {
-    publicUrl: string;
-    durationSeconds: number | null;
-  }) => {
-    setVideoUrl(result.publicUrl);
-    setPickedKind("video");
-  };
-
   const create = async () => {
     if (!canWrite || !title.trim() || uploading) return;
-    if (!organizationId.trim()) {
+    if (!orgId.trim()) {
       setError("Publishing organization is required.");
       return;
     }
@@ -279,21 +408,17 @@ export default function NewsPage() {
     setError(null);
     try {
       const gallery =
-        imageUrls.length > 0
-          ? imageUrls
-          : imageUrl.trim()
-            ? [imageUrl.trim()]
-            : [];
+        imageUrls.length > 0 ? imageUrls : imageUrl.trim() ? [imageUrl.trim()] : [];
       const image = gallery[0] ?? "";
       const sourceLabel = source.trim();
-      await postAdmin("/api/admin/news", {
+      const created = (await postAdmin("/api/admin/news", {
         title: title.trim(),
-        category,
+        category: categoryValue,
         status: statusValue,
         summary: "",
         body: body.trim(),
         source: sourceLabel,
-        organization_id: organizationId.trim(),
+        organization_id: orgId.trim(),
         image_url: image,
         cover_url: image,
         image_urls: gallery,
@@ -301,10 +426,14 @@ export default function NewsPage() {
         audio_url: audioUrl.trim(),
         sound_id: soundId.trim() || null,
         is_featured: featured,
-      });
+      })) as { id?: string } | null;
       if (sourceLabel) rememberNewsSource(sourceLabel);
       resetCreate();
       setCreateOpen(false);
+      if (created?.id) {
+        router.push(`/admin/news/${created.id}`);
+        return;
+      }
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
@@ -313,53 +442,19 @@ export default function NewsPage() {
     }
   };
 
-  const startEdit = (row: SportNewsRow) => {
-    setEditingId(row.id);
-    setDraft({ title: row.title, category: row.category, status: row.status });
-    setError(null);
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setDraft(null);
-  };
-
-  const saveEdit = async () => {
-    if (!editingId || !draft) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await patchAdmin(`/api/admin/news/${editingId}`, {
-        title: draft.title.trim(),
-        category: draft.category,
-        status: draft.status,
-      });
-      cancelEdit();
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const remove = async (row: SportNewsRow) => {
-    if (!window.confirm(`Delete "${row.title}"? This cannot be undone.`)) return;
-    setError(null);
-    try {
-      await deleteAdmin(`/api/admin/news/${row.id}`);
-      if (editingId === row.id) cancelEdit();
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Delete failed");
-    }
-  };
+  const createMedia = classifyNewsMedia({
+    video_url: videoUrl,
+    audio_url: audioUrl,
+    sound_id: soundId,
+    image_url: imageUrls[0] ?? imageUrl,
+    image_urls: imageUrls,
+  });
 
   return (
     <>
       <AdminPageHeader
         title="Sport News"
-        description="Publish stories for the home feed. Open an article for the full editor and mobile preview."
+        description="Publish stories for the home feed. Filters persist in the URL so overview drill-downs stay selected."
         breadcrumbs={[
           { label: "Content", href: "/admin/content" },
           { label: "Sport News" },
@@ -376,14 +471,65 @@ export default function NewsPage() {
           ) : null
         }
       />
-      {error ? <AdminErrorAlert message={error} /> : null}
+
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <AdminStatCard title="All (catalog)" value={`${totals.all ?? "—"}`} />
+        <button
+          type="button"
+          className="text-left"
+          onClick={() => writeParams({ status: "active" })}
+        >
+          <AdminStatCard title="Published" value={`${totals.published ?? "—"}`} />
+        </button>
+        <button
+          type="button"
+          className="text-left"
+          onClick={() => writeParams({ status: "draft" })}
+        >
+          <AdminStatCard title="Draft" value={`${totals.draft ?? "—"}`} />
+        </button>
+        <button
+          type="button"
+          className="text-left"
+          onClick={() => writeParams({ status: "archived" })}
+        >
+          <AdminStatCard title="Archived" value={`${totals.archived ?? "—"}`} />
+        </button>
+        <button
+          type="button"
+          className="text-left"
+          onClick={() => writeParams({ featured: "featured", status: null })}
+        >
+          <AdminStatCard title="Featured" value={`${totals.featured ?? "—"}`} />
+        </button>
+      </div>
+      <p className="mb-4 text-xs text-text-hint">
+        Catalog totals match Content Overview definitions. Table below shows filtered results (
+        {loading ? "…" : filteredTotal}).
+      </p>
+
+      {error ? (
+        <div className="mb-4">
+          <AdminErrorAlert message={error} />
+          <button
+            type="button"
+            className="-mt-2 mb-2 text-sm font-medium text-primary hover:underline"
+            onClick={() => void load()}
+          >
+            Retry
+          </button>
+        </div>
+      ) : null}
+
       <AdminFilterPanel>
-        <div className="grid gap-3 md:grid-cols-[1fr_160px_140px]">
-          <AdminSearchInput
-            value={query}
-            onChange={(value) => writeParams({ q: value || null })}
-            placeholder="Search headline, category, source"
-          />
+        <div className="grid gap-3 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="lg:col-span-2 xl:col-span-2">
+            <AdminSearchInput
+              value={query}
+              onChange={(value) => writeParams({ q: value || null })}
+              placeholder="Search headline, category, source"
+            />
+          </div>
           <AdminSelect
             value={status}
             onChange={(value) => writeParams({ status: value === "all" ? null : value })}
@@ -396,32 +542,122 @@ export default function NewsPage() {
             ))}
           </AdminSelect>
           <AdminSelect
+            value={category}
+            onChange={(value) => writeParams({ category: value === "all" ? null : value })}
+          >
+            <option value="all">All categories</option>
+            {(filterMeta?.categories?.length ? filterMeta.categories : [...newsCategories]).map(
+              (item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ),
+            )}
+          </AdminSelect>
+          <AdminSelect
+            value={mediaType}
+            onChange={(value) => writeParams({ media_type: value === "all" ? null : value })}
+          >
+            <option value="all">All media</option>
+            {newsMediaTypes.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </AdminSelect>
+          <AdminSelect
             value={featuredFilter}
             onChange={(value) => writeParams({ featured: value === "all" ? null : value })}
           >
             <option value="all">All placement</option>
             <option value="featured">Featured</option>
-            <option value="standard">Not featured</option>
+            <option value="standard">Standard</option>
           </AdminSelect>
         </div>
-        {publishedFrom || publishedTo ? (
-          <p className="mt-2 text-xs text-text-hint">
-            Publication window: {publishedFrom || "…"} → {publishedTo || "…"}{" "}
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <AdminSelect
+            value={organizationId || "all"}
+            onChange={(value) =>
+              writeParams({ organization_id: value === "all" ? null : value })
+            }
+          >
+            <option value="all">All organizations</option>
+            {(filterMeta?.organizations ?? []).map((org) => (
+              <option key={org.id} value={org.id}>
+                {org.name}
+              </option>
+            ))}
+          </AdminSelect>
+          <label className="text-xs text-text-secondary">
+            From
+            <input
+              type="date"
+              value={publishedFrom}
+              onChange={(e) => writeParams({ published_from: e.target.value || null })}
+              className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
+            />
+          </label>
+          <label className="text-xs text-text-secondary">
+            To
+            <input
+              type="date"
+              value={publishedTo}
+              onChange={(e) => writeParams({ published_to: e.target.value || null })}
+              className="mt-1 h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
+            />
+          </label>
+          <AdminSelect
+            value={`${sort}:${order}`}
+            onChange={(value) => {
+              const [s, o] = value.split(":");
+              writeParams({ sort: s || "recency", order: o || "desc" });
+            }}
+          >
+            <option value="recency:desc">Newest first</option>
+            <option value="recency:asc">Oldest first</option>
+            <option value="updated:desc">Recently updated</option>
+            <option value="title:asc">Title A–Z</option>
+            <option value="likes:desc">Most liked</option>
+            <option value="comments:desc">Most commented</option>
+          </AdminSelect>
+        </div>
+        {activeChips.length > 0 ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {activeChips.map((chip) => (
+              <button
+                key={chip.key}
+                type="button"
+                onClick={() => writeParams(chip.clear)}
+                className="rounded-full border border-border bg-muted/60 px-2.5 py-1 text-xs text-text-secondary hover:bg-muted"
+              >
+                {chip.label} ×
+              </button>
+            ))}
             <button
               type="button"
-              className="ml-2 text-primary hover:underline"
-              onClick={() => writeParams({ published_from: null, published_to: null })}
+              className="text-xs font-medium text-primary hover:underline"
+              onClick={clearAllFilters}
             >
-              Clear dates
+              Clear filters
             </button>
-          </p>
+          </div>
         ) : null}
       </AdminFilterPanel>
+
       {loading ? <AdminLoadingRow label="Loading articles…" /> : null}
+
       <AdminTableShell>
-        {filtered.length === 0 && !loading ? (
-          <AdminEmpty title="No articles" description="Create sport news to show on the home feed." />
-        ) : (
+        {!loading && rows.length === 0 ? (
+          <AdminEmpty
+            title={activeChips.length ? "No matching articles" : "No articles yet"}
+            description={
+              activeChips.length
+                ? "Try clearing filters or adjusting the date range."
+                : "Create sport news to show on the home feed."
+            }
+          />
+        ) : null}
+        {rows.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
@@ -430,16 +666,23 @@ export default function NewsPage() {
                   <th className="px-4 py-3 font-semibold">Media</th>
                   <th className="px-4 py-3 font-semibold">Category</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold">Placement</th>
                   <th className="px-4 py-3 font-semibold">Engagement</th>
-                  <th className="px-4 py-3 font-semibold">Published</th>
+                  <th className="px-4 py-3 font-semibold">Date</th>
+                  <th className="px-4 py-3 font-semibold">Updated</th>
                   <th className="px-4 py-3 font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((row) => {
-                  const thumb = thumbOf(row);
+                {rows.map((row) => {
+                  const thumb = (row.thumbnail || "").trim();
+                  const dateLabel = row.display_date?.label || "Date";
+                  const dateAt = row.display_date?.at;
                   return (
-                    <tr key={row.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                    <tr
+                      key={row.id}
+                      className="border-b border-border last:border-0 hover:bg-muted/30"
+                    >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           {thumb ? (
@@ -451,56 +694,70 @@ export default function NewsPage() {
                             />
                           ) : (
                             <div className="grid h-12 w-16 place-items-center rounded-md bg-muted text-[10px] text-text-hint">
-                              {mediaTypeOf(row)}
+                              {row.media_label || row.media_type}
                             </div>
                           )}
                           <div className="min-w-0">
                             <Link
-                              href={`/admin/news/${row.id}`}
+                              href={row.href || `/admin/news/${row.id}`}
                               className="font-medium text-text-primary hover:text-primary"
                             >
                               {row.title}
                             </Link>
                             <p className="mt-0.5 truncate text-xs text-text-secondary">
-                              {[row.source?.trim() || null, row.author?.trim() || null]
-                                .filter(Boolean)
-                                .join(" · ") || "No source credit"}
-                              {row.is_featured ? " · Featured" : ""}
+                              {row.organization_name || "No organization"}
+                              {row.source?.trim() ? ` · ${row.source.trim()}` : ""}
                             </p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-xs text-text-secondary">{mediaTypeOf(row)}</td>
-                      <td className="px-4 py-3 text-text-secondary">{row.category}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-xs text-text-secondary">
+                            {row.media_label || row.media_type}
+                          </span>
+                          {row.has_soundtrack ? (
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-text-secondary">
+                              Soundtrack
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-text-secondary">{row.category || "—"}</td>
                       <td className="px-4 py-3">
                         <StatusBadge tone={requestTone(row.status)}>
-                          {newsStatusLabel(row.status)}
+                          {row.status_label || newsStatusLabel(row.status)}
                         </StatusBadge>
                       </td>
                       <td className="px-4 py-3 text-xs text-text-secondary">
-                        ♥ {row.like_count ?? 0} · 💬 {row.comment_count ?? 0} · ☆{" "}
-                        {row.save_count ?? 0}
+                        {row.featured_label || (row.is_featured ? "Featured" : "Standard")}
                       </td>
-                      <td className="px-4 py-3 text-text-secondary">
-                        {row.published_at ? formatDate(row.published_at) : "—"}
+                      <td className="px-4 py-3 text-xs text-text-secondary">
+                        <span title="Lifetime engagement">
+                          Likes {row.engagement?.likes ?? 0} · Comments{" "}
+                          {row.engagement?.comments ?? 0} · Saves {row.engagement?.saves ?? 0}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-text-secondary">
+                        <div className="font-medium text-text-primary">{dateLabel}</div>
+                        <div>{dateAt ? formatDate(dateAt) : "—"}</div>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-text-secondary">
+                        {row.updated_at ? formatDate(row.updated_at) : "—"}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
                           <Link
-                            href={`/admin/news/${row.id}`}
+                            href={row.href || `/admin/news/${row.id}`}
                             className="text-sm font-medium text-primary"
                           >
                             Open
                           </Link>
-                          {canWrite ? (
-                            <button
-                              type="button"
-                              className="text-sm font-medium text-red-600"
-                              onClick={() => void remove(row)}
-                            >
-                              Delete
-                            </button>
-                          ) : null}
+                          <AdminRowMenu
+                            items={rowMenuItems(row)}
+                            disabled={busyId === row.id}
+                            aria-label={`Actions for ${row.title}`}
+                          />
                         </div>
                       </td>
                     </tr>
@@ -509,7 +766,33 @@ export default function NewsPage() {
               </tbody>
             </table>
           </div>
-        )}
+        ) : null}
+        {!loading && filteredTotal > pageSize ? (
+          <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm">
+            <p className="text-text-secondary">
+              Page {page} of {totalPages} · {filteredTotal} result
+              {filteredTotal === 1 ? "" : "s"}
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={page <= 1}
+                className="rounded-md border border-border px-3 py-1.5 disabled:opacity-40"
+                onClick={() => writeParams({ page: String(page - 1) }, { resetPage: false })}
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                disabled={page >= totalPages}
+                className="rounded-md border border-border px-3 py-1.5 disabled:opacity-40"
+                onClick={() => writeParams({ page: String(page + 1) }, { resetPage: false })}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        ) : null}
       </AdminTableShell>
 
       <AdminModal
@@ -529,7 +812,7 @@ export default function NewsPage() {
             }}
             onSave={() => void create()}
             saving={creating || Boolean(uploading)}
-            saveLabel="Create article"
+            saveLabel="Create draft"
           />
         }
       >
@@ -549,8 +832,8 @@ export default function NewsPage() {
           />
           <div className="grid gap-3 sm:grid-cols-2">
             <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
+              value={categoryValue}
+              onChange={(e) => setCategoryValue(e.target.value)}
               className="h-10 rounded-lg border border-border px-3 text-sm"
             >
               {newsCategories.map((item) => (
@@ -579,11 +862,11 @@ export default function NewsPage() {
             className="rounded-lg border border-border px-3 py-2 text-sm"
           />
           <NewsOrgPicker
-            value={organizationId}
+            value={orgId}
             disabled={creating || Boolean(uploading)}
-            onChange={(orgId, org) => {
-              setOrganizationId(orgId);
-              setOrganizationName(org?.name ?? "");
+            onChange={(nextId, org) => {
+              setOrgId(nextId);
+              setOrgName(org?.name ?? "");
             }}
           />
           <NewsSourceField
@@ -591,19 +874,25 @@ export default function NewsPage() {
             optional
             value={source}
             onChange={setSource}
-            knownSources={rows}
+            knownSources={[]}
             disabled={creating || Boolean(uploading)}
             inputClassName="h-10 w-full rounded-lg border border-border px-3 text-sm"
             hint="Optional credit under the title on the app. Leave blank to hide."
           />
           <p className="text-sm text-text-secondary">
             Author{" "}
-            <span className="font-medium text-text-primary">{authorName || "Signed-in admin"}</span>
+            <span className="font-medium text-text-primary">
+              {authorName || "Signed-in admin"}
+            </span>
+            <span className="ml-2 text-xs text-text-hint">
+              · Primary media: {createMedia.label}
+              {createMedia.has_soundtrack ? " + soundtrack" : ""}
+            </span>
           </p>
           <NewsTikTokPreview
             title={title}
             body={body}
-            organizationName={organizationName}
+            organizationName={orgName}
             source={source.trim()}
             imageUrl={imageUrls[0] ?? imageUrl}
             videoUrl={videoUrl}
@@ -652,8 +941,31 @@ export default function NewsPage() {
               setSoundId("");
               setPickedKind("none");
             }}
-            onRemoveWatermark={(options) => void removeWatermark(options)}
-            onTrimVideo={(result) => void trimVideo(result)}
+            onRemoveWatermark={(options: {
+              preset: NewsWatermarkPreset;
+              mode: NewsWatermarkMode;
+            }) =>
+              void (async () => {
+                if (!videoUrl.trim()) {
+                  setError("Upload a video first.");
+                  return;
+                }
+                setUploading("video");
+                try {
+                  const publicUrl = await removeNewsVideoWatermark(null, videoUrl, options);
+                  setVideoUrl(publicUrl);
+                  setPickedKind("video");
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : "Watermark removal failed");
+                } finally {
+                  setUploading(null);
+                }
+              })()
+            }
+            onTrimVideo={(result) => {
+              setVideoUrl(result.publicUrl);
+              setPickedKind("video");
+            }}
             onSoundSelect={(sound) => {
               setSoundId(sound?.id ?? "");
               setAudioUrl(sound?.audio_url?.trim() ?? "");
@@ -665,6 +977,7 @@ export default function NewsPage() {
               type="checkbox"
               checked={featured}
               onChange={(e) => setFeatured(e.target.checked)}
+              disabled={statusValue === "archived"}
             />
             Feature on home
           </label>
