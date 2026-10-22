@@ -474,9 +474,9 @@ export default function ContentOverviewPage() {
                   </li>
                 ))}
               </ul>
-              {(data?.definitions ? Object.entries(data.definitions) : []).length > 0 ? (
+              {Object.keys(data?.definitions ?? {}).length > 0 ? (
                 <ul className="mt-3 list-disc space-y-1 pl-4">
-                  {Object.entries(data.definitions ?? {}).map(([k, v]) => (
+                  {Object.entries(data?.definitions ?? {}).map(([k, v]) => (
                     <li key={k}>
                       <span className="font-medium text-foreground">{k}:</span> {v}
                     </li>

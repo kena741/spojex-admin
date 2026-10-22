@@ -286,8 +286,13 @@ export async function POST(request: Request) {
     }
 
     try {
-      let existing: { id: string; pricing?: unknown; owner_user_id?: string | null; status?: string } | null =
-        null;
+      type ExistingStadium = {
+        id: string;
+        pricing?: unknown;
+        owner_user_id?: string | null;
+        status?: string;
+      };
+      let existing: ExistingStadium | null = null;
 
       if (field.external_id) {
         const byExt = await client
@@ -295,7 +300,7 @@ export async function POST(request: Request) {
           .select("id, pricing, owner_user_id, status")
           .eq("external_id", field.external_id)
           .maybeSingle();
-        if (!byExt.error && byExt.data) existing = byExt.data as typeof existing;
+        if (!byExt.error && byExt.data) existing = byExt.data as ExistingStadium;
       }
       if (!existing) {
         const bySlug = await client
@@ -303,7 +308,7 @@ export async function POST(request: Request) {
           .select("id, pricing, owner_user_id, status")
           .eq("slug", slugBase)
           .maybeSingle();
-        if (!bySlug.error && bySlug.data) existing = bySlug.data as typeof existing;
+        if (!bySlug.error && bySlug.data) existing = bySlug.data as ExistingStadium;
       }
 
       if (preview) {
@@ -321,15 +326,15 @@ export async function POST(request: Request) {
       }
 
       if (existing?.id) {
-        const updatePayload = { ...payload, updated_at: nowIso };
+        const updatePayload: Record<string, unknown> = { ...payload, updated_at: nowIso };
         // Preserve local ownership, status, and pricing unless explicitly overwritten.
         if (!overwriteLocal) {
           delete updatePayload.status;
           if (existing.owner_user_id) {
-            delete (updatePayload as { owner_name?: string }).owner_name;
+            delete updatePayload.owner_name;
           }
           // Keep existing pricing — never silently rewrite product prices on re-import.
-          delete (updatePayload as { pricing?: unknown }).pricing;
+          delete updatePayload.pricing;
         } else {
           updatePayload.pricing = pricing;
         }
@@ -341,7 +346,7 @@ export async function POST(request: Request) {
         if (error) {
           // Columns may be missing before migration — retry without new fields.
           if (/external_id|import_source|imported_at|location_review/i.test(error.message)) {
-            const legacy = { ...updatePayload };
+            const legacy: Record<string, unknown> = { ...updatePayload };
             delete legacy.external_id;
             delete legacy.import_source;
             delete legacy.imported_at;

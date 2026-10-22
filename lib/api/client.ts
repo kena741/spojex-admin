@@ -180,6 +180,15 @@ export function createSpojexClient(options: SpojexClientOptions = {}) {
       return { data: { claims }, error: null };
     },
 
+    async resetPasswordForEmail(_email: string, _opts?: { redirectTo?: string }) {
+      return {
+        data: null,
+        error: authError(
+          "Password reset email is not available on Spojex auth yet. Ask the user to recover via the app, or recreate the login.",
+        ),
+      };
+    },
+
     onAuthStateChange(callback: (event: string, session: SpojexSession | null) => void) {
       return onAuthStateChange(callback);
     },
@@ -251,6 +260,20 @@ export function createSpojexClient(options: SpojexClientOptions = {}) {
           const message = err instanceof Error ? err.message : "Failed to create user";
           return { data: { user: null }, error: authError(message) };
         }
+      },
+
+      /** Create a login without returning a password (Spojex has no invite-email transport yet). */
+      async inviteUserByEmail(
+        email: string,
+        opts?: { data?: Record<string, unknown>; redirectTo?: string },
+      ) {
+        const password = `Tmp-${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}!aA1`;
+        return this.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: opts?.data,
+        });
       },
 
       async updateUserById(

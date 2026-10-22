@@ -90,7 +90,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: typeError.message }, { status: 400 });
   }
 
-  const idBySlug = new Map((insertedTypes ?? []).map((t) => [t.slug, t.id]));
+  const idBySlug = new Map(
+    (insertedTypes ?? []).map((t: { id: string; slug: string }) => [t.slug, t.id]),
+  );
   const reqRows = VERIFICATION_ROLE_REQUIREMENT_SEEDS.map((req) => {
     const docId = idBySlug.get(req.slug);
     if (!docId) return null;
