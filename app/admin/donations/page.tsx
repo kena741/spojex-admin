@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Plus } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -14,6 +15,7 @@ import {
   AdminRowMenu,
   AdminSearchInput,
   AdminSelect,
+  AdminStatCard,
   AdminTableShell,
 } from "@/components/admin-layout";
 import BeneficiarySelect from "@/components/beneficiary-select";
@@ -66,9 +68,6 @@ export default function DonationsPage() {
   const [asset, setAsset] = useState(searchParams.get("asset") || "all");
   const [featured, setFeatured] = useState(searchParams.get("featured") || "all");
   const [beneficiary, setBeneficiary] = useState(searchParams.get("beneficiary") || "");
-  const [view, setView] = useState<"cards" | "list">(
-    searchParams.get("view") === "list" ? "list" : "cards",
-  );
   const [sort, setSort] = useState(searchParams.get("sort") || "updated_at");
   const [order, setOrder] = useState(searchParams.get("order") || "desc");
 
@@ -133,13 +132,12 @@ export default function DonationsPage() {
     if (asset !== "all") next.set("asset", asset);
     if (featured !== "all") next.set("featured", featured);
     if (beneficiary.trim()) next.set("beneficiary", beneficiary.trim());
-    if (view !== "cards") next.set("view", view);
     if (sort !== "updated_at") next.set("sort", sort);
     if (order !== "desc") next.set("order", order);
     if (page > 1) next.set("page", String(page));
     const qs = next.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [query, status, asset, featured, beneficiary, view, sort, order, page, pathname, router]);
+  }, [query, status, asset, featured, beneficiary, sort, order, page, pathname, router]);
 
   const create = async () => {
     if (!canWrite || !title.trim()) return;
@@ -229,70 +227,62 @@ export default function DonationsPage() {
     return "Spojex (default)";
   };
 
+  const openCampaign = (row: DirectoryRow) => {
+    router.push(row.href || `/admin/donations/${row.id}`);
+  };
+
   return (
     <>
       <AdminPageHeader
         title="Donations"
-        description="Fundraising campaigns - ETB and coins are tracked separately."
+        description={`${rows.length} of ${total} · fundraising campaigns (ETB and coins tracked separately)`}
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex rounded-lg border border-border p-0.5 text-sm">
-              <button
-                type="button"
-                onClick={() => setView("cards")}
-                className={`rounded-md px-3 py-1.5 ${view === "cards" ? "bg-muted font-medium" : "text-text-secondary"}`}
-              >
-                Cards
-              </button>
-              <button
-                type="button"
-                onClick={() => setView("list")}
-                className={`rounded-md px-3 py-1.5 ${view === "list" ? "bg-muted font-medium" : "text-text-secondary"}`}
-              >
-                List
-              </button>
-            </div>
-            {canWrite ? (
-              <button
-                type="button"
-                onClick={() => setCreateOpen(true)}
-                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
-              >
-                Add campaign
-              </button>
-            ) : null}
-          </div>
+          canWrite ? (
+            <button
+              type="button"
+              onClick={() => setCreateOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Add campaign</span>
+              <span className="sm:hidden">Add</span>
+            </button>
+          ) : null
         }
       />
 
       {error ? <AdminErrorAlert message={error} /> : null}
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-border bg-card p-4">
-          <p className="text-xs uppercase text-text-secondary">ETB raised</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums">
-            {formatDonationAmount(Number(totals.etb_raised ?? 0), "ETB")}
-          </p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
-          <p className="text-xs uppercase text-text-secondary">Coins raised</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums">
-            {formatDonationAmount(Number(totals.coin_raised ?? 0), "COIN")}
-          </p>
-          <p className="mt-1 text-[11px] text-text-hint">No implied cash value</p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
-          <p className="text-xs uppercase text-text-secondary">Active campaigns</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums">{totals.active_count ?? "-"}</p>
-        </div>
-      </div>
+      <section className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <AdminStatCard title="Total" value={`${total}`} />
+        <AdminStatCard
+          title="ETB raised"
+          value={formatDonationAmount(Number(totals.etb_raised ?? 0), "ETB")}
+        />
+        <AdminStatCard
+          title="Coins raised"
+          value={formatDonationAmount(Number(totals.coin_raised ?? 0), "COIN")}
+        />
+        <AdminStatCard title="Active" value={`${totals.active_count ?? "-"}`} />
+      </section>
 
       <AdminFilterPanel>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-          <div className="xl:col-span-2">
-            <AdminSearchInput value={query} onChange={setQuery} placeholder="Search title or summary" />
-          </div>
-          <AdminSelect value={status} onChange={(v) => { setStatus(v); setPage(1); }}>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <AdminSearchInput
+            value={query}
+            onChange={(value) => {
+              setPage(1);
+              setQuery(value);
+            }}
+            placeholder="Search title or summary"
+          />
+          <AdminSelect
+            value={status}
+            onChange={(v) => {
+              setStatus(v);
+              setPage(1);
+            }}
+          >
             <option value="all">All statuses</option>
             {donationStatuses.map((item) => (
               <option key={item.id} value={item.id}>
@@ -300,14 +290,26 @@ export default function DonationsPage() {
               </option>
             ))}
           </AdminSelect>
-          <AdminSelect value={asset} onChange={(v) => { setAsset(v); setPage(1); }}>
+          <AdminSelect
+            value={asset}
+            onChange={(v) => {
+              setAsset(v);
+              setPage(1);
+            }}
+          >
             <option value="all">All assets</option>
             <option value="coin">Coins</option>
             <option value="etb">ETB</option>
           </AdminSelect>
-          <AdminSelect value={featured} onChange={(v) => { setFeatured(v); setPage(1); }}>
-            <option value="all">Featured: any</option>
-            <option value="yes">Featured only</option>
+          <AdminSelect
+            value={featured}
+            onChange={(v) => {
+              setFeatured(v);
+              setPage(1);
+            }}
+          >
+            <option value="all">All featuring</option>
+            <option value="yes">Featured</option>
             <option value="no">Not featured</option>
           </AdminSelect>
           <AdminSelect
@@ -325,35 +327,30 @@ export default function DonationsPage() {
             <option value="raised:desc">Raised ↓</option>
             <option value="status:asc">Status</option>
           </AdminSelect>
-        </div>
-        <div className="mt-3 max-w-md">
-          <label className="mb-1 block text-xs text-text-secondary">Beneficiary user id (optional)</label>
           <input
             value={beneficiary}
             onChange={(e) => {
               setBeneficiary(e.target.value);
               setPage(1);
             }}
-            placeholder="Filter by beneficiary user id"
-            className="h-10 w-full rounded-lg border border-border px-3 text-sm"
+            placeholder="Beneficiary user id"
+            className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm"
           />
         </div>
       </AdminFilterPanel>
 
       {loading ? <AdminLoadingRow label="Loading campaigns…" /> : null}
 
-      {!loading && rows.length === 0 ? (
-        <AdminEmpty title="No campaigns" description="Create a donation campaign for the home page." />
-      ) : null}
-
-      {!loading && rows.length > 0 && view === "cards" ? (
-        <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {!loading && rows.length > 0 ? (
+        <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:hidden">
           {rows.map((row) => {
             const media = campaignMedia(row);
             return (
-              <article
+              <button
                 key={row.id}
-                className="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+                type="button"
+                onClick={() => openCampaign(row)}
+                className="overflow-hidden rounded-xl border border-border bg-card text-left shadow-sm"
               >
                 <div className="aspect-[16/9] bg-muted">
                   {media.display_url ? (
@@ -370,127 +367,162 @@ export default function DonationsPage() {
                       {donationStatusLabel(row.status)}
                     </StatusBadge>
                   </div>
-                  {row.summary ? (
-                    <p className="line-clamp-2 text-xs text-text-secondary">{row.summary}</p>
-                  ) : null}
                   <p className="text-xs text-text-secondary">
                     {campaignAssetLabel(row)}
                     {row.is_featured ? " · Featured" : ""}
                   </p>
                   {renderProgress(row)}
                   <p className="text-xs text-text-secondary">Beneficiary: {beneficiaryLabel(row)}</p>
-                  <p className="text-[11px] text-text-hint">
-                    Updated {formatDate(row.updated_at || row.created_at)}
-                  </p>
-                  <Link
-                    href={row.href || `/admin/donations/${row.id}`}
-                    className="inline-flex text-sm font-medium text-primary hover:underline"
-                  >
-                    Open campaign
-                  </Link>
                 </div>
-              </article>
+              </button>
             );
           })}
         </div>
       ) : null}
 
-      {!loading && rows.length > 0 && view === "list" ? (
+      <div className="hidden lg:block">
         <AdminTableShell>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">Campaign</th>
-                  <th className="px-4 py-3 font-semibold">Asset</th>
-                  <th className="px-4 py-3 font-semibold">Raised / Target</th>
-                  <th className="px-4 py-3 font-semibold">Beneficiary</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 font-semibold">Updated</th>
-                  <th className="px-4 py-3 font-semibold"> </th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => {
-                  const media = campaignMedia(row);
-                  return (
-                    <tr key={row.id} className="border-b border-border last:border-0 hover:bg-muted/30">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-14 shrink-0 overflow-hidden rounded-md bg-muted">
+          {!loading && rows.length === 0 ? (
+            <AdminEmpty
+              title="No campaigns"
+              description={
+                canWrite
+                  ? "Add a donation campaign for the home page."
+                  : "Donation campaigns appear here."
+              }
+            />
+          ) : !loading ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+                  <tr>
+                    <th className="min-w-[14rem] px-4 py-3 font-semibold">Campaign</th>
+                    <th className="px-4 py-3 font-semibold">Asset</th>
+                    <th className="px-4 py-3 font-semibold">Raised / Target</th>
+                    <th className="px-4 py-3 font-semibold">Beneficiary</th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 font-semibold">Featured</th>
+                    <th className="px-4 py-3 font-semibold">Updated</th>
+                    <th className="px-4 py-3 font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => {
+                    const media = campaignMedia(row);
+                    const href = row.href || `/admin/donations/${row.id}`;
+                    return (
+                      <tr
+                        key={row.id}
+                        role="link"
+                        tabIndex={0}
+                        onClick={() => openCampaign(row)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            openCampaign(row);
+                          }
+                        }}
+                        className="cursor-pointer border-b border-border last:border-0 hover:bg-muted/40"
+                      >
+                        <td className="min-w-[14rem] px-4 py-3">
+                          <div className="flex items-center gap-3">
                             {media.display_url ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={media.display_url} alt="" className="h-full w-full object-cover" />
-                            ) : null}
+                              <img
+                                src={media.display_url}
+                                alt=""
+                                className="h-11 w-14 shrink-0 rounded-md object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-11 w-14 shrink-0 items-center justify-center rounded-md bg-muted text-[10px] text-text-secondary">
+                                No img
+                              </div>
+                            )}
+                            <div className="min-w-[10rem]">
+                              <p className="whitespace-nowrap font-medium text-text-primary">
+                                {row.title}
+                              </p>
+                              {row.summary ? (
+                                <p className="line-clamp-1 text-xs text-text-hint">{row.summary}</p>
+                              ) : null}
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <Link
-                              href={row.href || `/admin/donations/${row.id}`}
-                              className="font-medium text-text-primary hover:text-primary"
-                            >
-                              {row.title}
-                            </Link>
-                            {row.summary ? (
-                              <p className="mt-0.5 line-clamp-1 text-xs text-text-secondary">{row.summary}</p>
-                            ) : null}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-text-secondary">{campaignAssetLabel(row)}</td>
-                      <td className="px-4 py-3">{renderProgress(row)}</td>
-                      <td className="px-4 py-3 text-text-secondary">{beneficiaryLabel(row)}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap items-center gap-1">
+                        </td>
+                        <td className="px-4 py-3 text-text-secondary">
+                          {campaignAssetLabel(row)}
+                        </td>
+                        <td className="px-4 py-3">{renderProgress(row)}</td>
+                        <td className="px-4 py-3 text-text-secondary">
+                          {beneficiaryLabel(row)}
+                        </td>
+                        <td className="px-4 py-3">
                           <StatusBadge tone={requestTone(row.status)}>
                             {donationStatusLabel(row.status)}
                           </StatusBadge>
-                          {row.is_featured ? <StatusBadge tone="success">Featured</StatusBadge> : null}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-text-secondary">
-                        {formatDate(row.updated_at || row.created_at)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <AdminRowMenu
-                          items={[
-                            {
-                              id: "open",
-                              label: "Open",
-                              href: row.href || `/admin/donations/${row.id}`,
-                            },
-                            ...(canWrite
-                              ? [
-                                  {
-                                    id: "delete",
-                                    label: "Close / delete",
-                                    onClick: () => void remove(row),
-                                    tone: "danger" as const,
-                                  },
-                                ]
-                              : []),
-                          ]}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <StatusBadge tone={row.is_featured ? "success" : "neutral"}>
+                            {row.is_featured ? "Featured" : "Not featured"}
+                          </StatusBadge>
+                        </td>
+                        <td className="px-4 py-3 text-text-secondary">
+                          {formatDate(row.updated_at || row.created_at)}
+                        </td>
+                        <td
+                          className="px-4 py-3"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          <AdminRowMenu
+                            items={[
+                              { id: "open", label: "Open", href },
+                              ...(canWrite
+                                ? [
+                                    {
+                                      id: "delete",
+                                      label: "Close / delete",
+                                      onClick: () => void remove(row),
+                                      tone: "danger" as const,
+                                    },
+                                  ]
+                                : []),
+                            ]}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
         </AdminTableShell>
+      </div>
+
+      {!loading && rows.length === 0 ? (
+        <div className="lg:hidden">
+          <AdminEmpty
+            title="No campaigns"
+            description={
+              canWrite
+                ? "Add a donation campaign for the home page."
+                : "Donation campaigns appear here."
+            }
+          />
+        </div>
       ) : null}
 
       {!loading && total > pageSize ? (
-        <div className="mt-4 flex items-center justify-between text-sm">
-          <p className="text-text-secondary">
-            Page {page} of {totalPages} · {total} campaigns
-          </p>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-text-secondary">
+          <span>
+            Page {page} of {totalPages} · {rows.length} shown · {total} total
+          </span>
           <div className="flex gap-2">
             <button
               type="button"
               disabled={page <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="rounded-md border border-border px-3 py-1.5 disabled:opacity-50"
+              className="rounded-md border border-border px-3 py-1.5 text-xs disabled:opacity-40"
             >
               Previous
             </button>
@@ -498,7 +530,7 @@ export default function DonationsPage() {
               type="button"
               disabled={page >= totalPages}
               onClick={() => setPage((p) => p + 1)}
-              className="rounded-md border border-border px-3 py-1.5 disabled:opacity-50"
+              className="rounded-md border border-border px-3 py-1.5 text-xs disabled:opacity-40"
             >
               Next
             </button>
