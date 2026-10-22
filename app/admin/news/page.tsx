@@ -331,10 +331,6 @@ export default function NewsPage() {
           <AdminStatCard title="Featured" value={`${totals.featured ?? "-"}`} />
         </button>
       </div>
-      <p className="mb-4 text-xs text-text-hint">
-        Catalog totals match Content Overview definitions. Table below shows filtered results (
-        {loading ? "…" : filteredTotal}).
-      </p>
 
       {error ? (
         <div className="mb-4">
