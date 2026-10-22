@@ -52,6 +52,7 @@ export default function OrganizationsPage() {
   const [verified, setVerified] = useState(searchParams.get("verified") || "all");
   const [city, setCity] = useState(searchParams.get("city") || "");
   const [country, setCountry] = useState(searchParams.get("country") || "");
+  const [trash, setTrash] = useState(searchParams.get("trash") === "yes" ? "yes" : "");
   const [page, setPage] = useState(Math.max(1, Number(searchParams.get("page") || 1) || 1));
   const [total, setTotal] = useState(0);
   const pageSize = 40;
@@ -64,6 +65,7 @@ export default function OrganizationsPage() {
     unverified: number;
     by_type: Record<string, number>;
     missing_owner: number;
+    trashed?: number;
   } | null>(null);
   const [createIdempotencyKey, setCreateIdempotencyKey] = useState(() => crypto.randomUUID());
   const [ownerQuery, setOwnerQuery] = useState("");
@@ -110,6 +112,7 @@ export default function OrganizationsPage() {
     if (verified !== "all") params.set("verified", verified);
     if (city.trim()) params.set("city", city.trim());
     if (country.trim()) params.set("country", country.trim());
+    if (trash === "yes") params.set("trash", "yes");
     const response = await adminFetch(`/api/admin/organizations?${params}`);
     const payload = (await response.json()) as {
       data?: OrganizationRow[];
@@ -122,6 +125,7 @@ export default function OrganizationsPage() {
         unverified: number;
         by_type: Record<string, number>;
         missing_owner: number;
+        trashed?: number;
       };
       error?: string;
     };
@@ -136,7 +140,7 @@ export default function OrganizationsPage() {
     } else {
       setLiveGiftTotals(await loadOrgLiveGiftTotals(orgs.map((o) => o.id)));
     }
-  }, [query, type, verified, city, country, page, pageSize]);
+  }, [query, type, verified, city, country, trash, page, pageSize]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -162,10 +166,11 @@ export default function OrganizationsPage() {
     if (verified !== "all") params.set("verified", verified);
     if (city.trim()) params.set("city", city.trim());
     if (country.trim()) params.set("country", country.trim());
+    if (trash === "yes") params.set("trash", "yes");
     if (page > 1) params.set("page", String(page));
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [debouncedQuery, type, verified, city, country, page, pathname, router]);
+  }, [debouncedQuery, type, verified, city, country, trash, page, pathname, router]);
 
   // Fetch once on mount and when page changes. Filters apply on Reload.
   useEffect(() => {
@@ -431,7 +436,7 @@ export default function OrganizationsPage() {
               { label: "Total", value: listSummary.total },
               { label: "Verified", value: listSummary.verified },
               { label: "Pending verification", value: listSummary.unverified },
-              { label: "Missing owner profile", value: listSummary.missing_owner },
+              { label: "Trash", value: listSummary.trashed ?? 0 },
             ].map((item) => (
               <div key={item.label} className="rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
                 <p className="text-xs text-text-secondary">{item.label}</p>
@@ -453,6 +458,36 @@ export default function OrganizationsPage() {
       ) : null}
 
       <AdminFilterPanel>
+        <div className="mb-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setTrash("");
+              setPage(1);
+            }}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+              trash !== "yes"
+                ? "bg-primary text-primary-foreground"
+                : "border border-border bg-card hover:bg-muted"
+            }`}
+          >
+            Active
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setTrash("yes");
+              setPage(1);
+            }}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+              trash === "yes"
+                ? "bg-primary text-primary-foreground"
+                : "border border-border bg-card hover:bg-muted"
+            }`}
+          >
+            Trash{listSummary?.trashed != null ? ` (${listSummary.trashed})` : ""}
+          </button>
+        </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <div className="sm:col-span-2">
             <AdminSearchInput
@@ -517,11 +552,13 @@ export default function OrganizationsPage() {
             <AdminLoadingRow label="Loading organizations…" compact className="py-10" />
           ) : rows.length === 0 ? (
             <AdminEmpty
-              title="No organizations"
+              title={trash === "yes" ? "Trash is empty" : "No organizations"}
               description={
-                canWrite
-                  ? "Add an organization, or wait for individuals to create them in the app."
-                  : "Organizations created in admin or the superapp appear here."
+                trash === "yes"
+                  ? "Soft-deleted organizations appear here with Restore and permanent delete."
+                  : canWrite
+                    ? "Add an organization, or wait for individuals to create them in the app."
+                    : "Organizations created in admin or the superapp appear here."
               }
             />
           ) : (
@@ -552,14 +589,26 @@ export default function OrganizationsPage() {
                         {row.is_platform ? (
                           <span className="text-[10px] font-medium text-primary">Platform</span>
                         ) : null}
+                        {row.deleted_at ? (
+                          <StatusBadge tone="danger">Trash</StatusBadge>
+                        ) : null}
                       </div>
                       <p className="truncate text-xs text-text-secondary">
-                        {[
-                          locationLabel(row.city, row.country),
-                          row.users?.display_name ? `Owner: ${row.users.display_name}` : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
+                        {trash === "yes"
+                          ? [
+                              row.deleted_at ? `Deleted ${formatDate(row.deleted_at)}` : null,
+                              row.deleted_by_user?.display_name
+                                ? `by ${row.deleted_by_user.display_name}`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")
+                          : [
+                              locationLabel(row.city, row.country),
+                              row.users?.display_name ? `Owner: ${row.users.display_name}` : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
                       </p>
                       <button
                         type="button"

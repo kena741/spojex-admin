@@ -20,6 +20,7 @@ export const AUDIT_ACTION_REGISTRY = [
   "network.remove_connection",
   "network.remove_follow",
   "permission.denied",
+  "purge",
   "reassign_owner",
   "reject",
   "restore",

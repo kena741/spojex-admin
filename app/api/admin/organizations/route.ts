@@ -45,13 +45,20 @@ export async function GET(request: Request) {
   const ownerUserId = (url.searchParams.get("owner_user_id") || "").trim();
   const city = (url.searchParams.get("city") || "").trim();
   const country = (url.searchParams.get("country") || "").trim();
+  const trash = url.searchParams.get("trash") || "";
   const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
   const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get("page_size") || 40) || 40));
 
   let query = auth.context.client
     .from("organizations")
-    .select("*, users:user_id(id, display_name, email, role, avatar_url)", { count: "exact" })
-    .order("updated_at", { ascending: false });
+    .select(
+      "*, users:user_id(id, display_name, email, role, avatar_url), deleted_by_user:deleted_by(id, display_name, email)",
+      { count: "exact" },
+    )
+    .order(trash === "yes" ? "deleted_at" : "updated_at", { ascending: false });
+
+  if (trash === "yes") query = query.not("deleted_at", "is", null);
+  else query = query.is("deleted_at", null);
 
   if (type !== "all") query = query.eq("organization_type", type);
   if (verified === "yes") query = query.eq("verified", true);

@@ -115,7 +115,9 @@ export default function OrganizationDetailPage() {
   const load = async () => {
     const { data, error: loadError } = await getSpojexClient()
       .from("organizations")
-      .select("*, users:user_id(id, display_name, email, role, avatar_url)")
+      .select(
+        "*, users:user_id(id, display_name, email, role, avatar_url), deleted_by_user:deleted_by(id, display_name, email)",
+      )
       .eq("id", id)
       .maybeSingle();
     if (loadError) throw loadError;
@@ -359,7 +361,10 @@ export default function OrganizationDetailPage() {
     const payload = (await dry.json()) as {
       dependencies?: Record<string, number | null>;
       can_delete?: boolean;
+      can_purge?: boolean;
       blocking?: Record<string, number>;
+      linked_content_count?: number;
+      message?: string;
       error?: string;
     };
     setDeps(payload.dependencies ?? null);
@@ -369,31 +374,87 @@ export default function OrganizationDetailPage() {
   const remove = async () => {
     if (!org || org.is_platform) return;
     const summary = await loadDeps();
-    const hard = Object.entries(summary.blocking ?? {}).filter(
-      ([, n]) => typeof n === "number" && n > 0,
-    );
-    if (hard.length || summary.can_delete === false) {
-      setError(
-        `Cannot delete while linked products/content exist: ${
-          hard.map(([k, n]) => `${k}=${n}`).join(", ") ||
-          Object.entries(summary.dependencies ?? {})
-            .filter(([k, n]) => ["gyms", "live_events", "sport_news"].includes(k) && Number(n) > 0)
-            .map(([k, n]) => `${k}=${n}`)
-            .join(", ")
-        }. Unlink first.`,
+    const linked = summary.linked_content_count
+      ?? Object.values(summary.dependencies ?? {}).reduce<number>(
+        (sum, n) => sum + (typeof n === "number" ? n : 0),
+        0,
       );
-      return;
-    }
-    const label = org.name?.trim() || org.public_id || "this organization";
-    if (!window.confirm(`Delete “${label}”? Memberships will be removed. This cannot be undone.`))
-      return;
+    const counts = Object.entries(summary.dependencies ?? {})
+      .filter(([, n]) => typeof n === "number" && n > 0)
+      .map(([k, n]) => `${k}: ${n}`)
+      .join(", ");
+    const confirmMsg =
+      linked > 0
+        ? `Move this item to Trash? Linked content will be preserved.\n\nLinked: ${counts || linked}`
+        : "Move this item to Trash? Linked content will be preserved.";
+    if (!window.confirm(confirmMsg)) return;
     setDeleting(true);
     setError(null);
     try {
       await deleteAdmin(`/api/admin/organizations/${id}`);
-      router.replace("/admin/organizations");
+      setNotice("Moved to Trash. Linked content was preserved.");
+      router.replace("/admin/organizations?trash=yes");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Delete failed");
+      setError(err instanceof Error ? err.message : "Move to Trash failed");
+      setDeleting(false);
+    }
+  };
+
+  const restoreOrg = async () => {
+    if (!org || !canWrite || org.is_platform) return;
+    if (!window.confirm(`Restore “${org.name}” from Trash?`)) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await adminFetch(`/api/admin/organizations/${id}/restore`, {
+        method: "POST",
+      });
+      const payload = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(payload.error || "Restore failed");
+      setNotice("Organization restored from Trash.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Restore failed");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const purgeOrg = async () => {
+    if (!org || !canWrite || org.is_platform || !org.deleted_at) return;
+    const summary = await loadDeps();
+    const hard = Object.entries(summary.blocking ?? {}).filter(
+      ([, n]) => typeof n === "number" && n > 0,
+    );
+    if (hard.length || summary.can_purge === false) {
+      setError(
+        `Permanent deletion blocked while linked content remains: ${
+          hard.map(([k, n]) => `${k}=${n}`).join(", ") || "see dependencies"
+        }. Reassign or unlink first. Financial and audit records are preserved.`,
+      );
+      return;
+    }
+    const typed = window.prompt(
+      `Permanently delete “${org.name}”? This cannot be undone.\nType the organization name to confirm:`,
+    );
+    if (typed === null) return;
+    if (typed.trim() !== org.name.trim()) {
+      setError("Permanent deletion cancelled — name did not match.");
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await adminFetch(`/api/admin/organizations/${id}/purge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm_name: org.name.trim() }),
+      });
+      const payload = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(payload.error || "Permanent delete failed");
+      router.replace("/admin/organizations?trash=yes");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Permanent delete failed");
       setDeleting(false);
     }
   };
@@ -545,6 +606,9 @@ export default function OrganizationDetailPage() {
               <StatusBadge tone={verifiedTone(org.verified)}>
                 {org.verified ? "Verified" : "Unverified"}
               </StatusBadge>
+              {org.deleted_at ? (
+                <StatusBadge tone="danger">In Trash</StatusBadge>
+              ) : null}
               {org.archived_at ? (
                 <span className="text-xs font-medium text-amber-700">Archived</span>
               ) : null}
@@ -1028,28 +1092,66 @@ export default function OrganizationDetailPage() {
                 </button>
               </div>
               <div className="border-t border-border pt-4">
-                <p className="text-sm text-text-secondary">
-                  Prefer archive when historical relationships exist. Delete only when dependency
-                  check shows no blocking linked products.
-                </p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    disabled={archiving || Boolean(org.archived_at)}
-                    onClick={() => void archiveOrg()}
-                    className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
-                  >
-                    {org.archived_at ? "Already archived" : archiving ? "Archiving…" : "Archive…"}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={deleting}
-                    onClick={() => void remove()}
-                    className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
-                  >
-                    {deleting ? "Deleting…" : "Delete…"}
-                  </button>
-                </div>
+                {org.deleted_at ? (
+                  <>
+                    <p className="text-sm text-text-secondary">
+                      In Trash since {formatDate(org.deleted_at)}
+                      {org.deleted_by_user?.display_name
+                        ? ` · by ${org.deleted_by_user.display_name}`
+                        : ""}
+                      . Linked content was preserved. Restore to make it public again, or
+                      permanently delete only after unlinking gyms, live events, and sports news.
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={deleting}
+                        onClick={() => void restoreOrg()}
+                        className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+                      >
+                        {deleting ? "Working…" : "Restore"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={deleting}
+                        onClick={() => void purgeOrg()}
+                        className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+                      >
+                        Delete permanently…
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-text-secondary">
+                      Move to Trash hides the organization from public listings while preserving
+                      linked sports news, gyms, and other content. Archive keeps it out of active
+                      directories without trashing.
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={archiving || Boolean(org.archived_at)}
+                        onClick={() => void archiveOrg()}
+                        className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+                      >
+                        {org.archived_at
+                          ? "Already archived"
+                          : archiving
+                            ? "Archiving…"
+                            : "Archive…"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={deleting}
+                        onClick={() => void remove()}
+                        className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+                      >
+                        {deleting ? "Moving…" : "Move to Trash…"}
+                      </button>
+                    </div>
+                  </>
+                )}
                 {deps ? (
                   <ul className="mt-3 text-xs text-text-secondary">
                     {Object.entries(deps).map(([k, v]) => (

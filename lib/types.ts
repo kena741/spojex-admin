@@ -178,9 +178,13 @@ export type OrganizationRow = {
   verified: boolean;
   is_platform?: boolean;
   archived_at?: string | null;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  delete_snapshot?: { verified?: boolean; archived_at?: string | null } | null;
   created_at: string;
   updated_at: string;
   users?: Pick<UserRow, "id" | "display_name" | "email" | "role" | "avatar_url"> | null;
+  deleted_by_user?: Pick<UserRow, "id" | "display_name" | "email"> | null;
   active_people_count?: number;
   live_gifts_received?: number;
   location_label?: string;

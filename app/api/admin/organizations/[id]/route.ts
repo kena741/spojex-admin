@@ -53,6 +53,62 @@ function pythonErrorMessage(payload: unknown): string {
   return p.error || p.message || "Request failed";
 }
 
+async function dependencySummary(
+  // Spojex client query builder — keep loosely typed to match PostgREST chain.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  client: { from: (table: string) => any },
+  id: string,
+) {
+  const deps: Record<string, number | null> = {};
+  const checks: Array<{ key: string; table: string; column: string }> = [
+    { key: "members", table: "organization_members", column: "organization_id" },
+    { key: "followers", table: "organization_follows", column: "organization_id" },
+    { key: "gyms", table: "gyms", column: "organization_id" },
+    { key: "live_events", table: "live_events", column: "host_org_id" },
+    { key: "sport_news", table: "sport_news", column: "organization_id" },
+    {
+      key: "chat_join_requests",
+      table: "organization_chat_join_requests",
+      column: "organization_id",
+    },
+  ];
+  for (const check of checks) {
+    try {
+      const { count, error } = await client
+        .from(check.table)
+        .select("*", { count: "exact", head: true })
+        .eq(check.column, id);
+      deps[check.key] = error ? null : count ?? 0;
+    } catch {
+      deps[check.key] = null;
+    }
+  }
+  const hardKeys = ["gyms", "live_events", "sport_news"] as const;
+  const blocking = Object.fromEntries(
+    hardKeys
+      .map((k) => [k, deps[k]] as const)
+      .filter(([, n]) => typeof n === "number" && n > 0),
+  );
+  const linkedTotal = Object.values(deps).reduce<number>(
+    (sum, n) => sum + (typeof n === "number" ? n : 0),
+    0,
+  );
+  return {
+    dependencies: deps,
+    blocking,
+    can_delete: true,
+    can_trash: true,
+    can_purge: Object.keys(blocking).length === 0,
+    linked_content_count: linkedTotal,
+    soft_cleanup: [] as string[],
+    preserves_links: true,
+    message:
+      linkedTotal > 0
+        ? "Move this item to Trash? Linked content will be preserved."
+        : "Move this item to Trash?",
+  };
+}
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const body = (await request.json()) as Record<string, unknown>;
   const { id } = await params;
@@ -93,6 +149,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   if (!existing) {
     return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+  }
+  if (existing.deleted_at) {
+    return NextResponse.json(
+      { error: "Restore this organization from Trash before editing." },
+      { status: 400 },
+    );
   }
 
   const reason = String(body.reason || body.verification_reason || "").trim();
@@ -188,13 +250,16 @@ export async function DELETE(
 
   const { data: existing, error: loadError } = await auth.context.client
     .from("organizations")
-    .select("id, name, public_id, is_platform")
+    .select("id, name, public_id, is_platform, verified, archived_at, deleted_at")
     .eq("id", id)
     .maybeSingle();
   if (loadError) {
     const hint = missingServiceRoleMessage();
+    const message = loadError.message.includes("deleted_at")
+      ? "Trash requires the latest database migration (deleted_at)."
+      : loadError.message;
     return NextResponse.json(
-      { error: hint ? `${loadError.message}. ${hint}` : loadError.message },
+      { error: hint ? `${message}. ${hint}` : message },
       { status: 400 },
     );
   }
@@ -208,84 +273,59 @@ export async function DELETE(
     );
   }
 
-  const deps: Record<string, number | null> = {};
-  const checks: Array<{ key: string; table: string; column: string }> = [
-    { key: "members", table: "organization_members", column: "organization_id" },
-    { key: "followers", table: "organization_follows", column: "organization_id" },
-    { key: "gyms", table: "gyms", column: "organization_id" },
-    { key: "live_events", table: "live_events", column: "host_org_id" },
-    { key: "sport_news", table: "sport_news", column: "organization_id" },
-    {
-      key: "chat_join_requests",
-      table: "organization_chat_join_requests",
-      column: "organization_id",
-    },
-  ];
-  for (const check of checks) {
-    try {
-      // Prefer * - organization_members has a composite PK without `id`.
-      const { count, error } = await auth.context.client
-        .from(check.table)
-        .select("*", { count: "exact", head: true })
-        .eq(check.column, id);
-      deps[check.key] = error ? null : count ?? 0;
-    } catch {
-      deps[check.key] = null;
-    }
-  }
-
-  const hardKeys = ["gyms", "live_events", "sport_news"] as const;
-  const blocking = Object.fromEntries(
-    hardKeys
-      .map((k) => [k, deps[k]] as const)
-      .filter(([, n]) => typeof n === "number" && n > 0),
-  );
+  const summary = await dependencySummary(auth.context.client, id);
 
   if (dryRun) {
     return NextResponse.json({
-      can_delete: Object.keys(blocking).length === 0,
-      dependencies: deps,
-      blocking,
+      ...summary,
       is_platform: false,
-      soft_cleanup: ["members", "followers", "chat_join_requests"],
+      name: existing.name,
+      already_deleted: Boolean(existing.deleted_at),
+      mode: "trash",
       source: "local",
     });
   }
 
-  if (Object.keys(blocking).length > 0) {
-    return NextResponse.json(
-      {
-        error: `Cannot delete “${existing.name}”: linked products or content still reference it.`,
-        dependencies: deps,
-        blocking,
-      },
-      { status: 400 },
-    );
+  if (existing.deleted_at) {
+    return NextResponse.json({
+      ok: true,
+      already_deleted: true,
+      deleted_at: existing.deleted_at,
+      dependencies: summary.dependencies,
+      mode: "trash",
+      source: "local",
+    });
   }
 
-  // Soft cleanup memberships/follows before org row delete
-  for (const table of [
-    "organization_chat_join_requests",
-    "organization_follows",
-    "organization_members",
-  ]) {
-    await auth.context.client.from(table).delete().eq("organization_id", id);
+  const now = new Date().toISOString();
+  const snapshot = {
+    verified: Boolean(existing.verified),
+    archived_at: existing.archived_at ?? null,
+  };
+  let deletedBy: string | null = null;
+  if (auth.context.staff?.user_id) {
+    const { data: actorUser } = await auth.context.client
+      .from("users")
+      .select("id")
+      .eq("user_id", auth.context.staff.user_id)
+      .maybeSingle();
+    deletedBy = actorUser?.id ?? null;
   }
 
-  const { error: deleteError } = await auth.context.client
+  const { error: updateError } = await auth.context.client
     .from("organizations")
-    .delete()
+    .update({
+      deleted_at: now,
+      deleted_by: deletedBy,
+      delete_snapshot: snapshot,
+      verified: false,
+      updated_at: now,
+    })
     .eq("id", id);
-  if (deleteError) {
+  if (updateError) {
     const hint = missingServiceRoleMessage();
-    const message = deleteError.message.includes("foreign key")
-      ? `Cannot delete “${existing.name}”: linked records still reference it (${deleteError.message}).`
-      : deleteError.message;
     return NextResponse.json(
-      {
-        error: hint ? `${message}. ${hint}` : message,
-        dependencies: deps,
-      },
+      { error: hint ? `${updateError.message}. ${hint}` : updateError.message },
       { status: 400 },
     );
   }
@@ -296,13 +336,24 @@ export async function DELETE(
     action: "delete",
     resource_type: "organization",
     resource_id: id,
-    summary: `Deleted organization ${String(existing.name ?? existing.public_id ?? id)}`,
+    summary: `Moved organization ${String(existing.name ?? existing.public_id ?? id)} to Trash`,
     metadata: {
       name: existing.name,
       public_id: existing.public_id,
-      dependencies: deps,
+      dependencies: summary.dependencies,
+      linked_content_count: summary.linked_content_count,
+      mode: "trash",
     },
   });
 
-  return NextResponse.json({ ok: true, source: "local" });
+  return NextResponse.json({
+    ok: true,
+    deleted_at: now,
+    deleted_by: deletedBy,
+    dependencies: summary.dependencies,
+    linked_content_count: summary.linked_content_count,
+    mode: "trash",
+    message: "Moved to Trash. Linked content was preserved.",
+    source: "local",
+  });
 }
