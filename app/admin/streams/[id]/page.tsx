@@ -257,9 +257,10 @@ export default function StreamDetailPage() {
 
   // Cleanup when leaving the page.
   useEffect(() => {
+    const audio = audioRef.current;
+    const intended = intendedPlayRef;
     return () => {
-      intendedPlayRef.current = false;
-      const audio = audioRef.current;
+      intended.current = false;
       if (audio) {
         audio.pause();
         audio.removeAttribute("src");
@@ -441,9 +442,21 @@ export default function StreamDetailPage() {
     />
   );
 
-  if (loading) return <AdminLoadingRow label="Loading station…" />;
+  if (loading) {
+    return (
+      <>
+        {audioElement}
+        <AdminLoadingRow label="Loading station…" />
+      </>
+    );
+  }
   if (!workspace || !form) {
-    return <AdminErrorAlert message={error || "Station not found"} />;
+    return (
+      <>
+        {audioElement}
+        <AdminErrorAlert message={error || "Station not found"} />
+      </>
+    );
   }
 
   const station = workspace.station;

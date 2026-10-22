@@ -62,45 +62,87 @@ export async function POST(request: Request) {
   const organizer =
     asText(body.organizer) || (hostOrgId ? "Spojex" : "");
 
-  const { data, error } = await auth.context.client
-    .from("live_events")
-    .insert({
-      name,
-      kind,
-      slug: `${slugBase}-${Date.now().toString(36).slice(-6)}`,
-      starts_at: startsAt,
-      ends_at: asText(body.ends_at) || null,
-      status: status && liveEventStatusIds.has(status) ? status : "scheduled",
-      thumbnail_url: asText(body.thumbnail_url),
-      stream_url: asText(body.stream_url),
-      stream_kind: streamKind,
-      replay_url: asText(body.replay_url),
-      location: asText(body.location),
-      organizer,
-      competition: asText(body.competition),
-      stadium: asText(body.stadium),
-      home_name: asText(body.home_name),
-      away_name: asText(body.away_name),
-      home_logo_url: asText(body.home_logo_url),
-      away_logo_url: asText(body.away_logo_url),
-      fighter_a: asText(body.fighter_a),
-      fighter_b: asText(body.fighter_b),
-      fighter_a_photo_url: asText(body.fighter_a_photo_url),
-      fighter_b_photo_url: asText(body.fighter_b_photo_url),
-      weight_class: asText(body.weight_class),
-      total_rounds: asInt(body.total_rounds, 5),
-      description: typeof body.description === "string" ? body.description : "",
-      chat_enabled: body.chat_enabled !== false,
-      host_org_id: hostOrgId,
-    })
-    .select()
-    .single();
-  if (error) {
-    const hint = missingServiceRoleMessage();
+  const sourceTypeRaw = asText(body.source_type) || "external_url";
+  const sourceType =
+    sourceTypeRaw === "mock_dev"
+      ? "mock_dev"
+      : sourceTypeRaw === "ingest"
+        ? "external_url" // ingest not available — fall back
+        : "external_url";
+  const visibility = asText(body.visibility) === "private" ? "private" : "public";
+  const timezone = asText(body.timezone) || "Africa/Addis_Ababa";
+  const streamUrl = asText(body.stream_url);
+  const sourceReady =
+    body.source_ready === true || (sourceType !== "mock_dev" && Boolean(streamUrl));
+
+  if (sourceTypeRaw === "ingest") {
     return NextResponse.json(
-      { error: hint ? `${error.message}. ${hint}` : error.message },
+      {
+        error:
+          "Broadcaster ingest is not available yet. Use an external playback URL or a development mock source.",
+      },
       { status: 400 },
     );
   }
-  return NextResponse.json({ data });
+
+  const baseRow = {
+    name,
+    kind,
+    slug: `${slugBase}-${Date.now().toString(36).slice(-6)}`,
+    starts_at: startsAt,
+    ends_at: asText(body.ends_at) || null,
+    status: status && liveEventStatusIds.has(status) ? status : "scheduled",
+    thumbnail_url: asText(body.thumbnail_url),
+    stream_url: streamUrl,
+    stream_kind: streamKind,
+    replay_url: asText(body.replay_url),
+    location: asText(body.location),
+    organizer,
+    competition: asText(body.competition),
+    stadium: asText(body.stadium),
+    home_name: asText(body.home_name),
+    away_name: asText(body.away_name),
+    home_logo_url: asText(body.home_logo_url),
+    away_logo_url: asText(body.away_logo_url),
+    fighter_a: asText(body.fighter_a),
+    fighter_b: asText(body.fighter_b),
+    fighter_a_photo_url: asText(body.fighter_a_photo_url),
+    fighter_b_photo_url: asText(body.fighter_b_photo_url),
+    weight_class: asText(body.weight_class),
+    total_rounds: asInt(body.total_rounds, 5),
+    description: typeof body.description === "string" ? body.description : "",
+    chat_enabled: body.chat_enabled !== false,
+    host_org_id: hostOrgId,
+  };
+
+  let insert = await auth.context.client
+    .from("live_events")
+    .insert({
+      ...baseRow,
+      visibility,
+      timezone,
+      source_type: sourceType,
+      source_ready: sourceReady,
+    })
+    .select()
+    .single();
+
+  // Pre-migration DBs may lack readiness columns — retry without them.
+  if (
+    insert.error &&
+    /visibility|timezone|source_type|source_ready|column .* does not exist/i.test(
+      insert.error.message,
+    )
+  ) {
+    insert = await auth.context.client.from("live_events").insert(baseRow).select().single();
+  }
+
+  if (insert.error) {
+    const hint = missingServiceRoleMessage();
+    return NextResponse.json(
+      { error: hint ? `${insert.error.message}. ${hint}` : insert.error.message },
+      { status: 400 },
+    );
+  }
+  return NextResponse.json({ data: insert.data });
 }

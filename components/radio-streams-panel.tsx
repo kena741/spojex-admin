@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AdminEmpty,
@@ -214,7 +214,10 @@ export default function RadioStreamsPanel() {
   const [importResult, setImportResult] = useState<ImportPayload | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
 
-  const requestSeq = useRef(0);
+  const [reloadKey, setReloadKey] = useState(0);
+  const load = useCallback(async () => {
+    setReloadKey((key) => key + 1);
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 300);
@@ -238,9 +241,8 @@ export default function RadioStreamsPanel() {
       });
   }, []);
 
-  const load = useCallback(async () => {
-    const seq = ++requestSeq.current;
-    setLoading(true);
+  useEffect(() => {
+    let cancelled = false;
     const params = new URLSearchParams();
     if (debouncedQuery) params.set("q", debouncedQuery);
     if (status !== "all") params.set("status", status);
@@ -252,25 +254,26 @@ export default function RadioStreamsPanel() {
     params.set("page_size", String(PAGE_SIZE));
     params.set("sort", sort);
     params.set("order", order);
-    try {
-      const response = await adminFetch(`/api/admin/streams/radio?${params}`);
-      const payload = (await response.json().catch(() => ({}))) as ListPayload;
-      if (seq !== requestSeq.current) return;
-      if (!response.ok) throw new Error(payload.error || "Failed to load stations");
-      setRows(payload.data ?? []);
-      setTotal(payload.total ?? payload.data?.length ?? 0);
-      setError(null);
-    } catch (err) {
-      if (seq !== requestSeq.current) return;
-      setError(err instanceof Error ? err.message : "Failed to load stations");
-    } finally {
-      if (seq === requestSeq.current) setLoading(false);
-    }
-  }, [debouncedQuery, status, genre, organization, health, featured, sort, order, page]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+    setLoading(true);
+    adminFetch(`/api/admin/streams/radio?${params}`)
+      .then(async (response) => {
+        const payload = (await response.json().catch(() => ({}))) as ListPayload;
+        if (cancelled) return;
+        if (!response.ok) throw new Error(payload.error || "Failed to load stations");
+        setRows(payload.data ?? []);
+        setTotal(payload.total ?? payload.data?.length ?? 0);
+        setError(null);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load stations");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedQuery, status, genre, organization, health, featured, sort, order, page, reloadKey]);
 
   const orgName = useCallback(
     (row: RadioListRow) =>

@@ -123,6 +123,7 @@ export default function LiveEventsPanel() {
   const [kind, setKind] = useState("all");
   const [status, setStatus] = useState(searchParams.get("status") || "all");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const [createOpen, setCreateOpen] = useState(false);
   const [step, setStep] = useState(0);
@@ -180,6 +181,11 @@ export default function LiveEventsPanel() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -494,7 +500,7 @@ export default function LiveEventsPanel() {
                 const source = sourceBadge(row);
                 const secondsToStart =
                   row.status === "scheduled"
-                    ? Math.round((new Date(row.starts_at).getTime() - Date.now()) / 1000)
+                    ? Math.round((new Date(row.starts_at).getTime() - now) / 1000)
                     : null;
                 const host = orgName(row);
                 return (

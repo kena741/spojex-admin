@@ -48,6 +48,12 @@ const allowed = [
   "host_org_id",
   "default_duration_minutes",
   "round_ends_at",
+  "visibility",
+  "timezone",
+  "source_type",
+  "source_ready",
+  "actual_started_at",
+  "actual_ended_at",
 ] as const;
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
