@@ -12,7 +12,7 @@ import {
   AdminModal,
   AdminSearchInput,
   AdminSelect,
-  AdminTableActions,
+  AdminRowMenu,
   AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
@@ -550,41 +550,17 @@ export default function EventsPage() {
                         )}
                       </td>
                       <td className="px-4 py-3 align-middle">
-                        {canWrite ? (
-                          <button
-                            type="button"
-                            onClick={() => toggleUpcoming(row)}
-                            className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${
-                              row.is_upcoming
-                                ? "bg-emerald-100 text-emerald-800"
-                                : "bg-muted text-text-secondary hover:bg-muted/80"
-                            }`}
-                          >
-                            {row.is_upcoming ? "On" : "Off"}
-                          </button>
-                        ) : row.is_upcoming ? (
+                        {row.is_upcoming ? (
                           <StatusBadge tone="success">On</StatusBadge>
                         ) : (
-                          <span className="text-xs text-text-secondary">—</span>
+                          <span className="text-xs text-text-secondary">Off</span>
                         )}
                       </td>
                       <td className="px-4 py-3 align-middle">
-                        {canWrite ? (
-                          <button
-                            type="button"
-                            onClick={() => toggleFeatured(row)}
-                            className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${
-                              row.is_featured
-                                ? "bg-violet-100 text-violet-800"
-                                : "bg-muted text-text-secondary hover:bg-muted/80"
-                            }`}
-                          >
-                            {row.is_featured ? "On" : "Off"}
-                          </button>
-                        ) : row.is_featured ? (
+                        {row.is_featured ? (
                           <StatusBadge tone="info">On</StatusBadge>
                         ) : (
-                          <span className="text-xs text-text-secondary">—</span>
+                          <span className="text-xs text-text-secondary">Off</span>
                         )}
                       </td>
                       <td className="px-4 py-3 align-middle">
@@ -593,17 +569,40 @@ export default function EventsPage() {
                         </StatusBadge>
                       </td>
                       <td className="px-4 py-3 align-middle">
-                        <div className="flex flex-nowrap items-center gap-2">
-                          <Link
-                            href={`/admin/events/${row.id}`}
-                            className="whitespace-nowrap rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
-                          >
-                            Open
-                          </Link>
-                          {canWrite ? (
-                            <AdminTableActions canWrite onDelete={() => remove(row)} />
-                          ) : null}
-                        </div>
+                        <AdminRowMenu
+                          aria-label={`Actions for ${row.name}`}
+                          items={[
+                            {
+                              id: "view",
+                              label: "View event",
+                              href: `/admin/events/${row.id}`,
+                            },
+                            ...(canWrite
+                              ? [
+                                  {
+                                    id: "upcoming",
+                                    label: row.is_upcoming
+                                      ? "Remove upcoming promo"
+                                      : "Mark upcoming promo",
+                                    onClick: () => toggleUpcoming(row),
+                                    separatorBefore: true,
+                                  },
+                                  {
+                                    id: "featured",
+                                    label: row.is_featured ? "Unfeature" : "Feature on app",
+                                    onClick: () => toggleFeatured(row),
+                                  },
+                                  {
+                                    id: "delete",
+                                    label: "Delete",
+                                    onClick: () => remove(row),
+                                    tone: "danger" as const,
+                                    separatorBefore: true,
+                                  },
+                                ]
+                              : []),
+                          ]}
+                        />
                       </td>
                     </tr>
                   );

@@ -334,8 +334,7 @@ export default function StadiumsPage() {
                   <th className="px-4 py-3 font-semibold">Location</th>
                   <th className="px-4 py-3 font-semibold">Owner / operator</th>
                   <th className="px-4 py-3 font-semibold">Status</th>
-                  <th className="px-4 py-3 font-semibold">Open</th>
-                  {canWrite ? <th className="px-4 py-3 font-semibold">More</th> : null}
+                  <th className="px-4 py-3 font-semibold">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -343,7 +342,7 @@ export default function StadiumsPage() {
                   const cover = stadiumCoverUrl(row);
                   const holders = subscribersByStadium[row.id] ?? [];
                   const open = expandedId === row.id;
-                  const colSpan = canWrite ? 8 : 7;
+                  const colSpan = 7;
                   return (
                     <Fragment key={row.id}>
                   <tr className="border-b border-border last:border-0 hover:bg-muted/30">
@@ -428,27 +427,22 @@ export default function StadiumsPage() {
                       <StatusBadge tone={requestTone(row.status)}>{stadiumStatusLabel(row.status)}</StatusBadge>
                     </td>
                     <td className="px-4 py-3">
-                      <Link
-                        href={`/admin/stadiums/${row.id}`}
-                        onClick={rememberReturn}
-                        className="text-sm font-medium text-primary hover:underline"
-                      >
-                        Open venue
-                      </Link>
-                    </td>
-                    {canWrite ? (
-                      <td className="px-4 py-3">
-                        <AdminTableActions
+                      <AdminTableActions
+                        canWrite={canWrite}
+                        deleting={deletingId === row.id}
+                        viewHref={`/admin/stadiums/${row.id}`}
+                        onView={rememberReturn}
+                        onEdit={
                           canWrite
-                          deleting={deletingId === row.id}
-                          onEdit={() => {
-                            setCreating(false);
-                            setEditing(row);
-                          }}
-                          onDelete={() => void remove(row)}
-                        />
-                      </td>
-                    ) : null}
+                            ? () => {
+                                setCreating(false);
+                                setEditing(row);
+                              }
+                            : undefined
+                        }
+                        onDelete={canWrite ? () => void remove(row) : undefined}
+                      />
+                    </td>
                   </tr>
                   {open ? (
                     <tr className="border-b border-border last:border-0">
