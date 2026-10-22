@@ -2749,6 +2749,9 @@ function FinanceTab({
           return;
         }
         setData(payload);
+        if (payload.upstream_warning && payload.source === "local") {
+          setError(null);
+        }
       } catch (err) {
         if (!cancelled) setError(errorMessage(err, "Failed to load finance"));
       } finally {

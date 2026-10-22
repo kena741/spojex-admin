@@ -679,6 +679,10 @@ export type GymFinanceTxn = {
 };
 
 export type GymFinance = {
+  ok?: boolean;
+  source?: string;
+  upstream_warning?: string | null;
+  error?: string;
   period?: { days?: number; label?: string; timezone?: string };
   customer_collections?: {
     verified_gross?: string | null;
