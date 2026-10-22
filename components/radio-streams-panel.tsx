@@ -495,31 +495,24 @@ export default function RadioStreamsPanel() {
         </div>
       ) : null}
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-text-secondary">
-          <strong className="font-medium text-text-primary">Publication</strong> (on air / off air)
-          is configuration. <strong className="font-medium text-text-primary">Playback health</strong>{" "}
-          comes from the last probe.
-        </p>
-        {canWrite ? (
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => void openImport()}
-              className="h-10 rounded-md border border-border bg-card px-4 text-sm font-medium hover:bg-muted"
-            >
-              Import Ethiopian stations
-            </button>
-            <button
-              type="button"
-              onClick={openCreate}
-              className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"
-            >
-              New station
-            </button>
-          </div>
-        ) : null}
-      </div>
+      {canWrite ? (
+        <div className="mb-4 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => void openImport()}
+            className="h-10 rounded-md border border-border bg-card px-4 text-sm font-medium hover:bg-muted"
+          >
+            Import Ethiopian stations
+          </button>
+          <button
+            type="button"
+            onClick={openCreate}
+            className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"
+          >
+            New station
+          </button>
+        </div>
+      ) : null}
 
       <AdminFilterPanel>
         <AdminSearchInput

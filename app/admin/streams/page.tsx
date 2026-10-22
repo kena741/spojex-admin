@@ -154,9 +154,6 @@ function StreamsOverviewCards({ enabled }: { enabled: boolean }) {
           }
         />
       </div>
-      {overview?.config_vs_health ? (
-        <p className="mt-2 text-[11px] text-text-secondary">{overview.config_vs_health}</p>
-      ) : null}
     </section>
   );
 }
