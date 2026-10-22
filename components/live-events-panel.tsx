@@ -9,6 +9,7 @@ import {
   AdminFilterPanel,
   AdminLoadingRow,
   AdminModal,
+  AdminReloadButton,
   AdminRowMenu,
   AdminSearchInput,
   AdminSelect,
@@ -28,6 +29,7 @@ import {
   isFightKind,
   isScoreKind,
   liveEventKinds,
+  liveEventLanes,
   liveEventStatuses,
   liveKindLabel,
   liveSourceTypeLabel,
@@ -121,9 +123,11 @@ export default function LiveEventsPanel() {
   const [notice, setNotice] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState("all");
+  const [lane, setLane] = useState(searchParams.get("lane") || "all");
   const [status, setStatus] = useState(searchParams.get("status") || "all");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const [laneCounts, setLaneCounts] = useState<Record<string, number>>({});
 
   const [createOpen, setCreateOpen] = useState(false);
   const [step, setStep] = useState(0);
@@ -136,26 +140,34 @@ export default function LiveEventsPanel() {
 
   const devSources = isDevelopmentBuild || showDevSources;
 
-  const load = useCallback(async () => {
-    const response = await adminFetch("/api/admin/live-events");
+  const load = useCallback(async (activeLane = lane) => {
+    const params = new URLSearchParams();
+    if (activeLane && activeLane !== "all") params.set("lane", activeLane);
+    const qs = params.toString();
+    const response = await adminFetch(`/api/admin/live-events${qs ? `?${qs}` : ""}`);
     const payload = (await response.json().catch(() => ({}))) as {
       data?: LiveEventRow[];
+      lanes?: Record<string, number>;
       error?: string;
     };
     if (!response.ok) throw new Error(payload.error || "Failed to load");
     setRows(payload.data ?? []);
-  }, []);
+    if (payload.lanes) setLaneCounts(payload.lanes);
+  }, [lane]);
 
   useEffect(() => {
     if (!canManageLiveEvents(can)) {
       setLoading(false);
       return;
     }
-    load()
+    setLoading(true);
+    setError(null);
+    load(lane)
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
       .finally(() => setLoading(false));
+    // Refetch when lane changes; search/kind/status filter client-side.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [can, lane]);
 
   useEffect(() => {
     getSpojexClient()
@@ -173,14 +185,24 @@ export default function LiveEventsPanel() {
   useEffect(() => {
     const next = new URLSearchParams(searchParams.toString());
     next.set("tab", "live");
-    if (status !== "all") next.set("status", status);
+    if (lane !== "all") next.set("lane", lane);
+    else next.delete("lane");
+    if (status !== "all" && lane === "all") next.set("status", status);
     else next.delete("status");
     const nextString = next.toString();
     if (nextString !== searchParams.toString()) {
       router.replace(`/admin/streams?${nextString}`, { scroll: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [lane, status]);
+
+  const reload = () => {
+    setLoading(true);
+    setError(null);
+    load()
+      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
@@ -188,10 +210,12 @@ export default function LiveEventsPanel() {
   }, []);
 
   const filtered = useMemo(() => {
+    // Server already applies lane/status/kind/q when Python BFF is up;
+    // keep a light client filter for local fallback responses.
     const q = query.trim().toLowerCase();
     return rows.filter((row) => {
       if (kind !== "all" && row.kind !== kind) return false;
-      if (status !== "all" && row.status !== status) return false;
+      if (lane === "all" && status !== "all" && row.status !== status) return false;
       if (!q) return true;
       return [
         row.name,
@@ -205,7 +229,7 @@ export default function LiveEventsPanel() {
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q));
     });
-  }, [kind, query, rows, status]);
+  }, [kind, lane, query, rows, status]);
 
   const orgName = (row: LiveEventRow) =>
     orgs.find((org) => org.id === row.host_org_id)?.name ?? null;
@@ -438,8 +462,56 @@ export default function LiveEventsPanel() {
         tab: scheduled matches, fights, shows and streams. A countdown reaching zero never means
         the event is live - it needs an explicit go-live.
       </p>
-      {canWrite ? (
-        <div className="mb-4 flex justify-end">
+      <div className="mb-3 flex flex-wrap gap-2">
+        {liveEventLanes.map((item) => {
+          const count = item.id === "all" ? undefined : laneCounts[item.id];
+          const active = lane === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => {
+                setLane(item.id);
+                setStatus("all");
+              }}
+              className={
+                active
+                  ? "rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+                  : "rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-text-secondary hover:bg-muted"
+              }
+            >
+              {item.label}
+              {count != null ? ` (${count})` : ""}
+            </button>
+          );
+        })}
+      </div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <AdminFilterPanel>
+          <AdminSearchInput value={query} onChange={setQuery} placeholder="Search events" />
+          <div className="flex flex-wrap gap-2">
+            <AdminSelect value={kind} onChange={setKind}>
+              <option value="all">All kinds</option>
+              {liveEventKinds.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </AdminSelect>
+            {lane === "all" ? (
+              <AdminSelect value={status} onChange={setStatus}>
+                <option value="all">All statuses</option>
+                {liveEventStatuses.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </AdminSelect>
+            ) : null}
+            <AdminReloadButton onClick={reload} loading={loading} />
+          </div>
+        </AdminFilterPanel>
+        {canWrite ? (
           <button
             type="button"
             onClick={openCreate}
@@ -447,29 +519,8 @@ export default function LiveEventsPanel() {
           >
             New live event
           </button>
-        </div>
-      ) : null}
-      <AdminFilterPanel>
-        <AdminSearchInput value={query} onChange={setQuery} placeholder="Search events" />
-        <div className="flex flex-wrap gap-2">
-          <AdminSelect value={kind} onChange={setKind}>
-            <option value="all">All kinds</option>
-            {liveEventKinds.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </AdminSelect>
-          <AdminSelect value={status} onChange={setStatus}>
-            <option value="all">All statuses</option>
-            {liveEventStatuses.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </AdminSelect>
-        </div>
-      </AdminFilterPanel>
+        ) : null}
+      </div>
       {loading ? <AdminLoadingRow label="Loading live events…" /> : null}
       {error ? <AdminErrorAlert message={error} /> : null}
       {notice ? (

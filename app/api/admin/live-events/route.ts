@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAnyAdminPermission } from "@/lib/admin-auth";
+import { getSpojexApiBaseUrl } from "@/lib/env";
 import {
   asInt,
   asText,
@@ -10,19 +11,61 @@ import {
   liveStreamKindIds,
   slugifyLiveEvent,
 } from "@/lib/live-events";
+import { requestAccessToken } from "@/lib/spojex/server";
 
-export async function GET() {
+export const dynamic = "force-dynamic";
+
+export async function GET(request: Request) {
   const auth = await requireAnyAdminPermission(["events:read", "streams:read"]);
   if (!auth.ok) return auth.error;
-  const { data, error } = await auth.context.client
+
+  const { searchParams } = new URL(request.url);
+  const qs = new URLSearchParams();
+  for (const key of ["q", "status", "lane", "kind", "page", "page_size", "sort", "order"]) {
+    const value = searchParams.get(key);
+    if (value) qs.set(key, value);
+  }
+
+  const token = await requestAccessToken();
+  if (token) {
+    try {
+      const res = await fetch(
+        `${getSpojexApiBaseUrl()}/api/v1/admin/streams/live-events?${qs.toString()}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        },
+      );
+      const payload = await res.json().catch(() => ({}));
+      if (res.ok) {
+        return NextResponse.json({ ...payload, source: "python" });
+      }
+    } catch {
+      // fall through to local Supabase
+    }
+  }
+
+  let query = auth.context.client
     .from("live_events")
     .select("*")
     .order("starts_at", { ascending: false })
     .limit(200);
+  const status = searchParams.get("status");
+  const lane = searchParams.get("lane");
+  const kind = searchParams.get("kind");
+  if (status && status !== "all") query = query.eq("status", status);
+  if (kind && kind !== "all") query = query.eq("kind", kind);
+  if (lane === "live_now") query = query.in("status", ["live", "connecting", "reconnecting", "suspended"]);
+  if (lane === "upcoming") query = query.in("status", ["draft", "scheduled", "postponed"]);
+  if (lane === "ended") query = query.eq("status", "finished");
+  if (lane === "failed") query = query.eq("status", "failed");
+  if (lane === "cancelled") query = query.eq("status", "cancelled");
+
+  const { data, error } = await query;
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
-  return NextResponse.json({ data: data ?? [] });
+  return NextResponse.json({ data: data ?? [], source: "local" });
 }
 
 export async function POST(request: Request) {
@@ -59,8 +102,7 @@ export async function POST(request: Request) {
     hostOrgId = platform?.id ?? null;
   }
 
-  const organizer =
-    asText(body.organizer) || (hostOrgId ? "Spojex" : "");
+  const organizer = asText(body.organizer) || (hostOrgId ? "Spojex" : "");
 
   const sourceTypeRaw = asText(body.source_type) || "external_url";
   const sourceType =
@@ -123,6 +165,8 @@ export async function POST(request: Request) {
       timezone,
       source_type: sourceType,
       source_ready: sourceReady,
+      category: asText(body.category) || kind,
+      language: asText(body.language) || "en",
     })
     .select()
     .single();
@@ -130,7 +174,7 @@ export async function POST(request: Request) {
   // Pre-migration DBs may lack readiness columns - retry without them.
   if (
     insert.error &&
-    /visibility|timezone|source_type|source_ready|column .* does not exist/i.test(
+    /visibility|timezone|source_type|source_ready|category|language|column .* does not exist/i.test(
       insert.error.message,
     )
   ) {

@@ -9,11 +9,25 @@ export const liveEventKinds = [
 ] as const;
 
 export const liveEventStatuses = [
+  { id: "draft", label: "Draft" },
   { id: "scheduled", label: "Scheduled" },
+  { id: "connecting", label: "Connecting" },
   { id: "live", label: "Live" },
+  { id: "reconnecting", label: "Reconnecting" },
   { id: "suspended", label: "Paused" },
   { id: "postponed", label: "Postponed" },
   { id: "finished", label: "Finished" },
+  { id: "cancelled", label: "Cancelled" },
+  { id: "failed", label: "Failed" },
+] as const;
+
+/** Admin ops lanes for Live Events list. */
+export const liveEventLanes = [
+  { id: "all", label: "All" },
+  { id: "live_now", label: "Live Now" },
+  { id: "upcoming", label: "Upcoming" },
+  { id: "ended", label: "Ended" },
+  { id: "failed", label: "Failed" },
   { id: "cancelled", label: "Cancelled" },
 ] as const;
 
@@ -169,7 +183,18 @@ export function formatCountdown(seconds?: number | null) {
 }
 
 export type LiveLifecycleAction = {
-  id: "go_live" | "pause" | "postpone" | "finish" | "cancel" | "reschedule";
+  id:
+    | "go_live"
+    | "connect"
+    | "pause"
+    | "postpone"
+    | "finish"
+    | "terminate"
+    | "cancel"
+    | "fail"
+    | "reschedule"
+    | "mark_draft"
+    | "check_health";
   target: string;
   label: string;
   reasonRequired: boolean;
@@ -178,33 +203,51 @@ export type LiveLifecycleAction = {
 
 export const liveLifecycleActions: LiveLifecycleAction[] = [
   { id: "go_live", target: "live", label: "Go live", reasonRequired: false, tone: "success" },
+  { id: "connect", target: "connecting", label: "Mark connecting", reasonRequired: false },
   { id: "pause", target: "suspended", label: "Pause", reasonRequired: true },
   { id: "postpone", target: "postponed", label: "Postpone", reasonRequired: true },
   { id: "finish", target: "finished", label: "Finish", reasonRequired: false },
+  {
+    id: "terminate",
+    target: "finished",
+    label: "Terminate stream",
+    reasonRequired: true,
+    tone: "danger",
+  },
+  { id: "fail", target: "failed", label: "Mark failed", reasonRequired: true, tone: "danger" },
   { id: "reschedule", target: "scheduled", label: "Back to scheduled", reasonRequired: false },
+  { id: "mark_draft", target: "draft", label: "Move to draft", reasonRequired: false },
   { id: "cancel", target: "cancelled", label: "Cancel event", reasonRequired: true, tone: "danger" },
+  { id: "check_health", target: "", label: "Check source health", reasonRequired: false },
 ];
 
 /** Mirrors the backend transition table; workspace.lifecycle.allowed_transitions wins when present. */
 export const liveStatusTransitions: Record<string, string[]> = {
-  scheduled: ["live", "postponed", "cancelled"],
-  live: ["suspended", "finished", "cancelled"],
-  suspended: ["live", "finished", "cancelled", "postponed"],
+  draft: ["scheduled", "cancelled"],
+  scheduled: ["connecting", "live", "postponed", "cancelled"],
+  connecting: ["live", "reconnecting", "failed", "cancelled", "scheduled"],
+  live: ["suspended", "reconnecting", "finished", "cancelled", "failed"],
+  reconnecting: ["live", "failed", "finished", "cancelled", "suspended"],
+  suspended: ["live", "finished", "cancelled", "postponed", "connecting"],
   postponed: ["scheduled", "live", "cancelled"],
   finished: [],
   cancelled: [],
+  failed: ["scheduled", "cancelled"],
 };
 
 export function allowedLifecycleActions(status?: string | null, transitions?: string[] | null) {
   const targets =
     transitions && transitions.length > 0 ? transitions : (liveStatusTransitions[status ?? ""] ?? []);
-  return liveLifecycleActions
-    .filter((action) => targets.includes(action.target))
+  const actions = liveLifecycleActions
+    .filter((action) => action.id === "check_health" || targets.includes(action.target))
     .map((action) =>
       action.id === "go_live" && status === "suspended"
         ? { ...action, label: "Resume live" }
         : action,
     );
+  // Prefer terminate over finish when both map to finished.
+  const hasTerminate = actions.some((a) => a.id === "terminate");
+  return hasTerminate ? actions.filter((a) => a.id !== "finish") : actions;
 }
 
 function zoneOffsetMs(timestamp: number, timeZone: string) {
