@@ -711,8 +711,6 @@ function RadioChatPage() {
         ) : null}
       </div>
 
-      {loading ? <AdminLoadingRow label="Loading Radio Chat…" /> : null}
-
       {tab === "messages" ? (
         <>
           <AdminFilterPanel>
@@ -804,7 +802,9 @@ function RadioChatPage() {
             onScroll={onListScroll}
             className="max-h-[70vh] overflow-y-auto rounded-xl border border-border bg-card"
           >
-            {!loading && displayMessages.length === 0 ? (
+            {loading ? (
+              <AdminLoadingRow label="Loading messages…" compact className="py-10" />
+            ) : displayMessages.length === 0 ? (
               <AdminEmpty
                 title={
                   q || reported || dateFrom || dateTo || msgStatus !== "all"
@@ -924,7 +924,9 @@ function RadioChatPage() {
             </AdminFilterPanel>
 
             <div className="rounded-xl border border-border bg-card">
-              {!loading && (reportsPayload?.groups.length ?? 0) === 0 ? (
+              {loading ? (
+                <AdminLoadingRow label="Loading reports…" compact className="py-10" />
+              ) : (reportsPayload?.groups.length ?? 0) === 0 ? (
                 <AdminEmpty
                   title={
                     reportStatus === "unresolved" || reportStatus === "open"

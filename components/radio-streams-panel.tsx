@@ -9,9 +9,11 @@ import {
   AdminLoadingRow,
   AdminModal,
   AdminModalFooter,
+  AdminReloadButton,
   AdminRowMenu,
   AdminSearchInput,
   AdminSelect,
+  AdminTableLoading,
   AdminTableShell,
   type AdminRowMenuItem,
 } from "@/components/admin-layout";
@@ -495,24 +497,30 @@ export default function RadioStreamsPanel() {
         </div>
       ) : null}
 
-      {canWrite ? (
-        <div className="mb-4 flex flex-wrap justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => void openImport()}
-            className="h-10 rounded-md border border-border bg-card px-4 text-sm font-medium hover:bg-muted"
-          >
-            Import Ethiopian stations
-          </button>
-          <button
-            type="button"
-            onClick={openCreate}
-            className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"
-          >
-            New station
-          </button>
-        </div>
-      ) : null}
+      <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
+        <AdminReloadButton
+          loading={loading}
+          onClick={() => setReloadKey((key) => key + 1)}
+        />
+        {canWrite ? (
+          <>
+            <button
+              type="button"
+              onClick={() => void openImport()}
+              className="h-10 rounded-md border border-border bg-card px-4 text-sm font-medium hover:bg-muted"
+            >
+              Import Ethiopian stations
+            </button>
+            <button
+              type="button"
+              onClick={openCreate}
+              className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"
+            >
+              New station
+            </button>
+          </>
+        ) : null}
+      </div>
 
       <AdminFilterPanel>
         <AdminSearchInput
@@ -585,18 +593,8 @@ export default function RadioStreamsPanel() {
         </div>
       </AdminFilterPanel>
 
-      {loading ? <AdminLoadingRow label="Loading stations…" /> : null}
       <AdminTableShell>
-        {rows.length === 0 && !loading ? (
-          <AdminEmpty
-            title={hasFilters ? "No stations match these filters" : "No stations yet"}
-            description={
-              hasFilters
-                ? "Try clearing a filter."
-                : "Create a station with a stream URL, or import the Ethiopian catalog."
-            }
-          />
-        ) : (
+        <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
               <tr>
@@ -610,7 +608,23 @@ export default function RadioStreamsPanel() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => {
+              {loading ? (
+                <AdminTableLoading colSpan={7} label="Loading stations…" />
+              ) : rows.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-0">
+                    <AdminEmpty
+                      title={hasFilters ? "No stations match these filters" : "No stations yet"}
+                      description={
+                        hasFilters
+                          ? "Try clearing a filter."
+                          : "Create a station with a stream URL, or import the Ethiopian catalog."
+                      }
+                    />
+                  </td>
+                </tr>
+              ) : (
+              rows.map((row) => {
                 const healthStatus = row.playback_health?.status || "unknown";
                 const enabled = row.publication?.enabled ?? row.status === "active";
                 const name = orgName(row);
@@ -695,10 +709,11 @@ export default function RadioStreamsPanel() {
                     </td>
                   </tr>
                 );
-              })}
+              })
+              )}
             </tbody>
           </table>
-        )}
+        </div>
       </AdminTableShell>
 
       {total > 0 ? (

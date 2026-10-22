@@ -9,6 +9,7 @@ import {
   AdminErrorAlert,
   AdminFilterPanel,
   AdminLoadingRow,
+  AdminReloadButton,
   AdminSearchInput,
   AdminSelect,
   AdminStatCard,
@@ -235,6 +236,7 @@ export default function RequestsPage() {
       <AdminPageHeader
         title="Bookings"
         description="Manage service appointments and requests. Booking status and payment status stay separate."
+        actions={<AdminReloadButton loading={loading} onClick={() => void load()} />}
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -347,13 +349,18 @@ export default function RequestsPage() {
         )}
       </AdminFilterPanel>
 
-      {loading ? <AdminLoadingRow label="Loading bookings…" /> : null}
+      {loading ? (
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <AdminLoadingRow label="Loading bookings…" compact className="py-10" />
+        </div>
+      ) : null}
+
       {!loading && ok && rows.length === 0 && !error ? (
-        <AdminEmpty title="No bookings" description="Nothing matches these filters." />
+        <AdminEmpty title="No bookings" description="Nothing matches these filters. Adjust filters and Reload." />
       ) : null}
 
       {/* Mobile cards */}
-      {rows.length > 0 ? (
+      {!loading && rows.length > 0 ? (
         <ul className="space-y-3 md:hidden">
           {rows.map((row) => (
             <li key={row.id} className="rounded-xl border border-border bg-card p-4 shadow-sm">
@@ -408,7 +415,7 @@ export default function RequestsPage() {
       ) : null}
 
       {/* Desktop rich list */}
-      {rows.length > 0 ? (
+      {!loading && rows.length > 0 ? (
         <div className="hidden md:block">
         <AdminTableShell>
           <ul className="divide-y divide-border">

@@ -60,7 +60,8 @@ export default function FinancePayoutsPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { can } = useAdminPermissions();
-  const canResolveWithdrawals = can("withdrawals:write") || can("requests:write");
+  const canResolveWithdrawals =
+    can("withdrawals:write") || can("requests:write");
   const canResolveCoins = can("coins:write");
 
   const typeFilter = searchParams.get("type") || "all";
@@ -105,39 +106,55 @@ export default function FinancePayoutsPage() {
           .limit(300),
       ]);
       if (wRes.error) throw wRes.error;
-      if (cRes.error && !/does not exist|schema cache/i.test(cRes.error.message)) throw cRes.error;
+      if (
+        cRes.error &&
+        !/does not exist|schema cache/i.test(cRes.error.message)
+      )
+        throw cRes.error;
 
-      const withdrawals: PayoutRow[] = (wRes.data ?? []).map((r: Record<string, unknown>) => ({
-        id: String(r.id),
-        type: "withdrawal" as const,
-        user_id: String(r.user_id),
-        amount: Number(r.amount || 0),
-        currency: "ETB",
-        status: String(r.status),
-        created_at: String(r.created_at),
-        updated_at: String(r.updated_at),
-        bank_name: r.bank_name ? String(r.bank_name) : undefined,
-        account_number: r.account_number ? String(r.account_number) : undefined,
-        admin_note: r.admin_note ? String(r.admin_note) : undefined,
-        users: (r.users as PayoutRow["users"]) ?? null,
-      }));
-      const redemptions: PayoutRow[] = (cRes.data ?? []).map((r: Record<string, unknown>) => ({
-        id: String(r.id),
-        type: "coin_redemption" as const,
-        user_id: String(r.user_id),
-        amount: Number(r.etb_amount || 0),
-        coins: Number(r.coins || 0),
-        etb_per_coin: Number(r.etb_per_coin || 0),
-        currency: "ETB",
-        status: String(r.status),
-        created_at: String(r.created_at),
-        updated_at: String(r.updated_at),
-        bank_name: r.bank_name ? String(r.bank_name) : undefined,
-        account_number: r.account_number ? String(r.account_number) : undefined,
-        admin_note: r.admin_note ? String(r.admin_note) : undefined,
-        users: (r.users as PayoutRow["users"]) ?? null,
-      }));
-      setRows([...withdrawals, ...redemptions].sort((a, b) => b.created_at.localeCompare(a.created_at)));
+      const withdrawals: PayoutRow[] = (wRes.data ?? []).map(
+        (r: Record<string, unknown>) => ({
+          id: String(r.id),
+          type: "withdrawal" as const,
+          user_id: String(r.user_id),
+          amount: Number(r.amount || 0),
+          currency: "ETB",
+          status: String(r.status),
+          created_at: String(r.created_at),
+          updated_at: String(r.updated_at),
+          bank_name: r.bank_name ? String(r.bank_name) : undefined,
+          account_number: r.account_number
+            ? String(r.account_number)
+            : undefined,
+          admin_note: r.admin_note ? String(r.admin_note) : undefined,
+          users: (r.users as PayoutRow["users"]) ?? null,
+        }),
+      );
+      const redemptions: PayoutRow[] = (cRes.data ?? []).map(
+        (r: Record<string, unknown>) => ({
+          id: String(r.id),
+          type: "coin_redemption" as const,
+          user_id: String(r.user_id),
+          amount: Number(r.etb_amount || 0),
+          coins: Number(r.coins || 0),
+          etb_per_coin: Number(r.etb_per_coin || 0),
+          currency: "ETB",
+          status: String(r.status),
+          created_at: String(r.created_at),
+          updated_at: String(r.updated_at),
+          bank_name: r.bank_name ? String(r.bank_name) : undefined,
+          account_number: r.account_number
+            ? String(r.account_number)
+            : undefined,
+          admin_note: r.admin_note ? String(r.admin_note) : undefined,
+          users: (r.users as PayoutRow["users"]) ?? null,
+        }),
+      );
+      setRows(
+        [...withdrawals, ...redemptions].sort((a, b) =>
+          b.created_at.localeCompare(a.created_at),
+        ),
+      );
       setOk(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load payouts");
@@ -155,7 +172,8 @@ export default function FinancePayoutsPage() {
     const query = q.trim().toLowerCase();
     return rows.filter((row) => {
       if (typeFilter !== "all" && row.type !== typeFilter) return false;
-      if (statusFilter !== "all" && row.status.toLowerCase() !== statusFilter) return false;
+      if (statusFilter !== "all" && row.status.toLowerCase() !== statusFilter)
+        return false;
       if (!query) return true;
       return [row.users?.display_name, row.users?.email, row.id, row.bank_name]
         .filter(Boolean)
@@ -164,7 +182,8 @@ export default function FinancePayoutsPage() {
   }, [q, rows, statusFilter, typeFilter]);
 
   const markPaid = async (row: PayoutRow) => {
-    const canAct = row.type === "withdrawal" ? canResolveWithdrawals : canResolveCoins;
+    const canAct =
+      row.type === "withdrawal" ? canResolveWithdrawals : canResolveCoins;
     if (!canAct) return;
     const ref = window.prompt(
       "Transfer reference (required). Marking paid records an external transfer - it does not send money.",
@@ -194,7 +213,8 @@ export default function FinancePayoutsPage() {
   };
 
   const reject = async (row: PayoutRow) => {
-    const canAct = row.type === "withdrawal" ? canResolveWithdrawals : canResolveCoins;
+    const canAct =
+      row.type === "withdrawal" ? canResolveWithdrawals : canResolveCoins;
     if (!canAct) return;
     const reason = window.prompt("Rejection reason (required):");
     if (!reason?.trim()) return;
@@ -229,8 +249,8 @@ export default function FinancePayoutsPage() {
       />
 
       <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-text-secondary">
-        “Mark paid” confirms you already transferred funds outside Spojex. It does not execute a bank
-        transfer.
+        “Mark paid” confirms you already transferred funds outside Spojex. It
+        does not execute a bank transfer.
       </p>
 
       {error ? (
@@ -255,7 +275,9 @@ export default function FinancePayoutsPage() {
           />
           <AdminSelect
             value={typeFilter}
-            onChange={(value) => writeParams({ type: value === "all" ? null : value })}
+            onChange={(value) =>
+              writeParams({ type: value === "all" ? null : value })
+            }
           >
             <option value="all">All request types</option>
             <option value="withdrawal">Provider withdrawals</option>
@@ -263,7 +285,9 @@ export default function FinancePayoutsPage() {
           </AdminSelect>
           <AdminSelect
             value={statusFilter}
-            onChange={(value) => writeParams({ status: value === "all" ? null : value })}
+            onChange={(value) =>
+              writeParams({ status: value === "all" ? null : value })
+            }
           >
             <option value="all">All statuses</option>
             <option value="pending">Pending</option>
@@ -273,74 +297,108 @@ export default function FinancePayoutsPage() {
         </div>
       </AdminFilterPanel>
 
-      {loading ? <AdminLoadingRow label="Loading payouts…" /> : null}
       {!loading && ok && filtered.length === 0 && !error ? (
-        <AdminEmpty title="No payout requests" description="Nothing matches these filters." />
+        <AdminEmpty
+          title="No payout requests"
+          description="Nothing matches these filters."
+        />
       ) : null}
 
-      {filtered.length > 0 ? (
+      {loading || filtered.length > 0 ? (
         <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <ul className="divide-y divide-border">
-            {filtered.map((row) => (
-              <li key={`${row.type}-${row.id}`}>
-                <button
-                  type="button"
-                  onClick={() => setSelected(row)}
-                  className={cn(
-                    "flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/40",
-                    selected?.id === row.id && selected.type === row.type && "bg-secondary/50",
-                  )}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-sm font-medium">
-                        {row.users?.display_name || row.user_id.slice(0, 8)}
+          {loading ? (
+            <AdminLoadingRow
+              label="Loading payouts…"
+              compact
+              className="py-10"
+            />
+          ) : (
+            <ul className="divide-y divide-border">
+              {filtered.map((row) => (
+                <li key={`${row.type}-${row.id}`}>
+                  <button
+                    type="button"
+                    onClick={() => setSelected(row)}
+                    className={cn(
+                      "flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/40",
+                      selected?.id === row.id &&
+                        selected.type === row.type &&
+                        "bg-secondary/50",
+                    )}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate text-sm font-medium">
+                          {row.users?.display_name || row.user_id.slice(0, 8)}
+                        </p>
+                        <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-medium uppercase text-primary">
+                          {row.type === "withdrawal"
+                            ? "Withdrawal"
+                            : "Coin redemption"}
+                        </span>
+                      </div>
+                      <p className="truncate text-xs text-text-secondary">
+                        {row.bank_name || "Bank"} ·{" "}
+                        {maskAccount(row.account_number)} ·{" "}
+                        {ageLabel(row.created_at)} old
                       </p>
-                      <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-medium uppercase text-primary">
-                        {row.type === "withdrawal" ? "Withdrawal" : "Coin redemption"}
-                      </span>
                     </div>
-                    <p className="truncate text-xs text-text-secondary">
-                      {row.bank_name || "Bank"} · {maskAccount(row.account_number)} ·{" "}
-                      {ageLabel(row.created_at)} old
-                    </p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-sm font-semibold tabular-nums">{money(row.amount)}</p>
-                    {row.coins != null ? (
-                      <p className="text-[10px] text-text-hint">
-                        {row.coins} coins @ {row.etb_per_coin}/coin
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-semibold tabular-nums">
+                        {money(row.amount)}
                       </p>
-                    ) : null}
-                    <StatusBadge tone={requestTone(row.status)}>{row.status}</StatusBadge>
-                  </div>
-                </button>
-              </li>
-            ))}
-          </ul>
+                      {row.coins != null ? (
+                        <p className="text-[10px] text-text-hint">
+                          {row.coins} coins @ {row.etb_per_coin}/coin
+                        </p>
+                      ) : null}
+                      <StatusBadge tone={requestTone(row.status)}>
+                        {row.status}
+                      </StatusBadge>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       ) : null}
 
       {selected ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={() => setSelected(null)}>
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-black/30"
+          onClick={() => setSelected(null)}
+        >
           <aside
             className="h-full w-full max-w-md overflow-y-auto border-l border-border bg-card p-5 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="font-heading text-sm font-semibold">Payout request</h3>
-            <p className="mt-1 text-xs text-text-hint font-mono break-all">{selected.id}</p>
+            <h3 className="font-heading text-sm font-semibold">
+              Payout request
+            </h3>
+            <p className="mt-1 text-xs text-text-hint font-mono break-all">
+              {selected.id}
+            </p>
             <dl className="mt-4 space-y-2 text-xs">
               <div className="flex justify-between gap-2">
                 <dt className="text-text-hint">Requester</dt>
                 <dd>
-                  <Link href={`/admin/people/${selected.user_id}`} className="text-primary hover:underline">
-                    {selected.users?.display_name || selected.user_id.slice(0, 8)}
+                  <Link
+                    href={`/admin/people/${selected.user_id}`}
+                    className="text-primary hover:underline"
+                  >
+                    {selected.users?.display_name ||
+                      selected.user_id.slice(0, 8)}
                   </Link>
                 </dd>
               </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-text-hint">Type</dt>
-                <dd>{selected.type === "withdrawal" ? "Provider withdrawal" : "Coin redemption"}</dd>
+                <dd>
+                  {selected.type === "withdrawal"
+                    ? "Provider withdrawal"
+                    : "Coin redemption"}
+                </dd>
               </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-text-hint">Amount</dt>

@@ -5,7 +5,7 @@ import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
   AdminErrorAlert,
-  AdminLoadingRow,
+  AdminTableLoading,
   AdminTableShell,
 } from "@/components/admin-layout";
 import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
@@ -225,7 +225,6 @@ export default function ServiceSettingsPage() {
           </button>
         </form>
       ) : null}
-      {loading ? <AdminLoadingRow label="Loading service categories…" /> : null}
       <AdminTableShell>
         {rows.length === 0 && !loading ? (
           <AdminEmpty
@@ -245,7 +244,9 @@ export default function ServiceSettingsPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => {
+                {loading ? (
+                  <AdminTableLoading colSpan={canWrite ? 5 : 4} label="Loading service categories…" />
+                ) : rows.map((row) => {
                   const isEditing = editingId === row.id && draft;
                   const sport = isEditing ? draft.is_sport : row.is_sport !== false;
                   return (

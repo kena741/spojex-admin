@@ -7,8 +7,8 @@ import {
   AdminEmpty,
   AdminErrorAlert,
   AdminFilterPanel,
-  AdminLoadingRow,
   AdminSearchInput,
+  AdminTableLoading,
   AdminTableShell,
 } from "@/components/admin-layout";
 import type { WalletRow } from "@/lib/types";
@@ -56,28 +56,33 @@ export default function WalletsPage() {
       <AdminFilterPanel>
         <AdminSearchInput value={query} onChange={setQuery} placeholder="Search provider" />
       </AdminFilterPanel>
-      {loading ? <AdminLoadingRow label="Loading wallets…" /> : null}
       {error ? <AdminErrorAlert message={error} /> : null}
       <AdminTableShell>
-        {filtered.length === 0 && !loading ? (
-          <AdminEmpty
-            title="No wallets yet"
-            description="A wallet appears after a provider completes a paid booking."
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+              <tr>
+                <th className="px-4 py-3 font-semibold">Provider</th>
+                <th className="px-4 py-3 font-semibold">Available</th>
+                <th className="px-4 py-3 font-semibold">Lifetime earned</th>
+                <th className="px-4 py-3 font-semibold">Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <AdminTableLoading colSpan={4} label="Loading wallets…" />
+              ) : filtered.length === 0 ? (
                 <tr>
-                  <th className="px-4 py-3 font-semibold">Provider</th>
-                  <th className="px-4 py-3 font-semibold">Available</th>
-                  <th className="px-4 py-3 font-semibold">Lifetime earned</th>
-                  <th className="px-4 py-3 font-semibold">Updated</th>
+                  <td colSpan={4} className="p-0">
+                    <AdminEmpty
+                      title="No wallets yet"
+                      description="A wallet appears after a provider completes a paid booking."
+                    />
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filtered.map((row) => (
-                  <tr key={row.user_id} className="border-b border-border last:border-0">
+              ) : (
+                filtered.map((row) => (
+                  <tr key={row.user_id} className="border-b border-border last:border-0 hover:bg-muted/40">
                     <td className="px-4 py-3">
                       <Link href={`/admin/finance/wallets/${row.user_id}`} className="font-medium text-primary">
                         {row.users?.display_name || row.users?.full_name || row.user_id.slice(0, 8)}
@@ -90,11 +95,11 @@ export default function WalletsPage() {
                     <td className="px-4 py-3">{money(row.lifetime_earned, row.currency)}</td>
                     <td className="px-4 py-3 text-text-secondary">{formatDate(row.updated_at)}</td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </AdminTableShell>
     </>
   );

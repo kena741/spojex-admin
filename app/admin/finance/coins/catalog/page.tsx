@@ -6,7 +6,7 @@ import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
   AdminErrorAlert,
-  AdminLoadingRow,
+  AdminTableLoading,
   AdminTableShell,
 } from "@/components/admin-layout";
 import { adminFetch, deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
@@ -86,7 +86,9 @@ export default function CoinCatalogPage() {
   const [giftEmoji, setGiftEmoji] = useState("🎁");
   const [giftCoins, setGiftCoins] = useState("10");
 
-  const applySettingsPayload = (raw: Record<string, unknown> | null | undefined) => {
+  const applySettingsPayload = (
+    raw: Record<string, unknown> | null | undefined,
+  ) => {
     if (!raw) return;
     const etb = Number(raw.etb_per_coin);
     if (Number.isFinite(etb) && etb > 0) {
@@ -115,10 +117,16 @@ export default function CoinCatalogPage() {
         adminFetch("/api/admin/coin-settings"),
         spojex
           .from("coin_purchases")
-          .select("id,user_id,coins,price_etb,status,provider_ref,paid_at,created_at")
+          .select(
+            "id,user_id,coins,price_etb,status,provider_ref,paid_at,created_at",
+          )
           .order("created_at", { ascending: false })
           .limit(25),
-        spojex.from("app_settings").select("id,data").eq("id", "payment").maybeSingle(),
+        spojex
+          .from("app_settings")
+          .select("id,data")
+          .eq("id", "payment")
+          .maybeSingle(),
       ]);
     if (packRes.error) throw packRes.error;
     if (giftRes.error) throw giftRes.error;
@@ -128,7 +136,10 @@ export default function CoinCatalogPage() {
       setPurchases((purchaseRes.data ?? []) as CoinPurchaseRow[]);
     }
     if (settingsHttp.ok) {
-      const settingsPayload = (await settingsHttp.json()) as Record<string, unknown>;
+      const settingsPayload = (await settingsHttp.json()) as Record<
+        string,
+        unknown
+      >;
       applySettingsPayload(settingsPayload);
     } else {
       const fallback = await spojex
@@ -158,14 +169,17 @@ export default function CoinCatalogPage() {
       enabled: Boolean(chapaCfg.enable || chapaCfg.isActive),
       hasPublicKey: Boolean(String(chapaCfg.publicKey || "").trim()),
       hasSecretKey: Boolean(
-        chapaCfg.secretConfigured === true || String(chapaCfg.secretKey || "").trim(),
+        chapaCfg.secretConfigured === true ||
+        String(chapaCfg.secretKey || "").trim(),
       ),
     });
   };
 
   useEffect(() => {
     load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : "Failed to load"),
+      )
       .finally(() => setLoading(false));
   }, []);
 
@@ -204,7 +218,7 @@ export default function CoinCatalogPage() {
       const rate = 1 / perBirr;
       await syncPackPrices(rate);
       setNotice(
-        `Saved: 1 Birr = ${perBirr} coins. Pack prices now use coins × ${(rate).toFixed(4)} ETB.`,
+        `Saved: 1 Birr = ${perBirr} coins. Pack prices now use coins × ${rate.toFixed(4)} ETB.`,
       );
       await load();
     } catch (err) {
@@ -248,7 +262,9 @@ export default function CoinCatalogPage() {
       );
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save redeem limits");
+      setError(
+        err instanceof Error ? err.message : "Could not save redeem limits",
+      );
     }
   };
 
@@ -316,9 +332,27 @@ export default function CoinCatalogPage() {
       }
       if (gifts.length === 0) {
         const starters = [
-          { name: "Clap", slug: "clap", emoji: "👏", coin_value: 5, sort_order: 10 },
-          { name: "Fire", slug: "fire", emoji: "🔥", coin_value: 15, sort_order: 20 },
-          { name: "Trophy", slug: "trophy", emoji: "🏆", coin_value: 50, sort_order: 30 },
+          {
+            name: "Clap",
+            slug: "clap",
+            emoji: "👏",
+            coin_value: 5,
+            sort_order: 10,
+          },
+          {
+            name: "Fire",
+            slug: "fire",
+            emoji: "🔥",
+            coin_value: 15,
+            sort_order: 20,
+          },
+          {
+            name: "Trophy",
+            slug: "trophy",
+            emoji: "🏆",
+            coin_value: 50,
+            sort_order: 30,
+          },
         ];
         for (const gift of starters) {
           await postAdmin("/api/admin/coin-gifts", gift);
@@ -377,16 +411,23 @@ export default function CoinCatalogPage() {
       <section className="mb-6 rounded-xl border border-border bg-card p-4 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="mb-1 font-heading text-sm font-semibold">Chapa coin purchases</h2>
+            <h2 className="mb-1 font-heading text-sm font-semibold">
+              Chapa coin purchases
+            </h2>
             <p className="text-sm text-text-secondary">
-              Active packs are sold in the mobile wallet via Chapa. Configure keys under Payment
-              Settings, then users pay ETB and receive purchased coins.
+              Active packs are sold in the mobile wallet via Chapa. Configure
+              keys under Payment Settings, then users pay ETB and receive
+              purchased coins.
             </p>
           </div>
           <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs">
             <div>
               Status:{" "}
-              <span className={chapa.enabled ? "text-emerald-700" : "text-amber-700"}>
+              <span
+                className={
+                  chapa.enabled ? "text-emerald-700" : "text-amber-700"
+                }
+              >
                 {chapa.enabled ? "Enabled" : "Disabled"}
               </span>
             </div>
@@ -397,15 +438,19 @@ export default function CoinCatalogPage() {
       </section>
 
       <section className="mb-6 rounded-xl border border-border bg-card p-4 shadow-sm">
-        <h2 className="mb-3 font-heading text-sm font-semibold">Coin ↔ Birr rate</h2>
+        <h2 className="mb-3 font-heading text-sm font-semibold">
+          Coin ↔ Birr rate
+        </h2>
         <p className="mb-3 text-sm text-text-secondary">
-          Pack prices and custom buys use this rate: ETB = coins ÷ coins-per-Birr
-          (bonus coins are free). After Chapa pays, credited coins = paid Birr × this
-          rate (+ pack bonus).
+          Pack prices and custom buys use this rate: ETB = coins ÷
+          coins-per-Birr (bonus coins are free). After Chapa pays, credited
+          coins = paid Birr × this rate (+ pack bonus).
         </p>
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm">
-            <span className="mb-1 block text-text-secondary">Coins per 1 Birr</span>
+            <span className="mb-1 block text-text-secondary">
+              Coins per 1 Birr
+            </span>
             <input
               type="number"
               min={0.01}
@@ -428,8 +473,8 @@ export default function CoinCatalogPage() {
         </div>
         {Number(coinsPerBirr) > 0 ? (
           <p className="mt-2 text-xs text-text-secondary">
-            Example: 2 Birr → {Math.floor(2 * Number(coinsPerBirr))} coins · 1 coin ={" "}
-            {(1 / Number(coinsPerBirr)).toFixed(2)} ETB
+            Example: 2 Birr → {Math.floor(2 * Number(coinsPerBirr))} coins · 1
+            coin = {(1 / Number(coinsPerBirr)).toFixed(2)} ETB
           </p>
         ) : null}
       </section>
@@ -441,8 +486,8 @@ export default function CoinCatalogPage() {
               Redeem / withdraw limits
             </h2>
             <p className="text-sm text-text-secondary">
-              Controls mobile coin cash-out requests. Users redeem received coins; admin
-              pays or rejects under{" "}
+              Controls mobile coin cash-out requests. Users redeem received
+              coins; admin pays or rejects under{" "}
               <Link href="/admin/coin-redemptions" className="underline">
                 Coin redemptions
               </Link>
@@ -452,7 +497,9 @@ export default function CoinCatalogPage() {
         </div>
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm">
-            <span className="mb-1 block text-text-secondary">Min coins / request</span>
+            <span className="mb-1 block text-text-secondary">
+              Min coins / request
+            </span>
             <input
               type="number"
               min={1}
@@ -478,7 +525,9 @@ export default function CoinCatalogPage() {
             />
           </label>
           <label className="text-sm">
-            <span className="mb-1 block text-text-secondary">Max pending requests</span>
+            <span className="mb-1 block text-text-secondary">
+              Max pending requests
+            </span>
             <input
               type="number"
               min={1}
@@ -501,13 +550,16 @@ export default function CoinCatalogPage() {
         </div>
       </section>
 
-      {loading ? <AdminLoadingRow label="Loading catalog…" /> : null}
-
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
-          <h2 className="mb-3 font-heading text-sm font-semibold">Coin packs</h2>
+          <h2 className="mb-3 font-heading text-sm font-semibold">
+            Coin packs
+          </h2>
           {canWrite ? (
-            <form onSubmit={createPackage} className="mb-4 grid gap-2 md:grid-cols-2">
+            <form
+              onSubmit={createPackage}
+              className="mb-4 grid gap-2 md:grid-cols-2"
+            >
               <input
                 value={packName}
                 onChange={(e) => setPackName(e.target.value)}
@@ -544,25 +596,39 @@ export default function CoinCatalogPage() {
             </form>
           ) : null}
           <AdminTableShell>
-            {packages.length === 0 ? (
-              <AdminEmpty title="No packs" description="Add Chapa buy packs." />
-            ) : (
-              <table className="min-w-full text-left text-sm">
-                <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+            <table className="min-w-full text-left text-sm">
+              <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+                <tr>
+                  <th className="px-3 py-2">Name</th>
+                  <th className="px-3 py-2">Coins</th>
+                  <th className="px-3 py-2">ETB</th>
+                  <th className="px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <AdminTableLoading colSpan={4} label="Loading coin packs…" />
+                ) : packages.length === 0 ? (
                   <tr>
-                    <th className="px-3 py-2">Name</th>
-                    <th className="px-3 py-2">Coins</th>
-                    <th className="px-3 py-2">ETB</th>
-                    <th className="px-3 py-2" />
+                    <td colSpan={4} className="p-0">
+                      <AdminEmpty
+                        title="No packs"
+                        description="Add Chapa buy packs."
+                      />
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {packages.map((row) => (
-                    <tr key={row.id} className="border-b border-border last:border-0">
+                ) : (
+                  packages.map((row) => (
+                    <tr
+                      key={row.id}
+                      className="border-b border-border last:border-0"
+                    >
                       <td className="px-3 py-2 font-medium">
                         {row.name}
                         {!row.is_active ? (
-                          <span className="ml-2 text-xs text-text-secondary">off</span>
+                          <span className="ml-2 text-xs text-text-secondary">
+                            off
+                          </span>
                         ) : null}
                       </td>
                       <td className="px-3 py-2">
@@ -571,7 +637,9 @@ export default function CoinCatalogPage() {
                       </td>
                       <td className="px-3 py-2">
                         {priceForCoins(row.coins)}
-                        {Math.abs(Number(row.price_etb) - priceForCoins(row.coins)) > 0.01 ? (
+                        {Math.abs(
+                          Number(row.price_etb) - priceForCoins(row.coins),
+                        ) > 0.01 ? (
                           <span className="ml-1 text-xs text-text-secondary">
                             (was {row.price_etb})
                           </span>
@@ -584,9 +652,12 @@ export default function CoinCatalogPage() {
                               type="button"
                               className="text-xs text-primary"
                               onClick={() =>
-                                void patchAdmin(`/api/admin/coin-packages/${row.id}`, {
-                                  is_active: !row.is_active,
-                                }).then(load)
+                                void patchAdmin(
+                                  `/api/admin/coin-packages/${row.id}`,
+                                  {
+                                    is_active: !row.is_active,
+                                  },
+                                ).then(load)
                               }
                             >
                               {row.is_active ? "Disable" : "Enable"}
@@ -595,7 +666,9 @@ export default function CoinCatalogPage() {
                               type="button"
                               className="text-xs text-red-600"
                               onClick={() =>
-                                void deleteAdmin(`/api/admin/coin-packages/${row.id}`).then(load)
+                                void deleteAdmin(
+                                  `/api/admin/coin-packages/${row.id}`,
+                                ).then(load)
                               }
                             >
                               Delete
@@ -604,17 +677,22 @@ export default function CoinCatalogPage() {
                         ) : null}
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+                  ))
+                )}
+              </tbody>
+            </table>
           </AdminTableShell>
         </section>
 
         <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
-          <h2 className="mb-3 font-heading text-sm font-semibold">Gift catalog</h2>
+          <h2 className="mb-3 font-heading text-sm font-semibold">
+            Gift catalog
+          </h2>
           {canWrite ? (
-            <form onSubmit={createGift} className="mb-4 grid gap-2 md:grid-cols-3">
+            <form
+              onSubmit={createGift}
+              className="mb-4 grid gap-2 md:grid-cols-3"
+            >
               <input
                 value={giftEmoji}
                 onChange={(e) => setGiftEmoji(e.target.value)}
@@ -645,24 +723,38 @@ export default function CoinCatalogPage() {
             </form>
           ) : null}
           <AdminTableShell>
-            {gifts.length === 0 ? (
-              <AdminEmpty title="No gifts" description="Add emoji gifts fans can send." />
-            ) : (
-              <table className="min-w-full text-left text-sm">
-                <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+            <table className="min-w-full text-left text-sm">
+              <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+                <tr>
+                  <th className="px-3 py-2">Gift</th>
+                  <th className="px-3 py-2">Coins</th>
+                  <th className="px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <AdminTableLoading colSpan={3} label="Loading gifts…" />
+                ) : gifts.length === 0 ? (
                   <tr>
-                    <th className="px-3 py-2">Gift</th>
-                    <th className="px-3 py-2">Coins</th>
-                    <th className="px-3 py-2" />
+                    <td colSpan={3} className="p-0">
+                      <AdminEmpty
+                        title="No gifts"
+                        description="Add emoji gifts fans can send."
+                      />
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {gifts.map((row) => (
-                    <tr key={row.id} className="border-b border-border last:border-0">
+                ) : (
+                  gifts.map((row) => (
+                    <tr
+                      key={row.id}
+                      className="border-b border-border last:border-0"
+                    >
                       <td className="px-3 py-2 font-medium">
                         {row.emoji} {row.name}
                         {!row.is_active ? (
-                          <span className="ml-2 text-xs text-text-secondary">off</span>
+                          <span className="ml-2 text-xs text-text-secondary">
+                            off
+                          </span>
                         ) : null}
                       </td>
                       <td className="px-3 py-2">{row.coin_value}</td>
@@ -673,9 +765,12 @@ export default function CoinCatalogPage() {
                               type="button"
                               className="text-xs text-primary"
                               onClick={() =>
-                                void patchAdmin(`/api/admin/coin-gifts/${row.id}`, {
-                                  is_active: !row.is_active,
-                                }).then(load)
+                                void patchAdmin(
+                                  `/api/admin/coin-gifts/${row.id}`,
+                                  {
+                                    is_active: !row.is_active,
+                                  },
+                                ).then(load)
                               }
                             >
                               {row.is_active ? "Disable" : "Enable"}
@@ -684,7 +779,9 @@ export default function CoinCatalogPage() {
                               type="button"
                               className="text-xs text-red-600"
                               onClick={() =>
-                                void deleteAdmin(`/api/admin/coin-gifts/${row.id}`).then(load)
+                                void deleteAdmin(
+                                  `/api/admin/coin-gifts/${row.id}`,
+                                ).then(load)
                               }
                             >
                               Delete
@@ -693,39 +790,52 @@ export default function CoinCatalogPage() {
                         ) : null}
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+                  ))
+                )}
+              </tbody>
+            </table>
           </AdminTableShell>
         </section>
       </div>
 
       <section className="mt-6 rounded-xl border border-border bg-card p-4 shadow-sm">
-        <h2 className="mb-3 font-heading text-sm font-semibold">Recent Chapa purchases</h2>
+        <h2 className="mb-3 font-heading text-sm font-semibold">
+          Recent Chapa purchases
+        </h2>
         <AdminTableShell>
-          {purchases.length === 0 ? (
-            <AdminEmpty
-              title="No purchases yet"
-              description="Completed and pending coin buys from the app appear here."
-            />
-          ) : (
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+          <table className="min-w-full text-left text-sm">
+            <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+              <tr>
+                <th className="px-3 py-2">When</th>
+                <th className="px-3 py-2">Coins</th>
+                <th className="px-3 py-2">ETB</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Tx ref</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <AdminTableLoading colSpan={5} label="Loading purchases…" />
+              ) : purchases.length === 0 ? (
                 <tr>
-                  <th className="px-3 py-2">When</th>
-                  <th className="px-3 py-2">Coins</th>
-                  <th className="px-3 py-2">ETB</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Tx ref</th>
+                  <td colSpan={5} className="p-0">
+                    <AdminEmpty
+                      title="No purchases yet"
+                      description="Completed and pending coin buys from the app appear here."
+                    />
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {purchases.map((row) => (
-                  <tr key={row.id} className="border-b border-border last:border-0">
+              ) : (
+                purchases.map((row) => (
+                  <tr
+                    key={row.id}
+                    className="border-b border-border last:border-0"
+                  >
                     <td className="px-3 py-2 text-text-secondary">
                       {row.paid_at || row.created_at
-                        ? new Date(row.paid_at || row.created_at).toLocaleString()
+                        ? new Date(
+                            row.paid_at || row.created_at,
+                          ).toLocaleString()
                         : "-"}
                     </td>
                     <td className="px-3 py-2 font-medium">{row.coins}</td>
@@ -735,10 +845,10 @@ export default function CoinCatalogPage() {
                       {row.provider_ref || "-"}
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                ))
+              )}
+            </tbody>
+          </table>
         </AdminTableShell>
       </section>
     </>

@@ -467,11 +467,11 @@ export default function ServicesPage() {
       ) : null}
 
       <AdminTableShell>
-        {loading && view === "list" ? (
+        {view === "list" && loading ? (
           <AdminLoadingRow label="Loading services…" compact className="py-10" />
         ) : null}
 
-        {!loading && listOk && rows.length === 0 && !error && view === "list" ? (
+        {view === "list" && !loading && listOk && rows.length === 0 && !error ? (
           <AdminEmpty
             title={published === "pending" ? "No pending listings" : "No services"}
             description={
@@ -482,7 +482,7 @@ export default function ServicesPage() {
           />
         ) : null}
 
-        {!loading && rows.length > 0 && view === "list" ? (
+        {view === "list" && !loading && rows.length > 0 ? (
           <ul className="divide-y divide-border">
             {rows.map((row) => {
               const cover = serviceCoverUrl(row);

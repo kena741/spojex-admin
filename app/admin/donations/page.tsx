@@ -360,22 +360,22 @@ export default function DonationsPage() {
         </div>
       </AdminFilterPanel>
 
-      {!viewReady || (loading && view === "cards") ? (
-        <AdminLoadingRow label="Loading campaigns…" />
-      ) : null}
 
-      {!loading && viewReady && rows.length === 0 && view === "cards" ? (
-        <AdminEmpty
-          title="No campaigns"
-          description={
-            canWrite
-              ? "Add a donation campaign for the home page."
-              : "Donation campaigns appear here."
-          }
-        />
-      ) : null}
-
-      {!loading && viewReady && rows.length > 0 && view === "cards" ? (
+      {viewReady && view === "cards" ? (
+        loading ? (
+          <div className="mb-4 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+            <AdminLoadingRow label="Loading campaigns…" compact className="py-10" />
+          </div>
+        ) : rows.length === 0 ? (
+          <AdminEmpty
+            title="No campaigns"
+            description={
+              canWrite
+                ? "Add a donation campaign for the home page."
+                : "Donation campaigns appear here."
+            }
+          />
+        ) : (
         <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {rows.map((row) => {
             const media = campaignMedia(row);
@@ -412,6 +412,7 @@ export default function DonationsPage() {
             );
           })}
         </div>
+        )
       ) : null}
 
       {viewReady && view === "list" ? (

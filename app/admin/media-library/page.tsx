@@ -10,8 +10,10 @@ import {
   AdminErrorAlert,
   AdminFilterPanel,
   AdminLoadingRow,
+  AdminReloadButton,
   AdminSearchInput,
   AdminSelect,
+  AdminTableShell,
 } from "@/components/admin-layout";
 import type { DirectoryView } from "@/lib/directory-view";
 import { SharedAudioPlayer } from "@/components/shared-audio-player";
@@ -338,6 +340,7 @@ function MediaLibraryPage() {
         ]}
         actions={
           <div className="flex flex-wrap gap-2">
+            <AdminReloadButton loading={loading} onClick={() => void load()} />
             {canWrite ? (
               <button
                 type="button"
@@ -489,7 +492,11 @@ function MediaLibraryPage() {
 
       <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
         <div>
-          {loading ? <AdminLoadingRow label="Loading media…" /> : null}
+          {loading ? (
+            <AdminTableShell>
+              <AdminLoadingRow label="Loading media…" compact className="py-10" />
+            </AdminTableShell>
+          ) : null}
           {!loading && assets.length === 0 ? (
             <AdminEmpty
               title={

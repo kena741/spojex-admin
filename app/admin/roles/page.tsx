@@ -154,9 +154,10 @@ export default function RolesPage() {
         </form>
       ) : null}
 
-      {loading ? <AdminLoadingRow label="Loading roles…" /> : null}
       <AdminTableShell>
-        {rows.length === 0 && !loading ? (
+        {loading ? (
+          <AdminLoadingRow label="Loading roles…" compact className="py-10" />
+        ) : rows.length === 0 ? (
           <AdminEmpty title="No roles" description="Run 016_admins.sql to seed Super Admin, Operations, Identity, Marketplace, Support, and Viewer." />
         ) : (
           <div className="grid gap-4 lg:grid-cols-[320px_1fr]">

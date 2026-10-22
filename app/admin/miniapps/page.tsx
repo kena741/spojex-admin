@@ -7,12 +7,12 @@ import {
   AdminEmpty,
   AdminErrorAlert,
   AdminFilterPanel,
-  AdminLoadingRow,
   AdminModal,
   AdminModalFooter,
   AdminSearchInput,
   AdminSelect,
   AdminTableActions,
+  AdminTableLoading,
   AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
@@ -270,24 +270,35 @@ export default function MiniAppsPage() {
           </AdminSelect>
         </div>
       </AdminFilterPanel>
-      {loading ? <AdminLoadingRow label="Loading mini apps…" /> : null}
       <AdminTableShell>
-        {filtered.length === 0 && !loading ? (
-          <AdminEmpty title="No mini apps" description="Add an HTTPS URL to show it in the host Apps tab." />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+              <tr>
+                <th className="px-4 py-3 font-semibold">App</th>
+                <th className="px-4 py-3 font-semibold">URL</th>
+                <th className="px-4 py-3 font-semibold">Category</th>
+                <th className="px-4 py-3 font-semibold">Status</th>
+                {canWrite ? <th className="px-4 py-3 font-semibold">Actions</th> : null}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <AdminTableLoading
+                  colSpan={canWrite ? 5 : 4}
+                  label="Loading mini apps…"
+                />
+              ) : filtered.length === 0 ? (
                 <tr>
-                  <th className="px-4 py-3 font-semibold">App</th>
-                  <th className="px-4 py-3 font-semibold">URL</th>
-                  <th className="px-4 py-3 font-semibold">Category</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                  {canWrite ? <th className="px-4 py-3 font-semibold">Actions</th> : null}
+                  <td colSpan={canWrite ? 5 : 4} className="p-0">
+                    <AdminEmpty
+                      title="No mini apps"
+                      description="Add an HTTPS URL to show it in the host Apps tab."
+                    />
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filtered.map((row) => {
+              ) : (
+                filtered.map((row) => {
                   const logo = miniAppLogoUrl(row);
                   return (
                   <tr key={row.id} className="border-b border-border last:border-0 hover:bg-muted/30">
@@ -338,11 +349,11 @@ export default function MiniAppsPage() {
                     ) : null}
                   </tr>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </AdminTableShell>
 
       <AdminModal

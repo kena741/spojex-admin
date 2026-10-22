@@ -573,23 +573,13 @@ export default function FinanceTransactionsPage() {
         </div>
       </AdminFilterPanel>
 
-      {loading ? <AdminLoadingRow label="Loading transactions…" /> : null}
-
-      {!loading && listOk && rows.length === 0 && !error ? (
-        <AdminEmpty
-          title="No transactions in this window"
-          description="Try expanding the date range or clearing filters. This empty state only appears after a successful API response."
-        />
-      ) : null}
-
-      {rows.length > 0 ? (
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
           <div className="flex items-center justify-between border-b border-border px-4 py-2 text-xs text-text-secondary">
             <span>{total.toLocaleString()} transactions</span>
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                disabled={page <= 1}
+                disabled={page <= 1 || loading}
                 onClick={() => writeParams({ page: String(page - 1) })}
                 className="rounded border border-border p-1 disabled:opacity-40"
               >
@@ -600,7 +590,7 @@ export default function FinanceTransactionsPage() {
               </span>
               <button
                 type="button"
-                disabled={page >= totalPages}
+                disabled={page >= totalPages || loading}
                 onClick={() => writeParams({ page: String(page + 1) })}
                 className="rounded border border-border p-1 disabled:opacity-40"
               >
@@ -608,6 +598,14 @@ export default function FinanceTransactionsPage() {
               </button>
             </div>
           </div>
+          {loading ? (
+            <AdminLoadingRow label="Loading transactions…" compact className="py-10" />
+          ) : listOk && rows.length === 0 && !error ? (
+            <AdminEmpty
+              title="No transactions in this window"
+              description="Try expanding the date range or clearing filters. This empty state only appears after a successful API response."
+            />
+          ) : rows.length > 0 ? (
           <ul className="divide-y divide-border">
             {rows.map((row) => {
               const Incoming = row.direction === "incoming";
@@ -675,8 +673,8 @@ export default function FinanceTransactionsPage() {
               );
             })}
           </ul>
-        </div>
-      ) : null}
+          ) : null}
+      </div>
 
       {(summary?.notes?.length || summary?.gaps?.length) && !loading ? (
         <details className="rounded-xl border border-border bg-card p-4 text-xs text-text-secondary shadow-sm">

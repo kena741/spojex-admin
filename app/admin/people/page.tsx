@@ -301,23 +301,13 @@ export default function PeopleDirectoryPage() {
         </div>
       </AdminFilterPanel>
 
-      {loading ? (
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <AdminLoadingRow label="Loading people…" compact className="py-10" />
-        </div>
-      ) : null}
-
-      {!loading && rows.length === 0 ? (
-        <AdminEmpty title="No people found" description="Try adjusting filters or search, then Reload." />
-      ) : null}
-
-      {!loading && rows.length > 0 ? (
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
           <div className="flex items-center justify-between border-b border-border px-4 py-2 text-xs text-text-secondary">
             <label className="inline-flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={allSelected}
+                disabled={loading || rows.length === 0}
                 onChange={() =>
                   setSelected(allSelected ? [] : rows.map((r) => r.id))
                 }
@@ -327,7 +317,7 @@ export default function PeopleDirectoryPage() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                disabled={page <= 1}
+                disabled={page <= 1 || loading}
                 onClick={() => writeParams({ page: String(page - 1) })}
                 className="rounded border border-border p-1 disabled:opacity-40"
               >
@@ -338,7 +328,7 @@ export default function PeopleDirectoryPage() {
               </span>
               <button
                 type="button"
-                disabled={page >= totalPages}
+                disabled={page >= totalPages || loading}
                 onClick={() => writeParams({ page: String(page + 1) })}
                 className="rounded border border-border p-1 disabled:opacity-40"
               >
@@ -346,6 +336,11 @@ export default function PeopleDirectoryPage() {
               </button>
             </div>
           </div>
+          {loading ? (
+            <AdminLoadingRow label="Loading people…" compact className="py-10" />
+          ) : rows.length === 0 ? (
+            <AdminEmpty title="No people found" description="Try adjusting filters or search, then Reload." />
+          ) : (
           <ul className="divide-y divide-border">
             {rows.map((row) => (
               <li key={row.id}>
@@ -413,8 +408,8 @@ export default function PeopleDirectoryPage() {
               </li>
             ))}
           </ul>
-        </div>
-      ) : null}
+          )}
+      </div>
 
       {previewId ? (
         <PersonDrawer

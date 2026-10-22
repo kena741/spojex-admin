@@ -7,12 +7,12 @@ import {
   AdminEmpty,
   AdminErrorAlert,
   AdminFilterPanel,
-  AdminLoadingRow,
   AdminModal,
   AdminReloadButton,
   AdminRowMenu,
   AdminSearchInput,
   AdminSelect,
+  AdminTableLoading,
   AdminTableShell,
   type AdminRowMenuItem,
 } from "@/components/admin-layout";
@@ -521,7 +521,6 @@ export default function LiveEventsPanel() {
           </button>
         ) : null}
       </div>
-      {loading ? <AdminLoadingRow label="Loading live events…" /> : null}
       {error ? <AdminErrorAlert message={error} /> : null}
       {notice ? (
         <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
@@ -529,12 +528,7 @@ export default function LiveEventsPanel() {
         </div>
       ) : null}
       <AdminTableShell>
-        {filtered.length === 0 && !loading ? (
-          <AdminEmpty
-            title="No live events"
-            description="Create a stream, match, fight, or show. The app shows a countdown until start; it only goes live when you go live."
-          />
-        ) : (
+        <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
               <tr>
@@ -547,7 +541,19 @@ export default function LiveEventsPanel() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((row) => {
+              {loading ? (
+                <AdminTableLoading colSpan={6} label="Loading live events…" />
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="p-0">
+                    <AdminEmpty
+                      title="No live events"
+                      description="Create a stream, match, fight, or show. The app shows a countdown until start; it only goes live when you go live."
+                    />
+                  </td>
+                </tr>
+              ) : (
+              filtered.map((row) => {
                 const source = sourceBadge(row);
                 const secondsToStart =
                   row.status === "scheduled"
@@ -621,10 +627,11 @@ export default function LiveEventsPanel() {
                     </td>
                   </tr>
                 );
-              })}
+              })
+              )}
             </tbody>
           </table>
-        )}
+        </div>
       </AdminTableShell>
 
       <AdminModal

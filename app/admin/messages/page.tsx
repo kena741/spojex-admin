@@ -292,7 +292,6 @@ function MessagesPageInner() {
         ]}
       />
 
-      {loading ? <AdminLoadingRow label="Loading conversations…" /> : null}
       {error ? <AdminErrorAlert message={error} /> : null}
 
       <AdminFilterPanel>
@@ -338,7 +337,9 @@ function MessagesPageInner() {
         )}
       >
         <AdminTableShell>
-          {!loading && items.length === 0 ? (
+          {loading ? (
+            <AdminLoadingRow label="Loading conversations…" compact className="py-10" />
+          ) : items.length === 0 ? (
             <AdminEmpty
               title="No conversations"
               description="Conversations appear here once users message each other."

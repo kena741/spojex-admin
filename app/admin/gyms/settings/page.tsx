@@ -5,7 +5,7 @@ import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
   AdminErrorAlert,
-  AdminLoadingRow,
+  AdminTableLoading,
   AdminTableShell,
 } from "@/components/admin-layout";
 import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
@@ -168,7 +168,6 @@ export default function GymCategoriesPage() {
           </button>
         </form>
       ) : null}
-      {loading ? <AdminLoadingRow label="Loading gym categories…" /> : null}
       <AdminTableShell>
         {rows.length === 0 && !loading ? (
           <AdminEmpty
@@ -190,7 +189,9 @@ export default function GymCategoriesPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => {
+                {loading ? (
+                  <AdminTableLoading colSpan={canWrite ? 5 : 4} label="Loading gym categories…" />
+                ) : rows.map((row) => {
                   const isEditing = editingId === row.id && draft;
                   return (
                     <tr key={row.id} className="border-b border-border last:border-0">

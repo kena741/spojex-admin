@@ -512,23 +512,19 @@ export default function OrganizationsPage() {
 
       {error ? <AdminErrorAlert message={error} /> : null}
 
-      {!loading && rows.length === 0 ? (
-        <AdminEmpty
-          title="No organizations"
-          description={
-            canWrite
-              ? "Add an organization, or wait for individuals to create them in the app."
-              : "Organizations created in admin or the superapp appear here."
-          }
-        />
-      ) : null}
-
-      {loading ? (
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <AdminLoadingRow label="Loading organizations…" compact className="py-10" />
-        </div>
-      ) : rows.length > 0 ? (
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          {loading ? (
+            <AdminLoadingRow label="Loading organizations…" compact className="py-10" />
+          ) : rows.length === 0 ? (
+            <AdminEmpty
+              title="No organizations"
+              description={
+                canWrite
+                  ? "Add an organization, or wait for individuals to create them in the app."
+                  : "Organizations created in admin or the superapp appear here."
+              }
+            />
+          ) : (
           <ul className="divide-y divide-border">
             {rows.map((row) => {
               const liveGifts = liveGiftTotals[row.id] ?? row.live_gifts_received ?? 0;
@@ -601,8 +597,8 @@ export default function OrganizationsPage() {
               );
             })}
           </ul>
-        </div>
-      ) : null}
+          )}
+      </div>
 
       {!loading && totalPages > 1 ? (
         <div className="flex items-center justify-between gap-3 pt-2">

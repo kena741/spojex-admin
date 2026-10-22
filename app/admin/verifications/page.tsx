@@ -440,7 +440,7 @@ export default function VerificationCenterPage() {
                   Showing {rows.length} of {total} · server-side search · identity scope only
                 </p>
               </div>
-              {loading ? <AdminLoadingRow label="Loading queue…" /> : null}
+              {loading ? <AdminLoadingRow label="Loading queue…" compact className="py-10" /> : null}
               {!loading && loadState === "failed" ? (
                 <AdminEmpty title="Could not load queue" description="Use Retry above after fixing the API error." />
               ) : null}

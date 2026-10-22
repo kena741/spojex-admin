@@ -14,6 +14,7 @@ import {
   AdminErrorAlert,
   AdminFilterPanel,
   AdminLoadingRow,
+  AdminTableLoading,
   AdminSearchInput,
   AdminSelect,
   AdminTableShell,
@@ -299,8 +300,6 @@ function ReportsPageInner() {
         }
       />
 
-      {loading ? <AdminLoadingRow label="Loading reports…" /> : null}
-
       {error ? (
         <div className="space-y-2">
           <AdminErrorAlert message={error} />
@@ -388,7 +387,7 @@ function ReportsPageInner() {
               description="Try a different status, type, or search."
             />
           ) : null}
-          {!loading && !error && rows.length > 0 ? (
+          {loading || (!error && rows.length > 0) ? (
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
                 <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
@@ -403,7 +402,9 @@ function ReportsPageInner() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => {
+                  {loading ? (
+                    <AdminTableLoading colSpan={7} label="Loading reports…" />
+                  ) : rows.map((row) => {
                     const selected = selectedId === row.id;
                     return (
                       <tr

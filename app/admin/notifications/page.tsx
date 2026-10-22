@@ -7,7 +7,7 @@ import {
   AdminEmpty,
   AdminErrorAlert,
   AdminFilterPanel,
-  AdminLoadingRow,
+  AdminTableLoading,
   AdminSearchInput,
   AdminSelect,
   AdminTableShell,
@@ -60,7 +60,9 @@ type BroadcastResult = {
 };
 
 function recipientLabel(row: NotificationRow): string {
-  return row.recipient?.label || row.recipient?.display_name || "Profile unavailable";
+  return (
+    row.recipient?.label || row.recipient?.display_name || "Profile unavailable"
+  );
 }
 
 export default function NotificationsPage() {
@@ -88,7 +90,8 @@ export default function NotificationsPage() {
         cache: "no-store",
       });
       const payload = (await response.json()) as ListPayload;
-      if (!response.ok) throw new Error(payload.error || "Failed to load notifications");
+      if (!response.ok)
+        throw new Error(payload.error || "Failed to load notifications");
       setRows(payload.data ?? []);
       setScopeNote(payload.scope_note ?? null);
     } catch (err) {
@@ -156,7 +159,9 @@ export default function NotificationsPage() {
           route: route.trim() || undefined,
         }),
       });
-      const data = (await response.json()) as BroadcastResult & { error?: string };
+      const data = (await response.json()) as BroadcastResult & {
+        error?: string;
+      };
       if (!response.ok) {
         setResult({
           ok: false,
@@ -213,14 +218,19 @@ export default function NotificationsPage() {
         }
       />
 
-      {scopeNote ? <p className="mb-3 text-xs text-text-secondary">{scopeNote}</p> : null}
+      {scopeNote ? (
+        <p className="mb-3 text-xs text-text-secondary">{scopeNote}</p>
+      ) : null}
 
       {composerOpen && can("notifications:write") ? (
         <section className="mb-6 rounded-xl border border-border bg-card p-5 shadow-sm">
-          <h3 className="mb-1 font-heading text-sm font-semibold">Broadcast composer</h3>
+          <h3 className="mb-1 font-heading text-sm font-semibold">
+            Broadcast composer
+          </h3>
           <p className="mb-4 text-sm text-text-secondary">
-            Creates in-app inbox rows and queues push to devices with FCM tokens. Provider
-            acceptance is not the same as confirmed device delivery.
+            Creates in-app inbox rows and queues push to devices with FCM
+            tokens. Provider acceptance is not the same as confirmed device
+            delivery.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="grid gap-1 text-sm">
@@ -269,18 +279,23 @@ export default function NotificationsPage() {
                 className="mt-1"
               />
               <span>
-                Audience: <strong>All users</strong> (explicit). Eligible devices are those with a
-                push token; users without a token still receive the in-app inbox row when the
-                broadcast writes inbox copies.
+                Audience: <strong>All users</strong> (explicit). Eligible
+                devices are those with a push token; users without a token still
+                receive the in-app inbox row when the broadcast writes inbox
+                copies.
               </span>
             </label>
           </div>
           {title.trim() || body.trim() ? (
             <div className="mt-4 rounded-lg border border-dashed border-border bg-muted/40 px-4 py-3 text-sm">
-              <p className="text-[11px] font-semibold uppercase text-text-hint">Preview</p>
+              <p className="text-[11px] font-semibold uppercase text-text-hint">
+                Preview
+              </p>
               <p className="mt-1 font-medium">{title.trim() || "Untitled"}</p>
               <p className="text-text-secondary">{body.trim() || "-"}</p>
-              <p className="mt-2 text-xs text-text-hint">Opens: {route || "/notifications"}</p>
+              <p className="mt-2 text-xs text-text-hint">
+                Opens: {route || "/notifications"}
+              </p>
             </div>
           ) : null}
           {result ? (
@@ -293,13 +308,18 @@ export default function NotificationsPage() {
             >
               {`Push job: attempted ${result.attempted}, provider accepted ${result.sent}, skipped ${result.skipped}, failed ${result.failed}.`}
               {result.error ? ` ${result.error}` : ""}
-              {(result.errors ?? []).slice(0, 2).map((e) => ` ${e}`).join("")}
+              {(result.errors ?? [])
+                .slice(0, 2)
+                .map((e) => ` ${e}`)
+                .join("")}
             </div>
           ) : null}
           <button
             type="button"
             onClick={() => void sendBroadcast()}
-            disabled={sending || !title.trim() || !body.trim() || !audienceConfirm}
+            disabled={
+              sending || !title.trim() || !body.trim() || !audienceConfirm
+            }
             className="mt-4 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
           >
             {sending ? "Sending…" : "Review & send broadcast"}
@@ -307,13 +327,14 @@ export default function NotificationsPage() {
         </section>
       ) : null}
 
-      {loading ? <AdminLoadingRow label="Loading notification history…" /> : null}
       {error ? <AdminErrorAlert message={error} /> : null}
 
       <AdminFilterPanel>
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <label className="mb-1 block text-[11px] text-text-hint">Category</label>
+            <label className="mb-1 block text-[11px] text-text-hint">
+              Category
+            </label>
             <AdminSelect value={kindFilter} onChange={setKindFilter}>
               <option value="all">All</option>
               {kindOptions.map((k) => (
@@ -324,7 +345,9 @@ export default function NotificationsPage() {
             </AdminSelect>
           </div>
           <div className="min-w-[220px] flex-1">
-            <label className="mb-1 block text-[11px] text-text-hint">Search</label>
+            <label className="mb-1 block text-[11px] text-text-hint">
+              Search
+            </label>
             <AdminSearchInput
               value={query}
               onChange={setQuery}
@@ -335,34 +358,50 @@ export default function NotificationsPage() {
       </AdminFilterPanel>
 
       <AdminTableShell>
-        {filtered.length === 0 && !loading ? (
-          <AdminEmpty
-            title={rows.length === 0 ? "No notifications yet" : "No matching notifications"}
-            description={
-              rows.length === 0
-                ? "Platform in-app notification rows will appear here when the app or broadcasts create them."
-                : "Try another category or clear search."
-            }
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+              <tr>
+                <th className="px-4 py-3 font-semibold">Recipient</th>
+                <th className="px-4 py-3 font-semibold">Category</th>
+                <th className="px-4 py-3 font-semibold">Title / body</th>
+                <th className="px-4 py-3 font-semibold">Channel</th>
+                <th className="px-4 py-3 font-semibold">Delivery</th>
+                <th className="px-4 py-3 font-semibold">Opened</th>
+                <th className="px-4 py-3 font-semibold">Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <AdminTableLoading
+                  colSpan={7}
+                  label="Loading notification history…"
+                />
+              ) : filtered.length === 0 ? (
                 <tr>
-                  <th className="px-4 py-3 font-semibold">Recipient</th>
-                  <th className="px-4 py-3 font-semibold">Category</th>
-                  <th className="px-4 py-3 font-semibold">Title / body</th>
-                  <th className="px-4 py-3 font-semibold">Channel</th>
-                  <th className="px-4 py-3 font-semibold">Delivery</th>
-                  <th className="px-4 py-3 font-semibold">Opened</th>
-                  <th className="px-4 py-3 font-semibold">Created</th>
+                  <td colSpan={7} className="p-0">
+                    <AdminEmpty
+                      title={
+                        rows.length === 0
+                          ? "No notifications yet"
+                          : "No matching notifications"
+                      }
+                      description={
+                        rows.length === 0
+                          ? "Platform in-app notification rows will appear here when the app or broadcasts create them."
+                          : "Try another category or clear search."
+                      }
+                    />
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filtered.map((row) => {
+              ) : (
+                filtered.map((row) => {
                   const label = recipientLabel(row);
                   return (
-                    <tr key={row.id} className="border-b border-border last:border-0 align-top">
+                    <tr
+                      key={row.id}
+                      className="border-b border-border last:border-0 align-top"
+                    >
                       <td className="px-4 py-3">
                         <Link
                           href={`/admin/users/${row.user_id}`}
@@ -374,7 +413,9 @@ export default function NotificationsPage() {
                             size={28}
                           />
                           <span className="min-w-0">
-                            <span className="block truncate font-medium">{label}</span>
+                            <span className="block truncate font-medium">
+                              {label}
+                            </span>
                             {row.recipient?.username ? (
                               <span className="block truncate text-[11px] text-text-secondary">
                                 @{row.recipient.username}
@@ -390,7 +431,9 @@ export default function NotificationsPage() {
                       </td>
                       <td className="max-w-xs px-4 py-3">
                         <p className="truncate font-medium">{row.title}</p>
-                        <p className="truncate text-xs text-text-secondary">{row.body}</p>
+                        <p className="truncate text-xs text-text-secondary">
+                          {row.body}
+                        </p>
                       </td>
                       <td className="px-4 py-3 text-xs text-text-secondary">
                         {row.channel || "in_app"}
@@ -412,11 +455,11 @@ export default function NotificationsPage() {
                       </td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </AdminTableShell>
     </>
   );

@@ -5,7 +5,7 @@ import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
   AdminErrorAlert,
-  AdminLoadingRow,
+  AdminTableLoading,
   AdminModal,
   AdminRowMenu,
   AdminSearchInput,
@@ -47,11 +47,14 @@ async function uploadLibrarySound(file: File) {
       })
     : {};
   if (!response.ok) throw new Error(payload.error || "Upload failed");
-  if (!payload.publicUrl) throw new Error("Upload failed. No public URL was returned.");
+  if (!payload.publicUrl)
+    throw new Error("Upload failed. No public URL was returned.");
   return {
     publicUrl: toBackendMediaUrl(payload.publicUrl),
     durationSeconds:
-      typeof payload.durationSeconds === "number" ? payload.durationSeconds : null,
+      typeof payload.durationSeconds === "number"
+        ? payload.durationSeconds
+        : null,
     extractedFromVideo: Boolean(payload.extractedFromVideo),
   };
 }
@@ -85,13 +88,16 @@ export default function SoundLibraryPage() {
       data?: SportNewsSoundRow[];
       error?: string;
     };
-    if (!libRes.ok) throw new Error(libPayload.error || "Failed to load sounds");
+    if (!libRes.ok)
+      throw new Error(libPayload.error || "Failed to load sounds");
     setRows(libPayload.data ?? []);
   };
 
   useEffect(() => {
     load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : "Failed to load"),
+      )
       .finally(() => setLoading(false));
   }, []);
 
@@ -235,7 +241,12 @@ export default function SoundLibraryPage() {
 
   const remove = async (row: SportNewsSoundRow) => {
     if (!canWrite) return;
-    if (!window.confirm(`Delete “${row.name}”? News using it will keep the audio URL.`)) return;
+    if (
+      !window.confirm(
+        `Delete “${row.name}”? News using it will keep the audio URL.`,
+      )
+    )
+      return;
     setError(null);
     try {
       await deleteAdmin(`/api/admin/news-sounds/${row.id}`);
@@ -283,7 +294,11 @@ export default function SoundLibraryPage() {
       ) : null}
 
       <div className="mb-4 grid gap-3 md:grid-cols-[1fr_180px]">
-        <AdminSearchInput value={query} onChange={setQuery} placeholder="Search name, id, kind…" />
+        <AdminSearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Search name, id, kind…"
+        />
         <select
           value={filterKind}
           onChange={(e) => setFilterKind(e.target.value)}
@@ -308,10 +323,7 @@ export default function SoundLibraryPage() {
         }}
         title="Upload to sound library"
       >
-        <form
-          onSubmit={create}
-          className="grid gap-3 md:grid-cols-2"
-        >
+        <form onSubmit={create} className="grid gap-3 md:grid-cols-2">
           <label className="grid gap-1 text-sm md:col-span-2">
             <span className="text-text-secondary">Name</span>
             <input
@@ -322,7 +334,9 @@ export default function SoundLibraryPage() {
               className="h-10 rounded-lg border border-border px-3"
               required
             />
-            <span className="text-[11px] text-text-hint">Keep it short - max 48 characters.</span>
+            <span className="text-[11px] text-text-hint">
+              Keep it short - max 48 characters.
+            </span>
           </label>
           <label className="grid gap-1 text-sm">
             <span className="text-text-secondary">Kind</span>
@@ -354,8 +368,9 @@ export default function SoundLibraryPage() {
               }}
             />
             <span className="text-[11px] text-text-hint">
-              MP3 / M4A / WAV (max 20 MB), or MP4 / MOV / WebM video (max 28 MB). Video uploads extract
-              audio only - original video is not stored.
+              MP3 / M4A / WAV (max 20 MB), or MP4 / MOV / WebM video (max 28
+              MB). Video uploads extract audio only - original video is not
+              stored.
             </span>
           </label>
           {audioUrl ? (
@@ -374,14 +389,16 @@ export default function SoundLibraryPage() {
                   setAudioUrl(result.publicUrl);
                   setDurationSeconds(result.durationSeconds);
                   setExtractedFromVideo(false);
-                  setNotice("Clip trimmed. Preview it, then add to the library.");
+                  setNotice(
+                    "Clip trimmed. Preview it, then add to the library.",
+                  );
                 }}
               />
             </>
           ) : (
             <p className="text-xs text-text-secondary md:col-span-2">
-              After upload you can trim start/end, then save. Same audio URL will not create a
-              duplicate library row.
+              After upload you can trim start/end, then save. Same audio URL
+              will not create a duplicate library row.
             </p>
           )}
           <div className="md:col-span-2 flex flex-wrap justify-end gap-2 pt-2">
@@ -400,34 +417,42 @@ export default function SoundLibraryPage() {
               disabled={!name.trim() || !audioUrl.trim() || saving || uploading}
               className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
             >
-              {uploading ? "Uploading…" : saving ? "Saving…" : "Save to library"}
+              {uploading
+                ? "Uploading…"
+                : saving
+                  ? "Saving…"
+                  : "Save to library"}
             </button>
           </div>
         </form>
       </AdminModal>
 
       <AdminTableShell>
-        {loading ? <AdminLoadingRow label="Loading sounds…" /> : null}
-        {!loading && filtered.length === 0 ? (
-          <AdminEmpty
-            title="No library sounds yet"
-            description="Use Upload sound. Duplicate names stay separate - only exact audio URLs are reused."
-          />
-        ) : null}
-        {!loading && filtered.length > 0 ? (
-          <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-border text-text-secondary">
+        <table className="min-w-full text-left text-sm">
+          <thead className="border-b border-border text-text-secondary">
+            <tr>
+              <th className="px-3 py-2 font-medium">Name</th>
+              <th className="px-3 py-2 font-medium">Kind</th>
+              <th className="px-3 py-2 font-medium">Preview</th>
+              <th className="px-3 py-2 font-medium">Created</th>
+              <th className="px-3 py-2 font-medium">Status</th>
+              <th className="px-3 py-2 font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <AdminTableLoading colSpan={6} label="Loading sounds…" />
+            ) : filtered.length === 0 ? (
               <tr>
-                <th className="px-3 py-2 font-medium">Name</th>
-                <th className="px-3 py-2 font-medium">Kind</th>
-                <th className="px-3 py-2 font-medium">Preview</th>
-                <th className="px-3 py-2 font-medium">Created</th>
-                <th className="px-3 py-2 font-medium">Status</th>
-                <th className="px-3 py-2 font-medium">Actions</th>
+                <td colSpan={6} className="p-0">
+                  <AdminEmpty
+                    title="No library sounds yet"
+                    description="Use Upload sound. Duplicate names stay separate - only exact audio URLs are reused."
+                  />
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {filtered.map((row) => (
+            ) : (
+              filtered.map((row) => (
                 <tr key={row.id} className="border-b border-border/70">
                   <td className="px-3 py-3 font-medium">
                     {editingId === row.id ? (
@@ -458,7 +483,10 @@ export default function SoundLibraryPage() {
                       </div>
                     ) : (
                       <div>
-                        <span className="block max-w-[14rem] truncate" title={row.name}>
+                        <span
+                          className="block max-w-[14rem] truncate"
+                          title={row.name}
+                        >
                           {displaySoundTitle(row.name)}
                         </span>
                         {row.duration_seconds != null ? (
@@ -485,7 +513,9 @@ export default function SoundLibraryPage() {
                   <td className="px-3 py-3 text-xs text-text-secondary">
                     {row.created_at ? formatDate(row.created_at) : "-"}
                   </td>
-                  <td className="px-3 py-3">{row.is_active ? "Active" : "Hidden"}</td>
+                  <td className="px-3 py-3">
+                    {row.is_active ? "Active" : "Hidden"}
+                  </td>
                   <td className="px-3 py-3">
                     {canWrite && editingId !== row.id ? (
                       <AdminRowMenu
@@ -517,10 +547,10 @@ export default function SoundLibraryPage() {
                     )}
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : null}
+              ))
+            )}
+          </tbody>
+        </table>
       </AdminTableShell>
     </>
   );

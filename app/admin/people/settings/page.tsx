@@ -195,15 +195,14 @@ export default function CategoriesPage() {
         </form>
       ) : null}
 
-      {loading ? <AdminLoadingRow label="Loading account roles…" /> : null}
       <AdminTableShell>
-        {!catalog || groupedRoles.every((item) => item.roles.length === 0) ? (
-          !loading ? (
-            <AdminEmpty
-              title="No account roles"
-              description="Add roles to define what users can select when signing up."
-            />
-          ) : null
+        {loading ? (
+          <AdminLoadingRow label="Loading account roles…" compact className="py-10" />
+        ) : !catalog || groupedRoles.every((item) => item.roles.length === 0) ? (
+          <AdminEmpty
+            title="No account roles"
+            description="Add roles to define what users can select when signing up."
+          />
         ) : (
           <div className="divide-y divide-border">
             {groupedRoles.map(({ group, roles }) => (

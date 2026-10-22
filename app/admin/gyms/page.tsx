@@ -977,13 +977,12 @@ export default function GymsAdminPage() {
         </div>
       </AdminFilterPanel>
 
+      {/* Mobile Card Layout */}
       {loading ? (
-        <div className="lg:hidden">
-          <AdminLoadingRow label="Loading gyms…" />
+        <div className="mb-4 overflow-hidden rounded-xl border border-border bg-card shadow-sm lg:hidden">
+          <AdminLoadingRow label="Loading gyms…" compact className="py-10" />
         </div>
       ) : null}
-
-      {/* Mobile Card Layout */}
       {!loading && filtered.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 lg:hidden">
           {filtered.map((row) => (

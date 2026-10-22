@@ -7,7 +7,7 @@ import {
   AdminEmpty,
   AdminErrorAlert,
   AdminFilterPanel,
-  AdminLoadingRow,
+  AdminTableLoading,
   AdminSearchInput,
   AdminSelect,
   AdminTableShell,
@@ -18,7 +18,10 @@ import type { ProfileMediaRow } from "@/lib/types";
 import { formatDateTime } from "@/lib/utils";
 
 function isVideo(item: ProfileMediaRow) {
-  return item.kind === "highlight" || item.mime_type.toLowerCase().startsWith("video/");
+  return (
+    item.kind === "highlight" ||
+    item.mime_type.toLowerCase().startsWith("video/")
+  );
 }
 
 export default function ProfileMediaPage() {
@@ -31,15 +34,23 @@ export default function ProfileMediaPage() {
   const [kind, setKind] = useState("all");
 
   const load = async () => {
-    const response = await fetch("/api/admin/profile-media", { credentials: "same-origin" });
-    const payload = (await response.json()) as { data?: ProfileMediaRow[]; error?: string };
-    if (!response.ok) throw new Error(payload.error || "Failed to load profile media");
+    const response = await fetch("/api/admin/profile-media", {
+      credentials: "same-origin",
+    });
+    const payload = (await response.json()) as {
+      data?: ProfileMediaRow[];
+      error?: string;
+    };
+    if (!response.ok)
+      throw new Error(payload.error || "Failed to load profile media");
     setRows(payload.data ?? []);
   };
 
   useEffect(() => {
     load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
+      .catch((err) =>
+        setError(err instanceof Error ? err.message : "Failed to load"),
+      )
       .finally(() => setLoading(false));
   }, []);
 
@@ -49,7 +60,8 @@ export default function ProfileMediaPage() {
       if (kind === "photo" && isVideo(row)) return false;
       if (kind === "highlight" && !isVideo(row)) return false;
       if (!needle) return true;
-      const owner = row.users?.display_name || row.users?.username || row.user_id;
+      const owner =
+        row.users?.display_name || row.users?.username || row.user_id;
       return `${owner} ${row.title} ${row.kind}`.toLowerCase().includes(needle);
     });
   }, [kind, query, rows]);
@@ -71,7 +83,6 @@ export default function ProfileMediaPage() {
         title="Photos & clips"
         description="Profile photos and highlight videos uploaded in the app"
       />
-      {loading ? <AdminLoadingRow label="Loading media…" /> : null}
       {error ? <AdminErrorAlert message={error} /> : null}
       <AdminFilterPanel>
         <div className="grid gap-3 md:grid-cols-[1fr_180px]">
@@ -88,43 +99,74 @@ export default function ProfileMediaPage() {
         </div>
       </AdminFilterPanel>
       <AdminTableShell>
-        {filtered.length === 0 && !loading ? (
-          <AdminEmpty
-            title="No profile media"
-            description="Photos and highlight clips appear here after users upload them in the app."
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+              <tr>
+                <th className="px-4 py-3 font-semibold">Preview</th>
+                <th className="px-4 py-3 font-semibold">Type</th>
+                <th className="px-4 py-3 font-semibold">User</th>
+                <th className="px-4 py-3 font-semibold">Created</th>
+                <th className="px-4 py-3 font-semibold" />
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <AdminTableLoading colSpan={5} label="Loading media…" />
+              ) : filtered.length === 0 ? (
                 <tr>
-                  <th className="px-4 py-3 font-semibold">Preview</th>
-                  <th className="px-4 py-3 font-semibold">Type</th>
-                  <th className="px-4 py-3 font-semibold">User</th>
-                  <th className="px-4 py-3 font-semibold">Created</th>
-                  <th className="px-4 py-3 font-semibold" />
+                  <td colSpan={5} className="p-0">
+                    <AdminEmpty
+                      title="No profile media"
+                      description="Photos and highlight clips appear here after users upload them in the app."
+                    />
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filtered.map((row) => (
-                  <tr key={row.id} className="border-b border-border last:border-0">
+              ) : (
+                filtered.map((row) => (
+                  <tr
+                    key={row.id}
+                    className="border-b border-border last:border-0"
+                  >
                     <td className="px-4 py-3">
-                      <a href={row.url} target="_blank" rel="noreferrer" className="block h-14 w-14 overflow-hidden rounded-lg bg-muted">
+                      <a
+                        href={row.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block h-14 w-14 overflow-hidden rounded-lg bg-muted"
+                      >
                         {isVideo(row) ? (
-                          <video src={row.url} className="h-full w-full object-cover" muted />
+                          <video
+                            src={row.url}
+                            className="h-full w-full object-cover"
+                            muted
+                          />
                         ) : (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={row.url} alt="" className="h-full w-full object-cover" />
+                          <img
+                            src={row.url}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
                         )}
                       </a>
                     </td>
-                    <td className="px-4 py-3 capitalize">{isVideo(row) ? "Video" : "Photo"}</td>
+                    <td className="px-4 py-3 capitalize">
+                      {isVideo(row) ? "Video" : "Photo"}
+                    </td>
                     <td className="px-4 py-3">
-                      <Link href={`/admin/users/${row.user_id}`} className="text-primary">
-                        {row.users?.display_name || row.users?.username || row.user_id.slice(0, 8)}
+                      <Link
+                        href={`/admin/users/${row.user_id}`}
+                        className="text-primary"
+                      >
+                        {row.users?.display_name ||
+                          row.users?.username ||
+                          row.user_id.slice(0, 8)}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-text-secondary">{formatDateTime(row.created_at)}</td>
+                    <td className="px-4 py-3 text-text-secondary">
+                      {formatDateTime(row.created_at)}
+                    </td>
                     <td className="px-4 py-3 text-right">
                       {canWrite ? (
                         <button
@@ -137,11 +179,11 @@ export default function ProfileMediaPage() {
                       ) : null}
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </AdminTableShell>
     </>
   );
