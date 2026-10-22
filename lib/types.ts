@@ -391,10 +391,22 @@ export type MessageRow = {
 export type NotificationRow = {
   id: string;
   user_id: string;
+  recipient?: {
+    id: string;
+    display_name?: string | null;
+    username?: string | null;
+    avatar_url?: string | null;
+    label?: string;
+    unavailable?: boolean;
+  } | null;
   kind: string;
+  kind_label?: string;
   title: string;
   body: string;
   payload: Record<string, unknown>;
+  channel?: string;
+  delivery_state?: string;
+  delivery_note?: string;
   read_at: string | null;
   created_at: string;
 };

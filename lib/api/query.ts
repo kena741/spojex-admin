@@ -652,6 +652,27 @@ function project(row: Record<string, unknown>, columns: Set<string>) {
   return out;
 }
 
+/** Aliases that embed a `users` row via a FK column (PostgREST-style `alias:fk_col(...)`). */
+const USER_EMBED_ALIASES = new Set([
+  "requester",
+  "addressee",
+  "follower",
+  "following",
+  "blocker",
+  "blocked",
+  "reporter",
+  "target",
+  "sender",
+  "user",
+  "from_user",
+  "to_user",
+  "user_a_profile",
+  "user_b_profile",
+  "owner",
+  "member",
+  "recipient",
+]);
+
 function parseEmbeds(columns: string): Embed[] {
   const embeds: Embed[] = [];
   const re = /([a-zA-Z0-9_]+)(?::([a-zA-Z0-9_]+))?(?:![a-zA-Z0-9_]+)?\(([^)]*)\)/g;
@@ -661,8 +682,13 @@ function parseEmbeds(columns: string): Embed[] {
     const fkOrNull = match[2];
     const inner = match[3].trim();
     const isCount = inner === "count";
-    const tableName = aliasOrTable;
     const alias = aliasOrTable;
+    // Prefer real table names. User-profile aliases are not tables.
+    const tableName = USER_EMBED_ALIASES.has(alias)
+      ? "users"
+      : aliasOrTable === "user_a_profile" || aliasOrTable === "user_b_profile"
+        ? "users"
+        : aliasOrTable;
     const fk =
       fkOrNull ??
       (tableName.endsWith("s") ? `${tableName.slice(0, -1)}_id` : `${tableName}_id`);

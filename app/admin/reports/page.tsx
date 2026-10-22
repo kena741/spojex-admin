@@ -271,6 +271,10 @@ function ReportsPageInner() {
       <AdminPageHeader
         title="Reports"
         description="Moderation queue for profile, service, message, organization, and content reports. Radio chat has its own queue."
+        breadcrumbs={[
+          { label: "Network", href: "/admin/network" },
+          { label: "Reports" },
+        ]}
         actions={
           <div className="flex flex-wrap gap-2">
             {payload?.unresolved_count != null ? (
