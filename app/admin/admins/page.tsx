@@ -133,9 +133,10 @@ export default function AdminsPage() {
     }
   };
 
-  const remove = async (id: string) => {
+  const remove = async (row: AdminRow) => {
     try {
-      await deleteAdmin(`/api/admin/admins/${id}`);
+      const payload = await deleteAdmin(`/api/admin/admins/${row.id}`);
+      if (payload.message) setError(null);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
@@ -146,7 +147,7 @@ export default function AdminsPage() {
     <>
       <AdminPageHeader
         title="Admins"
-        description="Staff who can sign in to SpoJex Admin"
+        description="Staff who can sign in to SpoJex Admin. Suspend keeps a historical row; delete a suspended row to remove duplicates."
         actions={
           <div className="flex flex-wrap gap-2">
             <AdminReloadButton loading={loading} onClick={() => void refresh()} />
@@ -221,14 +222,16 @@ export default function AdminsPage() {
                   if (staff?.id !== row.id) {
                     items.push({
                       id: "remove",
-                      label: "Remove",
+                      label: row.is_active ? "Suspend access" : "Delete staff row",
                       tone: "danger",
                       separatorBefore: true,
                       onClick: () => {
                         const ok = window.confirm(
-                          "Remove this staff membership? Audit history is retained.",
+                          row.is_active
+                            ? "Suspend this admin? They lose access; the staff row stays for audit. Remove again later to delete the row."
+                            : "Permanently delete this suspended staff row? Audit log entries are kept (admin link cleared).",
                         );
-                        if (ok) void remove(row.id);
+                        if (ok) void remove(row);
                       },
                     });
                   }

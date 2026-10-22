@@ -61,13 +61,21 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   }
   const result = await proxyStaff("DELETE", id);
   if (result.status < 400) {
+    const body = (await result.clone().json().catch(() => ({}))) as {
+      mode?: string;
+      message?: string;
+    };
     await logAdminActivity({
       context: auth.context,
       request,
-      action: "delete",
+      action: body.mode === "purged" ? "purge" : "delete",
       resource_type: "admin",
       resource_id: id,
-      summary: `Deactivated admin ${id}`,
+      summary:
+        body.mode === "purged"
+          ? `Permanently removed staff row ${id}`
+          : `Deactivated admin ${id}`,
+      metadata: { mode: body.mode ?? "suspended", message: body.message ?? null },
     });
   }
   return result;

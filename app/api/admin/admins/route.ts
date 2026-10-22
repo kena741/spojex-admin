@@ -111,17 +111,76 @@ export async function POST(request: Request) {
 
   const userId = existing.id as string; // public.users.id - never auth uid
 
-  const { data: dup } = await client
+  const { data: existingStaff } = await client
     .from("admin")
-    .select("id")
+    .select("id, user_id, full_name, email, role, is_active, created_at, updated_at")
     .eq("user_id", userId)
-    .eq("is_active", true)
-    .maybeSingle();
-  if (dup) {
+    .order("created_at", { ascending: true })
+    .limit(20);
+
+  const staffRows = (existingStaff ?? []) as Array<{
+    id: string;
+    user_id: string;
+    full_name: string;
+    email: string | null;
+    role: string;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+  }>;
+  const active = staffRows.find((row) => row.is_active);
+  if (active) {
     return NextResponse.json(
       { error: "An active admin membership already exists for this user" },
       { status: 409 },
     );
+  }
+
+  // Reactivate oldest inactive row instead of inserting a duplicate membership.
+  if (staffRows.length > 0) {
+    const keep = staffRows[0];
+    const now = new Date().toISOString();
+    const { data: adminRow, error: updateError } = await client
+      .from("admin")
+      .update({
+        full_name: fullName,
+        email,
+        role,
+        is_active: body.is_active !== false,
+        updated_at: now,
+      })
+      .eq("id", keep.id)
+      .select("id, user_id, full_name, email, role, is_active, created_at, updated_at")
+      .single();
+    if (updateError) return NextResponse.json({ error: updateError.message }, { status: 400 });
+
+    // Keep extras inactive (should already be).
+    for (const extra of staffRows.slice(1)) {
+      if (extra.is_active) {
+        await client
+          .from("admin")
+          .update({ is_active: false, updated_at: now })
+          .eq("id", extra.id);
+      }
+    }
+
+    await logAdminActivity({
+      context: auth.context,
+      request,
+      action: "restore",
+      resource_type: "admin",
+      resource_id: adminRow.id,
+      summary: `Reactivated admin ${fullName}`,
+      metadata: {
+        changes: [
+          { field: "email", after: email },
+          { field: "role", after: role },
+          { field: "is_active", after: true },
+        ],
+      },
+    });
+
+    return NextResponse.json({ data: adminRow, mode: "reactivated" });
   }
 
   const { data: adminRow, error: insertError } = await client
