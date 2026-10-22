@@ -15,11 +15,13 @@ type UserOption = {
   display_name: string | null;
   full_name?: string | null;
   username?: string | null;
+  email?: string | null;
 };
 
 type Option = {
   value: string;
   label: string;
+  sublabel: string;
   kind: "org" | "person" | "default";
 };
 
@@ -32,21 +34,25 @@ function personLabel(u: UserOption) {
 }
 
 /**
- * Picks a gift beneficiary by org/person name.
- * Value is always a user id (org owner or person). Empty string = Spojex default.
+ * Searchable beneficiary picker.
+ * Value is always a user id (org owner or person). Empty string = Spojex platform default.
  */
 export default function BeneficiarySelect({
   value,
   onChange,
   disabled,
+  showAttributionHint = true,
 }: {
   value: string;
   onChange: (userId: string) => void;
   disabled?: boolean;
+  showAttributionHint?: boolean;
 }) {
   const [orgs, setOrgs] = useState<OrgOption[]>([]);
   const [users, setUsers] = useState<UserOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,12 +64,12 @@ export default function BeneficiarySelect({
           .select("id, name, user_id, is_platform")
           .order("is_platform", { ascending: false })
           .order("name")
-          .limit(200),
+          .limit(300),
         spojex
           .from("users")
-          .select("id, display_name, full_name, username")
+          .select("id, display_name, full_name, username, email")
           .order("display_name")
-          .limit(300),
+          .limit(500),
       ]);
       if (cancelled) return;
       setOrgs((orgRes.data ?? []) as OrgOption[]);
@@ -86,7 +92,8 @@ export default function BeneficiarySelect({
     const list: Option[] = [
       {
         value: "",
-        label: "Spojex (platform org) — default",
+        label: "Spojex (platform org)",
+        sublabel: "Default — platform organization owner wallet",
         kind: "default",
       },
     ];
@@ -100,67 +107,113 @@ export default function BeneficiarySelect({
       seenUsers.add(uid);
       list.push({
         value: uid,
-        label: `${org.name} (organization)`,
+        label: org.name,
+        sublabel: `Organization · credits owner ${uid.slice(0, 8)}…`,
         kind: "org",
       });
     }
-
     for (const user of users) {
       const uid = String(user.id);
-      if (!uid || seenUsers.has(uid)) continue;
+      if (seenUsers.has(uid)) continue;
       seenUsers.add(uid);
       list.push({
         value: uid,
-        label: `${personLabel(user)} (person)`,
+        label: personLabel(user),
+        sublabel: [user.username ? `@${user.username}` : null, user.email]
+          .filter(Boolean)
+          .join(" · ") || "Person",
         kind: "person",
       });
     }
-
-    // Ensure current value appears even if outside the loaded lists.
-    if (value && !list.some((o) => o.value === value)) {
-      const user = users.find((u) => u.id === value);
-      const org = orgs.find((o) => o.user_id === value);
-      list.push({
-        value,
-        label: org
-          ? `${org.name} (organization)`
-          : user
-            ? `${personLabel(user)} (person)`
-            : "Selected beneficiary",
-        kind: org ? "org" : "person",
-      });
-    }
-
     return list;
-  }, [orgs, users, platformUserId, value]);
+  }, [orgs, users, platformUserId]);
 
-  // Normalize: stored platform user id displays as the default "" option.
-  const selectValue =
-    value && platformUserId && value === platformUserId ? "" : value;
+  const selected = useMemo(() => {
+    if (!value || value === platformUserId) {
+      return options.find((o) => o.value === "") ?? options[0];
+    }
+    return options.find((o) => o.value === value) ?? {
+      value,
+      label: `User ${value.slice(0, 8)}…`,
+      sublabel: "Selected recipient",
+      kind: "person" as const,
+    };
+  }, [options, value, platformUserId]);
 
-  const selectedLabel = useMemo(() => {
-    if (!selectValue) return "Spojex (platform org)";
-    return options.find((o) => o.value === selectValue)?.label ?? "Selected";
-  }, [options, selectValue]);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options.slice(0, 40);
+    return options
+      .filter((o) => `${o.label} ${o.sublabel}`.toLowerCase().includes(q))
+      .slice(0, 40);
+  }, [options, query]);
 
   return (
-    <label className="grid gap-1 text-sm">
-      <span className="text-text-secondary">Beneficiary (receives gift coins)</span>
-      <select
+    <div className="relative space-y-1">
+      <button
+        type="button"
         disabled={disabled || loading}
-        value={selectValue}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-10 w-full rounded-lg border border-border px-3 text-sm"
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-auto min-h-10 w-full items-start justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2 text-left text-sm disabled:opacity-50"
       >
-        {options.map((opt) => (
-          <option key={`${opt.kind}-${opt.value || "default"}`} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-      <span className="text-xs text-text-secondary">
-        {loading ? "Loading…" : `Gifts credit: ${selectedLabel}`}
-      </span>
-    </label>
+        <span className="min-w-0">
+          <span className="block truncate font-medium">{selected.label}</span>
+          <span className="block truncate text-xs text-text-hint">{selected.sublabel}</span>
+        </span>
+        <span className="shrink-0 text-xs text-text-secondary">{open ? "▲" : "▼"}</span>
+      </button>
+      {open ? (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-10 cursor-default"
+            aria-label="Close beneficiary picker"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute z-20 mt-1 w-full rounded-lg border border-border bg-card p-2 shadow-lg">
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search person or organization…"
+              className="mb-2 h-9 w-full rounded-md border border-border px-2 text-sm"
+            />
+            <ul className="max-h-56 overflow-y-auto">
+              {filtered.map((opt) => (
+                <li key={`${opt.kind}-${opt.value || "default"}`}>
+                  <button
+                    type="button"
+                    className={`block w-full rounded-md px-2 py-2 text-left hover:bg-muted ${
+                      (value || "") === opt.value ||
+                      (!value && opt.value === "") ||
+                      (value === platformUserId && opt.value === "")
+                        ? "bg-muted"
+                        : ""
+                    }`}
+                    onClick={() => {
+                      onChange(opt.value);
+                      setOpen(false);
+                      setQuery("");
+                    }}
+                  >
+                    <span className="block text-sm font-medium">{opt.label}</span>
+                    <span className="block text-xs text-text-hint">{opt.sublabel}</span>
+                  </button>
+                </li>
+              ))}
+              {filtered.length === 0 ? (
+                <li className="px-2 py-3 text-sm text-text-secondary">No matches</li>
+              ) : null}
+            </ul>
+          </div>
+        </>
+      ) : null}
+      {showAttributionHint ? (
+        <p className="text-[11px] text-text-hint">
+          Public beneficiary resolves to a user wallet (org owner or person). Changing this does not
+          rewrite historical contribution recipients.
+        </p>
+      ) : null}
+    </div>
   );
 }

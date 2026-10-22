@@ -536,12 +536,34 @@ export type DonationCampaignRow = {
   sort_order: number;
   created_at: string;
   updated_at: string;
+  asset?: "coin" | "etb" | string;
+  asset_label?: string;
+  raised_display?: number | string;
+  goal_display?: number | string;
+  progress_percent?: number;
+  progress_bar_percent?: number;
+  progress_label?: string;
+  media?: {
+    display_url?: string;
+    cover_url?: string | null;
+    thumbnail_url?: string | null;
+    using_thumbnail_as_cover?: boolean;
+    note?: string;
+  };
+  beneficiary?: {
+    user_id?: string | null;
+    display_name?: string | null;
+    email?: string | null;
+    organization_name?: string | null;
+  };
+  unique_donors?: number;
+  contribution_count?: number;
 };
 
 export type DonationContributionRow = {
   id: string;
   campaign_id: string;
-  user_id: string;
+  user_id: string | null;
   amount: number;
   currency: string;
   message: string;
@@ -550,6 +572,15 @@ export type DonationContributionRow = {
   provider_ref: string;
   paid_at: string | null;
   created_at: string;
+  credited_user_id?: string | null;
+  donor_display_name?: string | null;
+  transaction_reference?: string;
+  payment_source?: {
+    method?: string;
+    label?: string;
+    reference?: string;
+  };
+  finance_href?: string;
   users?: Pick<UserRow, "id" | "display_name"> | null;
 };
 
