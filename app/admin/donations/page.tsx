@@ -48,6 +48,21 @@ type Totals = {
   note?: string;
 };
 
+type DirectoryView = "cards" | "list";
+
+const DONATIONS_VIEW_KEY = "spojex_admin_donations_view";
+
+function readStoredView(): DirectoryView {
+  if (typeof window === "undefined") return "list";
+  try {
+    const raw = localStorage.getItem(DONATIONS_VIEW_KEY);
+    if (raw === "cards" || raw === "list") return raw;
+  } catch {
+    /* ignore */
+  }
+  return "list";
+}
+
 export default function DonationsPage() {
   const { can } = useAdminPermissions();
   const canWrite = can("donations:write");
@@ -69,6 +84,22 @@ export default function DonationsPage() {
   const [beneficiary, setBeneficiary] = useState(searchParams.get("beneficiary") || "");
   const [sort, setSort] = useState(searchParams.get("sort") || "updated_at");
   const [order, setOrder] = useState(searchParams.get("order") || "desc");
+  const [view, setView] = useState<DirectoryView>("list");
+  const [viewReady, setViewReady] = useState(false);
+
+  useEffect(() => {
+    setView(readStoredView());
+    setViewReady(true);
+  }, []);
+
+  const setDirectoryView = (next: DirectoryView) => {
+    setView(next);
+    try {
+      localStorage.setItem(DONATIONS_VIEW_KEY, next);
+    } catch {
+      /* ignore */
+    }
+  };
 
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -236,17 +267,35 @@ export default function DonationsPage() {
         title="Donations"
         description={`${rows.length} of ${total} · fundraising campaigns (ETB and coins tracked separately)`}
         actions={
-          canWrite ? (
-            <button
-              type="button"
-              onClick={() => setCreateOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
-            >
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Add campaign</span>
-              <span className="sm:hidden">Add</span>
-            </button>
-          ) : null
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded-lg border border-border p-0.5 text-sm">
+              <button
+                type="button"
+                onClick={() => setDirectoryView("cards")}
+                className={`rounded-md px-3 py-1.5 ${view === "cards" ? "bg-muted font-medium" : "text-text-secondary"}`}
+              >
+                Cards
+              </button>
+              <button
+                type="button"
+                onClick={() => setDirectoryView("list")}
+                className={`rounded-md px-3 py-1.5 ${view === "list" ? "bg-muted font-medium" : "text-text-secondary"}`}
+              >
+                List
+              </button>
+            </div>
+            {canWrite ? (
+              <button
+                type="button"
+                onClick={() => setCreateOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Add campaign</span>
+                <span className="sm:hidden">Add</span>
+              </button>
+            ) : null}
+          </div>
         }
       />
 
@@ -338,10 +387,21 @@ export default function DonationsPage() {
         </div>
       </AdminFilterPanel>
 
-      {loading ? <AdminLoadingRow label="Loading campaigns…" /> : null}
+      {loading || !viewReady ? <AdminLoadingRow label="Loading campaigns…" /> : null}
 
-      {!loading && rows.length > 0 ? (
-        <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:hidden">
+      {!loading && viewReady && rows.length === 0 ? (
+        <AdminEmpty
+          title="No campaigns"
+          description={
+            canWrite
+              ? "Add a donation campaign for the home page."
+              : "Donation campaigns appear here."
+          }
+        />
+      ) : null}
+
+      {!loading && viewReady && rows.length > 0 && view === "cards" ? (
+        <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {rows.map((row) => {
             const media = campaignMedia(row);
             return (
@@ -349,7 +409,7 @@ export default function DonationsPage() {
                 key={row.id}
                 type="button"
                 onClick={() => openCampaign(row)}
-                className="overflow-hidden rounded-xl border border-border bg-card text-left shadow-sm"
+                className="overflow-hidden rounded-xl border border-border bg-card text-left shadow-sm transition-colors hover:bg-muted/20"
               >
                 <div className="aspect-[16/9] bg-muted">
                   {media.display_url ? (
@@ -379,136 +439,112 @@ export default function DonationsPage() {
         </div>
       ) : null}
 
-      <div className="hidden lg:block">
+      {!loading && viewReady && rows.length > 0 && view === "list" ? (
         <AdminTableShell>
-          {!loading && rows.length === 0 ? (
-            <AdminEmpty
-              title="No campaigns"
-              description={
-                canWrite
-                  ? "Add a donation campaign for the home page."
-                  : "Donation campaigns appear here."
-              }
-            />
-          ) : !loading ? (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
-                  <tr>
-                    <th className="min-w-[14rem] px-4 py-3 font-semibold">Campaign</th>
-                    <th className="px-4 py-3 font-semibold">Asset</th>
-                    <th className="px-4 py-3 font-semibold">Raised / Target</th>
-                    <th className="px-4 py-3 font-semibold">Beneficiary</th>
-                    <th className="px-4 py-3 font-semibold">Status</th>
-                    <th className="px-4 py-3 font-semibold">Featured</th>
-                    <th className="px-4 py-3 font-semibold">Updated</th>
-                    <th className="px-4 py-3 font-semibold">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => {
-                    const media = campaignMedia(row);
-                    const href = row.href || `/admin/donations/${row.id}`;
-                    return (
-                      <tr
-                        key={row.id}
-                        role="link"
-                        tabIndex={0}
-                        onClick={() => openCampaign(row)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            openCampaign(row);
-                          }
-                        }}
-                        className="cursor-pointer border-b border-border last:border-0 hover:bg-muted/40"
-                      >
-                        <td className="min-w-[14rem] px-4 py-3">
-                          <div className="flex items-center gap-3">
-                            {media.display_url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={media.display_url}
-                                alt=""
-                                className="h-11 w-14 shrink-0 rounded-md object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-11 w-14 shrink-0 items-center justify-center rounded-md bg-muted text-[10px] text-text-secondary">
-                                No img
-                              </div>
-                            )}
-                            <div className="min-w-[10rem]">
-                              <p className="whitespace-nowrap font-medium text-text-primary">
-                                {row.title}
-                              </p>
-                              {row.summary ? (
-                                <p className="line-clamp-1 text-xs text-text-hint">{row.summary}</p>
-                              ) : null}
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+                <tr>
+                  <th className="min-w-[14rem] px-4 py-3 font-semibold">Campaign</th>
+                  <th className="px-4 py-3 font-semibold">Asset</th>
+                  <th className="px-4 py-3 font-semibold">Raised / Target</th>
+                  <th className="px-4 py-3 font-semibold">Beneficiary</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold">Featured</th>
+                  <th className="px-4 py-3 font-semibold">Updated</th>
+                  <th className="px-4 py-3 font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => {
+                  const media = campaignMedia(row);
+                  const href = row.href || `/admin/donations/${row.id}`;
+                  return (
+                    <tr
+                      key={row.id}
+                      role="link"
+                      tabIndex={0}
+                      onClick={() => openCampaign(row)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          openCampaign(row);
+                        }
+                      }}
+                      className="cursor-pointer border-b border-border last:border-0 hover:bg-muted/40"
+                    >
+                      <td className="min-w-[14rem] px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          {media.display_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={media.display_url}
+                              alt=""
+                              className="h-11 w-14 shrink-0 rounded-md object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-11 w-14 shrink-0 items-center justify-center rounded-md bg-muted text-[10px] text-text-secondary">
+                              No img
                             </div>
+                          )}
+                          <div className="min-w-[10rem]">
+                            <p className="whitespace-nowrap font-medium text-text-primary">
+                              {row.title}
+                            </p>
+                            {row.summary ? (
+                              <p className="line-clamp-1 text-xs text-text-hint">{row.summary}</p>
+                            ) : null}
                           </div>
-                        </td>
-                        <td className="px-4 py-3 text-text-secondary">
-                          {campaignAssetLabel(row)}
-                        </td>
-                        <td className="px-4 py-3">{renderProgress(row)}</td>
-                        <td className="px-4 py-3 text-text-secondary">
-                          {beneficiaryLabel(row)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <StatusBadge tone={requestTone(row.status)}>
-                            {donationStatusLabel(row.status)}
-                          </StatusBadge>
-                        </td>
-                        <td className="px-4 py-3">
-                          <StatusBadge tone={row.is_featured ? "success" : "neutral"}>
-                            {row.is_featured ? "Featured" : "Not featured"}
-                          </StatusBadge>
-                        </td>
-                        <td className="px-4 py-3 text-text-secondary">
-                          {formatDate(row.updated_at || row.created_at)}
-                        </td>
-                        <td
-                          className="px-4 py-3"
-                          onClick={(e) => e.stopPropagation()}
-                          onKeyDown={(e) => e.stopPropagation()}
-                        >
-                          <AdminRowMenu
-                            items={[
-                              { id: "open", label: "Open", href },
-                              ...(canWrite
-                                ? [
-                                    {
-                                      id: "delete",
-                                      label: "Close / delete",
-                                      onClick: () => void remove(row),
-                                      tone: "danger" as const,
-                                    },
-                                  ]
-                                : []),
-                            ]}
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-text-secondary">
+                        {campaignAssetLabel(row)}
+                      </td>
+                      <td className="px-4 py-3">{renderProgress(row)}</td>
+                      <td className="px-4 py-3 text-text-secondary">
+                        {beneficiaryLabel(row)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge tone={requestTone(row.status)}>
+                          {donationStatusLabel(row.status)}
+                        </StatusBadge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge tone={row.is_featured ? "success" : "neutral"}>
+                          {row.is_featured ? "Featured" : "Not featured"}
+                        </StatusBadge>
+                      </td>
+                      <td className="px-4 py-3 text-text-secondary">
+                        {formatDate(row.updated_at || row.created_at)}
+                      </td>
+                      <td
+                        className="px-4 py-3"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
+                        <AdminRowMenu
+                          items={[
+                            { id: "open", label: "Open", href },
+                            ...(canWrite
+                              ? [
+                                  {
+                                    id: "delete",
+                                    label: "Close / delete",
+                                    onClick: () => void remove(row),
+                                    tone: "danger" as const,
+                                  },
+                                ]
+                              : []),
+                          ]}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </AdminTableShell>
-      </div>
-
-      {!loading && rows.length === 0 ? (
-        <div className="lg:hidden">
-          <AdminEmpty
-            title="No campaigns"
-            description={
-              canWrite
-                ? "Add a donation campaign for the home page."
-                : "Donation campaigns appear here."
-            }
-          />
-        </div>
       ) : null}
 
       {!loading && total > pageSize ? (
