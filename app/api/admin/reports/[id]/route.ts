@@ -1,18 +1,14 @@
-import { NextResponse } from "next/server";
-import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAdminPermission } from "@/lib/admin-auth";
+import { proxyAdminReports } from "@/lib/reports-api";
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdminPermission("reports:write");
+export const dynamic = "force-dynamic";
+
+export async function GET(
+  _request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  const auth = await requireAdminPermission("reports:read");
   if (!auth.ok) return auth.error;
-  const { id } = await params;
-  const { error: deleteError } = await auth.context.client.from("reports").delete().eq("id", id);
-  if (deleteError) {
-    const hint = missingServiceRoleMessage();
-    return NextResponse.json(
-      { error: hint ? `${deleteError.message}. ${hint}` : deleteError.message },
-      { status: 400 },
-    );
-  }
-  return NextResponse.json({ ok: true });
+  const { id } = await context.params;
+  return proxyAdminReports(`/${encodeURIComponent(id)}`);
 }

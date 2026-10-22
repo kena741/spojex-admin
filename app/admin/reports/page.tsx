@@ -1,8 +1,13 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -10,13 +15,70 @@ import {
   AdminFilterPanel,
   AdminLoadingRow,
   AdminSearchInput,
+  AdminSelect,
   AdminTableShell,
 } from "@/components/admin-layout";
 import { UserAvatar } from "@/components/user-avatar";
-import { deleteAdmin } from "@/lib/hooks";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
-import type { ReportRow } from "@/lib/types";
-import { formatDateTime } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
+
+type ReportItem = {
+  id: string;
+  reporter_id: string;
+  reporter?: {
+    id: string;
+    display_name?: string | null;
+    username?: string | null;
+    avatar_url?: string | null;
+  } | null;
+  target_type: string;
+  target_id?: string | null;
+  target_user_id?: string | null;
+  target_service_id?: string | null;
+  target?: {
+    id: string;
+    display_name?: string | null;
+    username?: string | null;
+    avatar_url?: string | null;
+  } | null;
+  service?: { id: string; title?: string | null } | null;
+  reason?: string | null;
+  reason_code?: string | null;
+  details?: string;
+  status: string;
+  assigned_admin_id?: string | null;
+  related_report_count?: number;
+  created_at?: string | null;
+  target_removed?: boolean;
+  content_surface?: string;
+};
+
+type ListPayload = {
+  items?: ReportItem[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  has_more?: boolean;
+  unresolved_count?: number | null;
+  note?: string;
+  error?: string;
+  code?: string;
+};
+
+type DetailPayload = ReportItem & {
+  evidence?: Record<string, unknown>;
+  message_context?: {
+    message?: { body?: string; conversation_id?: string; sender_id?: string | null };
+    neighbors?: { id: string; body?: string; is_reported?: boolean }[];
+    note?: string;
+  } | null;
+  news?: { id: string; title?: string; href?: string; status?: string } | null;
+  activity?: { id: string; action: string; summary?: string; created_at?: string | null }[];
+  allowed_actions?: string[];
+  resolution_note?: string;
+  updated_at?: string | null;
+  error?: string;
+};
 
 function userLabel(
   user?: { display_name?: string | null; username?: string | null } | null,
@@ -25,316 +87,547 @@ function userLabel(
   return user?.display_name || user?.username || (fallbackId ? fallbackId.slice(0, 8) : "Unknown");
 }
 
-function reportTargetLabel(row: ReportRow) {
-  if (row.target_service_id) {
-    return row.service?.title || `Service ${row.target_service_id.slice(0, 8)}`;
-  }
-  if (row.target_user_id) {
-    return userLabel(row.target, row.target_user_id);
-  }
+function targetLabel(row: ReportItem) {
+  if (row.service?.title) return row.service.title;
+  if (row.target) return userLabel(row.target, row.target_user_id);
+  if (row.target_id) return `${row.target_type} · ${row.target_id.slice(0, 8)}`;
   return "—";
 }
 
-function reportType(row: ReportRow) {
-  if (row.target_service_id) return "Service";
-  if (row.target_user_id) return "User";
-  return "Other";
+function statusTone(status: string) {
+  if (status === "open") return "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200";
+  if (status === "in_review") return "bg-sky-100 text-sky-900 dark:bg-sky-950/40 dark:text-sky-200";
+  if (status === "resolved") return "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200";
+  if (status === "dismissed") return "bg-muted text-text-secondary";
+  return "bg-muted text-text-secondary";
 }
 
-function previewText(value: string, max = 80) {
-  const trimmed = value.trim();
-  if (!trimmed) return "";
-  if (trimmed.length <= max) return trimmed;
-  return `${trimmed.slice(0, max).trimEnd()}…`;
-}
-
-export default function ReportsPage() {
+function ReportsPageInner() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { can } = useAdminPermissions();
   const canWrite = can("reports:write");
 
-  const [rows, setRows] = useState<ReportRow[]>([]);
+  const status = searchParams.get("status") || "unresolved";
+  const targetType = searchParams.get("target_type") || "all";
+  const q = searchParams.get("q") || "";
+  const page = Math.max(1, Number(searchParams.get("page") || "1") || 1);
+  const selectedId = searchParams.get("id") || "";
+
+  const [payload, setPayload] = useState<ListPayload | null>(null);
+  const [detail, setDetail] = useState<DetailPayload | null>(null);
   const [loading, setLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
+  const [searchDraft, setSearchDraft] = useState(q);
+  const [busy, setBusy] = useState(false);
+  const [decisionNote, setDecisionNote] = useState("");
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  const load = async () => {
-    const response = await fetch("/api/admin/reports", { credentials: "same-origin" });
-    const payload = (await response.json()) as { data?: ReportRow[]; error?: string };
-    if (!response.ok) throw new Error(payload.error || "Failed to load reports");
-    setRows(payload.data ?? []);
-  };
+  const writeParams = useCallback(
+    (patch: Record<string, string | null>) => {
+      const next = new URLSearchParams(searchParams.toString());
+      for (const [k, v] of Object.entries(patch)) {
+        if (v == null || v === "" || v === "all") next.delete(k);
+        else next.set(k, v);
+      }
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname);
+    },
+    [pathname, router, searchParams],
+  );
 
-  useEffect(() => {
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setErrorCode(null);
+    try {
+      const qs = new URLSearchParams();
+      qs.set("status", status);
+      if (targetType !== "all") qs.set("target_type", targetType);
+      if (q) qs.set("q", q);
+      qs.set("page", String(page));
+      qs.set("page_size", "40");
+      const res = await fetch(`/api/admin/reports?${qs}`, {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      const body = (await res.json()) as ListPayload;
+      if (!res.ok) {
+        setError(body.error || "Couldn't load reports.");
+        setErrorCode(body.code || String(res.status));
+        setPayload(null);
+        return;
+      }
+      setPayload(body);
+    } catch {
+      setError("Couldn't load reports.");
+      setErrorCode("network_error");
+      setPayload(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [status, targetType, q, page]);
+
+  const loadDetail = useCallback(async (id: string) => {
+    setDetailLoading(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/admin/reports/${encodeURIComponent(id)}`, {
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      const body = (await res.json()) as DetailPayload;
+      if (!res.ok) {
+        setActionError(body.error || "Couldn't load case.");
+        setDetail(null);
+        return;
+      }
+      setDetail(body);
+    } catch {
+      setActionError("Couldn't load case.");
+      setDetail(null);
+    } finally {
+      setDetailLoading(false);
+    }
   }, []);
 
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return rows;
-    return rows.filter((row) => {
-      const hay = [
-        row.reason,
-        row.details,
-        reportType(row),
-        userLabel(row.reporter, row.reporter_id),
-        reportTargetLabel(row),
-        row.reporter_id,
-        row.target_user_id ?? "",
-        row.target_service_id ?? "",
-      ]
-        .join(" ")
-        .toLowerCase();
-      return hay.includes(needle);
-    });
-  }, [rows, query]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  const dismiss = async (id: string) => {
-    if (!canWrite) return;
+  useEffect(() => {
+    setSearchDraft(q);
+  }, [q]);
+
+  useEffect(() => {
+    if (selectedId) void loadDetail(selectedId);
+    else setDetail(null);
+  }, [selectedId, loadDetail]);
+
+  const rows = payload?.items ?? [];
+  const emptyGenuine = !loading && !error && rows.length === 0 && !q;
+  const emptyFiltered = !loading && !error && rows.length === 0 && Boolean(q || (status !== "unresolved") || targetType !== "all");
+
+  const runClaim = async () => {
+    if (!selectedId || !canWrite) return;
+    setBusy(true);
+    setActionError(null);
     try {
-      await deleteAdmin(`/api/admin/reports/${id}`);
-      if (expandedId === id) setExpandedId(null);
+      const res = await fetch(`/api/admin/reports/${encodeURIComponent(selectedId)}/claim`, {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      const body = (await res.json()) as { error?: string; report?: DetailPayload };
+      if (!res.ok) throw new Error(body.error || "Claim failed");
+      if (body.report) setDetail(body.report);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Delete failed");
+      setActionError(err instanceof Error ? err.message : "Claim failed");
+    } finally {
+      setBusy(false);
     }
   };
 
-  const colSpan = canWrite ? 7 : 6;
+  const runDecision = async (action: string) => {
+    if (!selectedId || !canWrite) return;
+    setBusy(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/admin/reports/${encodeURIComponent(selectedId)}/decisions`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          note: decisionNote || null,
+          expected_updated_at: detail?.updated_at || null,
+        }),
+      });
+      const body = (await res.json()) as {
+        error?: string;
+        ok?: boolean;
+        enforcement?: { applied?: boolean; error?: string | null };
+        report?: DetailPayload;
+      };
+      if (!res.ok && !body.report) throw new Error(body.error || "Decision failed");
+      if (body.enforcement && body.enforcement.applied === false && body.enforcement.error) {
+        setActionError(`Decision recorded issue: ${body.enforcement.error}`);
+      }
+      if (body.report) setDetail(body.report);
+      setDecisionNote("");
+      await load();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Decision failed");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
-    <>
+    <div className="space-y-4">
       <AdminPageHeader
         title="Reports"
-        description="User-submitted profile and service reports. Radio chat reports live under Radio chat."
+        description="Moderation queue for profile, service, message, organization, and content reports. Radio chat has its own queue."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            {payload?.unresolved_count != null ? (
+              <span className="text-xs text-text-hint">
+                {payload.unresolved_count} unresolved
+              </span>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="inline-flex h-9 items-center rounded-lg border border-border bg-card px-3 text-xs font-medium"
+            >
+              Refresh
+            </button>
+            <Link
+              href="/admin/radio-chat?tab=reports"
+              className="inline-flex h-9 items-center rounded-lg border border-border bg-card px-3 text-xs font-medium"
+            >
+              Radio chat reports
+            </Link>
+          </div>
+        }
       />
+
       {loading ? <AdminLoadingRow label="Loading reports…" /> : null}
-      {error ? <AdminErrorAlert message={error} /> : null}
+
+      {error ? (
+        <div className="space-y-2">
+          <AdminErrorAlert message={error} />
+          {(errorCode === "unauthorized" || errorCode === "401") && (
+            <Link href="/login" className="text-sm font-medium text-primary hover:underline">
+              Sign in again
+            </Link>
+          )}
+          {(errorCode === "network_error" || errorCode === "upstream_error" || errorCode === "502") && (
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      ) : null}
 
       <AdminFilterPanel>
-        <AdminSearchInput
-          value={query}
-          onChange={setQuery}
-          placeholder="Search reason, message, reporter, target…"
-        />
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="mb-1 block text-[11px] text-text-hint">Status</label>
+            <AdminSelect
+              value={status}
+              onChange={(v) => writeParams({ status: v, page: null })}
+            >
+              <option value="unresolved">Unresolved</option>
+              <option value="open">New</option>
+              <option value="in_review">In review</option>
+              <option value="resolved">Resolved</option>
+              <option value="dismissed">Dismissed</option>
+              <option value="all">All</option>
+            </AdminSelect>
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] text-text-hint">Target type</label>
+            <AdminSelect
+              value={targetType}
+              onChange={(v) => writeParams({ target_type: v === "all" ? null : v, page: null })}
+            >
+              <option value="all">All types</option>
+              <option value="user">User</option>
+              <option value="service">Service</option>
+              <option value="message">Message</option>
+              <option value="organization">Organization</option>
+              <option value="news">News / video</option>
+              <option value="conversation">Conversation</option>
+            </AdminSelect>
+          </div>
+          <div className="flex min-w-[220px] flex-1 flex-wrap items-end gap-2">
+            <div className="min-w-[200px] flex-1">
+              <label className="mb-1 block text-[11px] text-text-hint">Search</label>
+              <AdminSearchInput
+                value={searchDraft}
+                onChange={setSearchDraft}
+                placeholder="Reason, reporter, target, report id…"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => writeParams({ q: searchDraft.trim() || null, page: null })}
+              className="h-10 rounded-lg border border-border bg-card px-3 text-xs font-medium"
+            >
+              Search
+            </button>
+          </div>
+        </div>
       </AdminFilterPanel>
 
-      <AdminTableShell>
-        {filtered.length === 0 && !loading ? (
-          <AdminEmpty
-            title={rows.length === 0 ? "No reports visible" : "No matching reports"}
-            description={
-              rows.length === 0
-                ? "Reports require an authenticated admin session against the Spojex API."
-                : "Try a different search."
-            }
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">Type</th>
-                  <th className="px-4 py-3 font-semibold">Reason</th>
-                  <th className="px-4 py-3 font-semibold">Message</th>
-                  <th className="px-4 py-3 font-semibold">Reporter</th>
-                  <th className="px-4 py-3 font-semibold">Target</th>
-                  <th className="px-4 py-3 font-semibold">Created</th>
-                  {canWrite ? <th className="px-4 py-3 font-semibold" /> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((row) => {
-                  const open = expandedId === row.id;
-                  const message = row.details?.trim() || "";
-                  return (
-                    <Fragment key={row.id}>
-                      <tr className="border-b border-border last:border-0 align-top hover:bg-muted/30">
+      {payload?.note ? <p className="text-xs text-text-hint">{payload.note}</p> : null}
+
+      <div className={cn("grid gap-4", selectedId ? "lg:grid-cols-[1fr_380px]" : "")}>
+        <AdminTableShell>
+          {emptyGenuine ? (
+            <AdminEmpty
+              title="No reports yet."
+              description="Reports submitted from the app will appear here."
+            />
+          ) : null}
+          {emptyFiltered ? (
+            <AdminEmpty
+              title="No reports match these filters."
+              description="Try a different status, type, or search."
+            />
+          ) : null}
+          {!loading && !error && rows.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Type</th>
+                    <th className="px-4 py-3 font-semibold">Reason</th>
+                    <th className="px-4 py-3 font-semibold">Target</th>
+                    <th className="px-4 py-3 font-semibold">Reporter</th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 font-semibold">Related</th>
+                    <th className="px-4 py-3 font-semibold">Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => {
+                    const selected = selectedId === row.id;
+                    return (
+                      <tr
+                        key={row.id}
+                        className={cn(
+                          "cursor-pointer border-b border-border last:border-0 align-top hover:bg-muted/30",
+                          selected && "bg-muted/40",
+                        )}
+                        onClick={() =>
+                          writeParams({ id: selected ? null : row.id })
+                        }
+                      >
+                        <td className="px-4 py-3 font-medium capitalize">{row.target_type}</td>
                         <td className="px-4 py-3">
-                          <button
-                            type="button"
-                            onClick={() => setExpandedId(open ? null : row.id)}
-                            className="inline-flex items-center gap-1.5 rounded px-1 py-0.5 text-left font-medium hover:bg-muted"
-                            aria-expanded={open}
-                            aria-label={open ? "Hide report details" : "Show report details"}
-                          >
-                            {open ? (
-                              <ChevronDown className="h-4 w-4 shrink-0 text-text-secondary" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4 shrink-0 text-text-secondary" />
-                            )}
-                            {reportType(row)}
-                          </button>
-                        </td>
-                        <td className="px-4 py-3 font-medium">{row.reason || "—"}</td>
-                        <td className="max-w-xs px-4 py-3 text-text-secondary">
-                          {message ? (
-                            <button
-                              type="button"
-                              onClick={() => setExpandedId(open ? null : row.id)}
-                              className="text-left hover:text-text-primary"
-                              title="View full message"
-                            >
-                              {previewText(message)}
-                            </button>
-                          ) : (
-                            <span className="italic text-text-secondary/70">No message</span>
-                          )}
+                          <div className="font-medium">{row.reason || row.reason_code || "—"}</div>
+                          {row.details ? (
+                            <p className="mt-0.5 line-clamp-2 text-xs text-text-secondary">
+                              {row.details}
+                            </p>
+                          ) : null}
                         </td>
                         <td className="px-4 py-3">
-                          <Link
-                            href={`/admin/users/${row.reporter_id}`}
-                            className="flex min-w-0 items-center gap-2 text-primary"
-                          >
+                          <span className="font-medium">{targetLabel(row)}</span>
+                          {row.target_removed ? (
+                            <p className="text-[11px] text-amber-700">Target removed</p>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
                             <UserAvatar
                               name={userLabel(row.reporter, row.reporter_id)}
                               src={row.reporter?.avatar_url}
                               size={28}
                             />
-                            <span className="min-w-0 truncate font-medium">
+                            <span className="truncate text-sm">
                               {userLabel(row.reporter, row.reporter_id)}
                             </span>
-                          </Link>
+                          </div>
                         </td>
                         <td className="px-4 py-3">
-                          {row.target_service_id ? (
-                            <Link
-                              href={`/admin/services/${row.target_service_id}`}
-                              className="font-medium text-primary"
-                            >
-                              {reportTargetLabel(row)}
-                            </Link>
-                          ) : row.target_user_id ? (
-                            <Link
-                              href={`/admin/users/${row.target_user_id}`}
-                              className="flex min-w-0 items-center gap-2 text-primary"
-                            >
-                              <UserAvatar
-                                name={userLabel(row.target, row.target_user_id)}
-                                src={row.target?.avatar_url}
-                                size={28}
-                              />
-                              <span className="min-w-0 truncate font-medium">
-                                {userLabel(row.target, row.target_user_id)}
-                              </span>
-                            </Link>
-                          ) : (
-                            "—"
-                          )}
+                          <span
+                            className={cn(
+                              "inline-flex rounded-md px-2 py-0.5 text-xs font-medium capitalize",
+                              statusTone(row.status),
+                            )}
+                          >
+                            {row.status.replace(/_/g, " ")}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 tabular-nums text-text-secondary">
+                          {row.related_report_count ?? 1}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-text-secondary">
-                          {formatDateTime(row.created_at)}
+                          {row.created_at ? formatDateTime(row.created_at) : "—"}
                         </td>
-                        {canWrite ? (
-                          <td className="px-4 py-3 text-right">
-                            <button
-                              type="button"
-                              onClick={() => dismiss(row.id)}
-                              className="text-sm text-red-600 hover:underline"
-                            >
-                              Dismiss
-                            </button>
-                          </td>
-                        ) : null}
                       </tr>
-                      {open ? (
-                        <tr className="border-b border-border bg-muted/40 last:border-0">
-                          <td colSpan={colSpan} className="px-4 py-4">
-                            <div className="grid gap-4 md:grid-cols-2">
-                              <div className="space-y-2">
-                                <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                                  Report message
-                                </h3>
-                                <p className="whitespace-pre-wrap rounded-lg border border-border bg-card px-3 py-2.5 text-sm text-text-primary">
-                                  {message || "No additional message was provided."}
-                                </p>
-                                <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-                                  <dt className="text-text-secondary">Reason</dt>
-                                  <dd className="font-medium">{row.reason || "—"}</dd>
-                                  <dt className="text-text-secondary">Type</dt>
-                                  <dd>{reportType(row)}</dd>
-                                  <dt className="text-text-secondary">Created</dt>
-                                  <dd>{formatDateTime(row.created_at)}</dd>
-                                  <dt className="text-text-secondary">Report ID</dt>
-                                  <dd className="break-all font-mono text-xs">{row.id}</dd>
-                                </dl>
-                              </div>
-                              <div className="space-y-3 text-sm">
-                                <div>
-                                  <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                                    Reporter
-                                  </h3>
-                                  <Link
-                                    href={`/admin/users/${row.reporter_id}`}
-                                    className="inline-flex items-center gap-2 text-primary"
-                                  >
-                                    <UserAvatar
-                                      name={userLabel(row.reporter, row.reporter_id)}
-                                      src={row.reporter?.avatar_url}
-                                      size={32}
-                                    />
-                                    <span>
-                                      <span className="block font-medium">
-                                        {userLabel(row.reporter, row.reporter_id)}
-                                      </span>
-                                      <span className="block font-mono text-xs text-text-secondary">
-                                        {row.reporter_id}
-                                      </span>
-                                    </span>
-                                  </Link>
-                                </div>
-                                <div>
-                                  <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                                    Reported {reportType(row).toLowerCase()}
-                                  </h3>
-                                  {row.target_service_id ? (
-                                    <Link
-                                      href={`/admin/services/${row.target_service_id}`}
-                                      className="text-primary"
-                                    >
-                                      <span className="block font-medium">{reportTargetLabel(row)}</span>
-                                      <span className="block font-mono text-xs text-text-secondary">
-                                        {row.target_service_id}
-                                      </span>
-                                    </Link>
-                                  ) : row.target_user_id ? (
-                                    <Link
-                                      href={`/admin/users/${row.target_user_id}`}
-                                      className="inline-flex items-center gap-2 text-primary"
-                                    >
-                                      <UserAvatar
-                                        name={userLabel(row.target, row.target_user_id)}
-                                        src={row.target?.avatar_url}
-                                        size={32}
-                                      />
-                                      <span>
-                                        <span className="block font-medium">
-                                          {userLabel(row.target, row.target_user_id)}
-                                        </span>
-                                        <span className="block font-mono text-xs text-text-secondary">
-                                          {row.target_user_id}
-                                        </span>
-                                      </span>
-                                    </Link>
-                                  ) : (
-                                    <p className="text-text-secondary">No target linked.</p>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      ) : null}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </AdminTableShell>
-    </>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+          {(payload?.total ?? 0) > (payload?.page_size ?? 40) ? (
+            <div className="flex items-center justify-between border-t border-border px-4 py-3 text-xs">
+              <span className="text-text-secondary">
+                Page {payload?.page} · {payload?.total} reports
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => writeParams({ page: String(page - 1) })}
+                  className="rounded-lg border border-border px-3 py-1 disabled:opacity-40"
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  disabled={!payload?.has_more}
+                  onClick={() => writeParams({ page: String(page + 1) })}
+                  className="rounded-lg border border-border px-3 py-1 disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </AdminTableShell>
+
+        {selectedId ? (
+          <aside className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm lg:sticky lg:top-4 lg:self-start">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3 className="font-heading text-base font-semibold">Case detail</h3>
+                <p className="font-mono text-[11px] text-text-hint">{selectedId}</p>
+              </div>
+              <button
+                type="button"
+                className="text-xs text-text-secondary hover:underline"
+                onClick={() => writeParams({ id: null })}
+              >
+                Close
+              </button>
+            </div>
+            {detailLoading ? <AdminLoadingRow label="Loading case…" /> : null}
+            {actionError ? <AdminErrorAlert message={actionError} /> : null}
+            {detail ? (
+              <div className="space-y-3 text-sm">
+                <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+                  <dt className="text-text-secondary">Type</dt>
+                  <dd className="capitalize">{detail.target_type}</dd>
+                  <dt className="text-text-secondary">Reason</dt>
+                  <dd>{detail.reason || detail.reason_code || "—"}</dd>
+                  <dt className="text-text-secondary">Status</dt>
+                  <dd className="capitalize">{detail.status?.replace(/_/g, " ")}</dd>
+                  <dt className="text-text-secondary">Target</dt>
+                  <dd>{targetLabel(detail)}</dd>
+                </dl>
+                <div>
+                  <h4 className="text-xs font-semibold uppercase text-text-secondary">Details</h4>
+                  <p className="mt-1 whitespace-pre-wrap rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs">
+                    {detail.details?.trim() || "No additional details."}
+                  </p>
+                </div>
+                {detail.message_context?.message ? (
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase text-text-secondary">
+                      Message evidence
+                    </h4>
+                    <p className="mt-1 text-xs">{detail.message_context.message.body}</p>
+                    <p className="mt-1 text-[11px] text-text-hint">
+                      {detail.message_context.note}
+                    </p>
+                  </div>
+                ) : null}
+                {detail.news ? (
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase text-text-secondary">Content</h4>
+                    <Link href={detail.news.href || "#"} className="text-xs text-primary hover:underline">
+                      {detail.news.title || detail.news.id}
+                    </Link>
+                  </div>
+                ) : null}
+                {detail.reporter ? (
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase text-text-secondary">Reporter</h4>
+                    <Link
+                      href={`/admin/users/${detail.reporter_id}`}
+                      className="mt-1 inline-flex items-center gap-2 text-xs text-primary"
+                    >
+                      <UserAvatar
+                        name={userLabel(detail.reporter, detail.reporter_id)}
+                        src={detail.reporter.avatar_url}
+                        size={24}
+                      />
+                      {userLabel(detail.reporter, detail.reporter_id)}
+                    </Link>
+                    <p className="mt-1 text-[11px] text-text-hint">
+                      Reporter identity is admin-only — not shown to the reported user.
+                    </p>
+                  </div>
+                ) : null}
+                {(detail.activity?.length ?? 0) > 0 ? (
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase text-text-secondary">Activity</h4>
+                    <ul className="mt-1 max-h-32 space-y-1 overflow-y-auto text-[11px] text-text-secondary">
+                      {detail.activity!.map((a) => (
+                        <li key={a.id}>
+                          {a.action}: {a.summary}{" "}
+                          {a.created_at ? `· ${formatDateTime(a.created_at)}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {canWrite ? (
+                  <div className="space-y-2 border-t border-border pt-3">
+                    <button
+                      type="button"
+                      disabled={busy || detail.status === "resolved" || detail.status === "dismissed"}
+                      onClick={() => void runClaim()}
+                      className="w-full rounded-lg border border-border px-3 py-2 text-xs font-medium disabled:opacity-40"
+                    >
+                      Claim / take in review
+                    </button>
+                    <textarea
+                      value={decisionNote}
+                      onChange={(e) => setDecisionNote(e.target.value)}
+                      placeholder="Decision / enforcement reason"
+                      className="min-h-[64px] w-full rounded-lg border border-border bg-card px-3 py-2 text-xs"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        ["no_violation", "No violation"],
+                        ["dismiss", "Dismiss"],
+                        ["hide_content", "Hide content"],
+                        ["restore_content", "Restore"],
+                        ["resolve_only", "Resolve"],
+                      ].map(([action, label]) => (
+                        <button
+                          key={action}
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void runDecision(action)}
+                          className="rounded-lg border border-border px-2.5 py-1.5 text-[11px] font-medium disabled:opacity-40"
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-text-hint">
+                      Hide/restore require a reason. Failed enforcement is not shown as success.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </aside>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export default function ReportsPage() {
+  return (
+    <Suspense fallback={<AdminLoadingRow label="Loading reports…" />}>
+      <ReportsPageInner />
+    </Suspense>
   );
 }
