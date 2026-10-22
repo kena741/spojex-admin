@@ -285,6 +285,10 @@ export type GymPlanRow = {
   sort_order: number;
   benefits?: string[] | null;
   created_at?: string | null;
+  /** Present when loaded from the Python plans directory. */
+  active_subscribers?: number | null;
+  lifetime_subscriptions?: number | null;
+  visibility?: string | null;
 };
 
 export function gymPlanMonthsLabel(months?: number | null, days?: number | null) {
@@ -352,4 +356,355 @@ export type GymRow = {
   created_at: string;
   updated_at?: string | null;
   users?: GymOwnerEmbed;
+  /** Workspace API owner summary (Python). */
+  owner?: {
+    user_id?: string | null;
+    display_name?: string | null;
+    email?: string | null;
+    operator_name?: string | null;
+  } | null;
+  category_unknown?: boolean | null;
+};
+
+// ---------------------------------------------------------------------------
+// Workspace API payloads (Python admin gyms service, proxied by Next routes)
+// ---------------------------------------------------------------------------
+
+export type GymUiTone = "success" | "warning" | "danger" | "info" | "neutral";
+
+/** Parse numeric API values that may arrive as strings (Decimal) or null. */
+export function gymNum(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Whole-number metric, or "—" when the backend did not provide it. */
+export function gymMetricLabel(value: unknown) {
+  const n = gymNum(value);
+  return n === null ? "—" : n.toLocaleString("en-ET");
+}
+
+export function gymVerificationTone(status?: string | null): GymUiTone {
+  switch ((status ?? "").toLowerCase()) {
+    case "verified":
+      return "success";
+    case "pending":
+    case "under_review":
+      return "warning";
+    case "rejected":
+    case "suspended":
+      return "danger";
+    default:
+      return "neutral";
+  }
+}
+
+export function gymListingTone(status?: string | null): GymUiTone {
+  switch ((status ?? "").toLowerCase()) {
+    case "active":
+      return "success";
+    case "pending":
+      return "warning";
+    case "rejected":
+      return "danger";
+    default:
+      return "neutral";
+  }
+}
+
+export function gymFeatureTone(status?: string | null, isFeatured?: boolean | null): GymUiTone {
+  if (isFeatured) return "success";
+  if (status === "pending") return "warning";
+  if (status === "rejected") return "danger";
+  return "neutral";
+}
+
+export type GymWorkspaceAction = {
+  id: string;
+  label: string;
+  tone?: "default" | "success" | "danger" | string | null;
+  needs_reason?: boolean;
+  description?: string | null;
+};
+
+export type GymAdminEvent = {
+  id: string;
+  action: string;
+  reason?: string | null;
+  previous_state?: Record<string, unknown> | null;
+  new_state?: Record<string, unknown> | null;
+  actor_user_id?: string | null;
+  created_at: string;
+};
+
+export type GymWorkspace = {
+  data: GymRow;
+  readiness?: {
+    label?: string;
+    issues?: string[];
+    public_visible?: boolean;
+    purchasable?: boolean;
+    plan_count?: number;
+    suspension_policy?: { note?: string } | null;
+  } | null;
+  allowed_actions?: GymWorkspaceAction[];
+  overview?: {
+    paid_active_memberships?: number | null;
+    community_members?: number | null;
+    community_total?: number | null;
+    followers?: number | null;
+    expiring_soon_14d?: number | null;
+    pending_memberships?: number | null;
+    definitions?: Record<string, string>;
+    period?: {
+      label?: string;
+      timezone?: string;
+      verified_collections?: string | null;
+      platform_commission?: string | null;
+      gym_net?: string | null;
+      currency?: string;
+      note?: string;
+    } | null;
+    config_issues?: string[];
+  } | null;
+  organization?: {
+    id?: string | null;
+    name?: string | null;
+    href?: string | null;
+    available?: boolean;
+  } | null;
+  community_summary?: {
+    linked?: boolean;
+    room_state?: string | null;
+    participant_count?: number | null;
+    posting_mode?: string | null;
+    href?: string;
+    note?: string | null;
+  } | null;
+  finance?: {
+    customer_memberships?: {
+      verified_gross?: string | null;
+      platform_commission?: string | null;
+      gym_earnings?: string | null;
+      verified_count?: number;
+      pending_count?: number;
+      refunds?: number;
+      currency?: string;
+      label?: string;
+      href?: string;
+    } | null;
+    platform_fee?: {
+      amount?: number | string | null;
+      currency?: string;
+      note?: string;
+      invoice_history_available?: boolean;
+    } | null;
+    settlement?: { available?: boolean; note?: string } | null;
+    payouts?: { available?: boolean; note?: string } | null;
+  } | null;
+  staff_capabilities?: Record<string, string>;
+  role_default_capabilities?: Record<string, string[]>;
+  suspension_policy?: { note?: string } | null;
+  recent_events?: GymAdminEvent[];
+  generated_at?: string;
+};
+
+export type GymMemberAccessType =
+  | GymMemberEntitlement["access_type"]
+  | string;
+
+export type GymDirectoryMember = {
+  id: string;
+  user_id: string | null;
+  full_name: string;
+  phone?: string | null;
+  email?: string | null;
+  member_code?: string | null;
+  is_active: boolean;
+  created_at?: string;
+  user_display_name?: string | null;
+  user_email?: string | null;
+  plan_label?: string | null;
+  source_note?: string | null;
+  membership_count?: number;
+  entitlement?: {
+    community_status?: string;
+    access_type?: GymMemberAccessType;
+    payment_state?: string;
+    entitlement_status?: string;
+    plan_title?: string | null;
+    note?: string;
+  } | null;
+  current_membership?: {
+    id?: string;
+    status?: string;
+    start_date?: string | null;
+    end_date?: string | null;
+    purchased_plan_title?: string | null;
+  } | null;
+};
+
+export const GYM_COMMUNITY_ONLY_LABEL = "Community roster (no plan)";
+
+export function gymMemberAccessLabel(accessType?: string | null) {
+  switch (accessType) {
+    case "paid_subscription":
+      return "Paid";
+    case "complimentary":
+      return "Complimentary";
+    case "pending_payment":
+      return "Pending payment";
+    case "expired_subscription":
+      return "Expired";
+    case "community_only":
+      return "Community only";
+    case "inactive_roster":
+      return "Inactive";
+    default:
+      return accessType ? accessType.replace(/_/g, " ") : "—";
+  }
+}
+
+export function gymMemberAccessTone(accessType?: string | null): GymUiTone {
+  switch (accessType) {
+    case "paid_subscription":
+    case "complimentary":
+      return "success";
+    case "pending_payment":
+      return "warning";
+    case "expired_subscription":
+      return "danger";
+    default:
+      return "neutral";
+  }
+}
+
+/** Never returns blank — roster-only members get an explicit label. */
+export function gymMemberPlanLabel(member: GymDirectoryMember) {
+  const raw = (
+    member.plan_label ||
+    member.entitlement?.plan_title ||
+    member.current_membership?.purchased_plan_title ||
+    ""
+  ).trim();
+  if (raw && raw !== "—") return { label: raw, rosterOnly: false };
+  const access = member.entitlement?.access_type;
+  if (!access || access === "community_only" || access === "inactive_roster") {
+    return { label: GYM_COMMUNITY_ONLY_LABEL, rosterOnly: true };
+  }
+  return { label: "Plan not recorded", rosterOnly: false };
+}
+
+export type GymMemberDetail = {
+  member: GymDirectoryMember & { user_display_name?: string | null };
+  entitlement?: GymDirectoryMember["entitlement"];
+  memberships?: Array<{
+    id: string;
+    status?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
+    purchased_plan_title?: string | null;
+    current_plan_title?: string | null;
+    purchased_price_amount?: string | number | null;
+    purchased_currency?: string | null;
+  }>;
+  payments?: Array<{
+    id: string;
+    amount?: string | number | null;
+    currency?: string | null;
+    commission_amount?: string | number | null;
+    gym_net_amount?: string | number | null;
+    payment_type?: string | null;
+    status?: string | null;
+    paid_at?: string | null;
+    created_at: string;
+  }>;
+  attendance?: { supported?: boolean; checkins?: number };
+  community?: {
+    org_member?: { member_role?: string; status?: string; joined_at?: string } | null;
+    note?: string;
+  };
+  actions?: {
+    deactivate_preserves_finance?: boolean;
+    remove_preserves_finance?: boolean;
+    note?: string;
+  };
+};
+
+export type GymCommunity = {
+  linked?: boolean;
+  room_state?: string | null;
+  configuration_state?: string | null;
+  participant_count?: number | null;
+  posting_mode?: string | null;
+  pending_join_requests?: number | null;
+  organization?: {
+    id?: string;
+    name?: string | null;
+    href?: string;
+    active_members?: number | null;
+  } | null;
+  conversation?: { id?: string; last_message_at?: string | null } | null;
+  settings?: {
+    group_visibility?: string | null;
+    who_can_post?: string | null;
+    allow_members_send?: boolean | null;
+    allow_media?: boolean | null;
+    allow_reactions?: boolean | null;
+  } | null;
+  access_policy?: Record<string, string> | null;
+  open_conversation_href?: string | null;
+  reports?: { available?: boolean; note?: string } | null;
+  note?: string | null;
+  messages_note?: string | null;
+  source?: string;
+};
+
+export type GymFinanceTxn = {
+  id: string;
+  amount?: string | number | null;
+  currency?: string | null;
+  commission_amount?: string | number | null;
+  gym_net_amount?: string | number | null;
+  payment_type?: string | null;
+  status?: string | null;
+  paid_at?: string | null;
+  created_at: string;
+  member_name?: string | null;
+  plan_title?: string | null;
+  member_id?: string | null;
+  finance_href?: string;
+  member_href?: string | null;
+};
+
+export type GymFinance = {
+  period?: { days?: number; label?: string; timezone?: string };
+  customer_collections?: {
+    verified_gross?: string | null;
+    platform_commission?: string | null;
+    gym_net_earnings?: string | null;
+    refunds_amount?: string | null;
+    verified_count?: number;
+    pending_count?: number;
+    currency?: string;
+    note?: string;
+  } | null;
+  by_payment_type?: Array<{
+    payment_type: string;
+    n?: number;
+    amount?: string | null;
+    commission?: string | null;
+    gym_net?: string | null;
+  }>;
+  platform_subscription_fee?: {
+    configured_monthly?: string | null;
+    currency?: string;
+    invoice_history_available?: boolean;
+    note?: string;
+  } | null;
+  settlement?: { available?: boolean; note?: string } | null;
+  payouts?: { available?: boolean; note?: string } | null;
+  transactions?: GymFinanceTxn[];
+  exclusions?: string[];
 };

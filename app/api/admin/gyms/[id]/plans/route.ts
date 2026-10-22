@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAdminPermission } from "@/lib/admin-auth";
+import { getSpojexApiBaseUrl } from "@/lib/env";
+import { requestAccessToken } from "@/lib/spojex/server";
 
 function planTypeForMonths(months: number) {
   switch (months) {
@@ -24,6 +26,27 @@ export async function GET(
   const auth = await requireAdminPermission("gyms:read");
   if (!auth.ok) return auth.error;
   const { id } = await params;
+
+  // Prefer the Python directory (adds subscriber counts); fall back to local rows.
+  const token = await requestAccessToken();
+  if (token) {
+    try {
+      const res = await fetch(
+        `${getSpojexApiBaseUrl()}/api/v1/admin/gyms/${id}/plans`,
+        { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" },
+      );
+      const payload = (await res.json().catch(() => null)) as {
+        data?: unknown[];
+        expiry_policy?: string;
+      } | null;
+      if (res.ok && Array.isArray(payload?.data)) {
+        return NextResponse.json({ ...payload, source: "python" });
+      }
+    } catch {
+      // fall through to local query
+    }
+  }
+
   const { data, error } = await auth.context.client
     .from("gym_plans")
     .select("*")

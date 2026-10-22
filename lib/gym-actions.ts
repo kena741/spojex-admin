@@ -27,6 +27,9 @@ export type GymAction = {
  * Allowed gym admin actions for the current listing / verification / feature state.
  * Listing, verification, and featuring are separate axes — do not show Approve for
  * an already active+verified gym.
+ *
+ * Prefer `workspace.allowed_actions` from the Python API when available; this helper
+ * is the client-side mirror for offline/local fallbacks.
  */
 export function gymAllowedActions(row: GymRow): GymAction[] {
   const actions: GymAction[] = [{ id: "edit", label: "Edit profile" }];
@@ -36,7 +39,12 @@ export function gymAllowedActions(row: GymRow): GymAction[] {
   const feature = (row.feature_status || "").toLowerCase();
   const isActiveVerified = listing === "active" && verification === "verified";
 
-  if (!isActiveVerified && ["pending", "inactive", "rejected"].includes(listing)) {
+  // Never show Approve when verification is already complete.
+  if (
+    !isActiveVerified &&
+    verification !== "verified" &&
+    ["pending", "inactive", "rejected"].includes(listing)
+  ) {
     actions.push({
       id: "approve_listing",
       label: "Approve & verify",
