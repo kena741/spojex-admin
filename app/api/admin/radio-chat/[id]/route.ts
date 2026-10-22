@@ -1,31 +1,30 @@
 import { NextResponse } from "next/server";
-import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAnyAdminPermission } from "@/lib/admin-auth";
+import { proxyRadioChat } from "@/lib/radio-chat-api";
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export const dynamic = "force-dynamic";
+
+/** Legacy hide endpoint — prefer /messages/[id]/actions. */
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
   const auth = await requireAnyAdminPermission(["streams:write", "reports:write"]);
   if (!auth.ok) return auth.error;
   const { id } = await params;
-  const body = (await request.json()) as { action?: string };
-  if (body.action !== "hide") {
+  const body = (await request.json().catch(() => ({}))) as {
+    action?: string;
+    reason?: string;
+  };
+  const action = body.action === "restore" ? "restore" : "hide";
+  if (action === "hide" && body.action && body.action !== "hide") {
     return NextResponse.json({ error: "Unsupported action" }, { status: 400 });
   }
-
-  const { data, error } = await auth.context.client
-    .from("radio_chat_messages")
-    .update({ status: "hidden", deleted_at: new Date().toISOString() })
-    .eq("id", id)
-    .select("id, status")
-    .maybeSingle();
-  if (error) {
-    const hint = missingServiceRoleMessage();
-    return NextResponse.json(
-      { error: hint ? `${error.message}. ${hint}` : error.message },
-      { status: 400 },
-    );
-  }
-  if (!data) {
-    return NextResponse.json({ error: "Message not found" }, { status: 404 });
-  }
-  return NextResponse.json({ data });
+  return proxyRadioChat(`/messages/${id}/actions`, {
+    method: "POST",
+    body: JSON.stringify({
+      action,
+      reason: body.reason || (action === "hide" ? "Hidden by moderator" : "Restored by moderator"),
+    }),
+  });
 }
