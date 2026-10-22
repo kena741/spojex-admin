@@ -39,7 +39,6 @@ import {
   Scale,
   Settings,
   ScrollText,
-  Scale,
   Dumbbell,
   Images,
   LogOut,
