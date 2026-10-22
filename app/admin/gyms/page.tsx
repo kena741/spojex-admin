@@ -13,7 +13,6 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  Eye,
   Ban,
   Sparkles,
   ChevronDown,
@@ -262,7 +261,10 @@ function GymCard({
   const isBusy = busyId === row.id;
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+    <Link
+      href={`/admin/gyms/${row.id}`}
+      className="block rounded-xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-primary/40 hover:bg-muted/30"
+    >
       {/* Header */}
       <div className="mb-3 flex items-start gap-3">
         {cover ? (
@@ -278,12 +280,7 @@ function GymCard({
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <Link
-            href={`/admin/gyms/${row.id}`}
-            className="block truncate font-medium text-text-primary hover:text-primary"
-          >
-            {row.name}
-          </Link>
+          <p className="font-medium text-text-primary break-words">{row.name}</p>
           <p className="flex items-center gap-1 text-xs text-text-secondary">
             <MapPin className="h-3 w-3" />
             {locationLabel(row.city, row.country)}
@@ -335,18 +332,18 @@ function GymCard({
         </span>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
-        <Link
-          href={`/admin/gyms/${row.id}`}
-          className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground"
+      {canWrite ? (
+        <div
+          className="flex flex-wrap items-center gap-1.5 border-t border-border pt-3"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
         >
-          <Eye className="h-3 w-3" /> Open gym
-        </Link>
-        {canWrite ? (
           <GymActionsMenu row={row} busy={isBusy} onEdit={onEdit} onAction={onAction} />
-        ) : null}
-      </div>
-    </div>
+        </div>
+      ) : null}
+    </Link>
   );
 }
 
@@ -1036,7 +1033,7 @@ export default function GymsAdminPage() {
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
                 <tr>
-                  <th className="px-4 py-3 font-semibold">Gym</th>
+                  <th className="min-w-[14rem] px-4 py-3 font-semibold">Gym</th>
                   <th className="px-4 py-3 font-semibold">Category</th>
                   <th className="px-4 py-3 font-semibold">Location</th>
                   <th className="px-4 py-3 font-semibold">Owner</th>
@@ -1047,7 +1044,7 @@ export default function GymsAdminPage() {
                     Monthly platform fee
                   </th>
                   <th className="px-4 py-3 font-semibold">Memberships</th>
-                  <th className="px-4 py-3 font-semibold">Actions</th>
+                  {canWrite ? <th className="px-4 py-3 font-semibold">Actions</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -1056,9 +1053,18 @@ export default function GymsAdminPage() {
                   return (
                     <tr
                       key={row.id}
-                      className="border-b border-border last:border-0 hover:bg-muted/40"
+                      role="link"
+                      tabIndex={0}
+                      onClick={() => router.push(`/admin/gyms/${row.id}`)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          router.push(`/admin/gyms/${row.id}`);
+                        }
+                      }}
+                      className="cursor-pointer border-b border-border last:border-0 hover:bg-muted/40"
                     >
-                      <td className="px-4 py-3">
+                      <td className="min-w-[14rem] px-4 py-3">
                         <div className="flex items-center gap-3">
                           {cover ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -1072,13 +1078,10 @@ export default function GymsAdminPage() {
                               No img
                             </div>
                           )}
-                          <div className="min-w-0">
-                            <Link
-                              href={`/admin/gyms/${row.id}`}
-                              className="font-medium text-text-primary hover:text-primary"
-                            >
+                          <div className="min-w-[10rem]">
+                            <p className="whitespace-nowrap font-medium text-text-primary">
                               {row.name}
-                            </Link>
+                            </p>
                             <p className="text-xs text-text-hint">
                               {gymRatingLabel(row.rating_avg, row.rating_count)} ·{" "}
                               {row.follower_count ?? 0} followers
@@ -1129,26 +1132,22 @@ export default function GymsAdminPage() {
                           ? `${row.membership_summary.active_entitlements ?? 0} entitlements · ${row.membership_summary.active_roster ?? 0} roster`
                           : "—"}
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Link
-                            href={`/admin/gyms/${row.id}`}
-                            className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
-                          >
-                            Open gym
-                          </Link>
-                          {canWrite ? (
-                            <GymActionsMenu
-                              row={row}
-                              busy={busyId === row.id}
-                              onEdit={() => openEdit(row)}
-                              onAction={(actionId, needsReason) =>
-                                void runGymAction(row.id, actionId, needsReason)
-                              }
-                            />
-                          ) : null}
-                        </div>
-                      </td>
+                      {canWrite ? (
+                        <td
+                          className="px-4 py-3"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          <GymActionsMenu
+                            row={row}
+                            busy={busyId === row.id}
+                            onEdit={() => openEdit(row)}
+                            onAction={(actionId, needsReason) =>
+                              void runGymAction(row.id, actionId, needsReason)
+                            }
+                          />
+                        </td>
+                      ) : null}
                     </tr>
                   );
                 })}
