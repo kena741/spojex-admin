@@ -64,9 +64,9 @@ export function gymRatingLabel(
   const count = Number(ratingCount ?? 0);
   const avg = Number(ratingAvg ?? 0);
   if (!Number.isFinite(count) || count <= 0) {
-    if (!Number.isFinite(avg) || avg <= 0) return "No ratings yet";
+    if (!Number.isFinite(avg) || avg <= 0) return "0 rating";
   }
-  return Number.isFinite(avg) ? avg.toFixed(1) : "No ratings yet";
+  return Number.isFinite(avg) ? avg.toFixed(1) : "0 rating";
 }
 
 /** Monthly Gym→Spojex platform fee (not member prices / commission). */
