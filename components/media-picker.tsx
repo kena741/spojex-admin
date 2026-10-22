@@ -1,14 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { AdminEmpty, AdminErrorAlert, AdminLoadingRow, AdminSearchInput } from "@/components/admin-layout";
 import { SharedAudioPlayer } from "@/components/shared-audio-player";
+import { adminCacheKey } from "@/lib/admin-session-cache";
 import {
   formatDuration,
   type MediaLibraryAsset,
   type MediaLibraryListResponse,
 } from "@/lib/media-library";
 import { toBackendMediaUrl } from "@/lib/spojex-media";
+import { useAdminQuery } from "@/lib/use-admin-query";
 
 export type MediaPickerSelection = {
   assetId: string;
@@ -49,15 +51,20 @@ export function MediaPicker({
   title?: string;
 }) {
   const [q, setQ] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [assets, setAssets] = useState<MediaLibraryAsset[]>([]);
   const [picked, setPicked] = useState<Set<string>>(new Set(selectedIds));
+  const typesKey = types.slice().sort().join(",");
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const {
+    data: assetsData,
+    loading,
+    error,
+    refresh,
+  } = useAdminQuery<MediaLibraryAsset[]>({
+    key: open
+      ? adminCacheKey(["media-picker", typesKey, organizationId ?? "_", q.trim()])
+      : null,
+    enabled: open,
+    fetcher: async () => {
       const params = new URLSearchParams();
       params.set("types", types.join(","));
       if (organizationId) params.set("organization_id", organizationId);
@@ -68,20 +75,15 @@ export function MediaPicker({
       });
       const data = (await res.json()) as MediaLibraryListResponse;
       if (!res.ok) throw new Error(data.error || "Failed to load media");
-      setAssets(data.assets ?? []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-      setAssets([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [types, organizationId, q]);
+      return data.assets ?? [];
+    },
+  });
+  const assets = assetsData ?? [];
 
   useEffect(() => {
     if (!open) return;
     setPicked(new Set(selectedIds));
-    void load();
-  }, [open, selectedIds, load]);
+  }, [open, selectedIds]);
 
   if (!open) return null;
 
@@ -107,7 +109,7 @@ export function MediaPicker({
         <div className="space-y-3 border-b border-border px-4 py-3">
           <AdminSearchInput value={q} onChange={setQ} placeholder="Search library…" />
           <div className="flex flex-wrap gap-2 text-sm">
-            <button type="button" className="text-primary hover:underline" onClick={() => void load()}>
+            <button type="button" className="text-primary hover:underline" onClick={() => void refresh()}>
               Search
             </button>
             <a

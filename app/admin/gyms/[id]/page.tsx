@@ -1415,16 +1415,7 @@ function MembersTab({
   const [access, setAccess] = useState("all");
   const [planId, setPlanId] = useState("");
   const [page, setPage] = useState(1);
-  const [rows, setRows] = useState<GymDirectoryMember[]>([]);
-  const [total, setTotal] = useState(0);
   const [pageSize, setPageSize] = useState(40);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  const [plans, setPlans] = useState<GymPlanRow[]>([]);
-  const [plansLoading, setPlansLoading] = useState(true);
-  const [plansError, setPlansError] = useState<string | null>(null);
 
   const [drawerId, setDrawerId] = useState<string | null>(urlMemberId);
   const [confirm, setConfirm] = useState<MemberConfirm | null>(null);
@@ -1439,63 +1430,66 @@ function MembersTab({
     return () => window.clearTimeout(timer);
   }, [qInput]);
 
-  useEffect(() => {
-    if (view !== "members") return;
-    let cancelled = false;
-    setLoading(true);
-    setLoadError(null);
-    const qs = new URLSearchParams();
-    if (q) qs.set("q", q);
-    if (access !== "all") qs.set("access", access);
-    if (planId) qs.set("plan_id", planId);
-    qs.set("page", String(page));
-    void (async () => {
-      try {
-        const res = await adminFetch(`/api/admin/gyms/${id}/members?${qs.toString()}`);
-        const payload = await readJson<{
-          data?: GymDirectoryMember[];
-          total?: number;
-          page_size?: number;
-        }>(res);
-        if (cancelled) return;
-        if (!res.ok) {
-          setRows([]);
-          setTotal(0);
-          setLoadError(payload.error || "Failed to load members");
-          return;
-        }
-        setRows(payload.data ?? []);
-        setTotal(Number(payload.total ?? 0));
-        if (payload.page_size) setPageSize(Number(payload.page_size));
-      } catch (err) {
-        if (!cancelled) setLoadError(errorMessage(err, "Failed to load members"));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [id, q, access, planId, page, view, refreshKey]);
+  type MembersListData = {
+    rows: GymDirectoryMember[];
+    total: number;
+    page_size?: number;
+  };
 
-  const loadPlans = useCallback(async () => {
-    setPlansLoading(true);
-    setPlansError(null);
-    try {
+  const {
+    data: membersData,
+    loading,
+    error: loadError,
+    refresh: refreshMembers,
+  } = useAdminQuery<MembersListData>({
+    key:
+      view === "members"
+        ? adminCacheKey(["gyms", id, "members", q, access, planId, page])
+        : null,
+    enabled: view === "members",
+    fetcher: async () => {
+      const qs = new URLSearchParams();
+      if (q) qs.set("q", q);
+      if (access !== "all") qs.set("access", access);
+      if (planId) qs.set("plan_id", planId);
+      qs.set("page", String(page));
+      const res = await adminFetch(`/api/admin/gyms/${id}/members?${qs.toString()}`);
+      const payload = await readJson<{
+        data?: GymDirectoryMember[];
+        total?: number;
+        page_size?: number;
+        error?: string;
+      }>(res);
+      if (!res.ok) throw new Error(payload.error || "Failed to load members");
+      return {
+        rows: payload.data ?? [],
+        total: Number(payload.total ?? 0),
+        page_size: payload.page_size ? Number(payload.page_size) : undefined,
+      };
+    },
+  });
+
+  const rows = membersData?.rows ?? [];
+  const total = membersData?.total ?? 0;
+  useEffect(() => {
+    if (membersData?.page_size) setPageSize(membersData.page_size);
+  }, [membersData?.page_size]);
+
+  const {
+    data: plansData,
+    loading: plansLoading,
+    error: plansError,
+    refresh: loadPlans,
+  } = useAdminQuery<GymPlanRow[]>({
+    key: adminCacheKey(["gyms", id, "plans"]),
+    fetcher: async () => {
       const res = await adminFetch(`/api/admin/gyms/${id}/plans`);
-      const payload = await readJson<{ data?: GymPlanRow[] }>(res);
+      const payload = await readJson<{ data?: GymPlanRow[]; error?: string }>(res);
       if (!res.ok) throw new Error(payload.error || "Failed to load plans");
-      setPlans(payload.data ?? []);
-    } catch (err) {
-      setPlansError(errorMessage(err, "Failed to load plans"));
-    } finally {
-      setPlansLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    void loadPlans();
-  }, [loadPlans]);
+      return payload.data ?? [];
+    },
+  });
+  const plans = plansData ?? [];
 
   const closeDrawer = () => {
     setDrawerId(null);
@@ -1524,7 +1518,9 @@ function MembersTab({
       );
       setConfirm(null);
       if (kind === "remove" && drawerId === member.id) closeDrawer();
-      setRefreshKey((key) => key + 1);
+      invalidateAdminCache(adminCacheKey(["gyms", id, "members"]));
+      invalidateAdminCache(adminCacheKey(["gyms", id, "member-detail"]));
+      await refreshMembers();
       void onChanged();
     } catch (err) {
       setConfirmError(errorMessage(err, "Member update failed"));
@@ -1610,7 +1606,7 @@ function MembersTab({
 
           {loadError ? <AdminErrorAlert message={loadError} /> : null}
 
-          {loading ? (
+          {loading && rows.length === 0 ? (
             <AdminLoadingRow label="Loading members…" />
           ) : rows.length === 0 && !loadError ? (
             <AdminTableShell>
@@ -1746,7 +1742,6 @@ function MembersTab({
           id={id}
           memberId={drawerId}
           canWrite={canWrite}
-          refreshKey={refreshKey}
           onClose={closeDrawer}
           onRequestAction={requestConfirm}
         />
@@ -1790,46 +1785,30 @@ function MemberDrawer({
   id,
   memberId,
   canWrite,
-  refreshKey,
   onClose,
   onRequestAction,
 }: {
   id: string;
   memberId: string;
   canWrite: boolean;
-  refreshKey: number;
   onClose: () => void;
   onRequestAction: (kind: MemberConfirm["kind"], member: GymDirectoryMember) => void;
 }) {
-  const [detail, setDetail] = useState<GymMemberDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    void (async () => {
-      try {
-        const res = await adminFetch(`/api/admin/gyms/${id}/members/${memberId}/detail`);
-        const payload = await readJson<Partial<GymMemberDetail>>(res);
-        if (cancelled) return;
-        if (!res.ok || !payload.member) {
-          setDetail(null);
-          setError(payload.error || "Failed to load member");
-          return;
-        }
-        setDetail(payload as GymMemberDetail);
-      } catch (err) {
-        if (!cancelled) setError(errorMessage(err, "Failed to load member"));
-      } finally {
-        if (!cancelled) setLoading(false);
+  const {
+    data: detail,
+    loading,
+    error,
+  } = useAdminQuery<GymMemberDetail>({
+    key: adminCacheKey(["gyms", id, "member-detail", memberId]),
+    fetcher: async () => {
+      const res = await adminFetch(`/api/admin/gyms/${id}/members/${memberId}/detail`);
+      const payload = await readJson<Partial<GymMemberDetail> & { error?: string }>(res);
+      if (!res.ok || !payload.member) {
+        throw new Error(payload.error || "Failed to load member");
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [id, memberId, refreshKey]);
+      return payload as GymMemberDetail;
+    },
+  });
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -1880,7 +1859,7 @@ function MemberDrawer({
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
-          {loading ? <AdminLoadingRow label="Loading member…" /> : null}
+          {loading && !detail ? <AdminLoadingRow label="Loading member…" /> : null}
           {error ? <AdminErrorAlert message={error} /> : null}
 
           {detail && member && memberWithEntitlement && plan ? (
@@ -2210,7 +2189,7 @@ function PlansView({
       </div>
 
       {loadError ? <AdminErrorAlert message={loadError} /> : null}
-      {loading ? <AdminLoadingRow label="Loading plans…" /> : null}
+      {loading && plans.length === 0 ? <AdminLoadingRow label="Loading plans…" /> : null}
 
       {!loading && plans.length === 0 && !loadError ? (
         <AdminTableShell>
@@ -2479,32 +2458,25 @@ function CommunityTab({
   onChanged: () => Promise<void>;
   navigate: Navigate;
 }) {
-  const [data, setData] = useState<GymCommunity | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const {
+    data,
+    loading,
+    error,
+    refresh: load,
+  } = useAdminQuery<GymCommunity>({
+    key: adminCacheKey(["gyms", id, "community"]),
+    fetcher: async () => {
       // Read-only inspection: never joins, marks read, or sends messages.
       const res = await adminFetch(`/api/admin/gyms/${id}/community`);
-      const payload = await readJson<GymCommunity>(res);
+      const payload = await readJson<GymCommunity & { error?: string }>(res);
       if (!res.ok) throw new Error(payload.error || "Failed to load community");
-      setData(payload);
-    } catch (err) {
-      setError(errorMessage(err, "Failed to load community"));
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+      return payload;
+    },
+  });
 
   const enableChat = async () => {
     setBusy(true);
@@ -2513,6 +2485,7 @@ function CommunityTab({
       await postAdminResponse(`/api/admin/gyms/${id}/ensure-org`, {});
       notify.success("Organization chat enabled for this gym.");
       setConfirmOpen(false);
+      invalidateAdminCache(adminCacheKey(["gyms", id, "community"]));
       await load();
       await onChanged();
     } catch (err) {
@@ -2535,7 +2508,7 @@ function CommunityTab({
         anything.
       </Notice>
 
-      {loading ? <AdminLoadingRow label="Loading community…" /> : null}
+      {loading && !data ? <AdminLoadingRow label="Loading community…" /> : null}
       {error ? <AdminErrorAlert message={error} /> : null}
 
       {data && !linked ? (
@@ -2751,38 +2724,20 @@ function FinanceTab({
   ws: GymWorkspace | null;
 }) {
   const [days, setDays] = useState<number>(30);
-  const [data, setData] = useState<GymFinance | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    void (async () => {
-      try {
-        const res = await adminFetch(`/api/admin/gyms/${id}/finance?days=${days}`);
-        const payload = await readJson<GymFinance>(res);
-        if (cancelled) return;
-        if (!res.ok) {
-          setData(null);
-          setError(payload.error || "Failed to load finance");
-          return;
-        }
-        setData(payload);
-        if (payload.upstream_warning && payload.source === "local") {
-          setError(null);
-        }
-      } catch (err) {
-        if (!cancelled) setError(errorMessage(err, "Failed to load finance"));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [id, days]);
+  const {
+    data,
+    loading,
+    error,
+  } = useAdminQuery<GymFinance>({
+    key: adminCacheKey(["gyms", id, "finance", days]),
+    fetcher: async () => {
+      const res = await adminFetch(`/api/admin/gyms/${id}/finance?days=${days}`);
+      const payload = await readJson<GymFinance & { error?: string }>(res);
+      if (!res.ok) throw new Error(payload.error || "Failed to load finance");
+      return payload;
+    },
+  });
 
   const cc = data?.customer_collections ?? null;
   const currency = cc?.currency || "ETB";
@@ -2821,7 +2776,7 @@ function FinanceTab({
       </div>
 
       {error ? <AdminErrorAlert message={error} /> : null}
-      {loading ? <AdminLoadingRow label="Loading finance…" /> : null}
+      {loading && !data ? <AdminLoadingRow label="Loading finance…" /> : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <MetricCard
@@ -3542,9 +3497,6 @@ function StaffSection({
   canWrite: boolean;
   notify: Notify;
 }) {
-  const [staff, setStaff] = useState<GymStaffRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [staffNotice, setStaffNotice] = useState<string | null>(null);
 
@@ -3558,24 +3510,21 @@ function StaffSection({
   const [removeTarget, setRemoveTarget] = useState<GymStaffRow | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
+  const {
+    data: staffData,
+    loading,
+    error: loadError,
+    refresh: load,
+  } = useAdminQuery<GymStaffRow[]>({
+    key: adminCacheKey(["gyms", id, "staff"]),
+    fetcher: async () => {
       const res = await adminFetch(`/api/admin/gyms/${id}/staff`);
-      const payload = await readJson<{ data?: GymStaffRow[] }>(res);
+      const payload = await readJson<{ data?: GymStaffRow[]; error?: string }>(res);
       if (!res.ok) throw new Error(payload.error || "Failed to load staff");
-      setStaff(payload.data ?? []);
-    } catch (err) {
-      setLoadError(errorMessage(err, "Failed to load staff"));
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+      return payload.data ?? [];
+    },
+  });
+  const staff = staffData ?? [];
 
   const add = async () => {
     const trimmed = email.trim().toLowerCase();
@@ -3606,6 +3555,7 @@ function StaffSection({
           : "Staff assignment updated. Platform profile role was not changed.",
       );
       notify.success(inviting ? "Invitation sent." : "Staff member assigned.");
+      invalidateAdminCache(adminCacheKey(["gyms", id, "staff"]));
       await load();
     } catch (err) {
       setModalError(errorMessage(err, "Add staff failed"));
@@ -3619,6 +3569,7 @@ function StaffSection({
     try {
       await patchAdmin(`/api/admin/gyms/${id}/staff/${row.id}`, body);
       notify.success("Staff updated.");
+      invalidateAdminCache(adminCacheKey(["gyms", id, "staff"]));
       await load();
     } catch (err) {
       notify.error(errorMessage(err, "Staff update failed"));
@@ -3635,6 +3586,7 @@ function StaffSection({
       await deleteAdmin(`/api/admin/gyms/${id}/staff/${removeTarget.id}`);
       notify.success("Staff removed.");
       setRemoveTarget(null);
+      invalidateAdminCache(adminCacheKey(["gyms", id, "staff"]));
       await load();
     } catch (err) {
       setRemoveError(errorMessage(err, "Remove failed"));
