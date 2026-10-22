@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
@@ -11,10 +11,12 @@ import {
   AdminLoadingRow,
   AdminModal,
   AdminModalFooter,
+  AdminReloadButton,
   AdminRowMenu,
   AdminSearchInput,
   AdminSelect,
   AdminStatCard,
+  AdminTableLoading,
   AdminTableShell,
 } from "@/components/admin-layout";
 import BeneficiarySelect from "@/components/beneficiary-select";
@@ -109,9 +111,7 @@ export default function DonationsPage() {
   const [beneficiaryId, setBeneficiaryId] = useState("");
   const [createStatus, setCreateStatus] = useState("draft");
 
-  const load = async () => {
-    setLoading(true);
-    setError(null);
+  const load = useCallback(async () => {
     const params = new URLSearchParams();
     if (query.trim()) params.set("q", query.trim());
     if (status !== "all") params.set("status", status);
@@ -122,38 +122,36 @@ export default function DonationsPage() {
     params.set("page_size", String(pageSize));
     params.set("sort", sort);
     params.set("order", order);
+    const res = await adminFetch(`/api/admin/donations?${params}`);
+    const payload = (await res.json()) as {
+      data?: DirectoryRow[];
+      total?: number;
+      totals?: Totals;
+      error?: string;
+    };
+    if (!res.ok) throw new Error(payload.error || "Failed to load");
+    setRows(payload.data ?? []);
+    setTotal(payload.total ?? 0);
+    setTotals(payload.totals ?? {});
+  }, [query, status, asset, featured, beneficiary, page, pageSize, sort, order]);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const res = await adminFetch(`/api/admin/donations?${params}`);
-      const payload = (await res.json()) as {
-        data?: DirectoryRow[];
-        total?: number;
-        totals?: Totals;
-        error?: string;
-      };
-      if (!res.ok) throw new Error(payload.error || "Failed to load");
-      setRows(payload.data ?? []);
-      setTotal(payload.total ?? 0);
-      setTotals(payload.totals ?? {});
+      await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load");
     } finally {
       setLoading(false);
     }
-  };
+  }, [load]);
 
+  // Fetch once on mount and when page changes. Filters apply on Reload.
   useEffect(() => {
-    void load();
+    void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, status, asset, featured, beneficiary, sort, order]);
-
-  useEffect(() => {
-    const handle = window.setTimeout(() => {
-      if (page !== 1) setPage(1);
-      else void load();
-    }, 300);
-    return () => window.clearTimeout(handle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
+  }, [page]);
 
   useEffect(() => {
     const next = new URLSearchParams();
@@ -197,7 +195,7 @@ export default function DonationsPage() {
       setCreateStatus("draft");
       setCreateAsset("coin");
       setCreateOpen(false);
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
     } finally {
@@ -216,7 +214,7 @@ export default function DonationsPage() {
     setError(null);
     try {
       await deleteAdmin(`/api/admin/donations/${row.id}`);
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
     }
@@ -268,6 +266,7 @@ export default function DonationsPage() {
         description={`${rows.length} of ${total} · fundraising campaigns (ETB and coins tracked separately)`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <AdminReloadButton loading={loading} onClick={() => void refresh()} />
             <div className="flex rounded-lg border border-border p-0.5 text-sm">
               <button
                 type="button"
@@ -387,9 +386,11 @@ export default function DonationsPage() {
         </div>
       </AdminFilterPanel>
 
-      {loading || !viewReady ? <AdminLoadingRow label="Loading campaigns…" /> : null}
+      {!viewReady || (loading && view === "cards") ? (
+        <AdminLoadingRow label="Loading campaigns…" />
+      ) : null}
 
-      {!loading && viewReady && rows.length === 0 ? (
+      {!loading && viewReady && rows.length === 0 && view === "cards" ? (
         <AdminEmpty
           title="No campaigns"
           description={
@@ -439,7 +440,7 @@ export default function DonationsPage() {
         </div>
       ) : null}
 
-      {!loading && viewReady && rows.length > 0 && view === "list" ? (
+      {viewReady && view === "list" ? (
         <AdminTableShell>
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
@@ -456,7 +457,22 @@ export default function DonationsPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => {
+                {loading ? (
+                  <AdminTableLoading colSpan={8} label="Loading campaigns…" />
+                ) : rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="p-0">
+                      <AdminEmpty
+                        title="No campaigns"
+                        description={
+                          canWrite
+                            ? "Add a donation campaign for the home page. Adjust filters and Reload."
+                            : "Donation campaigns appear here."
+                        }
+                      />
+                    </td>
+                  </tr>
+                ) : rows.map((row) => {
                   const media = campaignMedia(row);
                   const href = row.href || `/admin/donations/${row.id}`;
                   return (

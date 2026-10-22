@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from "react";
-import { Search } from "lucide-react";
+import { RefreshCw, Search } from "lucide-react";
 import Sidebar from "@/components/sidebar";
 import AdminTopBar from "@/components/admin-topbar";
 import { cn } from "@/lib/utils";
@@ -118,6 +118,53 @@ export function AdminLoadingRow({
       />
       <span>{label}</span>
     </div>
+  );
+}
+
+/** Spinner row rendered under the table header (inside `<tbody>`). */
+export function AdminTableLoading({
+  colSpan,
+  label = "Loading…",
+}: {
+  colSpan: number;
+  label?: string;
+}) {
+  return (
+    <tr>
+      <td colSpan={colSpan} className="px-4 py-12">
+        <AdminLoadingRow label={label} compact className="mb-0 min-h-0 py-4" />
+      </td>
+    </tr>
+  );
+}
+
+/** Manual refresh control - use instead of refetching on every filter click. */
+export function AdminReloadButton({
+  onClick,
+  loading = false,
+  label = "Reload",
+  className,
+}: {
+  onClick: () => void;
+  loading?: boolean;
+  label?: string;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={loading}
+      title={label}
+      aria-label={label}
+      className={cn(
+        "inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-xs font-medium text-text-secondary hover:text-foreground disabled:opacity-50",
+        className,
+      )}
+    >
+      <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} aria-hidden />
+      <span className="hidden sm:inline">{label}</span>
+    </button>
   );
 }
 

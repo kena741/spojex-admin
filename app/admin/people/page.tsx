@@ -10,6 +10,7 @@ import {
   AdminErrorAlert,
   AdminFilterPanel,
   AdminLoadingRow,
+  AdminReloadButton,
   AdminSearchInput,
   AdminSelect,
 } from "@/components/admin-layout";
@@ -103,7 +104,7 @@ export default function PeopleDirectoryPage() {
     [pathname, router, searchParams],
   );
 
-  const load = useCallback(async () => {
+  const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -134,9 +135,11 @@ export default function PeopleDirectoryPage() {
     }
   }, [page, profile, q, status, verified]);
 
+  // Fetch once on mount and when page changes. Filters apply on Reload.
   useEffect(() => {
-    void load();
-  }, [load]);
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   useEffect(() => {
     if (!previewId) {
@@ -187,15 +190,18 @@ export default function PeopleDirectoryPage() {
         title="People"
         description="Directory of Spojex accounts and role profiles"
         actions={
-          can("profiles:read") ? (
-            <Link
-              href="/admin/people/settings"
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-medium text-text-secondary hover:text-foreground"
-            >
-              <Settings2 className="h-3.5 w-3.5" />
-              Profile settings
-            </Link>
-          ) : null
+          <div className="flex flex-wrap gap-2">
+            <AdminReloadButton loading={loading} onClick={() => void refresh()} />
+            {can("profiles:read") ? (
+              <Link
+                href="/admin/people/settings"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-medium text-text-secondary hover:text-foreground"
+              >
+                <Settings2 className="h-3.5 w-3.5" />
+                Profile settings
+              </Link>
+            ) : null}
+          </div>
         }
       />
 
@@ -295,13 +301,17 @@ export default function PeopleDirectoryPage() {
         </div>
       </AdminFilterPanel>
 
-      {loading ? <AdminLoadingRow label="Loading people…" /> : null}
-
-      {!loading && rows.length === 0 ? (
-        <AdminEmpty title="No people found" description="Try adjusting filters or search." />
+      {loading ? (
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <AdminLoadingRow label="Loading people…" compact className="py-10" />
+        </div>
       ) : null}
 
-      {rows.length > 0 ? (
+      {!loading && rows.length === 0 ? (
+        <AdminEmpty title="No people found" description="Try adjusting filters or search, then Reload." />
+      ) : null}
+
+      {!loading && rows.length > 0 ? (
         <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
           <div className="flex items-center justify-between border-b border-border px-4 py-2 text-xs text-text-secondary">
             <label className="inline-flex items-center gap-2">

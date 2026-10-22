@@ -9,10 +9,12 @@ import {
   AdminErrorAlert,
   AdminFilterPanel,
   AdminLoadingRow,
+  AdminReloadButton,
   AdminRowMenu,
   AdminSearchInput,
   AdminSelect,
   AdminStatCard,
+  AdminTableLoading,
   AdminTableShell,
   type AdminRowMenuItem,
 } from "@/components/admin-layout";
@@ -140,12 +142,22 @@ export default function ServicesPage() {
     setListOk(true);
   }, [category, delivery, page, pricingType, published, query, subcategory]);
 
-  useEffect(() => {
+  const refresh = useCallback(async () => {
     setLoading(true);
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
+    try {
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
   }, [load]);
+
+  // Fetch once on mount and when page changes. Filters apply on Reload.
+  useEffect(() => {
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   const categorySubs = subcategories.filter((s) =>
     category === "all" ? true : s.category_id === category,
@@ -188,7 +200,7 @@ export default function ServicesPage() {
           ? "Approved and published."
           : `Action “${action.replace(/_/g, " ")}” applied.`,
       );
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
     } finally {
@@ -227,7 +239,7 @@ export default function ServicesPage() {
           : `Approved and published ${ok} listing(s).`,
       );
       setSelected(new Set());
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Approve failed");
     } finally {
@@ -251,7 +263,7 @@ export default function ServicesPage() {
           ? result.message || "Archived (bookings and payments preserved)."
           : "Deleted.",
       );
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Archive failed");
     } finally {
@@ -321,6 +333,7 @@ export default function ServicesPage() {
         stackOnSmall
         actions={
           <div className="flex flex-wrap gap-2">
+            <AdminReloadButton loading={loading} onClick={() => void refresh()} />
             <Link
               href="/admin/services/settings"
               className="inline-flex h-9 items-center rounded-md border border-border bg-card px-3 text-xs font-medium text-text-secondary hover:text-foreground"
@@ -439,18 +452,12 @@ export default function ServicesPage() {
           {notice}
         </p>
       ) : null}
-      {loading ? <AdminLoadingRow label="Loading services…" /> : null}
       {error ? (
         <div className="space-y-2">
           <AdminErrorAlert message={error} />
           <button
             type="button"
-            onClick={() => {
-              setLoading(true);
-              load()
-                .catch((err) => setError(err instanceof Error ? err.message : "Failed"))
-                .finally(() => setLoading(false));
-            }}
+            onClick={() => void refresh()}
             className="rounded-md border border-border bg-card px-3 py-2 text-xs font-medium"
           >
             Retry
@@ -459,18 +466,22 @@ export default function ServicesPage() {
       ) : null}
 
       <AdminTableShell>
-        {!loading && listOk && rows.length === 0 && !error ? (
+        {loading && view === "list" ? (
+          <AdminLoadingRow label="Loading services…" compact className="py-10" />
+        ) : null}
+
+        {!loading && listOk && rows.length === 0 && !error && view === "list" ? (
           <AdminEmpty
             title={published === "pending" ? "No pending listings" : "No services"}
             description={
               published === "pending"
                 ? "New listings wait here until an admin approves them."
-                : "Listings from the superapp marketplace appear here."
+                : "Listings from the superapp marketplace appear here. Adjust filters and Reload."
             }
           />
         ) : null}
 
-        {rows.length > 0 && view === "list" ? (
+        {!loading && rows.length > 0 && view === "list" ? (
           <ul className="divide-y divide-border">
             {rows.map((row) => {
               const cover = serviceCoverUrl(row);
@@ -581,7 +592,7 @@ export default function ServicesPage() {
           </ul>
         ) : null}
 
-        {rows.length > 0 && view === "table" ? (
+        {view === "table" ? (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
@@ -594,7 +605,22 @@ export default function ServicesPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
+                {loading ? (
+                  <AdminTableLoading colSpan={5} label="Loading services…" />
+                ) : listOk && rows.length === 0 && !error ? (
+                  <tr>
+                    <td colSpan={5} className="p-0">
+                      <AdminEmpty
+                        title={published === "pending" ? "No pending listings" : "No services"}
+                        description={
+                          published === "pending"
+                            ? "New listings wait here until an admin approves them."
+                            : "Listings from the superapp marketplace appear here. Adjust filters and Reload."
+                        }
+                      />
+                    </td>
+                  </tr>
+                ) : rows.map((row) => (
                   <tr
                     key={row.id}
                     role="link"

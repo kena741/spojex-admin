@@ -8,11 +8,12 @@ import {
   AdminEmpty,
   AdminErrorAlert,
   AdminFilterPanel,
-  AdminLoadingRow,
+  AdminReloadButton,
   AdminRowMenu,
   AdminSearchInput,
   AdminSelect,
   AdminStatCard,
+  AdminTableLoading,
   AdminTableShell,
   type AdminRowMenuItem,
 } from "@/components/admin-layout";
@@ -77,9 +78,6 @@ export default function NewsPage() {
   }, [launchOrg, router]);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
       const params = new URLSearchParams();
       if (query.trim()) params.set("q", query.trim());
       if (status !== "all") params.set("status", status);
@@ -97,12 +95,6 @@ export default function NewsPage() {
       const json = (await res.json()) as NewsDirectoryResponse & { error?: string };
       if (!res.ok) throw new Error(json.error || "Failed to load news");
       setPayload(json);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-      setPayload(null);
-    } finally {
-      setLoading(false);
-    }
   }, [
     category,
     featuredFilter,
@@ -118,9 +110,24 @@ export default function NewsPage() {
     status,
   ]);
 
-  useEffect(() => {
-    void load();
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load");
+      setPayload(null);
+    } finally {
+      setLoading(false);
+    }
   }, [load]);
+
+  // Fetch once on mount and when page changes. Filters apply on Reload.
+  useEffect(() => {
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   const rows = payload?.data ?? [];
   const totals = payload?.totals ?? {};
@@ -207,7 +214,7 @@ export default function NewsPage() {
     setError(null);
     try {
       await postAdminResponse(`/api/admin/news/${row.id}/actions`, { action });
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
     } finally {
@@ -221,7 +228,7 @@ export default function NewsPage() {
     setError(null);
     try {
       await deleteAdmin(`/api/admin/news/${row.id}`);
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
     } finally {
@@ -289,14 +296,17 @@ export default function NewsPage() {
           { label: "Sport News" },
         ]}
         actions={
-          canWrite ? (
-            <Link
-              href="/admin/news/new"
-              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
-            >
-              Add news
-            </Link>
-          ) : null
+          <div className="flex flex-wrap gap-2">
+            <AdminReloadButton loading={loading} onClick={() => void refresh()} />
+            {canWrite ? (
+              <Link
+                href="/admin/news/new"
+                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+              >
+                Add news
+              </Link>
+            ) : null}
+          </div>
         }
       />
 
@@ -338,7 +348,7 @@ export default function NewsPage() {
           <button
             type="button"
             className="-mt-2 mb-2 text-sm font-medium text-primary hover:underline"
-            onClick={() => void load()}
+            onClick={() => void refresh()}
           >
             Retry
           </button>
@@ -468,20 +478,7 @@ export default function NewsPage() {
         ) : null}
       </AdminFilterPanel>
 
-      {loading ? <AdminLoadingRow label="Loading articles…" /> : null}
-
       <AdminTableShell>
-        {!loading && rows.length === 0 ? (
-          <AdminEmpty
-            title={activeChips.length ? "No matching articles" : "No articles yet"}
-            description={
-              activeChips.length
-                ? "Try clearing filters or adjusting the date range."
-                : "Create sport news to show on the home feed."
-            }
-          />
-        ) : null}
-        {rows.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
@@ -498,7 +495,22 @@ export default function NewsPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => {
+                {loading ? (
+                  <AdminTableLoading colSpan={9} label="Loading articles…" />
+                ) : rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="p-0">
+                      <AdminEmpty
+                        title={activeChips.length ? "No matching articles" : "No articles yet"}
+                        description={
+                          activeChips.length
+                            ? "Try clearing filters or adjusting the date range, then Reload."
+                            : "Create sport news to show on the home feed."
+                        }
+                      />
+                    </td>
+                  </tr>
+                ) : rows.map((row) => {
                   const thumb = (row.thumbnail || "").trim();
                   const dateLabel = row.display_date?.label || "Date";
                   const dateAt = row.display_date?.at;
@@ -591,7 +603,6 @@ export default function NewsPage() {
               </tbody>
             </table>
           </div>
-        ) : null}
         {!loading && filteredTotal > pageSize ? (
           <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-3 text-sm">
             <p className="text-text-secondary">

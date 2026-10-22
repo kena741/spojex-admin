@@ -8,13 +8,14 @@ import {
   AdminEmpty,
   AdminErrorAlert,
   AdminFilterPanel,
-  AdminLoadingRow,
+  AdminReloadButton,
   AdminModal,
   AdminModalFooter,
   AdminRowMenu,
   AdminSearchInput,
   AdminSelect,
   AdminStatCard,
+  AdminTableLoading,
   AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
@@ -103,7 +104,7 @@ export default function OpportunitiesPage() {
     [pathname, router, searchParams],
   );
 
-  const load = useCallback(async () => {
+  const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     setOk(false);
@@ -144,9 +145,11 @@ export default function OpportunitiesPage() {
     }
   }, [page, q, status, published, category, organizer, country, deadline]);
 
+  // Fetch once on mount and when page changes. Filters apply on Reload.
   useEffect(() => {
-    void load();
-  }, [load]);
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   const openCreate = () => {
     setDraft(emptyOpportunityDraft());
@@ -191,7 +194,7 @@ export default function OpportunitiesPage() {
       if (created?.id) {
         rememberReturn();
         router.push(`/admin/opportunities/${created.id}`);
-      } else await load();
+      } else await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
     } finally {
@@ -219,7 +222,7 @@ export default function OpportunitiesPage() {
           ? result.message || "Archived (applications and payments preserved)."
           : "Deleted.",
       );
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Archive failed");
     } finally {
@@ -245,7 +248,7 @@ export default function OpportunitiesPage() {
       setNotice(
         `Schedules processed: opened ${opened}, closed ${closed}. Waitlist notified for newly opened (deduped).`,
       );
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Schedule processing failed");
     } finally {
@@ -261,8 +264,10 @@ export default function OpportunitiesPage() {
         title="Opportunities"
         description="Trials, jobs, and scouting listings - publication, applications, and interest waitlists are separate"
         actions={
-          canWrite ? (
-            <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2">
+            <AdminReloadButton loading={loading} onClick={() => void refresh()} />
+            {canWrite ? (
+              <>
               <button
                 type="button"
                 onClick={() => void processSchedules()}
@@ -279,8 +284,9 @@ export default function OpportunitiesPage() {
               >
                 New opportunity
               </button>
-            </div>
-          ) : null
+              </>
+            ) : null}
+          </div>
         }
       />
 
@@ -289,7 +295,7 @@ export default function OpportunitiesPage() {
           <AdminErrorAlert message={error} />
           <button
             type="button"
-            onClick={() => void load()}
+            onClick={() => void refresh()}
             className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium"
           >
             Retry
@@ -397,19 +403,7 @@ export default function OpportunitiesPage() {
         </div>
       </AdminFilterPanel>
 
-      {loading ? <AdminLoadingRow label="Loading opportunities…" /> : null}
-
       <AdminTableShell>
-        {!loading && ok && rows.length === 0 ? (
-          <AdminEmpty
-            title={total === 0 && !q ? "No opportunities yet" : "No matching opportunities"}
-            description={
-              !q && status === "all"
-                ? "Create a trial, job, or scouting listing to get started."
-                : "Try a different search or filter."
-            }
-          />
-        ) : !loading && ok ? (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
@@ -425,7 +419,22 @@ export default function OpportunitiesPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => {
+                {loading ? (
+                  <AdminTableLoading colSpan={8} label="Loading opportunities…" />
+                ) : ok && rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="p-0">
+                      <AdminEmpty
+                        title={total === 0 && !q ? "No opportunities yet" : "No matching opportunities"}
+                        description={
+                          !q && status === "all"
+                            ? "Create a trial, job, or scouting listing to get started."
+                            : "Try a different search or filter, then Reload."
+                        }
+                      />
+                    </td>
+                  </tr>
+                ) : rows.map((row) => {
                   const cover = toBackendMediaUrl(row.cover_image_url);
                   return (
                     <tr
@@ -563,7 +572,6 @@ export default function OpportunitiesPage() {
               </tbody>
             </table>
           </div>
-        ) : null}
       </AdminTableShell>
 
       {total > 40 ? (

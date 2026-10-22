@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
@@ -9,6 +9,7 @@ import {
   AdminErrorAlert,
   AdminFilterPanel,
   AdminLoadingRow,
+  AdminReloadButton,
   AdminModal,
   AdminSearchInput,
   AdminSelect,
@@ -97,14 +98,14 @@ export default function OrganizationsPage() {
     verification_reason: "",
   });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const params = new URLSearchParams({
       page: String(page),
       page_size: String(pageSize),
       sort: "updated_at",
       order: "desc",
     });
-    if (debouncedQuery.trim()) params.set("q", debouncedQuery.trim());
+    if (query.trim()) params.set("q", query.trim());
     if (type !== "all") params.set("type", type);
     if (verified !== "all") params.set("verified", verified);
     if (city.trim()) params.set("city", city.trim());
@@ -135,7 +136,19 @@ export default function OrganizationsPage() {
     } else {
       setLiveGiftTotals(await loadOrgLiveGiftTotals(orgs.map((o) => o.id)));
     }
-  };
+  }, [query, type, verified, city, country, page, pageSize]);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, [load]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query), 300);
@@ -154,14 +167,11 @@ export default function OrganizationsPage() {
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [debouncedQuery, type, verified, city, country, page, pathname, router]);
 
+  // Fetch once on mount and when page changes. Filters apply on Reload.
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
+    void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQuery, type, verified, city, country, page]);
+  }, [page]);
 
   useEffect(() => {
     if (!createOpen) return;
@@ -343,7 +353,7 @@ export default function OrganizationsPage() {
         router.push(`/admin/organizations/${created.id}`);
         return;
       }
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
     } finally {
@@ -363,7 +373,7 @@ export default function OrganizationsPage() {
     try {
       const payload = await postAdminResponse("/api/admin/organizations/platform", {});
       const org = payload.data as OrganizationRow | undefined;
-      await load();
+      await refresh();
       if (org?.id) {
         router.push(`/admin/organizations/${org.id}`);
       }
@@ -383,8 +393,10 @@ export default function OrganizationsPage() {
         description={`${total} total · page ${page} of ${totalPages}`}
         stackOnSmall
         actions={
-          canWrite ? (
-            <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2">
+            <AdminReloadButton loading={loading} onClick={() => void refresh()} />
+            {canWrite ? (
+              <>
               {!loading ? (
                 <button
                   type="button"
@@ -406,8 +418,9 @@ export default function OrganizationsPage() {
               >
                 Add organization
               </button>
-            </div>
-          ) : null
+              </>
+            ) : null}
+          </div>
         }
       />
 
@@ -497,7 +510,6 @@ export default function OrganizationsPage() {
         </div>
       </AdminFilterPanel>
 
-      {loading ? <AdminLoadingRow label="Loading organizations…" /> : null}
       {error ? <AdminErrorAlert message={error} /> : null}
 
       {!loading && rows.length === 0 ? (
@@ -511,7 +523,11 @@ export default function OrganizationsPage() {
         />
       ) : null}
 
-      {rows.length > 0 ? (
+      {loading ? (
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <AdminLoadingRow label="Loading organizations…" compact className="py-10" />
+        </div>
+      ) : rows.length > 0 ? (
         <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
           <ul className="divide-y divide-border">
             {rows.map((row) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -24,10 +24,12 @@ import {
   AdminLoadingRow,
   AdminModal,
   AdminModalFooter,
+  AdminReloadButton,
   AdminRowMenu,
   AdminSearchInput,
   AdminSelect,
   AdminStatCard,
+  AdminTableLoading,
   AdminTableShell,
   type AdminRowMenuItem,
 } from "@/components/admin-layout";
@@ -435,7 +437,7 @@ export default function GymsAdminPage() {
   const [saving, setSaving] = useState(false);
   const [uploadingKind, setUploadingKind] = useState<ImageKind | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const params = new URLSearchParams();
     if (query.trim()) params.set("q", query.trim());
     if (status !== "all") params.set("status", status);
@@ -473,15 +475,25 @@ export default function GymsAdminPage() {
         })),
       );
     }
-  };
-
-  useEffect(() => {
-    setLoading(true);
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload on filter/page change
   }, [query, status, verification, category, locationFilter, featuredFilter, page, pageSize, sort, order]);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, [load]);
+
+  // Fetch once on mount and when page changes. Filters apply on Reload.
+  useEffect(() => {
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   // Apply URL filters on browser back/forward and deep links (e.g. verification=queue).
   useEffect(() => {
@@ -594,7 +606,7 @@ export default function GymsAdminPage() {
         ...(reason ? { reason } : {}),
         idempotency_key: `${id}:${actionId}:${Date.now()}`,
       });
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action failed");
     } finally {
@@ -691,7 +703,7 @@ export default function GymsAdminPage() {
       }
       setCreateOpen(false);
       resetCreateForm();
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
     } finally {
@@ -818,7 +830,7 @@ export default function GymsAdminPage() {
       setOwnerOptions([]);
       setEditingLogo("");
       setEditingCover("");
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -840,7 +852,7 @@ export default function GymsAdminPage() {
     setError(null);
     try {
       await patchAdmin(`/api/admin/gyms/${id}`, patch);
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
     } finally {
@@ -855,6 +867,7 @@ export default function GymsAdminPage() {
         description={`${filtered.length} of ${rows.length} · venues and fitness centers`}
         actions={
           <div className="flex flex-wrap gap-2">
+            <AdminReloadButton loading={loading} onClick={() => void refresh()} />
             <Link
               href="/admin/gyms/settings"
               className="inline-flex h-9 items-center rounded-md border border-border bg-card px-3 text-xs font-medium text-text-secondary hover:text-foreground"
@@ -964,7 +977,11 @@ export default function GymsAdminPage() {
         </div>
       </AdminFilterPanel>
 
-      {loading ? <AdminLoadingRow label="Loading gyms…" /> : null}
+      {loading ? (
+        <div className="lg:hidden">
+          <AdminLoadingRow label="Loading gyms…" />
+        </div>
+      ) : null}
 
       {/* Mobile Card Layout */}
       {!loading && filtered.length > 0 ? (
@@ -988,16 +1005,6 @@ export default function GymsAdminPage() {
       {/* Desktop Table Layout */}
       <div className="hidden lg:block">
       <AdminTableShell>
-        {!loading && filtered.length === 0 ? (
-          <AdminEmpty
-            title="No gyms"
-            description={
-              canWrite
-                ? "Add a gym venue, or wait for submissions from the app."
-                : "Gym venues from SpoJex appear here."
-            }
-          />
-        ) : !loading ? (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
@@ -1017,7 +1024,22 @@ export default function GymsAdminPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((row) => {
+                {loading ? (
+                  <AdminTableLoading colSpan={canWrite ? 10 : 9} label="Loading gyms…" />
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={canWrite ? 10 : 9} className="p-0">
+                      <AdminEmpty
+                        title="No gyms"
+                        description={
+                          canWrite
+                            ? "Add a gym venue, or wait for submissions from the app. Adjust filters and Reload."
+                            : "Gym venues from SpoJex appear here."
+                        }
+                      />
+                    </td>
+                  </tr>
+                ) : filtered.map((row) => {
                   const cover = row.cover_url || row.logo_url;
                   return (
                     <tr
@@ -1123,7 +1145,6 @@ export default function GymsAdminPage() {
               </tbody>
             </table>
           </div>
-        ) : null}
       </AdminTableShell>
       {!loading && total > pageSize ? (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-text-secondary">

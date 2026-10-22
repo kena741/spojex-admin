@@ -1,18 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
   AdminErrorAlert,
   AdminFilterPanel,
-  AdminLoadingRow,
+  AdminReloadButton,
   AdminModal,
   AdminModalFooter,
   AdminSearchInput,
   AdminSelect,
   AdminTableActions,
+  AdminTableLoading,
   AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
@@ -77,18 +78,29 @@ export default function BannersPage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const response = await fetch("/api/admin/banners", { credentials: "same-origin" });
     const payload = (await response.json()) as { data?: BannerRow[]; error?: string };
     if (!response.ok) throw new Error(payload.error || "Failed to load banners");
     setRows(payload.data ?? []);
-  };
-
-  useEffect(() => {
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
   }, []);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, [load]);
+
+  // Single fetch on mount (list is filtered client-side). Reload to refetch.
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -148,7 +160,7 @@ export default function BannersPage() {
       setCreateFile(null);
       setCreateActive(true);
       if (createImageRef.current) createImageRef.current.value = "";
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
     } finally {
@@ -229,7 +241,7 @@ export default function BannersPage() {
         sort_order: draft.sort_order,
       });
       closeEdit();
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -243,7 +255,7 @@ export default function BannersPage() {
     try {
       await deleteAdmin(`/api/admin/banners/${row.id}`);
       if (editingId === row.id) closeEdit();
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
     }
@@ -254,7 +266,7 @@ export default function BannersPage() {
     setError(null);
     try {
       await patchAdmin(`/api/admin/banners/${row.id}`, { is_active: !row.is_active });
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
     }
@@ -269,6 +281,7 @@ export default function BannersPage() {
           { label: "Content", href: "/admin/content" },
           { label: "Banners" },
         ]}
+        actions={<AdminReloadButton loading={loading} onClick={() => void refresh()} />}
       />
       {error ? <AdminErrorAlert message={error} /> : null}
 
@@ -353,15 +366,7 @@ export default function BannersPage() {
         ) : null}
       </AdminFilterPanel>
 
-      {loading ? <AdminLoadingRow label="Loading banners…" /> : null}
-
       <AdminTableShell>
-        {filtered.length === 0 && !loading ? (
-          <AdminEmpty
-            title="No banners"
-            description="Add a banner, then upload an image to show it in the app."
-          />
-        ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
@@ -374,7 +379,18 @@ export default function BannersPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((row) => {
+                {loading ? (
+                  <AdminTableLoading colSpan={canWrite ? 5 : 4} label="Loading banners…" />
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={canWrite ? 5 : 4} className="p-0">
+                      <AdminEmpty
+                        title="No banners"
+                        description="Add a banner, then upload an image to show it in the app."
+                      />
+                    </td>
+                  </tr>
+                ) : filtered.map((row) => {
                   const image = (row.image_url ?? "").trim();
                   return (
                     <tr key={row.id} className="border-b border-border last:border-0 hover:bg-muted/30">
@@ -432,7 +448,6 @@ export default function BannersPage() {
               </tbody>
             </table>
           </div>
-        )}
       </AdminTableShell>
 
       <AdminModal

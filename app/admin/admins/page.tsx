@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
   AdminErrorAlert,
   AdminFilterPanel,
-  AdminLoadingRow,
   AdminModal,
   AdminModalFooter,
+  AdminReloadButton,
   AdminRowMenu,
   AdminSearchInput,
   AdminSelect,
+  AdminTableLoading,
   AdminTableShell,
   type AdminRowMenuItem,
 } from "@/components/admin-layout";
@@ -43,7 +44,7 @@ export default function AdminsPage() {
   const [nextRole, setNextRole] = useState("");
   const [roleSaving, setRoleSaving] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const [adminsRes, rolesRes] = await Promise.all([
       fetch("/api/admin/admins"),
       fetch("/api/admin/roles"),
@@ -53,13 +54,24 @@ export default function AdminsPage() {
     if (!adminsRes.ok) throw new Error(adminsPayload.error || "Failed to load admins");
     setRows(adminsPayload.data ?? []);
     if (rolesRes.ok) setRoles(rolesPayload.data ?? []);
-  };
-
-  useEffect(() => {
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
   }, []);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, [load]);
+
+  // Single fetch on mount (list is filtered client-side). Reload to refetch.
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -86,7 +98,7 @@ export default function AdminsPage() {
       if (!res.ok) throw new Error(payload.error || "Invite failed");
       if (payload.data?.token) setInviteToken(payload.data.token);
       setForm(emptyForm);
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invite failed");
     } finally {
@@ -104,7 +116,7 @@ export default function AdminsPage() {
     try {
       await patchAdmin(`/api/admin/admins/${roleEdit.id}`, { role: nextRole });
       setRoleEdit(null);
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
     } finally {
@@ -115,7 +127,7 @@ export default function AdminsPage() {
   const toggleActive = async (row: AdminRow) => {
     try {
       await patchAdmin(`/api/admin/admins/${row.id}`, { is_active: !row.is_active });
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
     }
@@ -124,7 +136,7 @@ export default function AdminsPage() {
   const remove = async (id: string) => {
     try {
       await deleteAdmin(`/api/admin/admins/${id}`);
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
     }
@@ -136,33 +148,29 @@ export default function AdminsPage() {
         title="Admins"
         description="Staff who can sign in to SpoJex Admin"
         actions={
-          canWrite ? (
-            <button
-              type="button"
-              onClick={() => {
-                setInviteToken(null);
-                setForm(emptyForm);
-                setCreateOpen(true);
-              }}
-              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
-            >
-              Invite staff
-            </button>
-          ) : null
+          <div className="flex flex-wrap gap-2">
+            <AdminReloadButton loading={loading} onClick={() => void refresh()} />
+            {canWrite ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setInviteToken(null);
+                  setForm(emptyForm);
+                  setCreateOpen(true);
+                }}
+                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+              >
+                Invite staff
+              </button>
+            ) : null}
+          </div>
         }
       />
       {error ? <AdminErrorAlert message={error} /> : null}
       <AdminFilterPanel>
         <AdminSearchInput value={query} onChange={setQuery} placeholder="Search name, email, role" />
       </AdminFilterPanel>
-      {loading ? <AdminLoadingRow label="Loading admins…" /> : null}
       <AdminTableShell>
-        {filtered.length === 0 && !loading ? (
-          <AdminEmpty
-            title="No admins"
-            description="Invite staff with an explicit role. Access is invitation-based."
-          />
-        ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
@@ -176,7 +184,18 @@ export default function AdminsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((row) => {
+                {loading ? (
+                  <AdminTableLoading colSpan={canWrite ? 6 : 5} label="Loading admins…" />
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={canWrite ? 6 : 5} className="p-0">
+                      <AdminEmpty
+                        title="No admins"
+                        description="Invite staff with an explicit role. Access is invitation-based."
+                      />
+                    </td>
+                  </tr>
+                ) : filtered.map((row) => {
                   const items: AdminRowMenuItem[] = [
                     {
                       id: "change-role",
@@ -246,7 +265,6 @@ export default function AdminsPage() {
               </tbody>
             </table>
           </div>
-        )}
       </AdminTableShell>
 
       <AdminModal

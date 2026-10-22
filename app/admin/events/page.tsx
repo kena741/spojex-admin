@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
@@ -8,11 +8,12 @@ import {
   AdminEmpty,
   AdminErrorAlert,
   AdminFilterPanel,
-  AdminLoadingRow,
   AdminModal,
+  AdminReloadButton,
   AdminSearchInput,
   AdminSelect,
   AdminRowMenu,
+  AdminTableLoading,
   AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
@@ -113,7 +114,7 @@ export default function EventsPage() {
     setCoverFile(file);
   };
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const params = new URLSearchParams();
     if (query.trim()) params.set("q", query.trim());
     if (status !== "all") params.set("status", status);
@@ -149,14 +150,6 @@ export default function EventsPage() {
     }
     setRows(payload.data ?? []);
     setTotal(Number(payload.total ?? 0));
-  };
-
-  useEffect(() => {
-    setLoading(true);
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     query,
     status,
@@ -172,19 +165,23 @@ export default function EventsPage() {
     pageSize,
   ]);
 
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, [load]);
+
+  // Fetch once on mount and when page changes. Filters apply on Reload.
   useEffect(() => {
-    setQuery(searchParams.get("q") || "");
-    setStatus(searchParams.get("status") || "all");
-    setLifecycle(searchParams.get("lifecycle") || "all");
-    setVisibility(searchParams.get("visibility") || "all");
-    setSalesFilter(searchParams.get("sales") || "all");
-    setVenueFilter(searchParams.get("venue") || "");
-    setOrganizerFilter(searchParams.get("organizer") || "");
-    setStartsFrom(searchParams.get("starts_from") || "");
-    setStartsTo(searchParams.get("starts_to") || "");
-    setWindowFilter(searchParams.get("window") || "");
-    setPage(Number(searchParams.get("page") || "1") || 1);
-  }, [searchParams]);
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   useEffect(() => {
     const next = new URLSearchParams();
@@ -268,7 +265,7 @@ export default function EventsPage() {
         router.push(`/admin/events/${created.id}`);
         return;
       }
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
     } finally {
@@ -283,7 +280,7 @@ export default function EventsPage() {
       await patchAdmin(`/api/admin/events/${row.id}`, {
         is_upcoming: !row.is_upcoming,
       });
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
     }
@@ -296,7 +293,7 @@ export default function EventsPage() {
       await patchAdmin(`/api/admin/events/${row.id}`, {
         is_featured: !row.is_featured,
       });
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
     }
@@ -307,7 +304,7 @@ export default function EventsPage() {
     setError(null);
     try {
       await deleteAdmin(`/api/admin/events/${row.id}`);
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
     }
@@ -319,15 +316,18 @@ export default function EventsPage() {
         title="Events"
         description="Listings, tickets, and gate codes"
         actions={
-          canWrite ? (
-            <button
-              type="button"
-              onClick={() => setCreateOpen(true)}
-              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
-            >
-              Add event
-            </button>
-          ) : null
+          <div className="flex flex-wrap items-center gap-2">
+            <AdminReloadButton loading={loading} onClick={() => void refresh()} />
+            {canWrite ? (
+              <button
+                type="button"
+                onClick={() => setCreateOpen(true)}
+                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+              >
+                Add event
+              </button>
+            ) : null}
+          </div>
         }
       />
       {error ? <AdminErrorAlert message={error} /> : null}
@@ -435,45 +435,50 @@ export default function EventsPage() {
           </p>
         ) : null}
       </AdminFilterPanel>
-      {loading ? <AdminLoadingRow label="Loading events…" /> : null}
       <AdminTableShell>
-        {filtered.length === 0 && !loading ? (
-          <AdminEmpty title="No events" description="Create an event to sell tickets." />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-[1120px] w-full table-fixed text-left text-sm">
-              <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+        <div className="overflow-x-auto">
+          <table className="min-w-[1120px] w-full table-fixed text-left text-sm">
+            <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+              <tr>
+                <th className="w-[26%] px-4 py-3 font-semibold">Event</th>
+                <th className="w-[14%] px-4 py-3 font-semibold" title="Africa/Addis_Ababa">
+                  When
+                </th>
+                <th
+                  className="w-[12%] px-4 py-3 font-semibold"
+                  title="Active tier prices; legacy ticket_price only if no active tiers"
+                >
+                  Price
+                </th>
+                <th
+                  className="w-[10%] px-4 py-3 font-semibold"
+                  title="Confirmed paid quantity (pending reservations excluded)"
+                >
+                  Sold
+                </th>
+                <th
+                  className="w-[11%] px-4 py-3 font-semibold"
+                  title="Verified payment collections only - pending checkouts excluded"
+                >
+                  Collections
+                </th>
+                <th className="w-[8%] px-4 py-3 font-semibold">Promo</th>
+                <th className="w-[8%] px-4 py-3 font-semibold">Featured</th>
+                <th className="w-[8%] px-4 py-3 font-semibold">Status</th>
+                <th className="w-[13%] px-4 py-3 font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <AdminTableLoading colSpan={9} label="Loading events…" />
+              ) : filtered.length === 0 ? (
                 <tr>
-                  <th className="w-[26%] px-4 py-3 font-semibold">Event</th>
-                  <th className="w-[14%] px-4 py-3 font-semibold" title="Africa/Addis_Ababa">
-                    When
-                  </th>
-                  <th
-                    className="w-[12%] px-4 py-3 font-semibold"
-                    title="Active tier prices; legacy ticket_price only if no active tiers"
-                  >
-                    Price
-                  </th>
-                  <th
-                    className="w-[10%] px-4 py-3 font-semibold"
-                    title="Confirmed paid quantity (pending reservations excluded)"
-                  >
-                    Sold
-                  </th>
-                  <th
-                    className="w-[11%] px-4 py-3 font-semibold"
-                    title="Verified payment collections only - pending checkouts excluded"
-                  >
-                    Collections
-                  </th>
-                  <th className="w-[8%] px-4 py-3 font-semibold">Promo</th>
-                  <th className="w-[8%] px-4 py-3 font-semibold">Featured</th>
-                  <th className="w-[8%] px-4 py-3 font-semibold">Status</th>
-                  <th className="w-[13%] px-4 py-3 font-semibold">Actions</th>
+                  <td colSpan={9} className="p-0">
+                    <AdminEmpty title="No events" description="Create an event to sell tickets. Adjust filters and Reload." />
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {filtered.map((row) => {
+              ) : (
+                filtered.map((row) => {
                   const cover = eventCoverUrl(row);
                   const sold = row.inventory?.confirmed_sold ?? 0;
                   const capacity = row.inventory?.capacity ?? row.capacity ?? 0;
@@ -606,11 +611,11 @@ export default function EventsPage() {
                       </td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </AdminTableShell>
       {!loading && total > pageSize ? (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-text-secondary">

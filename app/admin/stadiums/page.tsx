@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -9,10 +9,11 @@ import {
   AdminEmpty,
   AdminErrorAlert,
   AdminFilterPanel,
-  AdminLoadingRow,
+  AdminReloadButton,
   AdminSearchInput,
   AdminSelect,
   AdminTableActions,
+  AdminTableLoading,
   AdminTableShell,
 } from "@/components/admin-layout";
 import { SearchableSelect } from "@/components/searchable-select";
@@ -61,7 +62,7 @@ export default function StadiumsPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [surface, setSurface] = useState(searchParams.get("surface") || "all");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const spojex = getSpojexClient();
     const [stadiumsRes, subsRes] = await Promise.all([
       spojex
@@ -82,13 +83,24 @@ export default function StadiumsPage() {
     if (!subsRes.error) {
       setSubscriptions((subsRes.data ?? []) as StadiumSubscriptionRow[]);
     }
-  };
-
-  useEffect(() => {
-    load()
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load"))
-      .finally(() => setLoading(false));
   }, []);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, [load]);
+
+  // Single fetch on mount (list is filtered client-side). Reload to refetch.
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   useEffect(() => {
     const next = new URLSearchParams();
@@ -184,7 +196,7 @@ export default function StadiumsPage() {
           ? result.message || "Deactivated - bookings and payments preserved."
           : result?.message || "Removed.",
       );
-      await load();
+      await refresh();
       if (expandedId === row.id) setExpandedId(null);
       if (editing?.id === row.id) setEditing(null);
     } catch (err) {
@@ -215,7 +227,7 @@ export default function StadiumsPage() {
         skipped?: number;
         errors?: { name: string; error: string }[];
       }>("/api/admin/stadiums/import-addis", {});
-      await load();
+      await refresh();
       const errCount = result.errors?.length ?? 0;
       setNotice(
         `Import done - created ${result.created ?? 0}, updated ${result.updated ?? 0}, errors ${errCount}.`,
@@ -236,8 +248,10 @@ export default function StadiumsPage() {
         title="Stadiums"
         description="Venues, hourly reservations, and access passes - pass codes stay on the detail workspace"
         actions={
-          canWrite ? (
-            <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2">
+            <AdminReloadButton loading={loading} onClick={() => void refresh()} />
+            {canWrite ? (
+              <>
               <button
                 type="button"
                 disabled={importing}
@@ -256,8 +270,9 @@ export default function StadiumsPage() {
               >
                 Add stadium
               </button>
-            </div>
-          ) : null
+              </>
+            ) : null}
+          </div>
         }
       />
       {error ? <AdminErrorAlert message={error} /> : null}
@@ -319,11 +334,7 @@ export default function StadiumsPage() {
           />
         </div>
       </AdminFilterPanel>
-      {loading ? <AdminLoadingRow label="Loading stadiums…" /> : null}
       <AdminTableShell>
-        {filtered.length === 0 && !loading ? (
-          <AdminEmpty title="No stadiums" description="Add a venue, or wait for an owner to submit one from the app." />
-        ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
@@ -338,7 +349,15 @@ export default function StadiumsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((row) => {
+                {loading ? (
+                  <AdminTableLoading colSpan={7} label="Loading stadiums…" />
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-0">
+                      <AdminEmpty title="No stadiums" description="Add a venue, or wait for an owner to submit one from the app." />
+                    </td>
+                  </tr>
+                ) : filtered.map((row) => {
                   const cover = stadiumCoverUrl(row);
                   const holders = subscribersByStadium[row.id] ?? [];
                   const open = expandedId === row.id;
@@ -501,7 +520,6 @@ export default function StadiumsPage() {
               </tbody>
             </table>
           </div>
-        )}
       </AdminTableShell>
       <StadiumEditModal
         stadium={editing}
@@ -511,7 +529,7 @@ export default function StadiumsPage() {
           setEditing(null);
           setCreating(false);
         }}
-        onSaved={load}
+        onSaved={refresh}
       />
     </>
   );
