@@ -423,7 +423,7 @@ function MessagesPageInner() {
               Select a conversation to inspect messages.
             </div>
           ) : detailLoading ? (
-            <AdminLoadingRow label="Loading conversation…" />
+            <AdminLoadingRow label="Loading conversation…" fill />
           ) : detail ? (
             <div className="flex h-[70vh] flex-col">
               <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">

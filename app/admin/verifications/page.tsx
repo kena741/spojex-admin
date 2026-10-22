@@ -552,7 +552,7 @@ export default function VerificationCenterPage() {
                   </button>
                 </div>
               ) : null}
-              {detailLoading ? <AdminLoadingRow label="Loading request…" /> : null}
+              {detailLoading ? <AdminLoadingRow label="Loading request…" fill /> : null}
               {!detailLoading && !selected ? (
                 <div className="grid h-full place-items-center p-8 text-sm text-text-hint">
                   Select a request from the queue

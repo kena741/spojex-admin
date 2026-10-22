@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Info, Radio, Tv } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
+import { AdminLoadingRow } from "@/components/admin-layout";
 import LiveEventsPanel from "@/components/live-events-panel";
 import RadioStreamsPanel from "@/components/radio-streams-panel";
 import { adminFetch } from "@/lib/hooks";
@@ -251,7 +252,7 @@ export default function StreamsPage() {
       fallback={
         <>
           <AdminPageHeader title="Streams" description="Radio stations and live events" />
-          <p className="text-sm text-text-secondary">Loading…</p>
+          <AdminLoadingRow label="Loading streams…" />
         </>
       }
     >

@@ -508,7 +508,7 @@ function ReportsPageInner() {
                 Close
               </button>
             </div>
-            {detailLoading ? <AdminLoadingRow label="Loading case…" /> : null}
+            {detailLoading ? <AdminLoadingRow label="Loading case…" fill /> : null}
             {actionError ? <AdminErrorAlert message={actionError} /> : null}
             {detail ? (
               <div className="space-y-3 text-sm">

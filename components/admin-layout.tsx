@@ -86,11 +86,37 @@ export function AdminSelect({
   );
 }
 
-export function AdminLoadingRow({ label }: { label: string }) {
+export function AdminLoadingRow({
+  label,
+  className,
+  fill = false,
+  compact = false,
+}: {
+  label: string;
+  className?: string;
+  /** Fill the parent height (detail panes, split views, table shells). */
+  fill?: boolean;
+  /** Tighter padding for modals, pickers, and inline panels. */
+  compact?: boolean;
+}) {
   return (
-    <div className="mb-4 flex items-center gap-2 text-sm text-text-secondary">
-      <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      {label}
+    <div
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      className={cn(
+        "flex w-full flex-col items-center justify-center gap-2.5 px-4 text-center text-sm text-text-secondary",
+        compact && "mb-0 min-h-[6rem] py-6",
+        !compact && fill && "mb-0 min-h-[16rem] flex-1 py-12",
+        !compact && !fill && "mb-4 min-h-[10rem] py-10",
+        className,
+      )}
+    >
+      <div
+        className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-primary border-t-transparent"
+        aria-hidden
+      />
+      <span>{label}</span>
     </div>
   );
 }

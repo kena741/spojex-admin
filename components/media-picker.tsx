@@ -123,7 +123,7 @@ export function MediaPicker({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
           {error ? <AdminErrorAlert message={error} /> : null}
-          {loading ? <AdminLoadingRow label="Loading…" /> : null}
+          {loading ? <AdminLoadingRow label="Loading…" compact /> : null}
           {!loading && assets.length === 0 ? (
             <AdminEmpty
               title="No matching assets"
