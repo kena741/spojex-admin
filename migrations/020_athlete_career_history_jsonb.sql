@@ -136,7 +136,7 @@ declare
       "period": { "start_date": "2024-01-15", "end_date": null, "is_current": true },
       "stats": { "matches_played": 48, "goals": 9, "assists": 14 },
       "honours": [
-        "Player of the Month — Sep 2024",
+        "Player of the Month - Sep 2024",
         "U23 squad captain",
         "Premier League Team of the Week (x2)"
       ],
@@ -151,7 +151,7 @@ declare
       "location": { "city": "Hawassa", "country": "Ethiopia" },
       "period": { "start_date": "2023-08-01", "end_date": "2023-12-20", "is_current": false },
       "stats": { "matches_played": 18, "goals": 2, "assists": 5 },
-      "honours": ["Loan spell — senior minutes"],
+      "honours": ["Loan spell - senior minutes"],
       "summary": "Six-month loan to gain top-flight minutes. Featured in cup run and defensive midfield rotations.",
       "sort_order": 90
     },
@@ -183,7 +183,7 @@ declare
       "id": "career-coffee-trial",
       "entry_type": "trial",
       "organization": { "name": "Ethiopian Coffee SC", "short_name": "Coffee SC" },
-      "role": { "title": "Trial — Midfielder", "league_or_competition": "Pre-season assessment" },
+      "role": { "title": "Trial - Midfielder", "league_or_competition": "Pre-season assessment" },
       "location": { "city": "Addis Ababa", "country": "Ethiopia" },
       "period": { "start_date": "2019-12-02", "end_date": "2019-12-16", "is_current": false },
       "stats": { "matches_played": 3, "goals": 0, "assists": 1 },
@@ -199,7 +199,7 @@ declare
       "location": { "city": "Addis Ababa", "country": "Ethiopia" },
       "period": { "start_date": "2017-07-10", "end_date": "2017-07-24", "is_current": false },
       "stats": { "matches_played": 6, "goals": 1, "assists": 2 },
-      "honours": ["Camp standout — midfield group"],
+      "honours": ["Camp standout - midfield group"],
       "summary": "National federation identification camp before joining St. George youth setup.",
       "sort_order": 50
     }

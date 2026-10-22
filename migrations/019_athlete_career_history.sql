@@ -119,7 +119,7 @@ begin
     9,
     14,
     array[
-      'Player of the Month — Sep 2024',
+      'Player of the Month - Sep 2024',
       'U23 squad captain',
       'Premier League Team of the Week (x2)'
     ],
@@ -141,7 +141,7 @@ begin
     18,
     2,
     5,
-    array['Loan spell — senior minutes'],
+    array['Loan spell - senior minutes'],
     'Six-month loan to gain top-flight minutes. Featured in cup run and defensive midfield rotations.',
     90
   ),
@@ -191,7 +191,7 @@ begin
     'trial',
     'Ethiopian Coffee SC',
     'Coffee SC',
-    'Trial — Midfielder',
+    'Trial - Midfielder',
     'Pre-season assessment',
     'Addis Ababa',
     'Ethiopia',
@@ -220,7 +220,7 @@ begin
     6,
     1,
     2,
-    array['Camp standout — midfield group'],
+    array['Camp standout - midfield group'],
     'National federation identification camp before joining St. George youth setup.',
     50
   );

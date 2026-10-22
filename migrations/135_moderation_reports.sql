@@ -1,4 +1,4 @@
--- Mirror of Alembic a1spojex000068 — unified moderation reports hardening.
+-- Mirror of Alembic a1spojex000068 - unified moderation reports hardening.
 
 alter table public.reports
   add column if not exists target_type text;

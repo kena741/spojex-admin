@@ -39,6 +39,6 @@ create trigger live_events_sync_host_from_org_biu
   execute function public.live_events_sync_host_from_org();
 
 comment on column public.organizations.is_platform is
-  'Spojex platform brand org — at most one row. Follow/gifts use its owner user_id.';
+  'Spojex platform brand org - at most one row. Follow/gifts use its owner user_id.';
 comment on column public.live_events.host_org_id is
   'Organization hosting this live; syncs host_user_id to the org owner for gifts/follow.';

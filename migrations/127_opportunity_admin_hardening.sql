@@ -1,7 +1,7 @@
 -- Opportunities admin hardening:
 -- 1) Unique waitlist membership (prevents duplicate interest entries from retries)
 -- 2) Terms version on opportunities (bumped when terms/requirements change)
--- Soft / additive only — preserves existing IDs, applications, and payments.
+-- Soft / additive only - preserves existing IDs, applications, and payments.
 -- Prefer Alembic a1spojex000058 on the API deploy path; this file is a mirror.
 
 delete from public.opportunity_waitlist w

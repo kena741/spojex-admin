@@ -66,7 +66,7 @@ create index if not exists media_asset_usages_asset_idx
 comment on table public.media_library_assets is
   'Catalog overlay on media_objects / sport_news_sounds. Storage stays in GCS.';
 comment on table public.media_asset_usages is
-  'Explicit asset→content references. Coverage is incremental — unused only when indexed.';
+  'Explicit asset→content references. Coverage is incremental - unused only when indexed.';
 
 -- Link sounds table to optional media_object when column missing
 alter table public.sport_news_sounds
