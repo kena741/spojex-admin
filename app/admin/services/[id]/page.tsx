@@ -499,10 +499,6 @@ export default function ServiceDetailPage() {
         </p>
       ) : null}
       {error ? <AdminErrorAlert message={error} /> : null}
-      {definitions.publication ? (
-        <p className="mb-3 text-xs text-text-hint">{definitions.publication}</p>
-      ) : null}
-
       <div className="mb-4 flex flex-wrap gap-1 border-b border-border">
         {tabs.map((t) => (
           <button

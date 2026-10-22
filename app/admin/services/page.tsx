@@ -392,10 +392,6 @@ export default function ServicesPage() {
           </button>
         </div>
       </div>
-      {definitions.publication ? (
-        <p className="mb-4 text-xs text-text-hint">{definitions.publication}</p>
-      ) : null}
-
       <AdminFilterPanel>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <AdminSearchInput

@@ -217,10 +217,7 @@ export async function GET(
       bookings: bookings.length,
       payments: payCount.count ?? 0,
     },
-    definitions: {
-      publication:
-        "Approval and publication share one flag (`published`). Approving publishes immediately.",
-    },
+    definitions: {},
     source: "admin_local_fallback",
   });
 }

@@ -74,7 +74,6 @@ export function formatDelivery(mode: string | null | undefined) {
   return m.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** Approval and publication share `published`. Approve publishes immediately. */
 export function formatPublicationStatus(published: boolean | null | undefined) {
   return published ? "Published" : "Pending review";
 }

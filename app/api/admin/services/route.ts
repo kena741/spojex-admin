@@ -198,8 +198,6 @@ export async function GET(request: Request) {
       },
     },
     definitions: {
-      publication:
-        "Approval and publication share one flag (`published`). Approving publishes immediately.",
       delivery_on_request:
         "Legacy availability_mode value preserved as-is. Displayed as “On request”; not remapped.",
       provider_verification:
