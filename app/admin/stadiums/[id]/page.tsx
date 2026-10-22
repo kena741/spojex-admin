@@ -679,24 +679,34 @@ export default function StadiumDetailPage() {
                     {stadium.capacity > 0 ? ` · ${stadium.capacity} capacity` : ""}
                   </dd>
                 </div>
-                <div className="flex flex-col gap-0.5 border-b border-border py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-                  <dt className="shrink-0 text-text-secondary">Sub-city</dt>
-                  <dd className="font-medium sm:text-right">{stadium.subcity || "—"}</dd>
-                </div>
-                <div className="flex flex-col gap-0.5 border-b border-border py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-                  <dt className="shrink-0 text-text-secondary">Woreda</dt>
-                  <dd className="font-medium sm:text-right">
-                    {stadium.wereda != null ? `Woreda ${stadium.wereda}` : "—"}
-                  </dd>
-                </div>
-                <div className="flex flex-col gap-0.5 border-b border-border py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-                  <dt className="shrink-0 text-text-secondary">Location</dt>
-                  <dd className="font-medium sm:text-right">{stadium.location || "—"}</dd>
-                </div>
-                <div className="flex flex-col gap-0.5 border-b border-border py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-                  <dt className="shrink-0 text-text-secondary">Address</dt>
-                  <dd className="font-medium sm:text-right">{stadium.address || "—"}</dd>
-                </div>
+                {(stadium.subcity || stadium.wereda != null) ? (
+                  <div className="flex flex-col gap-0.5 border-b border-border py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                    <dt className="shrink-0 text-text-secondary">Area</dt>
+                    <dd className="font-medium sm:text-right">
+                      {[
+                        stadium.subcity || null,
+                        stadium.wereda != null ? `Woreda ${stadium.wereda}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </dd>
+                  </div>
+                ) : null}
+                {(stadium.location || stadium.address) ? (
+                  <div className="flex flex-col gap-0.5 border-b border-border py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                    <dt className="shrink-0 text-text-secondary">Location</dt>
+                    <dd className="font-medium sm:text-right">
+                      {stadium.location || stadium.address}
+                      {stadium.location &&
+                      stadium.address &&
+                      stadium.address !== stadium.location ? (
+                        <span className="mt-0.5 block text-xs font-normal text-text-secondary">
+                          {stadium.address}
+                        </span>
+                      ) : null}
+                    </dd>
+                  </div>
+                ) : null}
                 <div className="flex flex-col gap-0.5 border-b border-border py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                   <dt className="shrink-0 text-text-secondary">Owner</dt>
                   <dd className="sm:text-right">
@@ -716,23 +726,21 @@ export default function StadiumDetailPage() {
                     {stadium.contact_email ? ` · ${stadium.contact_email}` : ""}
                   </dd>
                 </div>
-                <div className="flex flex-col gap-0.5 border-b border-border py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-                  <dt className="shrink-0 text-text-secondary">Map</dt>
-                  <dd className="font-medium sm:text-right">
-                    {stadium.latitude != null && stadium.longitude != null ? (
+                {stadium.latitude != null && stadium.longitude != null ? (
+                  <div className="flex flex-col gap-0.5 border-b border-border py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                    <dt className="shrink-0 text-text-secondary">Map</dt>
+                    <dd className="font-medium sm:text-right">
                       <a
                         href={`https://www.google.com/maps?q=${stadium.latitude},${stadium.longitude}`}
                         target="_blank"
                         rel="noreferrer"
                         className="text-primary"
                       >
-                        {stadium.address || stadium.location || "Open in Maps"}
+                        Open in Maps
                       </a>
-                    ) : (
-                      stadium.address || stadium.location || "—"
-                    )}
-                  </dd>
-                </div>
+                    </dd>
+                  </div>
+                ) : null}
                 <div className="flex flex-col gap-0.5 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                   <dt className="shrink-0 text-text-secondary">Created</dt>
                   <dd className="font-medium sm:text-right">{formatDate(stadium.created_at)}</dd>

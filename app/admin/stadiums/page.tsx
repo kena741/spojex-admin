@@ -403,11 +403,6 @@ export default function StadiumsPage() {
                         row.location ||
                         row.address ||
                         "—"}
-                      {!row.subcity && row.location ? (
-                        <span className="mt-0.5 block text-xs text-amber-800">
-                          Structured Sub-city/Woreda blank — review location
-                        </span>
-                      ) : null}
                     </td>
                     <td className="px-4 py-3">
                       {row.users ? (
