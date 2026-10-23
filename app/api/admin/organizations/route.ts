@@ -60,6 +60,19 @@ export async function GET(request: Request) {
   if (trash === "yes") query = query.not("deleted_at", "is", null);
   else query = query.is("deleted_at", null);
 
+  // Gyms have their own admin section — exclude gym-type orgs from this list.
+  if (type === "gym") {
+    return NextResponse.json({
+      data: [],
+      total: 0,
+      page,
+      page_size: pageSize,
+      member_counts: {},
+      summary: null,
+      source: "local",
+    });
+  }
+  query = query.neq("organization_type", "gym");
   if (type !== "all") query = query.eq("organization_type", type);
   if (verified === "yes") query = query.eq("verified", true);
   if (verified === "no") query = query.eq("verified", false);
@@ -112,10 +125,16 @@ export async function GET(request: Request) {
     memberCounts[oid] = set.size;
   }
 
-  // Global summary (not page-scoped)
+  // Global summary (not page-scoped); gym orgs counted under Gyms, not here.
   const [allOrgs, typeRows] = await Promise.all([
-    auth.context.client.from("organizations").select("verified, user_id"),
-    auth.context.client.from("organizations").select("organization_type"),
+    auth.context.client
+      .from("organizations")
+      .select("verified, user_id, organization_type")
+      .neq("organization_type", "gym"),
+    auth.context.client
+      .from("organizations")
+      .select("organization_type")
+      .neq("organization_type", "gym"),
   ]);
   const all = (allOrgs.data ?? []) as Array<{ verified?: boolean; user_id?: string }>;
   const byType: Record<string, number> = {};
@@ -209,6 +228,12 @@ export async function POST(request: Request) {
   }
 
   const organizationType = (body.organization_type?.trim() || "club").toLowerCase();
+  if (organizationType === "gym") {
+    return NextResponse.json(
+      { error: "Create gyms under Admin → Gyms, not Organizations." },
+      { status: 400 },
+    );
+  }
   if (!allowedTypes.has(organizationType)) {
     return NextResponse.json({ error: "Invalid organization type" }, { status: 400 });
   }

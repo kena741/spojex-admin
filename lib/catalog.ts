@@ -51,7 +51,6 @@ export const organizationTypes: CatalogOption[] = [
   { id: "ngo", label: "NGO / Foundation" },
   { id: "sports_company", label: "Sports Company" },
   { id: "medical_provider", label: "Medical Provider" },
-  { id: "gym", label: "Gym / Fitness Center" },
   { id: "media_organization", label: "Media Organization" },
   { id: "sponsor", label: "Sponsor" },
   { id: "facility", label: "Sports Facility" },
@@ -71,6 +70,8 @@ export function roleLabel(role?: string | null) {
 
 export function organizationTypeLabel(type?: string | null) {
   if (!type) return "Organization";
+  // Legacy rows: gym orgs are managed under Admin → Gyms, not Organizations.
+  if (type === "gym") return "Gym";
   return orgLabelMap.get(type) ?? formatFallback(type);
 }
 

@@ -577,6 +577,9 @@ export default function OrganizationDetailPage() {
     { id: "settings", label: "Settings" },
   ];
 
+  const isGymOrg = org.organization_type === "gym";
+  const primaryGym = linkedGyms[0] ?? null;
+
   return (
     <div className="space-y-4">
       <AdminPageHeader
@@ -616,6 +619,26 @@ export default function OrganizationDetailPage() {
       {notice ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
           {notice}
+        </div>
+      ) : null}
+      {isGymOrg ? (
+        <div className="rounded-xl border border-border bg-muted/40 p-3 text-sm text-text-secondary">
+          Gym profiles are managed under{" "}
+          <Link href="/admin/gyms" className="font-medium text-primary hover:underline">
+            Gyms
+          </Link>
+          {primaryGym ? (
+            <>
+              .{" "}
+              <Link
+                href={`/admin/gyms/${primaryGym.id}`}
+                className="font-medium text-primary hover:underline"
+              >
+                Open {primaryGym.name}
+              </Link>
+            </>
+          ) : null}
+          .
         </div>
       ) : null}
 
@@ -1039,8 +1062,12 @@ export default function OrganizationDetailPage() {
                 <select
                   className={fieldClass}
                   value={draft.organization_type}
+                  disabled={isGymOrg}
                   onChange={(e) => setDraft((d) => ({ ...d, organization_type: e.target.value }))}
                 >
+                  {isGymOrg ? (
+                    <option value="gym">Gym (managed under Gyms)</option>
+                  ) : null}
                   {organizationTypes.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.label}

@@ -140,6 +140,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (key in body) patch[key] = body[key];
   }
 
+  if (String(patch.organization_type || "").toLowerCase() === "gym") {
+    return NextResponse.json(
+      { error: "Gyms are managed under Admin → Gyms, not Organizations." },
+      { status: 400 },
+    );
+  }
+
   const { data: existing } = await auth.context.client
     .from("organizations")
     .select("*")
