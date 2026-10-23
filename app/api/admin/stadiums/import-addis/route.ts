@@ -58,7 +58,6 @@ type AddisSportField = {
   imageUrl?: string;
   translations?: {
     en?: { name?: string; wereda?: string; subCity?: string; description?: string };
-    am?: { name?: string; wereda?: string; subCity?: string; description?: string };
   };
   wereda?: {
     name?: string;
@@ -176,7 +175,6 @@ function normalizeField(raw: unknown): FieldRow | null {
   const loc = mapLocation(subCity, weredaText);
   const unmapped: string[] = [];
   if (loc.location_review_reason) unmapped.push(loc.location_review_reason);
-  if (addis.translations?.am?.name) unmapped.push("Amharic name preserved in import only (not stored)");
 
   return {
     external_id: addis.id ? String(addis.id) : null,

@@ -10,7 +10,7 @@ export type AddisAbabaSubcity = {
   id: string;
   /** Canonical English display name stored on stadiums.subcity */
   name: string;
-  /** Alternate spellings for search matching */
+  /** Alternate English spellings for search matching */
   aliases: string[];
   /** Number of weredas (districts) in this sub-city */
   weredaCount: number;
@@ -20,73 +20,67 @@ export const ADDIS_ABABA_SUBCITIES: readonly AddisAbabaSubcity[] = [
   {
     id: "addis-ketema",
     name: "Addis Ketema",
-    aliases: ["addis ketema", "አዲስ ከተማ"],
+    aliases: ["addis ketema"],
     weredaCount: 12,
   },
   {
     id: "akaki-kality",
     name: "Akaki Kality",
-    aliases: ["akaki kality", "akaki kaliti", "kaliti", "አቃቂ ቃሊቲ"],
+    aliases: ["akaki kality", "akaki kaliti", "kaliti"],
     weredaCount: 13,
   },
   {
     id: "arada",
     name: "Arada",
-    aliases: ["arada", "አራዳ"],
+    aliases: ["arada"],
     weredaCount: 8,
   },
   {
     id: "bole",
     name: "Bole",
-    aliases: ["bole", "ቦሌ"],
+    aliases: ["bole"],
     weredaCount: 11,
   },
   {
     id: "gulele",
     name: "Gulele",
-    aliases: ["gulele", "gullele", "ጉለሌ"],
+    aliases: ["gulele", "gullele"],
     weredaCount: 10,
   },
   {
     id: "kirkos",
     name: "Kirkos",
-    aliases: ["kirkos", "kerkos", "ቂርቆስ"],
+    aliases: ["kirkos", "kerkos"],
     weredaCount: 10,
   },
   {
     id: "kolfe-keranio",
     name: "Kolfe Keranio",
-    aliases: ["kolfe keranio", "kolfe keraniyo", "kolfe", "ኮልፌ ቀራንዮ"],
+    aliases: ["kolfe keranio", "kolfe keraniyo", "kolfe"],
     weredaCount: 11,
   },
   {
     id: "lideta",
     name: "Lideta",
-    aliases: ["lideta", "ledeta", "ልደታ"],
+    aliases: ["lideta", "ledeta"],
     weredaCount: 10,
   },
   {
     id: "nifas-silk-lafto",
     name: "Nifas Silk-Lafto",
-    aliases: [
-      "nifas silk-lafto",
-      "nifas silk lafto",
-      "nefas silk",
-      "lafto",
-      "ንፋስ ስልክ ላፍቶ",
-    ],
+    aliases: ["nifas silk-lafto", "nifas silk lafto", "nefas silk", "lafto"],
     weredaCount: 13,
   },
   {
     id: "yeka",
     name: "Yeka",
-    aliases: ["yeka", "የካ"],
+    aliases: ["yeka"],
     weredaCount: 12,
   },
   {
     id: "lemi-kura",
     name: "Lemi Kura",
-    aliases: ["lemi kura", "lemi kura", "ለሚ ኩራ"],
+    aliases: ["lemi kura"],
     weredaCount: 14,
   },
 ] as const;

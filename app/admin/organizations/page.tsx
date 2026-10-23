@@ -512,7 +512,7 @@ export default function OrganizationsPage() {
                 setQuery(value);
                 setPage(1);
               }}
-              placeholder="Search name, Amharic name, public ID, city"
+              placeholder="Search name, public ID, city"
             />
           </div>
           <AdminSelect

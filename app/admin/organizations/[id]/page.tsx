@@ -113,7 +113,6 @@ export default function OrganizationDetailPage() {
   const [reassignBusy, setReassignBusy] = useState(false);
   const [draft, setDraft] = useState({
     name: "",
-    name_am: "",
     organization_type: "club",
     city: "",
     country: "",
@@ -225,7 +224,6 @@ export default function OrganizationDetailPage() {
     if (next) {
       setDraft({
         name: next.name || "",
-        name_am: next.name_am || "",
         organization_type: next.organization_type || "club",
         city: next.city || "",
         country: next.country || "",
@@ -286,7 +284,6 @@ export default function OrganizationDetailPage() {
     if (!org || !editing) return false;
     return (
       draft.name !== (org.name || "") ||
-      draft.name_am !== (org.name_am || "") ||
       draft.organization_type !== (org.organization_type || "club") ||
       draft.city !== (org.city || "") ||
       draft.country !== (org.country || "") ||
@@ -347,7 +344,6 @@ export default function OrganizationDetailPage() {
     try {
       await patchAdmin(`/api/admin/organizations/${id}`, {
         name: draft.name.trim(),
-        name_am: draft.name_am.trim() || null,
         organization_type: draft.organization_type,
         city: draft.city.trim(),
         country: draft.country.trim(),
@@ -670,7 +666,6 @@ export default function OrganizationDetailPage() {
               ) : null}
             </div>
             <dl className="mt-5 space-y-2 text-sm">
-              {org.name_am ? <Row label="Amharic name">{org.name_am}</Row> : null}
               <Row label="Location">{locationLabel(org.city, org.country)}</Row>
               <Row label="Owner">
                 {org.users ? (
@@ -974,7 +969,6 @@ export default function OrganizationDetailPage() {
                         setEditing(false);
                         setDraft({
                           name: org.name || "",
-                          name_am: org.name_am || "",
                           organization_type: org.organization_type || "club",
                           city: org.city || "",
                           country: org.country || "",
@@ -1033,20 +1027,11 @@ export default function OrganizationDetailPage() {
 
             <fieldset disabled={!editing || !canWrite} className="grid gap-3 sm:grid-cols-2 disabled:opacity-90">
               <label className="text-sm">
-                <span className="mb-1 block text-text-secondary">Name (English)</span>
+                <span className="mb-1 block text-text-secondary">Name</span>
                 <input
                   className={fieldClass}
                   value={draft.name}
                   onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-                />
-              </label>
-              <label className="text-sm">
-                <span className="mb-1 block text-text-secondary">Name (Amharic)</span>
-                <input
-                  className={fieldClass}
-                  value={draft.name_am}
-                  onChange={(e) => setDraft((d) => ({ ...d, name_am: e.target.value }))}
-                  placeholder="Optional"
                 />
               </label>
               <label className="text-sm">

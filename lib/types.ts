@@ -168,7 +168,6 @@ export type OrganizationRow = {
   public_id: string;
   organization_type: string;
   name: string;
-  name_am?: string | null;
   description: string;
   country: string;
   city: string;

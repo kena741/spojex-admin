@@ -136,7 +136,7 @@ export const REPORT_QUEUE_STATUSES = [
   { value: "all", label: "All" },
 ] as const;
 
-/** Linkify http(s) URLs; leave the rest as text (safe for Amharic/emoji). */
+/** Linkify http(s) URLs; leave the rest as text (safe for emoji). */
 export function renderMessageSegments(text: string): Array<{ type: "text" | "link"; value: string }> {
   const parts: Array<{ type: "text" | "link"; value: string }> = [];
   const re = /https?:\/\/[^\s<>"')\]]+/gi;

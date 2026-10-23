@@ -11,7 +11,6 @@ import { requestAccessToken } from "@/lib/spojex/server";
 
 const allowed = [
   "name",
-  "name_am",
   "description",
   "organization_type",
   "country",
