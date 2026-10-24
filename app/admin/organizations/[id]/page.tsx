@@ -17,6 +17,11 @@ import { useApplyAdminSnapshot } from "@/lib/use-admin-snapshot";
 import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import type { CoinWalletRow, OrganizationRow } from "@/lib/types";
 import { cn, formatCoins, formatDate, locationLabel } from "@/lib/utils";
+import {
+  AssignManagerModal,
+  OrgChatsPanel,
+  OrgContentPanel,
+} from "@/components/org-manager-panels";
 
 const fieldClass = "h-10 w-full rounded-lg border border-border px-3 text-sm";
 
@@ -25,10 +30,13 @@ type MemberRow = {
   member_role: string | null;
   status: string | null;
   joined_at?: string | null;
+  assigned_by?: string | null;
+  role_updated_at?: string | null;
   users?: {
     id: string;
     display_name: string;
     email: string | null;
+    username?: string | null;
     role: string;
     avatar_url?: string | null;
   } | null;
@@ -59,7 +67,7 @@ type AuditRow = {
   admin_name?: string | null;
 };
 
-type Tab = "overview" | "people" | "activity" | "settings";
+type Tab = "overview" | "people" | "content" | "chats" | "activity" | "settings";
 
 type OrgSnapshot = {
   org: OrganizationRow | null;
@@ -111,6 +119,8 @@ export default function OrganizationDetailPage() {
   const [reassignUserId, setReassignUserId] = useState("");
   const [reassignReason, setReassignReason] = useState("");
   const [reassignBusy, setReassignBusy] = useState(false);
+  const [assignManagerOpen, setAssignManagerOpen] = useState(false);
+  const [managerActionBusy, setManagerActionBusy] = useState<string | null>(null);
   const [draft, setDraft] = useState({
     name: "",
     organization_type: "club",
@@ -160,7 +170,7 @@ export default function OrganizationDetailPage() {
         client
           .from("organization_members")
           .select(
-            "user_id, member_role, status, joined_at, users:user_id(id, display_name, email, role, avatar_url)",
+            "user_id, member_role, status, joined_at, assigned_by, role_updated_at, users:user_id(id, display_name, email, username, role, avatar_url)",
           )
           .eq("organization_id", next.id)
           .limit(500),
@@ -573,9 +583,32 @@ export default function OrganizationDetailPage() {
   const tabs: { id: Tab; label: string }[] = [
     { id: "overview", label: "Overview" },
     { id: "people", label: `People (${people.active.length})` },
+    { id: "content", label: "Content" },
+    { id: "chats", label: "Chats" },
     { id: "activity", label: "Activity" },
     { id: "settings", label: "Settings" },
   ];
+
+  const demoteManager = async (userId: string) => {
+    if (!canWrite) return;
+    if (!window.confirm("Demote this manager to a regular member?")) return;
+    setManagerActionBusy(userId);
+    setError(null);
+    try {
+      const res = await adminFetch(
+        `/api/admin/organizations/${id}/managers/${userId}?demote=true`,
+        { method: "DELETE" },
+      );
+      const payload = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(payload.error || "Demote failed");
+      setNotice("Manager demoted to member.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Demote failed");
+    } finally {
+      setManagerActionBusy(null);
+    }
+  };
 
   const isGymOrg = org.organization_type === "gym";
   const primaryGym = linkedGyms[0] ?? null;
@@ -810,18 +843,33 @@ export default function OrganizationDetailPage() {
                 Active members ({people.active.length} unique)
               </h2>
               {canWrite && !org.is_platform ? (
-                <button
-                  type="button"
-                  onClick={() => setReassignOpen(true)}
-                  className="rounded-md border border-border px-2.5 py-1 text-xs font-medium"
-                >
-                  Reassign owner…
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAssignManagerOpen(true)}
+                    className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
+                  >
+                    Assign manager…
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReassignOpen(true)}
+                    className="rounded-md border border-border px-2.5 py-1 text-xs font-medium"
+                  >
+                    Reassign owner…
+                  </button>
+                </div>
               ) : null}
             </div>
             <ul className="divide-y divide-border">
               {people.active.map((m) => {
                 const isOwner = m.user_id === org.user_id || m.member_role === "owner";
+                const isManager = !isOwner && m.member_role === "admin";
+                const accessLabel = isOwner
+                  ? "owner"
+                  : isManager
+                    ? "manager"
+                    : m.member_role || "member";
                 return (
                   <li key={m.user_id} className="flex items-center justify-between gap-3 py-2.5">
                     <div className="flex min-w-0 items-center gap-3">
@@ -840,27 +888,55 @@ export default function OrganizationDetailPage() {
                             className="text-sm font-medium text-primary hover:underline"
                           >
                             {m.users.display_name}
+                            {m.users.username ? (
+                              <span className="ml-1 font-normal text-text-secondary">
+                                @{m.users.username}
+                              </span>
+                            ) : null}
                           </Link>
                         ) : (
                           <span className="text-sm font-medium">{m.user_id.slice(0, 8)}</span>
                         )}
                         <p className="text-xs text-text-secondary">
                           Profile role: {m.users?.role ? formatRole(m.users.role) : "-"} · Org
-                          access: {isOwner ? "owner" : m.member_role || "member"} ·{" "}
-                          {m.status || "active"}
+                          access: {accessLabel} · {m.status || "active"}
                           {m.joined_at ? ` · Joined ${formatDate(m.joined_at)}` : ""}
+                          {isManager && m.role_updated_at
+                            ? ` · Assigned ${formatDate(m.role_updated_at)}`
+                            : ""}
+                          {isManager && m.assigned_by
+                            ? ` · by admin ${m.assigned_by.slice(0, 8)}`
+                            : ""}
                         </p>
                       </div>
                     </div>
-                    {isOwner ? (
-                      <span className="rounded bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase text-primary">
-                        Owner
-                      </span>
-                    ) : (
-                      <span className="rounded border border-border px-2 py-0.5 text-[10px] font-medium uppercase text-text-secondary">
-                        {m.member_role || "Member"}
-                      </span>
-                    )}
+                    <div className="flex shrink-0 items-center gap-2">
+                      {isOwner ? (
+                        <span className="rounded bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase text-primary">
+                          Owner
+                        </span>
+                      ) : isManager ? (
+                        <>
+                          <span className="rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-medium uppercase text-emerald-800">
+                            Manager
+                          </span>
+                          {canWrite ? (
+                            <button
+                              type="button"
+                              disabled={managerActionBusy === m.user_id}
+                              onClick={() => void demoteManager(m.user_id)}
+                              className="text-xs text-text-secondary hover:text-red-600 disabled:opacity-50"
+                            >
+                              {managerActionBusy === m.user_id ? "…" : "Demote"}
+                            </button>
+                          ) : null}
+                        </>
+                      ) : (
+                        <span className="rounded border border-border px-2 py-0.5 text-[10px] font-medium uppercase text-text-secondary">
+                          {m.member_role || "Member"}
+                        </span>
+                      )}
+                    </div>
                   </li>
                 );
               })}
@@ -918,12 +994,24 @@ export default function OrganizationDetailPage() {
         </div>
       ) : null}
 
+      {tab === "content" ? <OrgContentPanel orgId={id} /> : null}
+
+      {tab === "chats" ? <OrgChatsPanel orgId={id} /> : null}
+
       {tab === "activity" ? (
         <div className="space-y-4">
           <section className="rounded-xl border border-border bg-card p-5 shadow-sm space-y-3">
             <h2 className="font-heading text-sm font-semibold">Publishing & gifts</h2>
             <p className="text-sm text-text-secondary">
               Sport news attributed to this org: <strong>{newsCount}</strong>
+              {" · "}
+              <button
+                type="button"
+                className="font-medium text-primary hover:underline"
+                onClick={() => setTab("content")}
+              >
+                Open Content library
+              </button>
             </p>
             <p className="text-sm text-text-secondary">
               Live gifts received by events hosted under this org:{" "}
@@ -1238,6 +1326,20 @@ export default function OrganizationDetailPage() {
           ) : null}
         </div>
       ) : null}
+
+      <AssignManagerModal
+        open={assignManagerOpen}
+        orgId={id}
+        orgName={org.name || "Organization"}
+        ownerUserId={org.user_id}
+        members={members}
+        canWrite={canWrite}
+        onClose={() => setAssignManagerOpen(false)}
+        onAssigned={async () => {
+          setNotice("Manager assigned.");
+          await load();
+        }}
+      />
 
       {reassignOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">

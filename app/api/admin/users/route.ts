@@ -5,9 +5,9 @@ import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { canUseAdminClient, createAdminClient } from "@/lib/spojex/admin";
 import { generateStadiumManagerPassword } from "@/lib/stadiums";
 
-const userSelect = "id, display_name, email, role, phone, city";
+const userSelect = "id, display_name, email, username, role, phone, city, avatar_url";
 
-/** Search public users by name or email for owner pickers (gyms / orgs). */
+/** Search public users by name, email, or username for owner/manager pickers. */
 export async function GET(request: Request) {
   const auth = await requireAnyAdminPermission([
     "users:read",
@@ -19,7 +19,9 @@ export async function GET(request: Request) {
   if (!auth.ok) return auth.error;
 
   const url = new URL(request.url);
-  const q = (url.searchParams.get("q") ?? "").trim().replace(/[%(),]/g, " ");
+  const rawQ = (url.searchParams.get("q") ?? "").trim().replace(/[%(),]/g, " ");
+  // Usernames may be entered with or without @.
+  const q = rawQ.replace(/^@+/, "");
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 12) || 12, 1), 50);
 
   if (q.length < 2) {
@@ -48,11 +50,21 @@ export async function GET(request: Request) {
     pushRows(exact.data);
   }
 
-  // Name / partial email / full_name via client-side or(ilike) over a wider page.
+  // Exact username (without @).
+  const exactUsername = await client
+    .from("users")
+    .select(userSelect)
+    .eq("username", q.toLowerCase())
+    .limit(5);
+  if (!exactUsername.error) pushRows(exactUsername.data);
+
+  // Name / partial email / username / full_name.
   const fuzzy = await client
     .from("users")
     .select(userSelect)
-    .or(`display_name.ilike.%${q}%,email.ilike.%${q}%,full_name.ilike.%${q}%`)
+    .or(
+      `display_name.ilike.%${q}%,email.ilike.%${q}%,full_name.ilike.%${q}%,username.ilike.%${q}%`,
+    )
     .order("display_name")
     .limit(Math.max(limit, 24));
   if (fuzzy.error) {
