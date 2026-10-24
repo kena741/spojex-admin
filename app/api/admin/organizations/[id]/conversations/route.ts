@@ -50,11 +50,41 @@ export async function GET(
     else groups.push(row);
   }
 
+  let groupMembers: Record<string, unknown>[] = [];
+  const primaryGroupId = groups[0] ? String(groups[0].id) : null;
+  if (primaryGroupId) {
+    const { data: memberRows } = await auth.context.client
+      .from("conversation_members")
+      .select(
+        "user_id, member_role, joined_at, users:user_id(id, display_name, username, email, avatar_url, role)",
+      )
+      .eq("conversation_id", primaryGroupId)
+      .limit(500);
+    groupMembers = (memberRows ?? []).map((row) => {
+      const user =
+        row.users && typeof row.users === "object"
+          ? (row.users as Record<string, unknown>)
+          : null;
+      return {
+        user_id: row.user_id,
+        member_role: row.member_role,
+        joined_at: row.joined_at,
+        display_name: user?.display_name ?? null,
+        username: user?.username ?? null,
+        email: user?.email ?? null,
+        avatar_url: user?.avatar_url ?? null,
+        profile_role: user?.role ?? null,
+      };
+    });
+  }
+
   return NextResponse.json({
     ok: true,
     organization_id: id,
     groups,
     private: privateChats,
+    group_members: groupMembers,
+    primary_group_id: primaryGroupId,
     source: "local",
   });
 }

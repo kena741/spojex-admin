@@ -519,9 +519,35 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-export function OrgChatsPanel({ orgId }: { orgId: string }) {
+type GroupChatMember = {
+  user_id: string;
+  member_role?: string | null;
+  joined_at?: string | null;
+  display_name?: string | null;
+  username?: string | null;
+  email?: string | null;
+  avatar_url?: string | null;
+  profile_role?: string | null;
+};
+
+export function OrgChatsPanel({
+  orgId,
+  pendingInvites = [],
+}: {
+  orgId: string;
+  pendingInvites?: Array<{
+    id: string;
+    user_id: string;
+    status: string;
+    kind: string;
+    message?: string | null;
+    created_at?: string | null;
+    users?: { id: string; display_name: string; email: string | null } | null;
+  }>;
+}) {
   const [groups, setGroups] = useState<ConversationRow[]>([]);
   const [privateChats, setPrivateChats] = useState<ConversationRow[]>([]);
+  const [groupMembers, setGroupMembers] = useState<GroupChatMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -533,12 +559,14 @@ export function OrgChatsPanel({ orgId }: { orgId: string }) {
         const payload = (await res.json().catch(() => ({}))) as {
           groups?: ConversationRow[];
           private?: ConversationRow[];
+          group_members?: GroupChatMember[];
           error?: string;
         };
         if (cancelled) return;
         if (!res.ok) throw new Error(payload.error || "Failed to load chats");
         setGroups(payload.groups ?? []);
         setPrivateChats(payload.private ?? []);
+        setGroupMembers(payload.group_members ?? []);
         setError(null);
       })
       .catch((err) => {
@@ -587,6 +615,81 @@ export function OrgChatsPanel({ orgId }: { orgId: string }) {
       {error ? (
         <p className="text-sm text-red-600">{error}</p>
       ) : null}
+      <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+        <h2 className="mb-1 font-heading text-sm font-semibold">
+          Group chat members ({groupMembers.length})
+        </h2>
+        <p className="mb-3 text-xs text-text-secondary">
+          People in the organization group chat. Chat membership is separate from Staff access
+          (managed under Settings).
+        </p>
+        {loading ? (
+          <p className="text-sm text-text-hint">Loading…</p>
+        ) : groupMembers.length === 0 ? (
+          <p className="text-sm text-text-hint">No group chat members yet.</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {groupMembers.map((m) => (
+              <li key={m.user_id} className="flex items-center justify-between gap-3 py-2.5">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-xs font-semibold">
+                    {m.avatar_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={m.avatar_url} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      (m.display_name || "?").slice(0, 1).toUpperCase()
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <Link
+                      href={`/admin/people/${m.user_id}`}
+                      className="text-sm font-medium text-primary hover:underline"
+                    >
+                      {m.display_name || m.user_id.slice(0, 8)}
+                      {m.username ? (
+                        <span className="ml-1 font-normal text-text-secondary">@{m.username}</span>
+                      ) : null}
+                    </Link>
+                    <p className="text-xs text-text-secondary">
+                      {[m.email, m.member_role || "member"]
+                        .filter(Boolean)
+                        .join(" · ")}
+                      {m.joined_at ? ` · Joined ${formatDate(m.joined_at)}` : ""}
+                    </p>
+                  </div>
+                </div>
+                <span className="rounded border border-border px-2 py-0.5 text-[10px] font-medium uppercase text-text-secondary">
+                  {m.member_role || "member"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {pendingInvites.length > 0 ? (
+        <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <h2 className="mb-3 font-heading text-sm font-semibold">
+            Pending join requests ({pendingInvites.length})
+          </h2>
+          <ul className="divide-y divide-border">
+            {pendingInvites.map((inv) => (
+              <li key={inv.id} className="flex items-center justify-between gap-3 py-2.5">
+                <div>
+                  <p className="text-sm font-medium">
+                    {inv.users?.display_name || inv.user_id.slice(0, 8)}
+                  </p>
+                  <p className="text-xs text-text-secondary">
+                    {inv.kind} · {inv.status}
+                    {inv.created_at ? ` · ${formatDate(inv.created_at)}` : ""}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
         <h2 className="mb-3 font-heading text-sm font-semibold">
           Group chats ({groups.length})

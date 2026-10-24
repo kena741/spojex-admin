@@ -67,7 +67,7 @@ type AuditRow = {
   admin_name?: string | null;
 };
 
-type Tab = "overview" | "people" | "content" | "chats" | "activity" | "settings";
+type Tab = "overview" | "content" | "chats" | "activity" | "settings";
 
 type OrgSnapshot = {
   org: OrganizationRow | null;
@@ -89,7 +89,10 @@ export default function OrganizationDetailPage() {
     `organizations:detail:${id}:tab`,
     "overview",
   );
-  const tab = (searchParams.get("tab") as Tab) || rememberedTab;
+  const rawTab = searchParams.get("tab") || rememberedTab;
+  // Legacy People tab → Settings (Staff & Access lives there, like gyms).
+  const tab: Tab =
+    rawTab === "people" ? "settings" : ((rawTab as Tab) || "overview");
   const { can } = useAdminPermissions();
   const canWrite = can("organizations:write");
   const canVerify = can("organizations:verify");
@@ -700,7 +703,6 @@ export default function OrganizationDetailPage() {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "overview", label: "Overview" },
-    { id: "people", label: `People (${people.active.length})` },
     { id: "content", label: "Content" },
     { id: "chats", label: "Chats" },
     { id: "activity", label: "Activity" },
@@ -1051,141 +1053,11 @@ export default function OrganizationDetailPage() {
         </div>
       ) : null}
 
-      {tab === "people" ? (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs text-text-secondary">
-              Staff have owner-level day-to-day access. Chat members do not automatically become
-              staff.
-            </p>
-            {canWrite && !org.is_platform ? (
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAssignManagerOpen(true)}
-                  className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
-                >
-                  Add staff
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setReassignOpen(true)}
-                  className="rounded-md border border-border px-2.5 py-1 text-xs font-medium"
-                >
-                  Reassign owner…
-                </button>
-              </div>
-            ) : null}
-          </div>
-
-          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-            <h2 className="mb-3 font-heading text-sm font-semibold">
-              Owner ({people.owner.length})
-            </h2>
-            <ul className="divide-y divide-border">
-              {people.owner.map((m) => renderPersonRow(m, "owner"))}
-              {people.owner.length === 0 ? (
-                <li className="py-2 text-sm text-text-hint">No owner on record.</li>
-              ) : null}
-            </ul>
-          </section>
-
-          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="font-heading text-sm font-semibold">
-                Staff ({people.staff.length})
-              </h2>
-              {canWrite && !org.is_platform ? (
-                <button
-                  type="button"
-                  onClick={() => setAssignManagerOpen(true)}
-                  className="rounded-md border border-border px-2.5 py-1 text-xs font-medium"
-                >
-                  Add staff
-                </button>
-              ) : null}
-            </div>
-            <p className="mb-2 text-xs text-text-secondary">
-              Same operational capabilities as the owner (profile, publishing, comments, chats).
-              Ownership, deletion, finance, and verification stay separate.
-            </p>
-            <ul className="divide-y divide-border">
-              {people.staff.map((m) => renderPersonRow(m, "staff"))}
-              {people.staff.length === 0 ? (
-                <li className="py-2 text-sm text-text-hint">
-                  No staff yet. Use Add staff to grant management access.
-                </li>
-              ) : null}
-            </ul>
-          </section>
-
-          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-            <h2 className="mb-3 font-heading text-sm font-semibold">
-              Members / chat members ({people.members.length})
-            </h2>
-            <p className="mb-2 text-xs text-text-secondary">
-              People who joined the organization chat or hold a non-staff membership. They cannot
-              manage the organization unless promoted to staff.
-            </p>
-            <ul className="divide-y divide-border">
-              {people.members.map((m) => renderPersonRow(m, "member"))}
-              {people.members.length === 0 ? (
-                <li className="py-2 text-sm text-text-hint">No chat members yet.</li>
-              ) : null}
-            </ul>
-          </section>
-
-          {invites.length > 0 ? (
-            <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-              <h2 className="mb-3 font-heading text-sm font-semibold">
-                Pending invitations / join requests ({invites.length})
-              </h2>
-              <ul className="divide-y divide-border">
-                {invites.map((inv) => (
-                  <li key={inv.id} className="flex items-center justify-between gap-3 py-2.5">
-                    <div>
-                      <p className="text-sm font-medium">
-                        {inv.users?.display_name || inv.user_id.slice(0, 8)}
-                      </p>
-                      <p className="text-xs text-text-secondary">
-                        {inv.kind} · {inv.status}
-                        {inv.created_at ? ` · ${formatDate(inv.created_at)}` : ""}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          {people.former.length > 0 ? (
-            <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-              <h2 className="mb-3 font-heading text-sm font-semibold">
-                Former members ({people.former.length})
-              </h2>
-              <ul className="divide-y divide-border">
-                {people.former.map((m) => (
-                  <li key={m.user_id} className="flex items-center justify-between gap-3 py-2.5">
-                    <div>
-                      <p className="text-sm font-medium">
-                        {m.users?.display_name || m.user_id.slice(0, 8)}
-                      </p>
-                      <p className="text-xs text-text-secondary">
-                        {m.status}
-                        {m.joined_at ? ` · Joined ${formatDate(m.joined_at)}` : ""}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-        </div>
-      ) : null}
-
       {tab === "content" ? <OrgContentPanel orgId={id} /> : null}
 
-      {tab === "chats" ? <OrgChatsPanel orgId={id} /> : null}
+      {tab === "chats" ? (
+        <OrgChatsPanel orgId={id} pendingInvites={invites} />
+      ) : null}
 
       {tab === "activity" ? (
         <div className="space-y-4">
@@ -1256,6 +1128,71 @@ export default function OrganizationDetailPage() {
 
       {tab === "settings" ? (
         <div className="space-y-4">
+          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="font-heading text-sm font-semibold">
+                  Staff &amp; Access
+                </h2>
+                <p className="mt-1 text-xs text-text-secondary">
+                  Staff get the same day-to-day access as the owner. Group chat members are listed
+                  under Chats and are not staff unless added here.
+                </p>
+              </div>
+              {canWrite && !org.is_platform ? (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAssignManagerOpen(true)}
+                    className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
+                  >
+                    Add staff
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReassignOpen(true)}
+                    className="rounded-md border border-border px-2.5 py-1 text-xs font-medium"
+                  >
+                    Reassign owner…
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+              Owner ({people.owner.length})
+            </h3>
+            <ul className="mb-4 divide-y divide-border border-b border-border pb-2">
+              {people.owner.map((m) => renderPersonRow(m, "owner"))}
+              {people.owner.length === 0 ? (
+                <li className="py-2 text-sm text-text-hint">No owner on record.</li>
+              ) : null}
+            </ul>
+
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                Staff ({people.staff.length})
+              </h3>
+              {canWrite && !org.is_platform ? (
+                <button
+                  type="button"
+                  onClick={() => setAssignManagerOpen(true)}
+                  className="text-xs font-medium text-primary hover:underline"
+                >
+                  Add staff
+                </button>
+              ) : null}
+            </div>
+            <ul className="divide-y divide-border">
+              {people.staff.map((m) => renderPersonRow(m, "staff"))}
+              {people.staff.length === 0 ? (
+                <li className="py-2 text-sm text-text-hint">
+                  No staff yet. Use Add staff to grant management access.
+                </li>
+              ) : null}
+            </ul>
+          </section>
+
           <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <h2 className="font-heading text-sm font-semibold">Profile</h2>
