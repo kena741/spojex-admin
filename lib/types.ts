@@ -182,7 +182,7 @@ export type OrganizationRow = {
   delete_snapshot?: { verified?: boolean; archived_at?: string | null } | null;
   created_at: string;
   updated_at: string;
-  users?: Pick<UserRow, "id" | "display_name" | "email" | "role" | "avatar_url"> | null;
+  users?: Pick<UserRow, "id" | "display_name" | "email" | "username" | "role" | "avatar_url"> | null;
   deleted_by_user?: Pick<UserRow, "id" | "display_name" | "email"> | null;
   active_people_count?: number;
   live_gifts_received?: number;

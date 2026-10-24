@@ -176,12 +176,12 @@ export default function OrganizationDetailPage() {
     const { data, error: loadError } = await getSpojexClient()
       .from("organizations")
       .select(
-        "*, users:user_id(id, display_name, email, role, avatar_url), deleted_by_user:deleted_by(id, display_name, email)",
+        "*, users:user_id(id, display_name, email, username, role, avatar_url), deleted_by_user:deleted_by(id, display_name, email)",
       )
       .eq("id", id)
       .maybeSingle();
     if (loadError) throw new Error(loadError.message);
-    const next = data as OrganizationRow | null;
+    let next = data as OrganizationRow | null;
     if (!next) {
       return {
         org: null,
@@ -194,6 +194,38 @@ export default function OrganizationDetailPage() {
         newsCount: 0,
       };
     }
+
+    // Normalize owner user association (join can be null / array-shaped).
+    const ownerId = String(next.user_id || "").trim();
+    let ownerUser = normalizeUserEmbed(next.users);
+    if (ownerId) {
+      const ensured = await adminFetch(`/api/admin/organizations/${next.id}/ensure-owner`, {
+        method: "POST",
+      })
+        .then(async (res) => {
+          const json = (await res.json().catch(() => ({}))) as {
+            owner?: MemberRow["users"];
+            owner_user_id?: string;
+          };
+          return res.ok ? json : null;
+        })
+        .catch(() => null);
+      if (ensured?.owner) ownerUser = normalizeUserEmbed(ensured.owner) ?? ownerUser;
+      if (!ownerUser) {
+        const { data: u } = await getSpojexClient()
+          .from("users")
+          .select("id, display_name, email, username, role, avatar_url")
+          .eq("id", ownerId)
+          .maybeSingle();
+        ownerUser = normalizeUserEmbed(u);
+      }
+    }
+    const orgRow: OrganizationRow = {
+      ...next,
+      user_id: ownerId || next.user_id,
+      users: asOrgUser(ownerUser),
+    };
+
     const client = getSpojexClient();
     const [
       wallets,
@@ -205,17 +237,17 @@ export default function OrganizationDetailPage() {
       newsRes,
       auditRes,
     ] = await Promise.all([
-      loadCoinWalletsByUserIds([next.user_id]),
-      loadOrgLiveGiftTotals([next.id]),
+      ownerId ? loadCoinWalletsByUserIds([ownerId]) : Promise.resolve({} as Record<string, CoinWalletRow>),
+      loadOrgLiveGiftTotals([orgRow.id]),
       client
         .from("organization_members")
         .select(
           "user_id, member_role, status, joined_at, assigned_by, role_updated_at, users:user_id(id, display_name, email, username, role, avatar_url)",
         )
-        .eq("organization_id", next.id)
+        .eq("organization_id", orgRow.id)
         .limit(500),
       // Dedicated staff endpoint (DB admin) — do not rely only on table scan.
-      adminFetch(`/api/admin/organizations/${next.id}/managers`)
+      adminFetch(`/api/admin/organizations/${orgRow.id}/managers`)
         .then(async (res) => {
           const json = (await res.json().catch(() => ({}))) as {
             managers?: Array<Record<string, unknown>>;
@@ -224,10 +256,7 @@ export default function OrganizationDetailPage() {
           if (!res.ok) return [] as MemberRow[];
           return (json.managers ?? []).map((row): MemberRow => {
             const userId = String(row.user_id ?? "");
-            const nested =
-              row.users && typeof row.users === "object"
-                ? (row.users as MemberRow["users"])
-                : null;
+            const nested = normalizeUserEmbed(row.users) ?? normalizeUserEmbed(row);
             return {
               user_id: userId,
               member_role: "admin",
@@ -251,25 +280,25 @@ export default function OrganizationDetailPage() {
       client
         .from("gyms")
         .select("id, name, verification_status")
-        .eq("organization_id", next.id)
+        .eq("organization_id", orgRow.id)
         .limit(50),
       client
         .from("organization_chat_join_requests")
         .select(
           "id, user_id, status, kind, message, created_at, users:user_id(id, display_name, email)",
         )
-        .eq("organization_id", next.id)
+        .eq("organization_id", orgRow.id)
         .eq("status", "pending")
         .limit(100),
       client
         .from("sport_news")
         .select("id", { count: "exact", head: true })
-        .eq("organization_id", next.id),
+        .eq("organization_id", orgRow.id),
       client
         .from("admin_activity_log")
         .select("id, action, summary, created_at, admin_email, admin_name")
         .eq("resource_type", "organization")
-        .eq("resource_id", next.id)
+        .eq("resource_id", orgRow.id)
         .order("created_at", { ascending: false })
         .limit(30),
     ]);
@@ -279,7 +308,11 @@ export default function OrganizationDetailPage() {
     for (const row of (membersRes.data ?? []) as MemberRow[]) {
       const uid = String(row.user_id || "").trim();
       if (!uid) continue;
-      byUser.set(uid, row);
+      byUser.set(uid, {
+        ...row,
+        user_id: uid,
+        users: normalizeUserEmbed(row.users) ?? row.users ?? null,
+      });
     }
     for (const row of managersRes) {
       const uid = String(row.user_id || "").trim();
@@ -298,11 +331,25 @@ export default function OrganizationDetailPage() {
       });
     }
 
+    // Always surface the owner as a member row with the resolved user profile.
+    if (ownerId) {
+      const existing = byUser.get(ownerId);
+      byUser.set(ownerId, {
+        user_id: ownerId,
+        member_role: "owner",
+        status: "active",
+        joined_at: existing?.joined_at ?? null,
+        assigned_by: existing?.assigned_by ?? null,
+        role_updated_at: existing?.role_updated_at ?? null,
+        users: ownerUser ?? existing?.users ?? null,
+      });
+    }
+
     return {
-      org: next,
+      org: orgRow,
       members: [...byUser.values()],
-      ownerCoinWallet: wallets[next.user_id] ?? null,
-      liveGiftsReceived: liveTotals[next.id] ?? 0,
+      ownerCoinWallet: ownerId ? wallets[ownerId] ?? null : null,
+      liveGiftsReceived: liveTotals[orgRow.id] ?? 0,
       linkedGyms: (gymsRes.data ?? []) as LinkedGym[],
       invites: (invitesRes.data ?? []) as InviteRow[],
       auditLogs: (auditRes.data ?? []) as AuditRow[],
@@ -364,18 +411,19 @@ export default function OrganizationDetailPage() {
       former: [] as MemberRow[],
     };
     if (!org) return empty;
+    const ownerId = String(org.user_id || "").trim();
     const byUser = new Map<string, MemberRow & { isOwner?: boolean }>();
     const roleOf = (m: MemberRow) =>
       String(m.member_role || "")
         .trim()
         .toLowerCase();
-    // Owner first
-    if (org.users || org.user_id) {
-      byUser.set(org.user_id, {
-        user_id: org.user_id,
+    // Owner first — always when a user_id is set (must be a Spojex user).
+    if (ownerId) {
+      byUser.set(ownerId, {
+        user_id: ownerId,
         member_role: "owner",
         status: "active",
-        users: org.users ?? null,
+        users: normalizeUserEmbed(org.users) ?? null,
         isOwner: true,
       });
     }
@@ -386,7 +434,7 @@ export default function OrganizationDetailPage() {
       const incomingRole = roleOf(m);
       if (existing) {
         // Keep owner badge; prefer staff (admin) over plain member when merging.
-        const keepOwner = existing.isOwner === true;
+        const keepOwner = existing.isOwner === true || uid === ownerId;
         const nextRole = keepOwner
           ? "owner"
           : incomingRole === "admin" || roleOf(existing) === "admin"
@@ -401,7 +449,7 @@ export default function OrganizationDetailPage() {
           joined_at: m.joined_at ?? existing.joined_at,
           assigned_by: m.assigned_by ?? existing.assigned_by,
           role_updated_at: m.role_updated_at ?? existing.role_updated_at,
-          users: m.users ?? existing.users,
+          users: normalizeUserEmbed(m.users) ?? existing.users,
           isOwner: keepOwner,
         });
       } else {
@@ -409,7 +457,8 @@ export default function OrganizationDetailPage() {
           ...m,
           user_id: uid,
           member_role: incomingRole || m.member_role || "member",
-          isOwner: false,
+          users: normalizeUserEmbed(m.users) ?? m.users ?? null,
+          isOwner: uid === ownerId,
         });
       }
     }
@@ -417,15 +466,15 @@ export default function OrganizationDetailPage() {
     const active = all.filter(
       (m) => String(m.status || "active").toLowerCase() === "active",
     );
-    const owner = active.filter(
-      (m) => m.user_id === org.user_id || roleOf(m) === "owner",
-    );
+    const owner = ownerId
+      ? active.filter((m) => m.user_id === ownerId || roleOf(m) === "owner")
+      : [];
     const staff = active.filter(
-      (m) => m.user_id !== org.user_id && roleOf(m) === "admin",
+      (m) => m.user_id !== ownerId && roleOf(m) === "admin",
     );
     const chatMembers = active.filter(
       (m) =>
-        m.user_id !== org.user_id &&
+        m.user_id !== ownerId &&
         roleOf(m) !== "owner" &&
         roleOf(m) !== "admin",
     );
@@ -975,8 +1024,12 @@ export default function OrganizationDetailPage() {
                   <Link href={`/admin/people/${org.users.id}`} className="text-primary hover:underline">
                     {org.users.display_name}
                   </Link>
+                ) : org.user_id ? (
+                  <Link href={`/admin/people/${org.user_id}`} className="text-primary hover:underline">
+                    View user
+                  </Link>
                 ) : (
-                  "-"
+                  <span className="text-amber-700">No user linked</span>
                 )}
               </Row>
               <Row label="Public ID">
@@ -1185,9 +1238,10 @@ export default function OrganizationDetailPage() {
                   <div>
                     <h2 className="font-heading text-sm font-semibold">Staff &amp; access</h2>
                     <p className="mt-1 text-xs text-text-secondary">
-                      Assign an existing Spojex user by @username or email. Staff get the same
-                      day-to-day access as the owner. Group chat members are listed under Chats and
-                      are not staff unless added here. Platform profile roles are never overwritten.
+                      Every organization must have an owner linked to a Spojex user. Add staff by
+                      @username or email — they get the same day-to-day access as the owner. Chat
+                      members are not staff unless added here. Platform profile roles are never
+                      overwritten.
                     </p>
                   </div>
                   {canWrite && !org.is_platform ? (
@@ -1196,18 +1250,36 @@ export default function OrganizationDetailPage() {
                       onClick={() => setAssignManagerOpen(true)}
                       className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
                     >
-                      Assign / invite staff
+                      Add staff
                     </button>
                   ) : null}
                 </div>
 
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                  Owner ({people.owner.length})
+                  Owner
                 </h3>
                 <ul className="mb-4 divide-y divide-border border-b border-border pb-2">
                   {people.owner.map((m) => renderPersonRow(m, "owner"))}
                   {people.owner.length === 0 ? (
-                    <li className="py-2 text-sm text-text-hint">No owner on record.</li>
+                    <li className="space-y-2 py-2 text-sm">
+                      <p className="font-medium text-amber-800">No owner user linked</p>
+                      <p className="text-xs text-text-secondary">
+                        Assign a Spojex user as owner under Ownership. Every organization must have
+                        an owner associated with a user account.
+                      </p>
+                      {canWrite && !org.is_platform ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSettingsSection("ownership");
+                            setReassignOpen(true);
+                          }}
+                          className="text-xs font-medium text-primary hover:underline"
+                        >
+                          Reassign owner…
+                        </button>
+                      ) : null}
+                    </li>
                   ) : null}
                 </ul>
 
@@ -1216,19 +1288,19 @@ export default function OrganizationDetailPage() {
                 </h3>
                 {people.staff.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center">
-                    <p className="text-sm font-medium">No staff</p>
+                    <p className="text-sm font-medium">No staff yet</p>
                     <p className="mt-1 text-xs text-text-secondary">
                       {canWrite
-                        ? "Add a manager linked to a Spojex user by username or email."
+                        ? "Add a Spojex user by @username or email to grant staff access."
                         : "Staff assignments appear here."}
                     </p>
                     {canWrite && !org.is_platform ? (
                       <button
                         type="button"
                         onClick={() => setAssignManagerOpen(true)}
-                        className="mt-3 text-xs font-medium text-primary hover:underline"
+                        className="mt-3 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
                       >
-                        Assign / invite staff
+                        Add staff
                       </button>
                     ) : null}
                   </div>
@@ -1454,7 +1526,9 @@ export default function OrganizationDetailPage() {
                   <ul className="divide-y divide-border border-b border-border pb-2">
                     {people.owner.map((m) => renderPersonRow(m, "owner"))}
                     {people.owner.length === 0 ? (
-                      <li className="py-2 text-sm text-text-hint">No owner on record.</li>
+                      <li className="py-2 text-sm text-amber-800">
+                        No owner user linked. Reassign ownership to a Spojex user.
+                      </li>
                     ) : null}
                   </ul>
                 </div>
@@ -1674,4 +1748,36 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 function formatRole(role: string) {
   return role.replace(/_/g, " ");
+}
+
+/** PostgREST embeds can be object, array, or null — always normalize to one user. */
+function normalizeUserEmbed(raw: unknown): MemberRow["users"] {
+  if (!raw) return null;
+  const row = Array.isArray(raw) ? raw[0] : raw;
+  if (!row || typeof row !== "object") return null;
+  const u = row as Record<string, unknown>;
+  const id = String(u.id ?? "").trim();
+  if (!id) return null;
+  return {
+    id,
+    display_name: String(u.display_name ?? "User"),
+    email: (u.email as string | null | undefined) ?? null,
+    username: (u.username as string | null | undefined) ?? null,
+    role: String(u.role ?? ""),
+    avatar_url: (u.avatar_url as string | null | undefined) ?? null,
+  };
+}
+
+function asOrgUser(
+  raw: MemberRow["users"] | null | undefined,
+): OrganizationRow["users"] {
+  if (!raw) return null;
+  return {
+    id: raw.id,
+    display_name: raw.display_name,
+    email: raw.email,
+    username: raw.username ?? null,
+    role: raw.role,
+    avatar_url: raw.avatar_url ?? null,
+  };
 }
