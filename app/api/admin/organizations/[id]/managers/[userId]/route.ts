@@ -4,7 +4,7 @@ import { logAdminActivity } from "@/lib/admin-activity-log";
 import { getSpojexApiBaseUrl } from "@/lib/env";
 import { requestAccessToken } from "@/lib/spojex/server";
 
-/** Demote or remove an organization manager. */
+/** Demote or remove organization staff (DB member_role admin). */
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string; userId: string }> },
@@ -34,7 +34,7 @@ export async function DELETE(
           action: "remove_manager",
           resource_type: "organization",
           resource_id: id,
-          summary: `Removed manager ${userId}`,
+          summary: `Removed staff ${userId}`,
           metadata: payload as Record<string, unknown>,
         });
         return NextResponse.json({ ...payload, source: "python" });
@@ -43,7 +43,7 @@ export async function DELETE(
         const detail =
           (payload as { detail?: { message?: string } }).detail?.message ||
           (payload as { error?: string }).error ||
-          "Remove manager failed";
+          "Remove staff failed";
         return NextResponse.json({ error: detail }, { status: res.status });
       }
     } catch {
@@ -61,7 +61,7 @@ export async function DELETE(
   }
   if (String(org.user_id) === userId) {
     return NextResponse.json(
-      { error: "Cannot remove the organization owner via manager tools" },
+      { error: "Cannot remove the organization owner via staff tools" },
       { status: 400 },
     );
   }
@@ -112,7 +112,7 @@ export async function DELETE(
     action: "remove_manager",
     resource_type: "organization",
     resource_id: id,
-    summary: `${demote ? "Demoted" : "Removed"} manager ${userId} from ${org.name}`,
+    summary: `${demote ? "Removed staff access for" : "Removed"} ${userId} from ${org.name}`,
     metadata: result,
   });
   return NextResponse.json(result);

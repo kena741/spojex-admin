@@ -136,7 +136,8 @@ export function AssignManagerModal({
     if (userId === ownerUserId) return "Owner";
     const m = membershipById.get(userId);
     if (!m) return null;
-    if (m.member_role === "admin") return "Manager";
+    // Product "Staff" = DB member_role admin (ops manager).
+    if (m.member_role === "admin") return "Staff";
     if (m.member_role === "owner") return "Owner";
     if (m.member_role === "moderator") return "Moderator";
     return m.member_role || "Member";
@@ -153,11 +154,11 @@ export function AssignManagerModal({
         body: JSON.stringify({ user_id: selected.id }),
       });
       const payload = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(payload.error || "Assign manager failed");
+      if (!res.ok) throw new Error(payload.error || "Add staff failed");
       await onAssigned();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Assign manager failed");
+      setError(err instanceof Error ? err.message : "Add staff failed");
     } finally {
       setBusy(false);
     }
@@ -168,14 +169,16 @@ export function AssignManagerModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
       <div className="w-full max-w-lg rounded-xl border border-border bg-card p-5 shadow-lg">
-        <h3 className="font-heading text-sm font-semibold">Assign manager</h3>
+        <h3 className="font-heading text-sm font-semibold">Add staff</h3>
         <p className="mt-1 text-xs text-text-secondary">
           Organization: <span className="font-medium text-text-primary">{orgName}</span>
         </p>
         <p className="mt-2 text-xs text-text-secondary">
-          Managers get operational access: edit profile/logo, publish and manage org content,
-          comment as the organization, moderate comments, and manage org chats. This does{" "}
-          <strong>not</strong> transfer ownership, platform verification, or finance permissions.
+          Staff get the same day-to-day access as the owner: edit profile/logo, publish and manage
+          org content, comment as the organization, moderate comments, and manage org chats. This
+          does <strong>not</strong> transfer ownership, delete the organization, grant finance
+          access, or change platform verification. Chat membership alone does not grant staff
+          access.
         </p>
 
         <label className="mt-3 block text-sm">
@@ -206,7 +209,7 @@ export function AssignManagerModal({
                 <li key={u.id}>
                   <button
                     type="button"
-                    disabled={u.id === ownerUserId || label === "Manager" || label === "Owner"}
+                    disabled={u.id === ownerUserId || label === "Staff" || label === "Owner"}
                     onClick={() => {
                       setSelected(u);
                       setQuery(
@@ -276,7 +279,7 @@ export function AssignManagerModal({
             onClick={() => void submit()}
             className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
           >
-            {busy ? "Saving…" : "Assign manager"}
+            {busy ? "Saving…" : "Add staff"}
           </button>
         </div>
       </div>

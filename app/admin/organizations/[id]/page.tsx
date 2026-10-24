@@ -256,7 +256,14 @@ export default function OrganizationDetailPage() {
   };
 
   const people = useMemo(() => {
-    if (!org) return { active: [] as MemberRow[], former: [] as MemberRow[] };
+    const empty = {
+      active: [] as MemberRow[],
+      owner: [] as MemberRow[],
+      staff: [] as MemberRow[],
+      members: [] as MemberRow[],
+      former: [] as MemberRow[],
+    };
+    if (!org) return empty;
     const byUser = new Map<string, MemberRow & { isOwner?: boolean }>();
     // Owner first
     if (org.users) {
@@ -271,22 +278,49 @@ export default function OrganizationDetailPage() {
     for (const m of members) {
       const existing = byUser.get(m.user_id);
       if (existing) {
-        // Keep owner badge; refresh membership fields
+        // Keep owner badge; refresh membership fields (incl. staff assignment meta)
         byUser.set(m.user_id, {
           ...existing,
+          ...m,
           member_role: existing.isOwner ? "owner" : m.member_role,
           status: m.status,
-          joined_at: m.joined_at,
+          joined_at: m.joined_at ?? existing.joined_at,
+          assigned_by: m.assigned_by ?? existing.assigned_by,
+          role_updated_at: m.role_updated_at ?? existing.role_updated_at,
           users: m.users ?? existing.users,
+          isOwner: existing.isOwner,
         });
       } else {
         byUser.set(m.user_id, { ...m, isOwner: false });
       }
     }
     const all = [...byUser.values()];
+    const active = all.filter(
+      (m) => String(m.status || "active").toLowerCase() === "active",
+    );
+    const owner = active.filter(
+      (m) => m.user_id === org.user_id || m.member_role === "owner",
+    );
+    const staff = active.filter(
+      (m) =>
+        m.user_id !== org.user_id &&
+        m.member_role !== "owner" &&
+        m.member_role === "admin",
+    );
+    const chatMembers = active.filter(
+      (m) =>
+        m.user_id !== org.user_id &&
+        m.member_role !== "owner" &&
+        m.member_role !== "admin",
+    );
     return {
-      active: all.filter((m) => String(m.status || "active").toLowerCase() === "active"),
-      former: all.filter((m) => ["left", "banned"].includes(String(m.status || "").toLowerCase())),
+      active,
+      owner,
+      staff,
+      members: chatMembers,
+      former: all.filter((m) =>
+        ["left", "banned"].includes(String(m.status || "").toLowerCase()),
+      ),
     };
   }, [members, org]);
 
@@ -589,9 +623,15 @@ export default function OrganizationDetailPage() {
     { id: "settings", label: "Settings" },
   ];
 
-  const demoteManager = async (userId: string) => {
+  const removeStaff = async (userId: string) => {
     if (!canWrite) return;
-    if (!window.confirm("Demote this manager to a regular member?")) return;
+    if (
+      !window.confirm(
+        "Remove staff access? They will become a regular member if they still belong to the organization chat.",
+      )
+    ) {
+      return;
+    }
     setManagerActionBusy(userId);
     setError(null);
     try {
@@ -600,14 +640,106 @@ export default function OrganizationDetailPage() {
         { method: "DELETE" },
       );
       const payload = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(payload.error || "Demote failed");
-      setNotice("Manager demoted to member.");
+      if (!res.ok) throw new Error(payload.error || "Remove staff failed");
+      setNotice("Staff access removed.");
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Demote failed");
+      setError(err instanceof Error ? err.message : "Remove staff failed");
     } finally {
       setManagerActionBusy(null);
     }
+  };
+
+  const renderPersonRow = (
+    m: MemberRow,
+    kind: "owner" | "staff" | "member",
+  ) => {
+    return (
+      <li key={m.user_id} className="flex items-center justify-between gap-3 py-2.5">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-xs font-semibold">
+            {m.users?.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={m.users.avatar_url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              (m.users?.display_name || "?").slice(0, 1).toUpperCase()
+            )}
+          </div>
+          <div className="min-w-0">
+            {m.users ? (
+              <Link
+                href={`/admin/people/${m.users.id}`}
+                className="text-sm font-medium text-primary hover:underline"
+              >
+                {m.users.display_name}
+                {m.users.username ? (
+                  <span className="ml-1 font-normal text-text-secondary">
+                    @{m.users.username}
+                  </span>
+                ) : null}
+              </Link>
+            ) : (
+              <span className="text-sm font-medium">{m.user_id.slice(0, 8)}</span>
+            )}
+            <p className="text-xs text-text-secondary">
+              {m.users?.email ? `${m.users.email} · ` : ""}
+              Profile: {m.users?.role ? formatRole(m.users.role) : "-"}
+              {m.joined_at ? ` · Joined ${formatDate(m.joined_at)}` : ""}
+              {kind === "staff" && m.role_updated_at
+                ? ` · Staff since ${formatDate(m.role_updated_at)}`
+                : ""}
+              {kind === "staff" && m.assigned_by
+                ? ` · by ${m.assigned_by.slice(0, 8)}`
+                : ""}
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {kind === "owner" ? (
+            <span className="rounded bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase text-primary">
+              Owner
+            </span>
+          ) : null}
+          {kind === "staff" ? (
+            <>
+              <span className="rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-medium uppercase text-emerald-800">
+                Staff
+              </span>
+              {canWrite ? (
+                <button
+                  type="button"
+                  disabled={managerActionBusy === m.user_id}
+                  onClick={() => void removeStaff(m.user_id)}
+                  className="text-xs text-text-secondary hover:text-red-600 disabled:opacity-50"
+                >
+                  {managerActionBusy === m.user_id ? "…" : "Remove"}
+                </button>
+              ) : null}
+            </>
+          ) : null}
+          {kind === "member" ? (
+            <>
+              <span className="rounded border border-border px-2 py-0.5 text-[10px] font-medium uppercase text-text-secondary">
+                {m.member_role === "moderator" ? "Moderator" : "Member"}
+              </span>
+              {canWrite && !org.is_platform ? (
+                <button
+                  type="button"
+                  disabled={managerActionBusy === m.user_id}
+                  onClick={() => {
+                    setAssignManagerOpen(true);
+                  }}
+                  className="text-xs text-primary hover:underline disabled:opacity-50"
+                  title="Promote to staff via Add staff"
+                >
+                  Make staff…
+                </button>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+      </li>
+    );
   };
 
   const isGymOrg = org.organization_type === "gym";
@@ -837,111 +969,84 @@ export default function OrganizationDetailPage() {
 
       {tab === "people" ? (
         <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-text-secondary">
+              Staff have owner-level day-to-day access. Chat members do not automatically become
+              staff.
+            </p>
+            {canWrite && !org.is_platform ? (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAssignManagerOpen(true)}
+                  className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
+                >
+                  Add staff
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReassignOpen(true)}
+                  className="rounded-md border border-border px-2.5 py-1 text-xs font-medium"
+                >
+                  Reassign owner…
+                </button>
+              </div>
+            ) : null}
+          </div>
+
+          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <h2 className="mb-3 font-heading text-sm font-semibold">
+              Owner ({people.owner.length})
+            </h2>
+            <ul className="divide-y divide-border">
+              {people.owner.map((m) => renderPersonRow(m, "owner"))}
+              {people.owner.length === 0 ? (
+                <li className="py-2 text-sm text-text-hint">No owner on record.</li>
+              ) : null}
+            </ul>
+          </section>
+
           <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <h2 className="font-heading text-sm font-semibold">
-                Active members ({people.active.length} unique)
+                Staff ({people.staff.length})
               </h2>
               {canWrite && !org.is_platform ? (
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setAssignManagerOpen(true)}
-                    className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
-                  >
-                    Assign manager…
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setReassignOpen(true)}
-                    className="rounded-md border border-border px-2.5 py-1 text-xs font-medium"
-                  >
-                    Reassign owner…
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setAssignManagerOpen(true)}
+                  className="rounded-md border border-border px-2.5 py-1 text-xs font-medium"
+                >
+                  Add staff
+                </button>
               ) : null}
             </div>
+            <p className="mb-2 text-xs text-text-secondary">
+              Same operational capabilities as the owner (profile, publishing, comments, chats).
+              Ownership, deletion, finance, and verification stay separate.
+            </p>
             <ul className="divide-y divide-border">
-              {people.active.map((m) => {
-                const isOwner = m.user_id === org.user_id || m.member_role === "owner";
-                const isManager = !isOwner && m.member_role === "admin";
-                const accessLabel = isOwner
-                  ? "owner"
-                  : isManager
-                    ? "manager"
-                    : m.member_role || "member";
-                return (
-                  <li key={m.user_id} className="flex items-center justify-between gap-3 py-2.5">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-xs font-semibold">
-                        {m.users?.avatar_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={m.users.avatar_url} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          (m.users?.display_name || "?").slice(0, 1).toUpperCase()
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        {m.users ? (
-                          <Link
-                            href={`/admin/people/${m.users.id}`}
-                            className="text-sm font-medium text-primary hover:underline"
-                          >
-                            {m.users.display_name}
-                            {m.users.username ? (
-                              <span className="ml-1 font-normal text-text-secondary">
-                                @{m.users.username}
-                              </span>
-                            ) : null}
-                          </Link>
-                        ) : (
-                          <span className="text-sm font-medium">{m.user_id.slice(0, 8)}</span>
-                        )}
-                        <p className="text-xs text-text-secondary">
-                          Profile role: {m.users?.role ? formatRole(m.users.role) : "-"} · Org
-                          access: {accessLabel} · {m.status || "active"}
-                          {m.joined_at ? ` · Joined ${formatDate(m.joined_at)}` : ""}
-                          {isManager && m.role_updated_at
-                            ? ` · Assigned ${formatDate(m.role_updated_at)}`
-                            : ""}
-                          {isManager && m.assigned_by
-                            ? ` · by admin ${m.assigned_by.slice(0, 8)}`
-                            : ""}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      {isOwner ? (
-                        <span className="rounded bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase text-primary">
-                          Owner
-                        </span>
-                      ) : isManager ? (
-                        <>
-                          <span className="rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-medium uppercase text-emerald-800">
-                            Manager
-                          </span>
-                          {canWrite ? (
-                            <button
-                              type="button"
-                              disabled={managerActionBusy === m.user_id}
-                              onClick={() => void demoteManager(m.user_id)}
-                              className="text-xs text-text-secondary hover:text-red-600 disabled:opacity-50"
-                            >
-                              {managerActionBusy === m.user_id ? "…" : "Demote"}
-                            </button>
-                          ) : null}
-                        </>
-                      ) : (
-                        <span className="rounded border border-border px-2 py-0.5 text-[10px] font-medium uppercase text-text-secondary">
-                          {m.member_role || "Member"}
-                        </span>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-              {people.active.length === 0 ? (
-                <li className="py-2 text-sm text-text-hint">No active members.</li>
+              {people.staff.map((m) => renderPersonRow(m, "staff"))}
+              {people.staff.length === 0 ? (
+                <li className="py-2 text-sm text-text-hint">
+                  No staff yet. Use Add staff to grant management access.
+                </li>
+              ) : null}
+            </ul>
+          </section>
+
+          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+            <h2 className="mb-3 font-heading text-sm font-semibold">
+              Members / chat members ({people.members.length})
+            </h2>
+            <p className="mb-2 text-xs text-text-secondary">
+              People who joined the organization chat or hold a non-staff membership. They cannot
+              manage the organization unless promoted to staff.
+            </p>
+            <ul className="divide-y divide-border">
+              {people.members.map((m) => renderPersonRow(m, "member"))}
+              {people.members.length === 0 ? (
+                <li className="py-2 text-sm text-text-hint">No chat members yet.</li>
               ) : null}
             </ul>
           </section>
@@ -1336,7 +1441,7 @@ export default function OrganizationDetailPage() {
         canWrite={canWrite}
         onClose={() => setAssignManagerOpen(false)}
         onAssigned={async () => {
-          setNotice("Manager assigned.");
+          setNotice("Staff assigned.");
           await load();
         }}
       />

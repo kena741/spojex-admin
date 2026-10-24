@@ -5,7 +5,7 @@ import { getSpojexApiBaseUrl } from "@/lib/env";
 import { requestAccessToken } from "@/lib/spojex/server";
 
 /**
- * List / assign organization managers (member_role = admin).
+ * List / assign organization staff (DB member_role = admin; product "Staff").
  * Does NOT transfer ownership.
  */
 export async function GET(
@@ -91,7 +91,7 @@ export async function POST(
           action: "assign_manager",
           resource_type: "organization",
           resource_id: id,
-          summary: `Assigned manager ${userId}`,
+          summary: `Assigned staff ${userId}`,
           metadata: payload as Record<string, unknown>,
         });
         return NextResponse.json({ ...payload, source: "python" });
@@ -100,7 +100,7 @@ export async function POST(
         const detail =
           (payload as { detail?: { message?: string } }).detail?.message ||
           (payload as { error?: string }).error ||
-          "Assign manager failed";
+          "Add staff failed";
         return NextResponse.json({ error: detail }, { status: res.status });
       }
     } catch {
@@ -121,13 +121,13 @@ export async function POST(
   }
   if (org.deleted_at) {
     return NextResponse.json(
-      { error: "Restore this organization from Trash before assigning managers." },
+      { error: "Restore this organization from Trash before assigning staff." },
       { status: 400 },
     );
   }
   if (org.is_platform) {
     return NextResponse.json(
-      { error: "Cannot assign managers to the Spojex platform organization" },
+      { error: "Cannot assign staff to the Spojex platform organization" },
       { status: 400 },
     );
   }
@@ -162,7 +162,7 @@ export async function POST(
 
   if (existing?.member_role === "owner") {
     return NextResponse.json(
-      { error: "Cannot assign the owner as a manager; use Reassign owner" },
+      { error: "Cannot assign the owner as staff; use Reassign owner" },
       { status: 400 },
     );
   }
@@ -212,7 +212,9 @@ export async function POST(
     already_manager: already,
     user: target,
     assigned_by: actorId,
-    note: "Manager has operational access; ownership was not transferred.",
+    product_role: "staff",
+    already_staff: already,
+    note: "Staff has operational access; ownership was not transferred.",
     source: "local",
   };
 
@@ -222,7 +224,7 @@ export async function POST(
     action: "assign_manager",
     resource_type: "organization",
     resource_id: id,
-    summary: `Assigned manager ${target.display_name || userId} to ${org.name}`,
+    summary: `Assigned staff ${target.display_name || userId} to ${org.name}`,
     metadata: result,
   });
 
