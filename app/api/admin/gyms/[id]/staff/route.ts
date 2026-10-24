@@ -132,7 +132,7 @@ export async function GET(
 
   const { data, error } = await auth.context.client
     .from("gym_staff")
-    .select("*, users:user_id(id, display_name, email, role, phone)")
+    .select("*, users:user_id(id, display_name, email, username, role, phone, avatar_url)")
     .eq("gym_id", id)
     .order("created_at", { ascending: false });
 
@@ -153,6 +153,9 @@ export async function POST(
   const body = (await request.json()) as {
     user_id?: string;
     user_email?: string;
+    username?: string;
+    /** Email or @username — preferred for assign-existing. */
+    lookup?: string;
     full_name?: string;
     staff_role?: string;
     is_active?: boolean;
@@ -163,10 +166,20 @@ export async function POST(
   };
 
   let userId = body.user_id?.trim() || "";
-  const userEmail = body.user_email?.trim().toLowerCase() || "";
+  const lookupRaw =
+    body.lookup?.trim() ||
+    body.user_email?.trim() ||
+    body.username?.trim() ||
+    "";
+  const lookup = lookupRaw.replace(/^@+/, "");
+  const isEmailLookup = lookup.includes("@");
+  const userEmail = isEmailLookup
+    ? lookup.toLowerCase()
+    : body.user_email?.trim().toLowerCase() || "";
+  const usernameLookup = !isEmailLookup && lookup ? lookup.toLowerCase() : "";
   const fullName =
     body.full_name?.trim() ||
-    (userEmail.includes("@") ? userEmail.split("@")[0] : "Staff") ||
+    (userEmail.includes("@") ? userEmail.split("@")[0] : lookup || "Staff") ||
     "Staff";
   const staffRole = (body.staff_role?.trim() || "manager") as GymStaffRole;
   const isActive = body.is_active !== false;
@@ -179,6 +192,28 @@ export async function POST(
 
   if (!allowedRoles.has(staffRole)) {
     return NextResponse.json({ error: "Invalid staff_role" }, { status: 400 });
+  }
+
+  if (!userId && usernameLookup) {
+    const { data: user, error: userError } = await auth.context.client
+      .from("users")
+      .select("id, role, email")
+      .ilike("username", usernameLookup)
+      .maybeSingle();
+    if (userError) {
+      return NextResponse.json({ error: userError.message }, { status: 400 });
+    }
+    if (user?.id) {
+      userId = user.id;
+    } else if (!(createIfMissing || inviteNew)) {
+      return NextResponse.json(
+        {
+          error:
+            "No SpoJex user found with that username. Check the spelling, or use email / Invite.",
+        },
+        { status: 400 },
+      );
+    }
   }
 
   if (!userId && userEmail) {
@@ -262,7 +297,10 @@ export async function POST(
   }
 
   if (!userId) {
-    return NextResponse.json({ error: "user_id or user_email is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "user_id, username, or email is required" },
+      { status: 400 },
+    );
   }
 
   const client = canUseAdminClient() ? createAdminClient() : auth.context.client;

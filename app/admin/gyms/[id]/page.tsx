@@ -738,7 +738,7 @@ function GymWorkspaceView() {
 
       if (res.ok && payload.data) {
         nextWs = payload as GymWorkspace;
-      } else {
+          } else {
         const reason = payload.error || "Workspace summary unavailable";
         const fb = await adminFetch(`/api/admin/gyms/${id}`);
         const fbPayload = await readJson<{ data?: GymRow }>(fb);
@@ -1003,9 +1003,9 @@ function GymWorkspaceView() {
 
       <div className="mb-6 flex flex-wrap gap-1 border-b border-border">
         {TABS.map((item) => (
-          <button
+              <button
             key={item.id}
-            type="button"
+                type="button"
             onClick={() => navigate({ tab: item.id })}
             className={cn(
               "px-4 py-2.5 text-sm font-medium",
@@ -1015,7 +1015,7 @@ function GymWorkspaceView() {
             )}
           >
             {item.label}
-          </button>
+              </button>
         ))}
       </div>
 
@@ -1186,13 +1186,13 @@ function OverviewTab({
         <Card
           title="Profile snapshot"
           actions={
-            <button
-              type="button"
+              <button
+                type="button"
               className="text-sm font-medium text-primary hover:underline"
               onClick={() => navigate({ tab: "settings", section: "profile" })}
             >
               Open settings
-            </button>
+              </button>
           }
         >
           <dl className="grid gap-3 sm:grid-cols-2">
@@ -1231,13 +1231,13 @@ function OverviewTab({
             {unavailable ? "Unavailable" : gymMetricLabel(ov?.pending_memberships)}
           </p>
           <p className="mt-1 text-xs text-text-secondary">Awaiting payment confirmation</p>
-          <button
-            type="button"
+                <button
+                  type="button"
             className="mt-3 text-sm font-medium text-primary hover:underline"
             onClick={() => navigate({ tab: "members", view: "members" })}
-          >
+                >
             Review members
-          </button>
+                </button>
         </Card>
 
         <Card title="Configuration issues">
@@ -1263,13 +1263,13 @@ function OverviewTab({
         <Card
           title="Community"
           actions={
-            <button
-              type="button"
+                <button
+                  type="button"
               className="text-sm font-medium text-primary hover:underline"
               onClick={() => navigate({ tab: "community" })}
-            >
+                >
               Inspect
-            </button>
+                </button>
           }
         >
           {!community ? (
@@ -1293,13 +1293,13 @@ function OverviewTab({
           title="Recent admin events"
           actions={
             events.length > 0 ? (
-              <button
-                type="button"
+                <button
+                  type="button"
                 className="text-sm font-medium text-primary hover:underline"
                 onClick={() => navigate({ tab: "settings", section: "history" })}
               >
                 View all
-              </button>
+                </button>
             ) : null
           }
         >
@@ -1318,7 +1318,7 @@ function OverviewTab({
                     </p>
                     {changes.length > 0 ? (
                       <p className="text-xs text-text-secondary">{changes.join(" · ")}</p>
-                    ) : null}
+              ) : null}
                     <p className="text-xs text-text-hint">
                       {formatDateTime(event.created_at)}
                       {event.actor_user_id ? (
@@ -1339,7 +1339,7 @@ function OverviewTab({
             </ul>
           )}
         </Card>
-      </div>
+            </div>
     </div>
   );
 }
@@ -1544,9 +1544,9 @@ function MembersTab({
               { id: "plans", label: `Plans${plansLoading ? "" : ` (${plans.length})`}` },
             ] as const
           ).map((item) => (
-            <button
-              key={item.id}
-              type="button"
+          <button
+            key={item.id}
+            type="button"
               onClick={() => navigate({ tab: "members", view: item.id })}
               className={cn(
                 "rounded-md px-3.5 py-1.5 text-sm font-medium",
@@ -1554,10 +1554,10 @@ function MembersTab({
                   ? "bg-primary text-primary-foreground"
                   : "text-text-secondary hover:text-text-primary",
               )}
-            >
-              {item.label}
-            </button>
-          ))}
+          >
+            {item.label}
+          </button>
+        ))}
         </div>
         <p className="max-w-xl text-xs text-text-secondary">
           Community roster is separate from paid membership. An active roster entry is not proof of
@@ -1583,7 +1583,7 @@ function MembersTab({
               >
                 {ACCESS_FILTERS.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.label}
+                  {item.label}
                   </option>
                 ))}
               </AdminSelect>
@@ -1777,7 +1777,7 @@ function MembersTab({
           </>
         ) : null}
       </ConfirmDialog>
-    </div>
+                  </div>
   );
 }
 
@@ -1846,8 +1846,8 @@ function MemberDrawer({
               <p className="truncate text-xs text-text-secondary">
                 {member.email || member.user_email || member.phone || "No contact on file"}
               </p>
-            ) : null}
-          </div>
+                ) : null}
+              </div>
           <button
             type="button"
             onClick={onClose}
@@ -1865,14 +1865,14 @@ function MemberDrawer({
           {detail && member && memberWithEntitlement && plan ? (
             <>
               <section className="space-y-2">
-                <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2">
                   <StatusBadge tone={member.is_active ? "success" : "neutral"}>
                     Roster: {member.is_active ? "Active" : "Inactive"}
-                  </StatusBadge>
+                    </StatusBadge>
                   <StatusBadge tone={gymMemberAccessTone(entitlement?.access_type)}>
                     {gymMemberAccessLabel(entitlement?.access_type)}
-                  </StatusBadge>
-                </div>
+                    </StatusBadge>
+                  </div>
                 <dl className="space-y-2 pt-1">
                   <Field label="Plan">{plan.label}</Field>
                   <Field label="Payment state">
@@ -1892,8 +1892,8 @@ function MemberDrawer({
                     {member.user_id ? (
                       <Link
                         href={`/admin/users/${member.user_id}`}
-                        className="text-primary hover:underline"
-                      >
+                          className="text-primary hover:underline"
+                        >
                         {member.user_display_name || "View profile"}
                       </Link>
                     ) : (
@@ -1930,7 +1930,7 @@ function MemberDrawer({
                           <StatusBadge tone={membershipStatusTone(ms.status)}>
                             {formatStatusLabel(ms.status)}
                           </StatusBadge>
-                        </div>
+                  </div>
                         <p className="mt-0.5 text-xs text-text-secondary">
                           {dateRange(ms.start_date, ms.end_date)}
                           {gymNum(ms.purchased_price_amount) !== null
@@ -1969,12 +1969,12 @@ function MemberDrawer({
                           <StatusBadge tone={paymentTone(payment.status)}>
                             {formatStatusLabel(payment.status)}
                           </StatusBadge>
-                          <Link
+                        <Link
                             href={`/admin/finance/transactions?module=gym&q=${payment.id}`}
                             className="text-xs text-primary hover:underline"
-                          >
+                        >
                             Ledger
-                          </Link>
+                        </Link>
                         </div>
                       </li>
                     ))}
@@ -2003,7 +2003,7 @@ function MemberDrawer({
               </Notice>
             </>
           ) : null}
-        </div>
+                  </div>
 
         {canWrite && memberWithEntitlement ? (
           <div className="space-y-2 border-t border-border px-5 py-4">
@@ -2033,7 +2033,7 @@ function MemberDrawer({
               >
                 Remove from gym
               </button>
-            </div>
+                  </div>
           </div>
         ) : null}
       </aside>
@@ -2249,7 +2249,7 @@ function PlansView({
                   <p className="mt-0.5 text-xs text-text-secondary">
                     {gymPlanMonthsLabel(plan.duration_months, plan.duration_days)}
                   </p>
-                </div>
+                  </div>
                 {items.length > 0 ? (
                   <AdminRowMenu items={items} aria-label={`Actions for ${plan.title}`} />
                 ) : null}
@@ -2276,7 +2276,7 @@ function PlansView({
                 <Field label="Lifetime subscriptions">
                   {lifetimeSubs === null ? "-" : lifetimeSubs.toLocaleString("en-ET")}
                 </Field>
-              </dl>
+                </dl>
             </article>
           );
         })}
@@ -2324,26 +2324,26 @@ function PlansView({
               placeholder="Access hours, perks, etc."
             />
           </label>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="grid gap-1 text-sm">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="grid gap-1 text-sm">
               <span className="text-text-secondary">Price</span>
               <input
-                className={fieldClass}
+                        className={fieldClass}
                 type="number"
                 min={0}
                 step="1"
                 value={draft.price_amount}
-                onChange={(event) =>
+                        onChange={(event) =>
                   setDraft((prev) => ({ ...prev, price_amount: event.target.value }))
                 }
               />
-            </label>
-            <label className="grid gap-1 text-sm">
+                    </label>
+                    <label className="grid gap-1 text-sm">
               <span className="text-text-secondary">Currency</span>
               <input
-                className={fieldClass}
+                        className={fieldClass}
                 value={draft.currency}
-                onChange={(event) =>
+                        onChange={(event) =>
                   setDraft((prev) => ({ ...prev, currency: event.target.value }))
                 }
               />
@@ -2396,8 +2396,8 @@ function PlansView({
               className="h-4 w-4 rounded border-border"
             />
             <span>Active (visible in the app)</span>
-          </label>
-        </div>
+                    </label>
+                  </div>
       </AdminModal>
 
       <ConfirmDialog
@@ -2433,9 +2433,9 @@ function PlansView({
                   : "Makes the plan visible in the app again so members can purchase it."}
             </p>
           </>
-        ) : null}
+              ) : null}
       </ConfirmDialog>
-    </div>
+            </div>
   );
 }
 
@@ -2567,7 +2567,7 @@ function CommunityTab({
               label="Pending join requests"
               value={gymMetricLabel(data.pending_join_requests)}
             />
-          </div>
+              </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
             <Card
@@ -2604,18 +2604,18 @@ function CommunityTab({
                       "Organization is linked but no group conversation exists yet."}
                   </Notice>
                   {canEnable ? (
-                    <button
-                      type="button"
+                <button
+                  type="button"
                       className={btnSecondary}
-                      onClick={() => {
+                  onClick={() => {
                         setConfirmError(null);
                         setConfirmOpen(true);
-                      }}
-                    >
+                  }}
+                >
                       Create chat room
-                    </button>
-                  ) : null}
-                </div>
+                </button>
+              ) : null}
+            </div>
               ) : null}
             </Card>
 
@@ -2664,7 +2664,7 @@ function CommunityTab({
                   Announcement only: only owners, admins and moderators can send. Members do not
                   get a composer.
                 </p>
-              ) : null}
+                        ) : null}
             </Card>
           </div>
 
@@ -2706,7 +2706,7 @@ function CommunityTab({
           sent or read, and nobody is added automatically.
         </p>
       </ConfirmDialog>
-    </div>
+                              </div>
   );
 }
 
@@ -2769,8 +2769,8 @@ function FinanceTab({
             {FINANCE_RANGES.map((range) => (
               <option key={range} value={range}>
                 Last {range} days
-              </option>
-            ))}
+                                  </option>
+                                ))}
           </AdminSelect>
         </div>
       </div>
@@ -2824,7 +2824,7 @@ function FinanceTab({
           }
           muted
         />
-      </div>
+                              </div>
 
       {cc?.note ? <p className="text-xs text-text-hint">{cc.note}</p> : null}
 
@@ -2849,13 +2849,13 @@ function FinanceTab({
                     <td className="px-4 py-3 tabular-nums">{moneyCell(row.amount, currency)}</td>
                     <td className="px-4 py-3 tabular-nums">
                       {moneyCell(row.commission, currency)}
-                    </td>
+                            </td>
                     <td className="px-4 py-3 tabular-nums">{moneyCell(row.gym_net, currency)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </AdminTableShell>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+              </AdminTableShell>
         </Card>
       ) : null}
 
@@ -2872,17 +2872,17 @@ function FinanceTab({
         }
       >
         {transactions.length === 0 ? (
-          <AdminEmpty
+              <AdminEmpty
             title="No transactions"
             description={
               error
                 ? "Transactions are unavailable right now."
                 : "No payments were recorded in this period."
             }
-          />
-        ) : (
-          <AdminTableShell>
-            <table className="min-w-full text-left text-sm">
+              />
+            ) : (
+              <AdminTableShell>
+                  <table className="min-w-full text-left text-sm">
               <thead className={theadClass}>
                 <tr>
                   <th className={thClass}>When</th>
@@ -2894,33 +2894,33 @@ function FinanceTab({
                   <th className={thClass}>Gym net</th>
                   <th className={thClass}>Status</th>
                   <th className={thClass}>Links</th>
-                </tr>
-              </thead>
-              <tbody>
+                      </tr>
+                    </thead>
+                    <tbody>
                 {transactions.map((txn) => {
                   const cur = txn.currency || currency;
-                  return (
+                        return (
                     <tr key={txn.id} className="border-b border-border last:border-0">
                       <td className="whitespace-nowrap px-4 py-3 text-text-secondary">
                         {formatDate(txn.paid_at || txn.created_at)}
                       </td>
                       <td className="px-4 py-3">{txn.member_name || "-"}</td>
                       <td className="px-4 py-3">{txn.plan_title || "-"}</td>
-                      <td className="px-4 py-3">
+                            <td className="px-4 py-3">
                         {txn.payment_type ? formatStatusLabel(txn.payment_type) : "-"}
-                      </td>
+                            </td>
                       <td className="px-4 py-3 tabular-nums">{moneyCell(txn.amount, cur)}</td>
                       <td className="px-4 py-3 tabular-nums">
                         {moneyCell(txn.commission_amount, cur)}
-                      </td>
+                            </td>
                       <td className="px-4 py-3 tabular-nums">
                         {moneyCell(txn.gym_net_amount, cur)}
-                      </td>
-                      <td className="px-4 py-3">
+                            </td>
+                            <td className="px-4 py-3">
                         <StatusBadge tone={paymentTone(txn.status)}>
                           {formatStatusLabel(txn.status)}
-                        </StatusBadge>
-                      </td>
+                              </StatusBadge>
+                            </td>
                       <td className="whitespace-nowrap px-4 py-3 text-xs">
                         <Link
                           href={txn.finance_href || `/admin/finance/transactions?module=gym&q=${txn.id}`}
@@ -2935,15 +2935,15 @@ function FinanceTab({
                               Member
                             </Link>
                           </>
-                        ) : null}
+                            ) : null}
                       </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </AdminTableShell>
-        )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+              </AdminTableShell>
+            )}
       </Card>
 
       {(data?.exclusions ?? []).length > 0 ? (
@@ -3258,7 +3258,7 @@ function ProfileSection({
         ) : null
       }
     >
-      {!canWrite ? (
+          {!canWrite ? (
         <p className="mb-4 text-xs text-text-secondary">You have read-only access.</p>
       ) : null}
       {formError ? (
@@ -3269,105 +3269,105 @@ function ProfileSection({
       {!editing ? (
         readOnly
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="grid gap-1 text-sm sm:col-span-2">
-            <span className="text-text-secondary">Name</span>
-            <input
-              className={fieldClass}
-              value={draft.name}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-sm sm:col-span-2">
+                  <span className="text-text-secondary">Name</span>
+                  <input
+                    className={fieldClass}
+                    value={draft.name}
               onChange={(event) => set("name")(event.target.value)}
-            />
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-text-secondary">Category</span>
-            <select
-              className={fieldClass}
-              value={draft.category}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-text-secondary">Category</span>
+                  <select
+                    className={fieldClass}
+                    value={draft.category}
               onChange={(event) => set("category")(event.target.value)}
-            >
+                  >
               {categoryOptions.map((item) => (
                 <option key={item.slug} value={item.slug}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm">
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-sm">
             <span className="text-text-secondary">Monthly platform fee (ETB)</span>
-            <input
-              type="number"
-              min={0}
-              step={1}
-              className={fieldClass}
-              value={draft.monthly_payment}
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    className={fieldClass}
+                    value={draft.monthly_payment}
               onChange={(event) => set("monthly_payment")(event.target.value)}
-            />
-          </label>
-          <label className="grid gap-1 text-sm sm:col-span-2">
-            <span className="text-text-secondary">Description</span>
-            <textarea
-              rows={4}
-              className={areaClass}
-              value={draft.description}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm sm:col-span-2">
+                  <span className="text-text-secondary">Description</span>
+                  <textarea
+                    rows={4}
+                    className={areaClass}
+                    value={draft.description}
               onChange={(event) => set("description")(event.target.value)}
-            />
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-text-secondary">City</span>
-            <input
-              className={fieldClass}
-              value={draft.city}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-text-secondary">City</span>
+                  <input
+                    className={fieldClass}
+                    value={draft.city}
               onChange={(event) => set("city")(event.target.value)}
-            />
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-text-secondary">Country</span>
-            <input
-              className={fieldClass}
-              value={draft.country}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-text-secondary">Country</span>
+                  <input
+                    className={fieldClass}
+                    value={draft.country}
               onChange={(event) => set("country")(event.target.value)}
-            />
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-text-secondary">Area / neighborhood</span>
-            <input
-              className={fieldClass}
-              value={draft.location}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-text-secondary">Area / neighborhood</span>
+                  <input
+                    className={fieldClass}
+                    value={draft.location}
               onChange={(event) => set("location")(event.target.value)}
-            />
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-text-secondary">Address</span>
-            <input
-              className={fieldClass}
-              value={draft.address}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-text-secondary">Address</span>
+                  <input
+                    className={fieldClass}
+                    value={draft.address}
               onChange={(event) => set("address")(event.target.value)}
-            />
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-text-secondary">Phone</span>
-            <input
-              className={fieldClass}
-              value={draft.contact_phone}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-text-secondary">Phone</span>
+                  <input
+                    className={fieldClass}
+                    value={draft.contact_phone}
               onChange={(event) => set("contact_phone")(event.target.value)}
-            />
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-text-secondary">Email</span>
-            <input
-              className={fieldClass}
-              value={draft.contact_email}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-text-secondary">Email</span>
+                  <input
+                    className={fieldClass}
+                    value={draft.contact_email}
               onChange={(event) => set("contact_email")(event.target.value)}
-            />
-          </label>
-          <label className="grid gap-1 text-sm sm:col-span-2">
-            <span className="text-text-secondary">Website</span>
-            <input
-              className={fieldClass}
-              value={draft.website}
+                  />
+                </label>
+                <label className="grid gap-1 text-sm sm:col-span-2">
+                  <span className="text-text-secondary">Website</span>
+                  <input
+                    className={fieldClass}
+                    value={draft.website}
               onChange={(event) => set("website")(event.target.value)}
-            />
-          </label>
+                  />
+                </label>
           <p className="text-xs text-text-hint sm:col-span-2">
             Commission is read-only. Listing and verification are changed from the header Actions
             menu.
@@ -3527,17 +3527,27 @@ function StaffSection({
   const staff = staffData ?? [];
 
   const add = async () => {
-    const trimmed = email.trim().toLowerCase();
-    if (!trimmed.includes("@")) {
-      setModalError("Enter a SpoJex user email.");
+    const trimmed = email.trim().replace(/^@+/, "");
+    if (!trimmed) {
+      setModalError(
+        mode === "invite"
+          ? "Enter an email to invite."
+          : "Enter a SpoJex username or email.",
+      );
       return;
     }
     const inviting = mode === "invite";
+    if (inviting && !trimmed.includes("@")) {
+      setModalError("Invites require an email address.");
+      return;
+    }
     setSaving(true);
     setModalError(null);
     try {
       const payload = await postAdminResponse(`/api/admin/gyms/${id}/staff`, {
-        user_email: trimmed,
+        lookup: trimmed,
+        user_email: trimmed.includes("@") ? trimmed.toLowerCase() : undefined,
+        username: trimmed.includes("@") ? undefined : trimmed.toLowerCase(),
         full_name: fullName.trim() || undefined,
         staff_role: role,
         is_active: true,
@@ -3665,7 +3675,15 @@ function StaffSection({
                             {row.users.display_name || "User"}
                           </Link>
                           <p className="text-xs text-text-secondary">
-                            {row.users.email || row.users.phone || ""}
+                            {[
+                              row.users.username
+                                ? `@${row.users.username}`
+                                : null,
+                              row.users.email,
+                              row.users.phone,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
                           </p>
                         </>
                       ) : (
@@ -3674,20 +3692,20 @@ function StaffSection({
                     </td>
                     <td className="px-4 py-3">
                       {canWrite ? (
-                        <select
+                  <select
                           className="h-8 rounded-md border border-border bg-card px-2 text-xs"
                           value={row.staff_role}
                           disabled={busy}
-                          onChange={(event) =>
+                    onChange={(event) =>
                             void patch(row, { staff_role: event.target.value })
-                          }
-                        >
+                    }
+                  >
                           {gymStaffRoles.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.label}
-                            </option>
-                          ))}
-                        </select>
+                      <option key={item.id} value={item.id}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
                       ) : (
                         gymStaffRoleLabel(row.staff_role)
                       )}
@@ -3806,13 +3824,17 @@ function StaffSection({
             </select>
           </label>
           <label className="grid gap-1 text-sm">
-            <span className="text-text-secondary">Spojex email</span>
+            <span className="text-text-secondary">
+              {mode === "invite" ? "Spojex email" : "Username or email"}
+            </span>
             <input
               className={fieldClass}
-              type="email"
+              type={mode === "invite" ? "email" : "text"}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              placeholder="name@example.com"
+              placeholder={
+                mode === "invite" ? "name@example.com" : "@username or name@example.com"
+              }
               autoComplete="off"
             />
           </label>
@@ -3827,7 +3849,7 @@ function StaffSection({
           </label>
           <p className="text-xs text-text-secondary">
             {mode === "assign"
-              ? "Looks up an existing Spojex user by email. Their platform profile role is left unchanged."
+              ? "Looks up an existing Spojex user by @username or email. Their platform profile role is left unchanged."
               : "Sends an Auth invitation / creates an activatable account. Passwords are never returned in admin responses."}
           </p>
         </div>
@@ -3981,7 +4003,7 @@ function OwnershipSection({
                 className={fieldClass}
                 value={query}
                 disabled={busy}
-                onChange={(event) => {
+              onChange={(event) => {
                   setQuery(event.target.value);
                   setPendingId("");
                   setPendingName("");
@@ -4027,7 +4049,7 @@ function OwnershipSection({
                 onChange={(event) => setReason(event.target.value)}
                 placeholder="Why is ownership changing?"
               />
-            </label>
+          </label>
             <div className="flex justify-end">
               <button
                 type="button"
@@ -4040,7 +4062,7 @@ function OwnershipSection({
               >
                 Transfer ownership
               </button>
-            </div>
+        </div>
           </div>
         )}
       </Card>

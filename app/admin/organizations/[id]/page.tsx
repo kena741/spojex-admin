@@ -69,6 +69,15 @@ type AuditRow = {
 
 type Tab = "overview" | "content" | "chats" | "activity" | "settings";
 
+const SETTINGS_SECTIONS = [
+  { id: "profile", label: "Profile & location" },
+  { id: "media", label: "Media" },
+  { id: "staff", label: "Staff & Access" },
+  { id: "ownership", label: "Ownership" },
+  { id: "history", label: "History" },
+] as const;
+type SettingsSection = (typeof SETTINGS_SECTIONS)[number]["id"];
+
 type OrgSnapshot = {
   org: OrganizationRow | null;
   members: MemberRow[];
@@ -90,9 +99,18 @@ export default function OrganizationDetailPage() {
     "overview",
   );
   const rawTab = searchParams.get("tab") || rememberedTab;
-  // Legacy People tab → Settings (Staff & Access lives there, like gyms).
+  // Legacy People tab → Settings / Staff & Access (like gyms).
   const tab: Tab =
-    rawTab === "people" ? "settings" : ((rawTab as Tab) || "overview");
+    rawTab === "people" || rawTab === "team"
+      ? "settings"
+      : ((rawTab as Tab) || "overview");
+  const rawSection = searchParams.get("section") || "";
+  const settingsSection: SettingsSection =
+    rawTab === "people" || rawTab === "team"
+      ? "staff"
+      : SETTINGS_SECTIONS.some((item) => item.id === rawSection)
+        ? (rawSection as SettingsSection)
+        : "profile";
   const { can } = useAdminPermissions();
   const canWrite = can("organizations:write");
   const canVerify = can("organizations:verify");
@@ -140,6 +158,17 @@ export default function OrganizationDetailPage() {
     const params = new URLSearchParams(searchParams.toString());
     if (next === "overview") params.delete("tab");
     else params.set("tab", next);
+    if (next !== "settings") params.delete("section");
+    else if (!params.get("section")) params.set("section", "profile");
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+
+  const setSettingsSection = (section: SettingsSection) => {
+    setRememberedTab("settings");
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", "settings");
+    if (section === "profile") params.delete("section");
+    else params.set("section", section);
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
@@ -1127,329 +1156,421 @@ export default function OrganizationDetailPage() {
       ) : null}
 
       {tab === "settings" ? (
-        <div className="space-y-4">
-          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h2 className="font-heading text-sm font-semibold">
-                  Staff &amp; Access
-                </h2>
+        <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+          <nav
+            aria-label="Settings sections"
+            className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible"
+          >
+            {SETTINGS_SECTIONS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setSettingsSection(item.id)}
+                className={cn(
+                  "whitespace-nowrap rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors",
+                  settingsSection === item.id
+                    ? "bg-primary/10 text-primary"
+                    : "text-text-secondary hover:bg-muted hover:text-text-primary",
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
+
+          <div className="min-w-0 space-y-4">
+            {settingsSection === "staff" ? (
+              <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h2 className="font-heading text-sm font-semibold">Staff &amp; access</h2>
+                    <p className="mt-1 text-xs text-text-secondary">
+                      Assign an existing Spojex user by @username or email. Staff get the same
+                      day-to-day access as the owner. Group chat members are listed under Chats and
+                      are not staff unless added here. Platform profile roles are never overwritten.
+                    </p>
+                  </div>
+                  {canWrite && !org.is_platform ? (
+                    <button
+                      type="button"
+                      onClick={() => setAssignManagerOpen(true)}
+                      className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+                    >
+                      Assign / invite staff
+                    </button>
+                  ) : null}
+                </div>
+
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                  Owner ({people.owner.length})
+                </h3>
+                <ul className="mb-4 divide-y divide-border border-b border-border pb-2">
+                  {people.owner.map((m) => renderPersonRow(m, "owner"))}
+                  {people.owner.length === 0 ? (
+                    <li className="py-2 text-sm text-text-hint">No owner on record.</li>
+                  ) : null}
+                </ul>
+
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                  Staff ({people.staff.length})
+                </h3>
+                {people.staff.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center">
+                    <p className="text-sm font-medium">No staff</p>
+                    <p className="mt-1 text-xs text-text-secondary">
+                      {canWrite
+                        ? "Add a manager linked to a Spojex user by username or email."
+                        : "Staff assignments appear here."}
+                    </p>
+                    {canWrite && !org.is_platform ? (
+                      <button
+                        type="button"
+                        onClick={() => setAssignManagerOpen(true)}
+                        className="mt-3 text-xs font-medium text-primary hover:underline"
+                      >
+                        Assign / invite staff
+                      </button>
+                    ) : null}
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {people.staff.map((m) => renderPersonRow(m, "staff"))}
+                  </ul>
+                )}
+              </section>
+            ) : null}
+
+            {settingsSection === "profile" ? (
+              <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h2 className="font-heading text-sm font-semibold">Profile &amp; location</h2>
+                    <p className="mt-1 text-xs text-text-secondary">
+                      Verification is changed from the header actions so each change is audited.
+                    </p>
+                  </div>
+                  {canWrite ? (
+                    editing ? (
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => {
+                            setEditing(false);
+                            setDraft({
+                              name: org.name || "",
+                              organization_type: org.organization_type || "club",
+                              city: org.city || "",
+                              country: org.country || "",
+                              currency: org.currency || "ETB",
+                              website: org.website || "",
+                              description: org.description || "",
+                            });
+                          }}
+                          className="rounded-md border border-border px-3 py-1.5 text-xs font-medium"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          disabled={saving || !dirty}
+                          onClick={() => void saveProfile()}
+                          className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                        >
+                          {saving ? "Saving…" : "Save changes"}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setEditing(true)}
+                        className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+                      >
+                        Edit
+                      </button>
+                    )
+                  ) : null}
+                </div>
+
+                <fieldset
+                  disabled={!editing || !canWrite}
+                  className="grid gap-3 sm:grid-cols-2 disabled:opacity-90"
+                >
+                  <label className="text-sm">
+                    <span className="mb-1 block text-text-secondary">Name</span>
+                    <input
+                      className={fieldClass}
+                      value={draft.name}
+                      onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+                    />
+                  </label>
+                  <label className="text-sm">
+                    <span className="mb-1 block text-text-secondary">Type</span>
+                    <select
+                      className={fieldClass}
+                      value={draft.organization_type}
+                      disabled={isGymOrg}
+                      onChange={(e) =>
+                        setDraft((d) => ({ ...d, organization_type: e.target.value }))
+                      }
+                    >
+                      {isGymOrg ? (
+                        <option value="gym">Gym (managed under Gyms)</option>
+                      ) : null}
+                      {organizationTypes.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-sm">
+                    <span className="mb-1 block text-text-secondary">Currency</span>
+                    <input
+                      className={fieldClass}
+                      value={draft.currency}
+                      onChange={(e) => setDraft((d) => ({ ...d, currency: e.target.value }))}
+                    />
+                  </label>
+                  <label className="text-sm">
+                    <span className="mb-1 block text-text-secondary">City</span>
+                    <input
+                      className={fieldClass}
+                      value={draft.city}
+                      onChange={(e) => setDraft((d) => ({ ...d, city: e.target.value }))}
+                    />
+                  </label>
+                  <label className="text-sm">
+                    <span className="mb-1 block text-text-secondary">Country</span>
+                    <input
+                      className={fieldClass}
+                      value={draft.country}
+                      onChange={(e) => setDraft((d) => ({ ...d, country: e.target.value }))}
+                    />
+                  </label>
+                  <label className="text-sm sm:col-span-2">
+                    <span className="mb-1 block text-text-secondary">Website</span>
+                    <input
+                      className={fieldClass}
+                      value={draft.website}
+                      onChange={(e) => setDraft((d) => ({ ...d, website: e.target.value }))}
+                    />
+                  </label>
+                  <label className="text-sm sm:col-span-2">
+                    <span className="mb-1 block text-text-secondary">Description</span>
+                    <textarea
+                      value={draft.description}
+                      onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+                      rows={5}
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                    />
+                  </label>
+                </fieldset>
+                {dirty ? (
+                  <p className="mt-2 text-xs text-amber-700">You have unsaved changes.</p>
+                ) : null}
+
+                <div className="mt-6 border-t border-border pt-4">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                    Verification
+                  </h3>
+                  <p className="mt-2 text-sm text-text-secondary">
+                    Status: {org.verified ? "Verified" : "Unverified / pending review"}. Org
+                    verification is separate from gym listing verification.
+                  </p>
+                  {canVerify ? (
+                    <button
+                      type="button"
+                      onClick={() => void toggleVerified()}
+                      className="mt-3 rounded-md border border-border px-3 py-2 text-sm font-medium"
+                    >
+                      {org.verified ? "Unverify…" : "Mark verified…"}
+                    </button>
+                  ) : (
+                    <p className="mt-2 text-xs text-text-hint">
+                      Requires organizations:verify to change verification.
+                    </p>
+                  )}
+                </div>
+              </section>
+            ) : null}
+
+            {settingsSection === "media" ? (
+              <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+                <h2 className="font-heading text-sm font-semibold">Media</h2>
                 <p className="mt-1 text-xs text-text-secondary">
-                  Staff get the same day-to-day access as the owner. Group chat members are listed
-                  under Chats and are not staff unless added here.
+                  Organization logo shown on profile, chats, and content attribution.
                 </p>
-              </div>
-              {canWrite && !org.is_platform ? (
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setAssignManagerOpen(true)}
-                    className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground"
-                  >
-                    Add staff
-                  </button>
+                <div className="mt-4 flex flex-wrap items-center gap-4">
+                  <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-xl border border-border bg-muted text-lg font-semibold">
+                    {org.logo_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={org.logo_url} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      (org.name || "?").slice(0, 1).toUpperCase()
+                    )}
+                  </div>
+                  <div>
+                    <input
+                      ref={fileRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) void uploadLogo(file);
+                      }}
+                    />
+                    {canWrite ? (
+                      <button
+                        type="button"
+                        disabled={uploading}
+                        onClick={() => fileRef.current?.click()}
+                        className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+                      >
+                        {uploading ? "Uploading…" : "Upload logo"}
+                      </button>
+                    ) : (
+                      <p className="text-xs text-text-hint">Read-only</p>
+                    )}
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
+            {settingsSection === "ownership" ? (
+              <section className="rounded-xl border border-border bg-card p-5 shadow-sm space-y-4">
+                <div>
+                  <h2 className="font-heading text-sm font-semibold">Ownership</h2>
+                  <p className="mt-1 text-xs text-text-secondary">
+                    Ownership transfer updates canonical owner and memberships only. Personal gift
+                    wallets and historical transactions stay with the account holder.
+                  </p>
+                </div>
+                <div>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                    Current owner
+                  </h3>
+                  <ul className="divide-y divide-border border-b border-border pb-2">
+                    {people.owner.map((m) => renderPersonRow(m, "owner"))}
+                    {people.owner.length === 0 ? (
+                      <li className="py-2 text-sm text-text-hint">No owner on record.</li>
+                    ) : null}
+                  </ul>
+                </div>
+                {canWrite && !org.is_platform ? (
                   <button
                     type="button"
                     onClick={() => setReassignOpen(true)}
-                    className="rounded-md border border-border px-2.5 py-1 text-xs font-medium"
+                    className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
                   >
                     Reassign owner…
                   </button>
-                </div>
-              ) : null}
-            </div>
+                ) : org.is_platform ? (
+                  <p className="text-sm text-text-secondary">
+                    The Spojex platform organization cannot be reassigned.
+                  </p>
+                ) : null}
 
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
-              Owner ({people.owner.length})
-            </h3>
-            <ul className="mb-4 divide-y divide-border border-b border-border pb-2">
-              {people.owner.map((m) => renderPersonRow(m, "owner"))}
-              {people.owner.length === 0 ? (
-                <li className="py-2 text-sm text-text-hint">No owner on record.</li>
-              ) : null}
-            </ul>
-
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-text-secondary">
-                Staff ({people.staff.length})
-              </h3>
-              {canWrite && !org.is_platform ? (
-                <button
-                  type="button"
-                  onClick={() => setAssignManagerOpen(true)}
-                  className="text-xs font-medium text-primary hover:underline"
-                >
-                  Add staff
-                </button>
-              ) : null}
-            </div>
-            <ul className="divide-y divide-border">
-              {people.staff.map((m) => renderPersonRow(m, "staff"))}
-              {people.staff.length === 0 ? (
-                <li className="py-2 text-sm text-text-hint">
-                  No staff yet. Use Add staff to grant management access.
-                </li>
-              ) : null}
-            </ul>
-          </section>
-
-          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="font-heading text-sm font-semibold">Profile</h2>
-              {canWrite ? (
-                editing ? (
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() => {
-                        setEditing(false);
-                        setDraft({
-                          name: org.name || "",
-                          organization_type: org.organization_type || "club",
-                          city: org.city || "",
-                          country: org.country || "",
-                          currency: org.currency || "ETB",
-                          website: org.website || "",
-                          description: org.description || "",
-                        });
-                      }}
-                      className="rounded-md border border-border px-3 py-1.5 text-xs font-medium"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      disabled={saving || !dirty}
-                      onClick={() => void saveProfile()}
-                      className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
-                    >
-                      {saving ? "Saving…" : "Save changes"}
-                    </button>
+                {canWrite && !org.is_platform ? (
+                  <div className="border-t border-border pt-4">
+                    <h3 className="font-heading text-sm font-semibold">Danger zone</h3>
+                    {org.deleted_at ? (
+                      <>
+                        <p className="mt-2 text-sm text-text-secondary">
+                          In Trash since {formatDate(org.deleted_at)}
+                          {org.deleted_by_user?.display_name
+                            ? ` · by ${org.deleted_by_user.display_name}`
+                            : ""}
+                          .
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={deleting}
+                            onClick={() => void restoreOrg()}
+                            className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+                          >
+                            {deleting ? "Working…" : "Restore"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={deleting}
+                            onClick={() => void purgeOrg()}
+                            className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+                          >
+                            Delete permanently…
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="mt-2 text-sm text-text-secondary">
+                          Move to Trash hides the organization from public listings while preserving
+                          linked content. Archive keeps it out of active directories without
+                          trashing.
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={archiving || Boolean(org.archived_at)}
+                            onClick={() => void archiveOrg()}
+                            className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+                          >
+                            {org.archived_at
+                              ? "Already archived"
+                              : archiving
+                                ? "Archiving…"
+                                : "Archive…"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={deleting}
+                            onClick={() => void remove()}
+                            className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
+                          >
+                            {deleting ? "Moving…" : "Move to Trash…"}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                    {deps ? (
+                      <ul className="mt-3 text-xs text-text-secondary">
+                        {Object.entries(deps).map(([k, v]) => (
+                          <li key={k}>
+                            {k}: {v == null ? "Unavailable" : v}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setEditing(true)}
-                    className="rounded-md border border-border px-3 py-1.5 text-xs font-medium"
-                  >
-                    Edit profile
-                  </button>
-                )
-              ) : null}
-            </div>
-
-            <div className="mb-4 flex items-center gap-3">
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void uploadLogo(file);
-                }}
-              />
-              {canWrite ? (
-                <button
-                  type="button"
-                  disabled={uploading}
-                  onClick={() => fileRef.current?.click()}
-                  className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
-                >
-                  {uploading ? "Uploading…" : "Upload logo"}
-                </button>
-              ) : null}
-            </div>
-
-            <fieldset disabled={!editing || !canWrite} className="grid gap-3 sm:grid-cols-2 disabled:opacity-90">
-              <label className="text-sm">
-                <span className="mb-1 block text-text-secondary">Name</span>
-                <input
-                  className={fieldClass}
-                  value={draft.name}
-                  onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-                />
-              </label>
-              <label className="text-sm">
-                <span className="mb-1 block text-text-secondary">Type</span>
-                <select
-                  className={fieldClass}
-                  value={draft.organization_type}
-                  disabled={isGymOrg}
-                  onChange={(e) => setDraft((d) => ({ ...d, organization_type: e.target.value }))}
-                >
-                  {isGymOrg ? (
-                    <option value="gym">Gym (managed under Gyms)</option>
-                  ) : null}
-                  {organizationTypes.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="text-sm">
-                <span className="mb-1 block text-text-secondary">Currency</span>
-                <input
-                  className={fieldClass}
-                  value={draft.currency}
-                  onChange={(e) => setDraft((d) => ({ ...d, currency: e.target.value }))}
-                />
-              </label>
-              <label className="text-sm">
-                <span className="mb-1 block text-text-secondary">City</span>
-                <input
-                  className={fieldClass}
-                  value={draft.city}
-                  onChange={(e) => setDraft((d) => ({ ...d, city: e.target.value }))}
-                />
-              </label>
-              <label className="text-sm">
-                <span className="mb-1 block text-text-secondary">Country</span>
-                <input
-                  className={fieldClass}
-                  value={draft.country}
-                  onChange={(e) => setDraft((d) => ({ ...d, country: e.target.value }))}
-                />
-              </label>
-              <label className="text-sm sm:col-span-2">
-                <span className="mb-1 block text-text-secondary">Website</span>
-                <input
-                  className={fieldClass}
-                  value={draft.website}
-                  onChange={(e) => setDraft((d) => ({ ...d, website: e.target.value }))}
-                />
-              </label>
-              <label className="text-sm sm:col-span-2">
-                <span className="mb-1 block text-text-secondary">Description</span>
-                <textarea
-                  value={draft.description}
-                  onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
-                  rows={5}
-                  className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-                />
-              </label>
-            </fieldset>
-            {dirty ? (
-              <p className="mt-2 text-xs text-amber-700">You have unsaved changes.</p>
+                ) : null}
+              </section>
             ) : null}
-          </section>
 
-          <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
-            <h2 className="font-heading text-sm font-semibold">Verification details</h2>
-            <p className="mt-2 text-sm text-text-secondary">
-              Status: {org.verified ? "Verified" : "Unverified / pending review"}. Org verification
-              is separate from gym listing verification and from identity Verification Center cases.
-            </p>
-            {canVerify ? (
-              <button
-                type="button"
-                onClick={() => void toggleVerified()}
-                className="mt-3 rounded-md border border-border px-3 py-2 text-sm font-medium"
-              >
-                {org.verified ? "Unverify…" : "Mark verified…"}
-              </button>
-            ) : (
-              <p className="mt-2 text-xs text-text-hint">
-                Requires organizations:verify to change verification.
-              </p>
-            )}
-          </section>
-
-          {canWrite && !org.is_platform ? (
-            <section className="rounded-xl border border-border bg-card p-5 shadow-sm space-y-4">
-              <h2 className="font-heading text-sm font-semibold">Advanced</h2>
-              <div>
-                <p className="text-sm text-text-secondary">
-                  Ownership transfer updates canonical owner and memberships only. Personal gift
-                  wallets and historical transactions stay with the account holder.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setReassignOpen(true)}
-                  className="mt-2 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
-                >
-                  Reassign owner…
-                </button>
-              </div>
-              <div className="border-t border-border pt-4">
-                {org.deleted_at ? (
-                  <>
-                    <p className="text-sm text-text-secondary">
-                      In Trash since {formatDate(org.deleted_at)}
-                      {org.deleted_by_user?.display_name
-                        ? ` · by ${org.deleted_by_user.display_name}`
-                        : ""}
-                      . Linked content was preserved. Restore to make it public again, or
-                      permanently delete only after unlinking gyms, live events, and sports news.
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={deleting}
-                        onClick={() => void restoreOrg()}
-                        className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
-                      >
-                        {deleting ? "Working…" : "Restore"}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={deleting}
-                        onClick={() => void purgeOrg()}
-                        className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
-                      >
-                        Delete permanently…
-                      </button>
-                    </div>
-                  </>
+            {settingsSection === "history" ? (
+              <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+                <h2 className="mb-3 font-heading text-sm font-semibold">History</h2>
+                {auditLogs.length === 0 ? (
+                  <p className="text-sm text-text-hint">
+                    No admin audit events for this organization yet.
+                  </p>
                 ) : (
-                  <>
-                    <p className="text-sm text-text-secondary">
-                      Move to Trash hides the organization from public listings while preserving
-                      linked sports news, gyms, and other content. Archive keeps it out of active
-                      directories without trashing.
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={archiving || Boolean(org.archived_at)}
-                        onClick={() => void archiveOrg()}
-                        className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
-                      >
-                        {org.archived_at
-                          ? "Already archived"
-                          : archiving
-                            ? "Archiving…"
-                            : "Archive…"}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={deleting}
-                        onClick={() => void remove()}
-                        className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-60"
-                      >
-                        {deleting ? "Moving…" : "Move to Trash…"}
-                      </button>
-                    </div>
-                  </>
-                )}
-                {deps ? (
-                  <ul className="mt-3 text-xs text-text-secondary">
-                    {Object.entries(deps).map(([k, v]) => (
-                      <li key={k}>
-                        {k}: {v == null ? "Unavailable" : v}
+                  <ul className="divide-y divide-border text-sm">
+                    {auditLogs.map((log) => (
+                      <li key={log.id} className="py-2.5">
+                        <p className="font-medium">{log.summary || log.action}</p>
+                        <p className="text-xs text-text-secondary">
+                          {log.admin_name || log.admin_email || "Admin"} ·{" "}
+                          {formatDate(log.created_at)} · {log.action}
+                        </p>
                       </li>
                     ))}
                   </ul>
-                ) : null}
-              </div>
-            </section>
-          ) : org.is_platform ? (
-            <p className="text-sm text-text-secondary">
-              The Spojex platform organization cannot be deleted, archived, or reassigned.
-            </p>
-          ) : null}
+                )}
+              </section>
+            ) : null}
+          </div>
         </div>
       ) : null}
 

@@ -169,7 +169,7 @@ export function AssignManagerModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
       <div className="w-full max-w-lg rounded-xl border border-border bg-card p-5 shadow-lg">
-        <h3 className="font-heading text-sm font-semibold">Add staff</h3>
+        <h3 className="font-heading text-sm font-semibold">Assign / invite staff</h3>
         <p className="mt-1 text-xs text-text-secondary">
           Organization: <span className="font-medium text-text-primary">{orgName}</span>
         </p>
@@ -182,7 +182,7 @@ export function AssignManagerModal({
         </p>
 
         <label className="mt-3 block text-sm">
-          <span className="mb-1 block text-text-secondary">Search by email, @username, or name</span>
+          <span className="mb-1 block text-text-secondary">Username or email</span>
           <input
             className={fieldClass}
             value={query}
@@ -190,7 +190,7 @@ export function AssignManagerModal({
               setQuery(e.target.value);
               setSelected(null);
             }}
-            placeholder="@username, email, or display name"
+            placeholder="@username or name@example.com"
           />
         </label>
 
