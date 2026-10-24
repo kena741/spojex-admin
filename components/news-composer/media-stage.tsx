@@ -5,11 +5,15 @@ import {
   Film,
   ImageIcon,
   Mic,
-  Music2,
   Upload,
   X,
 } from "lucide-react";
 import { ImageCropDialog } from "@/components/news-composer/image-crop-dialog";
+import {
+  MediaEditTray,
+  isLiveMediaEditTool,
+  type MediaEditToolId,
+} from "@/components/news-composer/media-edit-tray";
 import { NewsSoundPicker } from "@/components/news-sound-picker";
 import { VideoClipEditor } from "@/components/video-clip-editor";
 import {
@@ -34,6 +38,7 @@ type MediaStageProps = {
   videoUrl: string;
   audioUrl: string;
   soundId: string;
+  soundName?: string;
   coverUrl: string;
   uploading: NewsUploadKind | null;
   uploadPercent: number;
@@ -52,6 +57,7 @@ type MediaStageProps = {
   onSoundSelect: (sound: SportNewsSoundRow | null) => void | boolean | string | Promise<void | boolean | string>;
   onReplaceImageAt: (index: number, file: File) => void | Promise<void>;
   onSetCoverFromVideo: (url: string) => void;
+  onFocusCaption?: (field: "title" | "body") => void;
 };
 
 function formatBytes(size: number) {
@@ -78,6 +84,7 @@ export function MediaStage({
   videoUrl,
   audioUrl,
   soundId,
+  soundName = "",
   coverUrl,
   uploading,
   uploadPercent,
@@ -92,14 +99,68 @@ export function MediaStage({
   onSoundSelect,
   onReplaceImageAt,
   onSetCoverFromVideo: _onSetCoverFromVideo,
+  onFocusCaption,
 }: MediaStageProps) {
   const [dragOver, setDragOver] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
   const [cropIndex, setCropIndex] = useState<number | null>(null);
   const [soundOpen, setSoundOpen] = useState(false);
+  const [soundSheetReady, setSoundSheetReady] = useState(false);
+  const [activeTool, setActiveTool] = useState<MediaEditToolId | null>(null);
+  const [soonTool, setSoonTool] = useState<MediaEditToolId | null>(null);
   const [lastFileMeta, setLastFileMeta] = useState<{ name: string; size: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const clipEditorRef = useRef<HTMLDivElement>(null);
   const busy = Boolean(uploading) || Boolean(disabled);
+
+  const openSoundSheet = useCallback(() => {
+    setSoundSheetReady(true);
+    setSoundOpen(true);
+  }, []);
+
+  const handleEditTool = useCallback(
+    (id: MediaEditToolId) => {
+      if (!isLiveMediaEditTool(id)) {
+        setSoonTool(id);
+        setActiveTool(id);
+        return;
+      }
+      setSoonTool(null);
+      setActiveTool(id);
+      if (id === "edit") {
+        if (mode === "image" && imageUrls.length > 0) {
+          setCropIndex(0);
+          return;
+        }
+        if (mode === "video") {
+          clipEditorRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          return;
+        }
+        if (mode === "audio" && imageUrls.length > 0) {
+          setCropIndex(0);
+          return;
+        }
+        setHint(
+          mode === "video"
+            ? "Use the trim handles on the video to cut."
+            : "Add a cover image to crop, or use Sound / Caption.",
+        );
+        return;
+      }
+      if (id === "sound") {
+        openSoundSheet();
+        return;
+      }
+      if (id === "text") {
+        onFocusCaption?.("title");
+        return;
+      }
+      if (id === "caption") {
+        onFocusCaption?.("body");
+      }
+    },
+    [imageUrls.length, mode, onFocusCaption, openSoundSheet],
+  );
 
   const acceptFiles = useCallback(
     async (files: File[]) => {
@@ -209,7 +270,7 @@ export function MediaStage({
             void acceptFiles(Array.from(e.dataTransfer.files || []));
           }}
           className={cn(
-            "flex min-h-[220px] flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-4 py-8 text-center transition",
+            "flex min-h-55 flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-4 py-8 text-center transition",
             dragOver ? "border-primary bg-primary/5" : "border-border bg-muted/30",
           )}
         >
@@ -373,27 +434,26 @@ export function MediaStage({
               </button>
             ) : null}
           </div>
-          <div className="flex flex-wrap gap-2">
+          <MediaEditTray
+            disabled={busy}
+            activeTool={activeTool}
+            soonTool={soonTool}
+            onTool={handleEditTool}
+            onDismissSoon={() => {
+              setSoonTool(null);
+              setActiveTool(null);
+            }}
+          />
+          {soundId ? (
             <button
               type="button"
               disabled={busy}
-              onClick={() => setSoundOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium"
+              onClick={() => void onSoundSelect(null)}
+              className="text-xs font-medium text-rose-600"
             >
-              <Music2 className="h-3.5 w-3.5" />
-              {soundId ? "Change soundtrack" : "Add soundtrack"}
+              Remove soundtrack
             </button>
-            {soundId ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void onSoundSelect(null)}
-                className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-rose-600"
-              >
-                Remove soundtrack
-              </button>
-            ) : null}
-          </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -414,12 +474,28 @@ export function MediaStage({
             </button>
           </div>
           {videoUrl ? (
-            <VideoClipEditor
-              videoUrl={videoUrl}
-              articleId={articleId}
+            <div ref={clipEditorRef}>
+              <VideoClipEditor
+                videoUrl={videoUrl}
+                articleId={articleId}
+                disabled={busy}
+                onTrimmed={onTrimVideo}
+                onOpenSound={openSoundSheet}
+                onFocusCaption={onFocusCaption}
+                soundtrackUrl={soundId ? audioUrl : ""}
+                soundtrackLabel={soundName || (soundId ? "Soundtrack on" : "")}
+              />
+            </div>
+          ) : null}
+          {soundId ? (
+            <button
+              type="button"
               disabled={busy}
-              onTrimmed={onTrimVideo}
-            />
+              onClick={() => void onSoundSelect(null)}
+              className="text-xs font-medium text-rose-600"
+            >
+              Remove soundtrack
+            </button>
           ) : null}
           <div className="rounded-xl border border-border bg-muted/30 p-3">
             <p className="mb-2 text-xs font-medium text-text-secondary">Cover</p>
@@ -476,6 +552,16 @@ export function MediaStage({
           {audioUrl ? (
             <audio controls src={toBackendMediaUrl(audioUrl)} className="w-full" preload="metadata" />
           ) : null}
+          <MediaEditTray
+            disabled={busy}
+            activeTool={activeTool}
+            soonTool={soonTool}
+            onTool={handleEditTool}
+            onDismissSoon={() => {
+              setSoonTool(null);
+              setActiveTool(null);
+            }}
+          />
           <div className="rounded-xl border border-border bg-muted/30 p-3">
             <p className="mb-2 text-xs font-medium text-text-secondary">Cover (optional)</p>
             {coverUrl || imageUrls[0] ? (
@@ -520,37 +606,51 @@ export function MediaStage({
         />
       ) : null}
 
-      {soundOpen ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/40">
+      {soundSheetReady ? (
+        <div
+          className={cn(
+            "fixed inset-0 z-50 flex justify-end bg-black/40 transition-opacity duration-150",
+            soundOpen ? "opacity-100" : "pointer-events-none opacity-0",
+          )}
+          aria-hidden={!soundOpen}
+        >
           <button
             type="button"
             className="flex-1"
             aria-label="Close soundtrack library"
+            tabIndex={soundOpen ? 0 : -1}
             onClick={() => setSoundOpen(false)}
           />
-          <div className="h-full w-full max-w-md overflow-y-auto bg-background p-4 shadow-xl">
-            <div className="mb-3 flex items-center justify-between">
+          <div
+            className={cn(
+              "flex h-full w-full max-w-md flex-col border-l border-border bg-background p-4 shadow-xl transition-transform duration-200",
+              soundOpen ? "translate-x-0" : "translate-x-full",
+            )}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Soundtrack library"
+          >
+            <div className="mb-3 flex shrink-0 items-center justify-between gap-2">
               <h2 className="text-sm font-semibold">Soundtrack</h2>
               <button
                 type="button"
-                className="text-sm text-primary"
+                className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
                 onClick={() => setSoundOpen(false)}
               >
                 Done
               </button>
             </div>
-            <p className="mb-3 text-xs text-text-secondary">
-              Image posts keep Image/Gallery as the primary type. Soundtrack is optional.
-            </p>
             <NewsSoundPicker
               soundId={soundId}
               audioUrl={audioUrl}
               disabled={busy}
-              onSelect={async (sound) => {
-                const result = await onSoundSelect(sound);
-                if (result === true || result == null) setSoundOpen(false);
-                return result;
-              }}
+              heading={mode === "video" ? "Add sound to video" : "Image soundtrack"}
+              hint={
+                mode === "video"
+                  ? "Plays over the clip in Studio (video audio muted while a track is selected). Stays open so you can preview & switch."
+                  : "Curated library tracks. Panel stays open until you tap Done."
+              }
+              onSelect={async (sound) => onSoundSelect(sound)}
             />
           </div>
         </div>

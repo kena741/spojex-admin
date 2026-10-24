@@ -77,6 +77,7 @@ export default function NewsComposerPage() {
   const [videoUrl, setVideoUrl] = useState("");
   const [audioUrl, setAudioUrl] = useState("");
   const [soundId, setSoundId] = useState("");
+  const [soundName, setSoundName] = useState("");
   const [uploading, setUploading] = useState<NewsUploadKind | null>(null);
   const [uploadPercent, setUploadPercent] = useState(0);
 
@@ -88,6 +89,7 @@ export default function NewsComposerPage() {
   const [publishing, setPublishing] = useState(false);
 
   const titleRef = useRef<HTMLInputElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
   const orgRef = useRef<HTMLDivElement>(null);
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const idempotencyRef = useRef<string>("");
@@ -429,6 +431,7 @@ export default function NewsComposerPage() {
     setVideoUrl("");
     setAudioUrl("");
     setSoundId("");
+    setSoundName("");
     setFeatured(false);
     setSaveState("idle");
     setError(null);
@@ -586,6 +589,7 @@ export default function NewsComposerPage() {
             videoUrl={videoUrl}
             audioUrl={audioUrl}
             soundId={soundId}
+            soundName={soundName}
             coverUrl={imageUrls[0] || ""}
             uploading={uploading}
             uploadPercent={uploadPercent}
@@ -597,6 +601,7 @@ export default function NewsComposerPage() {
             onClearMedia={() => {
               setImageUrls([]);
               setSoundId("");
+              setSoundName("");
               if (!videoUrl) setAudioUrl("");
             }}
             onRemoveVideo={() => {
@@ -606,12 +611,13 @@ export default function NewsComposerPage() {
             onRemoveAudio={() => {
               setAudioUrl("");
               setSoundId("");
+              setSoundName("");
             }}
             onTrimVideo={(result) => setVideoUrl(result.publicUrl)}
             onSoundSelect={(sound) => {
               setSoundId(sound?.id ?? "");
+              setSoundName(sound?.name?.trim() ?? "");
               setAudioUrl(sound?.audio_url?.trim() ?? "");
-              return true;
             }}
             onReplaceImageAt={async (index, file) => {
               const url = await uploadNewsFile(articleId, file, "image", {
@@ -624,6 +630,11 @@ export default function NewsComposerPage() {
               });
             }}
             onSetCoverFromVideo={(url) => setImageUrls([url])}
+            onFocusCaption={(field) => {
+              const el = field === "title" ? titleRef.current : bodyRef.current;
+              el?.scrollIntoView({ behavior: "smooth", block: "center" });
+              el?.focus();
+            }}
           />
           {fieldErrors.media ? (
             <p className="text-xs text-rose-600">{fieldErrors.media}</p>
@@ -673,6 +684,7 @@ export default function NewsComposerPage() {
                 </span>
               </span>
               <textarea
+                ref={bodyRef}
                 value={body}
                 maxLength={BODY_MAX}
                 onChange={(e) => setBody(e.target.value)}
