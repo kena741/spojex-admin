@@ -619,13 +619,22 @@ export default function OrganizationsPage() {
                             ]
                               .filter(Boolean)
                               .join(" · ")
-                          : [
-                              locationLabel(row.city, row.country),
-                              row.users?.display_name ? `Owner: ${row.users.display_name}` : null,
-                            ]
-                              .filter(Boolean)
-                              .join(" · ")}
+                          : locationLabel(row.city, row.country)}
                       </p>
+                      {trash !== "yes" && row.users?.id ? (
+                        <button
+                          type="button"
+                          className="mt-0.5 truncate text-left text-xs text-primary hover:underline"
+                          title="Open owner user"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            router.push(`/admin/people/${row.users!.id}`);
+                          }}
+                        >
+                          Owner (user): {row.users.display_name}
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         title="Copy public ID"

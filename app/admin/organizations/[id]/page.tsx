@@ -818,51 +818,77 @@ export default function OrganizationDetailPage() {
     m: MemberRow,
     kind: "owner" | "staff" | "member",
   ) => {
+    const personId = String(m.users?.id || m.user_id || "").trim();
+    const personHref = personId ? `/admin/people/${personId}` : null;
+    const displayName = m.users?.display_name?.trim() || "User";
+    const username = m.users?.username?.trim() || null;
+    const email = m.users?.email?.trim() || null;
+
     return (
       <li key={m.user_id} className="flex items-center justify-between gap-3 py-2.5">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-xs font-semibold">
-            {m.users?.avatar_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={m.users.avatar_url} alt="" className="h-full w-full object-cover" />
-            ) : (
-              (m.users?.display_name || "?").slice(0, 1).toUpperCase()
-            )}
-          </div>
+          {personHref ? (
+            <Link
+              href={personHref}
+              className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-xs font-semibold hover:opacity-90"
+              title="Open user"
+            >
+              {m.users?.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={m.users.avatar_url} alt="" className="h-full w-full object-cover" />
+              ) : (
+                displayName.slice(0, 1).toUpperCase()
+              )}
+            </Link>
+          ) : (
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-xs font-semibold">
+              ?
+            </div>
+          )}
           <div className="min-w-0">
-            {m.users ? (
+            {personHref ? (
               <Link
-                href={`/admin/people/${m.users.id}`}
+                href={personHref}
                 className="text-sm font-medium text-primary hover:underline"
               >
-                {m.users.display_name}
-                {m.users.username ? (
-                  <span className="ml-1 font-normal text-text-secondary">
-                    @{m.users.username}
-                  </span>
+                {displayName}
+                {username ? (
+                  <span className="ml-1 font-normal text-text-secondary">@{username}</span>
                 ) : null}
               </Link>
             ) : (
-              <span className="text-sm font-medium">{m.user_id.slice(0, 8)}</span>
+              <span className="text-sm font-medium">{displayName}</span>
             )}
             <p className="text-xs text-text-secondary">
-              {m.users?.email ? `${m.users.email} · ` : ""}
-              Profile: {m.users?.role ? formatRole(m.users.role) : "-"}
-              {m.joined_at ? ` · Joined ${formatDate(m.joined_at)}` : ""}
-              {kind === "staff" && m.role_updated_at
-                ? ` · Staff since ${formatDate(m.role_updated_at)}`
-                : ""}
-              {kind === "staff" && m.assigned_by
-                ? ` · by ${m.assigned_by.slice(0, 8)}`
-                : ""}
+              {[
+                kind === "owner" ? "User" : null,
+                email,
+                m.users?.role ? formatRole(m.users.role) : null,
+                m.joined_at ? `Joined ${formatDate(m.joined_at)}` : null,
+                kind === "staff" && m.role_updated_at
+                  ? `Staff since ${formatDate(m.role_updated_at)}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
             </p>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {kind === "owner" ? (
-            <span className="rounded bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase text-primary">
-              Owner
-            </span>
+            <>
+              <span className="rounded bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase text-primary">
+                Owner
+              </span>
+              {personHref ? (
+                <Link
+                  href={personHref}
+                  className="text-xs font-medium text-primary hover:underline"
+                >
+                  View user
+                </Link>
+              ) : null}
+            </>
           ) : null}
           {kind === "staff" ? (
             <>
@@ -1019,18 +1045,46 @@ export default function OrganizationDetailPage() {
             </div>
             <dl className="mt-5 space-y-2 text-sm">
               <Row label="Location">{locationLabel(org.city, org.country)}</Row>
-              <Row label="Owner">
-                {org.users ? (
-                  <Link href={`/admin/people/${org.users.id}`} className="text-primary hover:underline">
-                    {org.users.display_name}
-                  </Link>
-                ) : org.user_id ? (
-                  <Link href={`/admin/people/${org.user_id}`} className="text-primary hover:underline">
-                    View user
-                  </Link>
-                ) : (
-                  <span className="text-amber-700">No user linked</span>
-                )}
+              <Row label="Owner (user)">
+                {(() => {
+                  const owner = people.owner[0];
+                  const ownerId = String(owner?.users?.id || owner?.user_id || org.user_id || "").trim();
+                  const name =
+                    owner?.users?.display_name?.trim() ||
+                    org.users?.display_name?.trim() ||
+                    null;
+                  if (!ownerId) {
+                    return <span className="text-amber-700">No user linked</span>;
+                  }
+                  return (
+                    <Link
+                      href={`/admin/people/${ownerId}`}
+                      className="inline-flex max-w-full items-center gap-2 text-primary hover:underline"
+                      title="Open user detail"
+                    >
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-[10px] font-semibold text-text-secondary">
+                        {(owner?.users?.avatar_url || org.users?.avatar_url) ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={(owner?.users?.avatar_url || org.users?.avatar_url)!}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          (name || "U").slice(0, 1).toUpperCase()
+                        )}
+                      </span>
+                      <span className="truncate font-medium">
+                        {name || "Open user"}
+                        {(owner?.users?.username || org.users?.username) ? (
+                          <span className="ml-1 font-normal text-text-secondary">
+                            @{(owner?.users?.username || org.users?.username)!}
+                          </span>
+                        ) : null}
+                      </span>
+                    </Link>
+                  );
+                })()}
               </Row>
               <Row label="Public ID">
                 <button
@@ -1172,12 +1226,12 @@ export default function OrganizationDetailPage() {
                   Live gifts currently credit the owner user account. Do not sum this wallet across
                   multiple organizations.
                 </p>
-                {org.users ? (
+                {org.user_id ? (
                   <Link
-                    href={`/admin/people/${org.users.id}`}
+                    href={`/admin/people/${org.users?.id || org.user_id}`}
                     className="mt-2 inline-block font-medium text-primary hover:underline"
                   >
-                    Open owner profile
+                    Open owner user
                   </Link>
                 ) : null}
               </div>
@@ -1667,7 +1721,15 @@ export default function OrganizationDetailPage() {
           <div className="w-full max-w-md rounded-xl border border-border bg-card p-5 shadow-lg">
             <h3 className="font-heading text-sm font-semibold">Reassign owner</h3>
             <p className="mt-1 text-xs text-text-secondary">
-              Current owner: {org.users?.display_name || org.user_id}. Wallets are not moved.
+              Current owner user:{" "}
+              {org.user_id ? (
+                <Link href={`/admin/people/${org.users?.id || org.user_id}`} className="text-primary hover:underline">
+                  {org.users?.display_name || "Open user"}
+                </Link>
+              ) : (
+                "none linked"
+              )}
+              . Wallets are not moved.
             </p>
             <label className="mt-3 block text-sm">
               <span className="mb-1 block text-text-secondary">Search user</span>
