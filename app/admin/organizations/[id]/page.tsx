@@ -163,45 +163,112 @@ export default function OrganizationDetailPage() {
       };
     }
     const client = getSpojexClient();
-    const [wallets, liveTotals, membersRes, gymsRes, invitesRes, newsRes, auditRes] =
-      await Promise.all([
-        loadCoinWalletsByUserIds([next.user_id]),
-        loadOrgLiveGiftTotals([next.id]),
-        client
-          .from("organization_members")
-          .select(
-            "user_id, member_role, status, joined_at, assigned_by, role_updated_at, users:user_id(id, display_name, email, username, role, avatar_url)",
-          )
-          .eq("organization_id", next.id)
-          .limit(500),
-        client
-          .from("gyms")
-          .select("id, name, verification_status")
-          .eq("organization_id", next.id)
-          .limit(50),
-        client
-          .from("organization_chat_join_requests")
-          .select(
-            "id, user_id, status, kind, message, created_at, users:user_id(id, display_name, email)",
-          )
-          .eq("organization_id", next.id)
-          .eq("status", "pending")
-          .limit(100),
-        client
-          .from("sport_news")
-          .select("id", { count: "exact", head: true })
-          .eq("organization_id", next.id),
-        client
-          .from("admin_activity_log")
-          .select("id, action, summary, created_at, admin_email, admin_name")
-          .eq("resource_type", "organization")
-          .eq("resource_id", next.id)
-          .order("created_at", { ascending: false })
-          .limit(30),
-      ]);
+    const [
+      wallets,
+      liveTotals,
+      membersRes,
+      managersRes,
+      gymsRes,
+      invitesRes,
+      newsRes,
+      auditRes,
+    ] = await Promise.all([
+      loadCoinWalletsByUserIds([next.user_id]),
+      loadOrgLiveGiftTotals([next.id]),
+      client
+        .from("organization_members")
+        .select(
+          "user_id, member_role, status, joined_at, assigned_by, role_updated_at, users:user_id(id, display_name, email, username, role, avatar_url)",
+        )
+        .eq("organization_id", next.id)
+        .limit(500),
+      // Dedicated staff endpoint (DB admin) — do not rely only on table scan.
+      adminFetch(`/api/admin/organizations/${next.id}/managers`)
+        .then(async (res) => {
+          const json = (await res.json().catch(() => ({}))) as {
+            managers?: Array<Record<string, unknown>>;
+            error?: string;
+          };
+          if (!res.ok) return [] as MemberRow[];
+          return (json.managers ?? []).map((row): MemberRow => {
+            const userId = String(row.user_id ?? "");
+            const nested =
+              row.users && typeof row.users === "object"
+                ? (row.users as MemberRow["users"])
+                : null;
+            return {
+              user_id: userId,
+              member_role: "admin",
+              status: String(row.status ?? "active"),
+              joined_at: (row.joined_at as string | null | undefined) ?? null,
+              assigned_by: (row.assigned_by as string | null | undefined) ?? null,
+              role_updated_at:
+                (row.role_updated_at as string | null | undefined) ?? null,
+              users: nested ?? {
+                id: userId,
+                display_name: String(row.display_name ?? "Staff"),
+                email: (row.email as string | null | undefined) ?? null,
+                username: (row.username as string | null | undefined) ?? null,
+                role: String(row.profile_role ?? row.role ?? ""),
+                avatar_url: (row.avatar_url as string | null | undefined) ?? null,
+              },
+            };
+          });
+        })
+        .catch(() => [] as MemberRow[]),
+      client
+        .from("gyms")
+        .select("id, name, verification_status")
+        .eq("organization_id", next.id)
+        .limit(50),
+      client
+        .from("organization_chat_join_requests")
+        .select(
+          "id, user_id, status, kind, message, created_at, users:user_id(id, display_name, email)",
+        )
+        .eq("organization_id", next.id)
+        .eq("status", "pending")
+        .limit(100),
+      client
+        .from("sport_news")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", next.id),
+      client
+        .from("admin_activity_log")
+        .select("id, action, summary, created_at, admin_email, admin_name")
+        .eq("resource_type", "organization")
+        .eq("resource_id", next.id)
+        .order("created_at", { ascending: false })
+        .limit(30),
+    ]);
+
+    // Merge table members + managers API so Staff always surfaces.
+    const byUser = new Map<string, MemberRow>();
+    for (const row of (membersRes.data ?? []) as MemberRow[]) {
+      const uid = String(row.user_id || "").trim();
+      if (!uid) continue;
+      byUser.set(uid, row);
+    }
+    for (const row of managersRes) {
+      const uid = String(row.user_id || "").trim();
+      if (!uid) continue;
+      const existing = byUser.get(uid);
+      byUser.set(uid, {
+        ...existing,
+        ...row,
+        user_id: uid,
+        member_role: "admin",
+        status: row.status || existing?.status || "active",
+        users: row.users ?? existing?.users ?? null,
+        assigned_by: row.assigned_by ?? existing?.assigned_by,
+        role_updated_at: row.role_updated_at ?? existing?.role_updated_at,
+        joined_at: row.joined_at ?? existing?.joined_at,
+      });
+    }
+
     return {
       org: next,
-      members: (membersRes.data ?? []) as MemberRow[],
+      members: [...byUser.values()],
       ownerCoinWallet: wallets[next.user_id] ?? null,
       liveGiftsReceived: liveTotals[next.id] ?? 0,
       linkedGyms: (gymsRes.data ?? []) as LinkedGym[],
@@ -248,9 +315,10 @@ export default function OrganizationDetailPage() {
     if (loadError) setError(loadError);
   }, [loadError]);
 
-  /** Soft reload after a mutation; also drops the parent list cache. */
+  /** Soft reload after a mutation; drop list + this org detail cache. */
   const load = async () => {
     invalidateAdminCache(adminCacheKey(["organizations", "list"]));
+    invalidateAdminCache(adminCacheKey(["organizations", "detail", id]));
     const next = await refresh();
     if (!next) throw new Error("Failed to reload organization");
   };
@@ -265,33 +333,52 @@ export default function OrganizationDetailPage() {
     };
     if (!org) return empty;
     const byUser = new Map<string, MemberRow & { isOwner?: boolean }>();
+    const roleOf = (m: MemberRow) =>
+      String(m.member_role || "")
+        .trim()
+        .toLowerCase();
     // Owner first
-    if (org.users) {
+    if (org.users || org.user_id) {
       byUser.set(org.user_id, {
         user_id: org.user_id,
         member_role: "owner",
         status: "active",
-        users: org.users,
+        users: org.users ?? null,
         isOwner: true,
       });
     }
     for (const m of members) {
-      const existing = byUser.get(m.user_id);
+      const uid = String(m.user_id || "").trim();
+      if (!uid) continue;
+      const existing = byUser.get(uid);
+      const incomingRole = roleOf(m);
       if (existing) {
-        // Keep owner badge; refresh membership fields (incl. staff assignment meta)
-        byUser.set(m.user_id, {
+        // Keep owner badge; prefer staff (admin) over plain member when merging.
+        const keepOwner = existing.isOwner === true;
+        const nextRole = keepOwner
+          ? "owner"
+          : incomingRole === "admin" || roleOf(existing) === "admin"
+            ? "admin"
+            : incomingRole || roleOf(existing) || "member";
+        byUser.set(uid, {
           ...existing,
           ...m,
-          member_role: existing.isOwner ? "owner" : m.member_role,
-          status: m.status,
+          user_id: uid,
+          member_role: nextRole,
+          status: m.status ?? existing.status,
           joined_at: m.joined_at ?? existing.joined_at,
           assigned_by: m.assigned_by ?? existing.assigned_by,
           role_updated_at: m.role_updated_at ?? existing.role_updated_at,
           users: m.users ?? existing.users,
-          isOwner: existing.isOwner,
+          isOwner: keepOwner,
         });
       } else {
-        byUser.set(m.user_id, { ...m, isOwner: false });
+        byUser.set(uid, {
+          ...m,
+          user_id: uid,
+          member_role: incomingRole || m.member_role || "member",
+          isOwner: false,
+        });
       }
     }
     const all = [...byUser.values()];
@@ -299,19 +386,16 @@ export default function OrganizationDetailPage() {
       (m) => String(m.status || "active").toLowerCase() === "active",
     );
     const owner = active.filter(
-      (m) => m.user_id === org.user_id || m.member_role === "owner",
+      (m) => m.user_id === org.user_id || roleOf(m) === "owner",
     );
     const staff = active.filter(
-      (m) =>
-        m.user_id !== org.user_id &&
-        m.member_role !== "owner" &&
-        m.member_role === "admin",
+      (m) => m.user_id !== org.user_id && roleOf(m) === "admin",
     );
     const chatMembers = active.filter(
       (m) =>
         m.user_id !== org.user_id &&
-        m.member_role !== "owner" &&
-        m.member_role !== "admin",
+        roleOf(m) !== "owner" &&
+        roleOf(m) !== "admin",
     );
     return {
       active,
