@@ -99,7 +99,7 @@ export default function VerificationCenterPage() {
   const canReadDocs = can("profiles:read");
 
   const tab = searchParams.get("tab") === "requirements" ? "requirements" : "requests";
-  const statusFilter = searchParams.get("status") || "pending";
+  const statusFilter = searchParams.get("status") || "all";
   const selectedId = searchParams.get("id") || "";
   const roleFilter = searchParams.get("role") || "all";
   const page = Math.max(1, Number(searchParams.get("page") || 1) || 1);

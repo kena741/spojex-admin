@@ -46,6 +46,9 @@ type ReportItem = {
     avatar_url?: string | null;
   } | null;
   service?: { id: string; title?: string | null } | null;
+  organization?: { id: string; name?: string | null } | null;
+  news?: { id: string; title?: string | null } | null;
+  gym_content?: { id: string; title?: string | null; kind?: string | null } | null;
   reason?: string | null;
   reason_code?: string | null;
   details?: string;
@@ -91,10 +94,29 @@ function userLabel(
   return user?.display_name || user?.username || (fallbackId ? fallbackId.slice(0, 8) : "Unknown");
 }
 
+function targetTypeLabel(type: string) {
+  const map: Record<string, string> = {
+    user: "Person",
+    service: "Service",
+    organization: "Organization",
+    news: "News",
+    gym_post: "Gym post",
+    gym_video: "Gym video",
+    message: "Message",
+    conversation: "Conversation",
+  };
+  return map[type] || type;
+}
+
 function targetLabel(row: ReportItem) {
   if (row.service?.title) return row.service.title;
+  if (row.organization?.name) return row.organization.name;
+  if (row.news?.title) return row.news.title;
+  if (row.gym_content?.title) return row.gym_content.title;
   if (row.target) return userLabel(row.target, row.target_user_id);
-  if (row.target_id) return `${row.target_type} · ${row.target_id.slice(0, 8)}`;
+  if (row.target_id) {
+    return `${targetTypeLabel(row.target_type)} · ${row.target_id.slice(0, 8)}`;
+  }
   return "-";
 }
 
@@ -333,11 +355,13 @@ function ReportsPageInner() {
               onChange={(v) => writeParams({ target_type: v === "all" ? null : v, page: null })}
             >
               <option value="all">All types</option>
-              <option value="user">User</option>
-              <option value="service">Service</option>
+              <option value="user">People</option>
+              <option value="service">Services</option>
+              <option value="organization">Organizations / gyms</option>
+              <option value="gym_post">Gym posts</option>
+              <option value="gym_video">Gym videos</option>
+              <option value="news">News</option>
               <option value="message">Message</option>
-              <option value="organization">Organization</option>
-              <option value="news">News / video</option>
               <option value="conversation">Conversation</option>
             </AdminSelect>
           </div>

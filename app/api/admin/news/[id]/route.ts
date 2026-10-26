@@ -320,11 +320,30 @@ export async function DELETE(
   const auth = await requireAdminPermission("news:write");
   if (!auth.ok) return auth.error;
   const { id } = await params;
+  const client = auth.context.client;
 
-  const { error: deleteError } = await auth.context.client
-    .from("sport_news")
+  // Clear engagement children first — sport_news_comments.article_id blocks hard delete (NO ACTION).
+  const { data: comments } = await client
+    .from("sport_news_comments")
+    .select("id")
+    .eq("article_id", id);
+  const commentIds = (comments ?? [])
+    .map((row) => String((row as { id?: string }).id ?? ""))
+    .filter(Boolean);
+  if (commentIds.length) {
+    await client.from("sport_news_comment_likes").delete().in("comment_id", commentIds);
+    await client.from("sport_news_comment_mentions").delete().in("comment_id", commentIds);
+  }
+  await client.from("sport_news_comments").delete().eq("article_id", id);
+  await client.from("sport_news_likes").delete().eq("article_id", id);
+  await client.from("sport_news_saves").delete().eq("article_id", id);
+  await client
+    .from("content_hashtags")
     .delete()
-    .eq("id", id);
+    .eq("content_kind", "news")
+    .eq("content_id", id);
+
+  const { error: deleteError } = await client.from("sport_news").delete().eq("id", id);
   if (deleteError) {
     const hint = missingServiceRoleMessage();
     return NextResponse.json(

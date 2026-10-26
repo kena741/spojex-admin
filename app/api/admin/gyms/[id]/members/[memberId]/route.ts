@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
-import { isRpcUnavailable } from "@/lib/rpc-unavailable";
 
 export async function PATCH(
   request: Request,
@@ -41,30 +40,9 @@ export async function DELETE(
   const { id: gymId, memberId } = await params;
   const client = auth.context.client;
 
-  const rpc = await client.rpc("remove_gym_member", {
-    p_gym_id: gymId,
-    p_member_id: memberId,
-  });
-
-  if (!rpc.error) {
-    const payload = rpc.data as { ok?: boolean; error?: string } | null;
-    if (payload && payload.ok === false) {
-      const missing = payload.error === "Member not found";
-      return NextResponse.json(
-        { error: payload.error || "Remove failed" },
-        { status: missing ? 404 : 400 },
-      );
-    }
-    return NextResponse.json({ ok: true });
-  }
-
-  if (!isRpcUnavailable(rpc.error)) {
-    return NextResponse.json({ error: rpc.error.message }, { status: 400 });
-  }
-
   const { data: member, error: memberError } = await client
     .from("gym_members")
-    .select("id, user_id")
+    .select("id, user_id, is_active")
     .eq("id", memberId)
     .eq("gym_id", gymId)
     .maybeSingle();
@@ -75,6 +53,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Member not found" }, { status: 404 });
   }
 
+  // Soft-remove preserves gym_memberships / payments FKs (hard delete returns FK 400).
   if (member.user_id) {
     const { data: gym } = await client
       .from("gyms")
@@ -120,17 +99,19 @@ export async function DELETE(
     }
   }
 
-  const { data: removed, error } = await client
+  const { data, error } = await client
     .from("gym_members")
-    .delete()
+    .update({ is_active: false })
     .eq("id", memberId)
     .eq("gym_id", gymId)
-    .select("id");
+    .select("id, is_active")
+    .maybeSingle();
+
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
-  if (!removed?.length) {
+  if (!data) {
     return NextResponse.json({ error: "Member not found" }, { status: 404 });
   }
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, soft_removed: true, data });
 }

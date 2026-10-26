@@ -211,7 +211,7 @@ export default function PeopleDirectoryPage() {
           label="Pending verifications"
           value={summary?.pending_verifications}
           loading={loading && !summary}
-          href="/admin/verifications?status=pending"
+          href="/admin/verifications?status=all"
         />
         <SummaryCard
           label="Restricted accounts"
