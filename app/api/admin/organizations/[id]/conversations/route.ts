@@ -7,11 +7,9 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireAdminPermission("organizations:read");
-  if (!auth.ok) {
-    const write = await requireAdminPermission("organizations:write");
-    if (!write.ok) return write.error;
-  }
+  let auth = await requireAdminPermission("organizations:read");
+  if (!auth.ok) auth = await requireAdminPermission("organizations:write");
+  if (!auth.ok) return auth.error;
   const { id } = await params;
 
   const token = await requestAccessToken();
@@ -60,7 +58,7 @@ export async function GET(
       )
       .eq("conversation_id", primaryGroupId)
       .limit(500);
-    groupMembers = (memberRows ?? []).map((row) => {
+    groupMembers = (memberRows ?? []).map((row: Record<string, unknown>) => {
       const user =
         row.users && typeof row.users === "object"
           ? (row.users as Record<string, unknown>)

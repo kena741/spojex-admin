@@ -12,11 +12,9 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireAdminPermission("organizations:read");
-  if (!auth.ok) {
-    const write = await requireAdminPermission("organizations:write");
-    if (!write.ok) return write.error;
-  }
+  let auth = await requireAdminPermission("organizations:read");
+  if (!auth.ok) auth = await requireAdminPermission("organizations:write");
+  if (!auth.ok) return auth.error;
   const { id } = await params;
 
   const token = await requestAccessToken();

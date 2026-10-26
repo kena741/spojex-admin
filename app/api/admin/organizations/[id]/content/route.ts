@@ -7,11 +7,9 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireAdminPermission("organizations:read");
-  if (!auth.ok) {
-    const write = await requireAdminPermission("organizations:write");
-    if (!write.ok) return write.error;
-  }
+  let auth = await requireAdminPermission("organizations:read");
+  if (!auth.ok) auth = await requireAdminPermission("organizations:write");
+  if (!auth.ok) return auth.error;
   const { id } = await params;
   const url = new URL(request.url);
   const qs = url.searchParams.toString();
@@ -54,7 +52,7 @@ export async function GET(
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  const items = (data ?? []).map((row) => ({
+  const items = (data ?? []).map((row: Record<string, unknown>) => ({
     ...row,
     content_type: "sport_news",
   }));
@@ -64,7 +62,7 @@ export async function GET(
     .from("gyms")
     .select("id, name")
     .eq("organization_id", id);
-  const gymIds = (gyms ?? []).map((g) => g.id);
+  const gymIds = (gyms ?? []).map((g: { id: string }) => g.id);
   let gymVideos: Record<string, unknown>[] = [];
   if (gymIds.length > 0) {
     const { data: clips } = await auth.context.client
@@ -75,8 +73,10 @@ export async function GET(
       .in("gym_id", gymIds)
       .order("created_at", { ascending: false })
       .limit(40);
-    const gymNameById = new Map((gyms ?? []).map((g) => [g.id, g.name]));
-    gymVideos = (clips ?? []).map((c) => ({
+    const gymNameById = new Map(
+      (gyms ?? []).map((g: { id: string; name: string }) => [g.id, g.name]),
+    );
+    gymVideos = (clips ?? []).map((c: Record<string, unknown>) => ({
       id: c.id,
       title: c.title,
       summary: c.caption,
@@ -94,7 +94,7 @@ export async function GET(
       duration_seconds: c.duration_seconds,
       content_type: "gym_video",
       gym_id: c.gym_id,
-      gym_name: gymNameById.get(c.gym_id) ?? null,
+      gym_name: gymNameById.get(String(c.gym_id)) ?? null,
     }));
   }
 

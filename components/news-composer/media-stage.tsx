@@ -140,11 +140,7 @@ export function MediaStage({
           setCropIndex(0);
           return;
         }
-        setHint(
-          mode === "video"
-            ? "Use the trim handles on the video to cut."
-            : "Add a cover image to crop, or use Sound / Caption.",
-        );
+        setHint("Add a cover image to crop, or use Sound / Caption.");
         return;
       }
       if (id === "sound") {

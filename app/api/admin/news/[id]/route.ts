@@ -328,7 +328,7 @@ export async function DELETE(
     .select("id")
     .eq("article_id", id);
   const commentIds = (comments ?? [])
-    .map((row) => String((row as { id?: string }).id ?? ""))
+    .map((row: { id?: string }) => String(row.id ?? ""))
     .filter(Boolean);
   if (commentIds.length) {
     await client.from("sport_news_comment_likes").delete().in("comment_id", commentIds);
