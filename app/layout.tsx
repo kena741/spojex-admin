@@ -48,7 +48,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${inter.variable} ${spaceGrotesk.variable} ${geistMono.variable} h-full overflow-x-hidden`}
     >
-      <body className="min-h-full overflow-x-hidden bg-background font-sans text-text-primary antialiased">
+      <body className="min-h-full overflow-x-clip bg-background font-sans text-text-primary antialiased">
         {children}
       </body>
     </html>

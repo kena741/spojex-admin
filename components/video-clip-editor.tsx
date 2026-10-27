@@ -761,10 +761,10 @@ export function VideoClipEditor({
           <p className="text-xs font-semibold tracking-wide">Studio</p>
           <p className="text-[11px] text-white/50">
             9:16 ·{" "}
-            {duration > 0
+          {duration > 0
               ? `${formatTime(clipLength)} keep · ${formatTime(duration)} full`
-              : "loading…"}
-          </p>
+            : "loading…"}
+        </p>
         </div>
         <button
           type="button"
@@ -780,23 +780,23 @@ export function VideoClipEditor({
       <div className="grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_56px]">
         <div className="space-y-3">
           <div className="flex justify-center rounded-xl bg-black p-2">
-            <div
+        <div
               ref={stageBoxRef}
               className="relative w-full max-w-65 overflow-hidden rounded-xl bg-zinc-900 shadow-inner"
-              style={{ aspectRatio: "9 / 16" }}
-            >
+          style={{ aspectRatio: "9 / 16" }}
+        >
               <style>{`
                 @keyframes spojex-zoom { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
                 @keyframes spojex-flash { 0%,100%{opacity:1} 40%{opacity:0.55} 55%{opacity:1} }
                 @keyframes spojex-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-2px)} 75%{transform:translateX(2px)} }
               `}</style>
-              <video
-                ref={videoRef}
-                key={src}
-                src={src}
-                playsInline
+          <video
+            ref={videoRef}
+            key={src}
+            src={src}
+            playsInline
                 muted={hasSoundtrack ? muted || !keepOriginalVoice : muted}
-                className="absolute inset-0 h-full w-full object-cover"
+            className="absolute inset-0 h-full w-full object-cover"
                 style={{
                   filter: filterCss || undefined,
                   transform: activeEffect.mirror ? "scaleX(-1)" : undefined,
@@ -809,12 +809,12 @@ export function VideoClipEditor({
                           ? "spojex-shake 0.35s linear infinite"
                           : undefined,
                 }}
-                onLoadedMetadata={(e) => {
-                  const d = e.currentTarget.duration;
-                  if (!Number.isFinite(d) || d <= 0) return;
-                  setDuration(d);
-                  setEnd((prev) => (prev > 0 && prev <= d ? prev : d));
-                }}
+            onLoadedMetadata={(e) => {
+              const d = e.currentTarget.duration;
+              if (!Number.isFinite(d) || d <= 0) return;
+              setDuration(d);
+              setEnd((prev) => (prev > 0 && prev <= d ? prev : d));
+            }}
                 onTimeUpdate={(e) => {
                   setCurrent(e.currentTarget.currentTime);
                   const bed = soundtrackRef.current;
@@ -915,14 +915,14 @@ export function VideoClipEditor({
                         }}
                       />
                     ) : null}
-                  </div>
+        </div>
                 );
               })}
 
               {sticker ? (
                 <div className="pointer-events-none absolute bottom-[22%] right-3 z-10 text-4xl drop-shadow-lg">
                   {sticker}
-                </div>
+      </div>
               ) : null}
 
               {activeEffect.wash ? (
@@ -970,9 +970,9 @@ export function VideoClipEditor({
               </div>
 
               {tool !== "text" ? (
-                <button
-                  type="button"
-                  disabled={disabled || saving || duration <= 0}
+        <button
+          type="button"
+          disabled={disabled || saving || duration <= 0}
                   onClick={togglePlay}
                   className="absolute left-1/2 top-1/2 z-20 grid h-14 w-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/45 text-white backdrop-blur-sm transition hover:bg-black/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                   aria-label={playing ? "Pause" : "Play"}
@@ -1014,14 +1014,14 @@ export function VideoClipEditor({
             <button
               type="button"
               disabled={disabled || saving}
-              onClick={() => {
+          onClick={() => {
                 setMuted((v) => !v);
-              }}
+          }}
               className={iconBtn}
               aria-label={muted ? "Unmute" : "Mute"}
-            >
+        >
               {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-            </button>
+        </button>
           </div>
         </div>
 
@@ -1072,95 +1072,95 @@ export function VideoClipEditor({
         {tool === "edit" ? (
           <div className="space-y-3">
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={disabled || saving || duration <= 0}
-                onClick={() => {
-                  const t = Math.min(current, end - 0.25);
-                  setStart(Math.max(0, t));
-                }}
+        <button
+          type="button"
+          disabled={disabled || saving || duration <= 0}
+          onClick={() => {
+            const t = Math.min(current, end - 0.25);
+            setStart(Math.max(0, t));
+          }}
                 className="rounded-full bg-white/10 px-3 py-2 text-xs font-semibold hover:bg-white/15 disabled:opacity-40"
-              >
-                Set in
-              </button>
-              <button
-                type="button"
-                disabled={disabled || saving || duration <= 0}
-                onClick={() => {
-                  const t = Math.max(current, start + 0.25);
-                  setEnd(Math.min(duration, t));
-                }}
+        >
+          Set in
+        </button>
+        <button
+          type="button"
+          disabled={disabled || saving || duration <= 0}
+          onClick={() => {
+            const t = Math.max(current, start + 0.25);
+            setEnd(Math.min(duration, t));
+          }}
                 className="rounded-full bg-white/10 px-3 py-2 text-xs font-semibold hover:bg-white/15 disabled:opacity-40"
-              >
-                Set out
-              </button>
-              <button
-                type="button"
-                disabled={disabled || saving || duration <= 0 || end <= start}
-                onClick={previewSelection}
+        >
+          Set out
+        </button>
+        <button
+          type="button"
+          disabled={disabled || saving || duration <= 0 || end <= start}
+          onClick={previewSelection}
                 className="rounded-full bg-white/10 px-3 py-2 text-xs font-semibold hover:bg-white/15 disabled:opacity-40"
-              >
-                Preview keep
-              </button>
-              <button
-                type="button"
-                disabled={!canTrim}
-                onClick={() => void applyTrim()}
+        >
+          Preview keep
+        </button>
+        <button
+          type="button"
+          disabled={!canTrim}
+          onClick={() => void applyTrim()}
                 className="ml-auto rounded-full bg-[#FE2C55] px-4 py-2 text-xs font-bold text-white shadow-sm hover:brightness-110 disabled:opacity-40"
-              >
-                {saving ? "Saving…" : "Apply trim"}
-              </button>
-            </div>
+        >
+          {saving ? "Saving…" : "Apply trim"}
+        </button>
+      </div>
 
             <div className="space-y-1.5">
-              <div
-                ref={trackRef}
+        <div
+          ref={trackRef}
                 className="relative h-12 cursor-pointer rounded-xl bg-white/10"
-                onPointerDown={(event) => {
-                  if (disabled || saving || duration <= 0) return;
-                  const t = timeFromClientX(event.clientX);
-                  setCurrent(t);
-                  if (videoRef.current) videoRef.current.currentTime = t;
-                  setDrag("playhead");
-                }}
-              >
-                <div
+          onPointerDown={(event) => {
+            if (disabled || saving || duration <= 0) return;
+            const t = timeFromClientX(event.clientX);
+            setCurrent(t);
+            if (videoRef.current) videoRef.current.currentTime = t;
+            setDrag("playhead");
+          }}
+        >
+          <div
                   className="absolute inset-y-1 rounded-lg bg-[#25F4EE]/35"
-                  style={{ left: `${startPct}%`, width: `${Math.max(0, endPct - startPct)}%` }}
-                />
-                <div
-                  className="absolute top-0 bottom-0 z-10 w-0.5 bg-white"
-                  style={{ left: `${playPct}%` }}
-                />
-                <button
-                  type="button"
-                  aria-label="Trim start"
+            style={{ left: `${startPct}%`, width: `${Math.max(0, endPct - startPct)}%` }}
+          />
+          <div
+            className="absolute top-0 bottom-0 z-10 w-0.5 bg-white"
+            style={{ left: `${playPct}%` }}
+          />
+          <button
+            type="button"
+            aria-label="Trim start"
                   className="absolute top-0 bottom-0 z-20 w-3.5 -translate-x-1/2 cursor-ew-resize rounded-md bg-[#25F4EE]"
-                  style={{ left: `${startPct}%` }}
-                  onPointerDown={(event) => {
-                    event.stopPropagation();
-                    if (disabled || saving) return;
-                    setDrag("start");
-                  }}
-                />
-                <button
-                  type="button"
-                  aria-label="Trim end"
+            style={{ left: `${startPct}%` }}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              if (disabled || saving) return;
+              setDrag("start");
+            }}
+          />
+          <button
+            type="button"
+            aria-label="Trim end"
                   className="absolute top-0 bottom-0 z-20 w-3.5 -translate-x-1/2 cursor-ew-resize rounded-md bg-[#25F4EE]"
-                  style={{ left: `${endPct}%` }}
-                  onPointerDown={(event) => {
-                    event.stopPropagation();
-                    if (disabled || saving) return;
-                    setDrag("end");
-                  }}
-                />
-              </div>
+            style={{ left: `${endPct}%` }}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+              if (disabled || saving) return;
+              setDrag("end");
+            }}
+          />
+        </div>
               <div className="flex justify-between text-[11px] text-white/55">
-                <span>In {formatTime(start)}</span>
-                <span>{formatTime(current)}</span>
-                <span>Out {formatTime(end)}</span>
-              </div>
-            </div>
+          <span>In {formatTime(start)}</span>
+          <span>{formatTime(current)}</span>
+          <span>Out {formatTime(end)}</span>
+        </div>
+      </div>
           </div>
         ) : null}
 

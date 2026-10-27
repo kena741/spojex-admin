@@ -6,13 +6,13 @@ import AdminTopBar from "@/components/admin-topbar";
 import { cn } from "@/lib/utils";
 
 export const adminPageMainClassName =
-  "min-h-screen min-w-0 flex-1 overflow-x-hidden pb-[env(safe-area-inset-bottom)] lg:ml-64";
+  "min-h-screen min-w-0 flex-1 overflow-x-clip pb-[env(safe-area-inset-bottom)] lg:ml-64";
 export const adminPageContentClassName =
   "mx-auto min-w-0 w-full max-w-7xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8";
 
 export function AdminShell({ children }: { children: ReactNode }) {
   return (
-    <div className="flex min-h-screen w-full max-w-[100vw] overflow-x-hidden">
+    <div className="flex min-h-screen w-full max-w-[100vw] overflow-x-clip">
       <Sidebar />
       <main className={adminPageMainClassName}>
         <AdminTopBar />
