@@ -44,7 +44,10 @@ export async function GET(
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  if (status) query = query.eq("status", status);
+  // UI "published" maps to sport_news status active|published.
+  if (status === "published") query = query.in("status", ["active", "published"]);
+  else if (status === "hidden") query = query.in("status", ["hidden", "archived"]);
+  else if (status) query = query.eq("status", status);
   if (q) query = query.or(`title.ilike.%${q}%,summary.ilike.%${q}%`);
 
   const { data, error } = await query;
@@ -96,6 +99,10 @@ export async function GET(
       gym_id: c.gym_id,
       gym_name: gymNameById.get(String(c.gym_id)) ?? null,
     }));
+    if (status === "published") gymVideos = gymVideos.filter((g) => g.status === "published");
+    else if (status === "draft") gymVideos = gymVideos.filter((g) => g.status === "draft");
+    else if (status === "hidden") gymVideos = gymVideos.filter((g) => g.status === "hidden");
+    else if (status === "processing") gymVideos = [];
   }
 
   return NextResponse.json({

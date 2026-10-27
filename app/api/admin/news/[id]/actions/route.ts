@@ -32,13 +32,15 @@ export async function POST(
   );
   const payload = await res.json().catch(() => ({}));
   if (!res.ok) {
+    const body = payload as { error?: string; message?: string; detail?: string; code?: string };
+    // Prefer human message — FastAPI error_body puts the machine code in `error`.
+    const message =
+      (typeof body.message === "string" && body.message.trim()) ||
+      (typeof body.detail === "string" && body.detail.trim()) ||
+      (typeof body.error === "string" && body.error.trim()) ||
+      "Action failed";
     return NextResponse.json(
-      {
-        error:
-          (payload as { error?: string; message?: string }).error ||
-          (payload as { message?: string }).message ||
-          "Action failed",
-      },
+      { error: message, code: body.code || body.error || undefined },
       { status: res.status },
     );
   }

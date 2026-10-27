@@ -73,10 +73,14 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     error?: string;
     message?: string;
     detail?: string;
+    code?: string;
   };
   if (!res.ok) {
     return NextResponse.json(
-      { error: payload.message || payload.detail || payload.error || "Delete failed" },
+      {
+        error: payload.message || payload.detail || payload.error || "Delete failed",
+        code: payload.code,
+      },
       { status: res.status },
     );
   }

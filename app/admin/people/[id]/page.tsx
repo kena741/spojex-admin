@@ -373,7 +373,6 @@ export default function UserDetailPage() {
           { id: "overview", label: "Overview" },
           { id: "profiles", label: "Profiles" },
           { id: "organizations", label: "Organizations" },
-          { id: "verification", label: "Verification" },
           { id: "activity", label: "Activity" },
         ].map((s) => (
           <a

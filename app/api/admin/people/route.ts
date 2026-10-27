@@ -42,10 +42,12 @@ export async function GET(request: Request) {
       .select("id", { count: "exact", head: true })
       .is("deleted_at", null)
       .gte("created_at", since30.toISOString()),
+    // Unverified people (not only submitted identity_verification_requests).
     client
-      .from("identity_verification_requests")
+      .from("users")
       .select("id", { count: "exact", head: true })
-      .eq("status", "pending"),
+      .is("deleted_at", null)
+      .eq("verified", false),
   ]);
 
   // Restricted = soft-deleted in last 90d (visible when status=restricted)

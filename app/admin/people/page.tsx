@@ -211,7 +211,7 @@ export default function PeopleDirectoryPage() {
           label="Pending verifications"
           value={summary?.pending_verifications}
           loading={loading && !summary}
-          href="/admin/verifications?status=all"
+          onClick={() => writeParams({ verified: "no", status: "active", page: "1" })}
         />
         <SummaryCard
           label="Restricted accounts"
@@ -561,7 +561,19 @@ function PersonDrawer({
                   Verification
                 </h4>
                 {(preview?.verifications?.length ?? 0) === 0 ? (
-                  <p className="text-xs text-text-hint">No verification requests</p>
+                  user.verified ? (
+                    <p className="text-xs text-text-hint">No verification requests</p>
+                  ) : (
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <StatusBadge tone="warning">Pending verification</StatusBadge>
+                      <Link
+                        href="/admin/verifications?status=all"
+                        className="text-primary hover:underline"
+                      >
+                        Verification center
+                      </Link>
+                    </div>
+                  )
                 ) : (
                   <ul className="space-y-2">
                     {preview!.verifications.map((v) => (

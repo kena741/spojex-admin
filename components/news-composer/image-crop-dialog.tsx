@@ -19,6 +19,14 @@ type ImageCropDialogProps = {
   onApply: (file: File) => void | Promise<void>;
 };
 
+function cropSourceUrl(imageUrl: string) {
+  const abs = toBackendMediaUrl(imageUrl);
+  if (!abs) return "";
+  // Same-origin proxy avoids canvas tainted / CORS failures on GCS URLs.
+  if (abs.startsWith("blob:") || abs.startsWith("data:")) return abs;
+  return `/api/admin/news/media/source?url=${encodeURIComponent(abs)}`;
+}
+
 async function cropToFile(
   imageSrc: string,
   pixelCrop: Area,
@@ -107,7 +115,7 @@ export function ImageCropDialog({ imageUrl, open, onClose, onApply }: ImageCropD
     setSaving(true);
     setError(null);
     try {
-      const file = await cropToFile(toBackendMediaUrl(imageUrl), croppedArea, rotation);
+      const file = await cropToFile(cropSourceUrl(imageUrl), croppedArea, rotation);
       await onApply(file);
       onClose();
     } catch (err) {
@@ -128,7 +136,7 @@ export function ImageCropDialog({ imageUrl, open, onClose, onApply }: ImageCropD
         </div>
         <div className="relative h-72 bg-black sm:h-80">
           <Cropper
-            image={toBackendMediaUrl(imageUrl)}
+            image={cropSourceUrl(imageUrl)}
             crop={crop}
             zoom={zoom}
             rotation={rotation}

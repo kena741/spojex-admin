@@ -476,7 +476,7 @@ export default function VerificationCenterPage() {
                   description={
                     query.trim()
                       ? "No requests match this search and filter."
-                      : "No identity verification requests in this filter."
+                      : "No submitted identity requests here. Unverified people still show under People → Pending verifications."
                   }
                 />
               ) : null}

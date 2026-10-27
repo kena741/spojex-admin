@@ -48,7 +48,12 @@ type ReportItem = {
   service?: { id: string; title?: string | null } | null;
   organization?: { id: string; name?: string | null } | null;
   news?: { id: string; title?: string | null } | null;
-  gym_content?: { id: string; title?: string | null; kind?: string | null } | null;
+  gym_content?: {
+    id: string;
+    title?: string | null;
+    kind?: string | null;
+    gym_name?: string | null;
+  } | null;
   reason?: string | null;
   reason_code?: string | null;
   details?: string;
@@ -112,7 +117,10 @@ function targetLabel(row: ReportItem) {
   if (row.service?.title) return row.service.title;
   if (row.organization?.name) return row.organization.name;
   if (row.news?.title) return row.news.title;
-  if (row.gym_content?.title) return row.gym_content.title;
+  if (row.gym_content?.title) {
+    const gym = row.gym_content.gym_name ? ` · ${row.gym_content.gym_name}` : "";
+    return `${row.gym_content.title}${gym}`;
+  }
   if (row.target) return userLabel(row.target, row.target_user_id);
   if (row.target_id) {
     return `${targetTypeLabel(row.target_type)} · ${row.target_id.slice(0, 8)}`;
@@ -357,7 +365,7 @@ function ReportsPageInner() {
               <option value="all">All types</option>
               <option value="user">People</option>
               <option value="service">Services</option>
-              <option value="organization">Organizations / gyms</option>
+              <option value="organization">Organizations</option>
               <option value="gym_post">Gym posts</option>
               <option value="gym_video">Gym videos</option>
               <option value="news">News</option>

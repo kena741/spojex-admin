@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ ...proxied.payload, source: "python" });
   }
 
-  const status = (url.searchParams.get("status") || "pending").toLowerCase();
+  const status = (url.searchParams.get("status") || "all").toLowerCase();
   const q = (url.searchParams.get("q") || "").trim().toLowerCase();
   const role = (url.searchParams.get("role") || "all").toLowerCase();
   const reviewerId = (url.searchParams.get("reviewer_id") || "").trim();
