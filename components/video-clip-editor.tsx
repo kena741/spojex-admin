@@ -927,14 +927,14 @@ export function VideoClipEditor({
 
               {activeEffect.wash ? (
                 <div
-                  className="pointer-events-none absolute inset-0 z-[5]"
+                  className="pointer-events-none absolute inset-0 z-5"
                   style={{ background: activeEffect.wash }}
                 />
               ) : null}
 
               {overlayWashId !== "none" ? (
                 <div
-                  className="pointer-events-none absolute inset-0 z-[6]"
+                  className="pointer-events-none absolute inset-0 z-6"
                   style={{
                     backgroundColor:
                       OVERLAY_WASHES.find((w) => w.id === overlayWashId)?.css ||
@@ -949,7 +949,7 @@ export function VideoClipEditor({
                 <img
                   src={overlayImageUrl}
                   alt=""
-                  className="pointer-events-none absolute inset-0 z-[7] h-full w-full object-cover"
+                  className="pointer-events-none absolute inset-0 z-7 h-full w-full object-cover"
                   style={{ opacity: (overlayOpacity / 100) * 0.55 }}
                 />
               ) : null}
@@ -1251,7 +1251,7 @@ export function VideoClipEditor({
             </div>
 
             {selectedText ? (
-              <div className="space-y-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+              <div className="space-y-3 rounded-2xl border border-white/10 bg-white/4 p-3">
                 <div className="flex gap-1 rounded-xl bg-black/35 p-1">
                   {(
                     [

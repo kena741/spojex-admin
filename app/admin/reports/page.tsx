@@ -373,8 +373,8 @@ function ReportsPageInner() {
               <option value="conversation">Conversation</option>
             </AdminSelect>
           </div>
-          <div className="flex min-w-[220px] flex-1 flex-wrap items-end gap-2">
-            <div className="min-w-[200px] flex-1">
+          <div className="flex min-w-55 flex-1 flex-wrap items-end gap-2">
+            <div className="min-w-50 flex-1">
               <label className="mb-1 block text-[11px] text-text-hint">Search</label>
               <AdminSearchInput
                 value={searchDraft}
@@ -618,7 +618,7 @@ function ReportsPageInner() {
                       value={decisionNote}
                       onChange={(e) => setDecisionNote(e.target.value)}
                       placeholder="Decision / enforcement reason"
-                      className="min-h-[64px] w-full rounded-lg border border-border bg-card px-3 py-2 text-xs"
+                      className="min-h-16 w-full rounded-lg border border-border bg-card px-3 py-2 text-xs"
                     />
                     <div className="flex flex-wrap gap-2">
                       {[
