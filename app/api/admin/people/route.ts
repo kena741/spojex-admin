@@ -219,7 +219,9 @@ export async function GET(request: Request) {
     // Always surface primary role category as badge if no extra profile rows
     if (!badges.length && r.role) {
       const role = String(r.role);
-      if (["player", "athlete"].includes(role)) badges.push("athlete");
+      // Roles are fan / athlete / professional; legacy slugs remain on un-migrated rows only.
+      if (["athlete", "player"].includes(role)) badges.push("athlete");
+      else if (role === "professional") badges.push("professional");
       else if (["photographer", "sports_journalist", "media"].includes(role)) badges.push("media");
       else if (
         ["coach", "agent", "scout", "physiotherapist", "administrator", "referee"].includes(role)

@@ -45,6 +45,7 @@ import {
   Menu,
   Search,
   X,
+  SlidersHorizontal,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { SpojexLogo } from "@/components/spojex-logo";
@@ -97,6 +98,12 @@ const identityItems: NavItem[] = [
     label: "Verification Center",
     icon: BadgeCheck,
     visible: (can) => can("users:read") || can("profiles:read") || can("users:verify"),
+  },
+  {
+    href: "/admin/profile-config",
+    label: "Profile Configuration",
+    icon: SlidersHorizontal,
+    visible: (can) => can("profile_catalog:read") || can("profile_catalog:write"),
   },
 ];
 

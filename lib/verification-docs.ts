@@ -139,8 +139,10 @@ function identityPair(role: string): RoleReqSeed[] {
   ];
 }
 
+// Account roles + professions (sport-specific documents are set in Profile Configuration).
 const VERIFIABLE_ROLES = [
-  "player",
+  "athlete",
+  "professional",
   "coach",
   "scout",
   "agent",
@@ -160,14 +162,14 @@ const VERIFIABLE_ROLES = [
 export const VERIFICATION_ROLE_REQUIREMENT_SEEDS: RoleReqSeed[] = [
   ...VERIFIABLE_ROLES.flatMap((role) => identityPair(role)),
   {
-    role_slug: "player",
+    role_slug: "athlete",
     slug: "federation_card",
     is_required: false,
     description: "Optional federation or association player card.",
     sort_order: 30,
   },
   {
-    role_slug: "player",
+    role_slug: "athlete",
     slug: "club_letter",
     is_required: false,
     description: "Optional club or academy affiliation letter.",

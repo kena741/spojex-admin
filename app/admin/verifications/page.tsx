@@ -428,12 +428,8 @@ export default function VerificationCenterPage() {
                 className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm"
               >
                 <option value="all">All roles</option>
-                <option value="player">Player</option>
-                <option value="coach">Coach</option>
-                <option value="scout">Scout</option>
-                <option value="agent">Agent</option>
-                <option value="referee">Referee</option>
-                <option value="fitness_coach">Fitness coach</option>
+                <option value="athlete">Athlete</option>
+                <option value="professional">Professional</option>
               </select>
             </label>
           </div>

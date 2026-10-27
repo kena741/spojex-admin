@@ -16,6 +16,9 @@ export const PERMISSION_DEFINITIONS: PermissionDefinition[] = [
   { key: "organizations:verify", label: "Verify organizations", group: "Identity" },
   { key: "profiles:read", label: "View role profiles", group: "Identity" },
   { key: "profiles:write", label: "Manage profiles & media", group: "Identity" },
+  { key: "profile_catalog:read", label: "View profile configuration", group: "Identity" },
+  { key: "profile_catalog:write", label: "Edit profile configuration drafts", group: "Identity" },
+  { key: "profile_catalog:publish", label: "Publish profile configuration", group: "Identity" },
   { key: "services:read", label: "View services", group: "Marketplace" },
   { key: "services:write", label: "Manage services", group: "Marketplace" },
   { key: "catalog:read", label: "View categories", group: "Marketplace" },
@@ -286,6 +289,9 @@ export const DEFAULT_ADMIN_ROLES = [
       "organizations:verify",
       "profiles:read",
       "profiles:write",
+      "profile_catalog:read",
+      "profile_catalog:write",
+      "profile_catalog:publish",
     ],
     is_system: true,
   },
@@ -455,6 +461,9 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
     return can("users:read") || can("profiles:read") || can("users:verify");
   }
   if (pathname.startsWith("/admin/verification-docs")) return can("profiles:read");
+  if (pathname.startsWith("/admin/profile-config")) {
+    return can("profile_catalog:read") || can("profile_catalog:write");
+  }
   if (pathname.startsWith("/admin/organizations")) return can("organizations:read");
   if (
     pathname.startsWith("/admin/athletes") ||

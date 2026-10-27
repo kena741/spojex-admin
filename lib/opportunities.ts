@@ -15,8 +15,11 @@ export const applicationStatuses = [
 ] as const;
 export type ApplicationStatus = (typeof applicationStatuses)[number];
 
+/** Account roles first; profession / legacy slugs narrow to that category (player = football). */
 export const ELIGIBLE_ROLE_OPTIONS = [
-  { value: "player", label: "Player" },
+  { value: "athlete", label: "Any athlete" },
+  { value: "professional", label: "Any professional" },
+  { value: "player", label: "Football player" },
   { value: "scout", label: "Scout" },
   { value: "agent", label: "Agent" },
   { value: "coach", label: "Coach" },
