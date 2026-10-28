@@ -210,6 +210,7 @@ export default function GlobalSettingsPage() {
       privacyPolicy: policy.privacyPolicy ?? settings.privacyPolicy ?? "",
       termsAndConditions:
         policy.termsAndConditions ?? settings.termsAndConditions ?? "",
+      communityGuidelines: policy.communityGuidelines ?? "",
       aboutApp: policy.aboutApp ?? settings.aboutApp ?? "",
       aboutAppSpojex:
         policy.aboutAppSpojex ?? settings.aboutAppSpojex ?? "",
@@ -561,6 +562,35 @@ export default function GlobalSettingsPage() {
                         }
                       />
                     </div>
+                    <div>
+                      <label className={labelClassName()}>Community guidelines (HTML)</label>
+                      <textarea
+                        className="min-h-36 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                        value={String(policySettings.communityGuidelines ?? "")}
+                        disabled={!canWrite}
+                        onChange={(e) =>
+                          setPolicySettings({
+                            ...policySettings,
+                            communityGuidelines: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClassName()}>About Spojex (shown in app Settings)</label>
+                      <textarea
+                        className="min-h-24 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                        value={String(policySettings.aboutApp ?? "")}
+                        disabled={!canWrite}
+                        onChange={(e) =>
+                          setPolicySettings({ ...policySettings, aboutApp: e.target.value })
+                        }
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      These texts, plus the Contact tab and App name/version,
+                      appear in the mobile app under Profile → Settings.
+                    </p>
                   </div>
                 </Section>
               )}
