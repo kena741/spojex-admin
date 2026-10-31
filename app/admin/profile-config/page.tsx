@@ -772,7 +772,7 @@ function FieldsTab({
                   <th className="px-3 py-2">Order</th>
                   <th className="px-3 py-2">Field</th>
                   <th className="px-3 py-2">Type</th>
-                  {bucket === "portfolio" ? <th className="px-3 py-2">Group</th> : <th className="px-3 py-2">Applies to</th>}
+                  {bucket === "portfolio" ? <th className="px-3 py-2">Section</th> : <th className="px-3 py-2">Applies to</th>}
                   <th className="px-3 py-2">Rules</th>
                   <th className="px-3 py-2">Usage</th>
                   <th className="px-3 py-2">Status</th>
