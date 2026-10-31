@@ -11,11 +11,7 @@ export async function POST(
   const auth = await requireAdminPermission("services:write");
   if (!auth.ok) return auth.error;
   const { id } = await params;
-  const body = (await request.json()) as {
-    action?: string;
-    reason?: string;
-    fields?: string[];
-  };
+  const body = (await request.json()) as { action?: string; reason?: string };
   if (!body.action) {
     return NextResponse.json({ error: "action is required" }, { status: 400 });
   }
@@ -34,7 +30,6 @@ export async function POST(
           body: JSON.stringify({
             action: body.action,
             reason: body.reason || null,
-            fields: Array.isArray(body.fields) ? body.fields : undefined,
           }),
           cache: "no-store",
         },
