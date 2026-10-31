@@ -16,9 +16,9 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge, verifiedTone } from "@/components/status-badge";
 import { organizationTypeLabel, organizationTypes } from "@/lib/catalog";
-import { adminCacheKey } from "@/lib/admin-session-cache";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { loadOrgLiveGiftTotals } from "@/lib/coin-wallets";
-import { adminFetch, postAdminResponse, useIdentityCatalog } from "@/lib/hooks";
+import { adminFetch, deleteAdmin, postAdminResponse, useIdentityCatalog } from "@/lib/hooks";
 import { generateStadiumManagerPassword } from "@/lib/stadiums";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { useAdminQuery } from "@/lib/use-admin-query";
@@ -402,6 +402,43 @@ export default function OrganizationsPage() {
   };
 
   const platformOrg = rows.find((row) => row.is_platform);
+  const [rowBusyId, setRowBusyId] = useState<string | null>(null);
+
+  const trashOrg = async (row: OrganizationRow) => {
+    if (!canWrite || row.is_platform) return;
+    if (!window.confirm(`Move “${row.name || "organization"}” to Trash? Linked content is preserved.`)) {
+      return;
+    }
+    setRowBusyId(row.id);
+    setError(null);
+    try {
+      await deleteAdmin(`/api/admin/organizations/${row.id}`);
+      invalidateAdminCache(adminCacheKey(["organizations"]));
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Move to Trash failed");
+    } finally {
+      setRowBusyId(null);
+    }
+  };
+
+  const restoreOrgRow = async (row: OrganizationRow) => {
+    if (!canWrite || row.is_platform) return;
+    if (!window.confirm(`Restore “${row.name || "organization"}” from Trash?`)) return;
+    setRowBusyId(row.id);
+    setError(null);
+    try {
+      const res = await adminFetch(`/api/admin/organizations/${row.id}/restore`, { method: "POST" });
+      const payload = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(payload.error || "Restore failed");
+      invalidateAdminCache(adminCacheKey(["organizations"]));
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Restore failed");
+    } finally {
+      setRowBusyId(null);
+    }
+  };
 
   return (
     <>
@@ -666,6 +703,29 @@ export default function OrganizationsPage() {
                       <span className="block">Updated</span>
                       {formatDate(row.updated_at || row.created_at)}
                     </div>
+                    {canWrite && !row.is_platform ? (
+                      <button
+                        type="button"
+                        disabled={rowBusyId === row.id}
+                        className={
+                          trash === "yes"
+                            ? "shrink-0 rounded-md border border-border px-2 py-1 text-[11px] font-medium hover:bg-muted disabled:opacity-50"
+                            : "shrink-0 rounded-md border border-red-200 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        }
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (trash === "yes") void restoreOrgRow(row);
+                          else void trashOrg(row);
+                        }}
+                      >
+                        {rowBusyId === row.id
+                          ? "…"
+                          : trash === "yes"
+                            ? "Restore"
+                            : "Delete"}
+                      </button>
+                    ) : null}
                   </Link>
                 </li>
               );

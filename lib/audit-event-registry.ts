@@ -29,6 +29,8 @@ export const AUDIT_ACTION_REGISTRY = [
   "suspend",
   "transfer",
   "update",
+  "verification.claim",
+  "verification.review",
   "verify",
   "withdrawals.resolve",
 ] as const;
@@ -36,6 +38,7 @@ export const AUDIT_ACTION_REGISTRY = [
 export const AUDIT_RESOURCE_REGISTRY = [
   "admin",
   "admin_invitation",
+  "approval",
   "block",
   "booking",
   "coin_redemption",
@@ -46,6 +49,9 @@ export const AUDIT_RESOURCE_REGISTRY = [
   "event",
   "finance_transactions",
   "follow",
+  "gym",
+  "identity_document_types",
+  "identity_verification_request",
   "live_event",
   "mini_app",
   "news",
@@ -61,6 +67,7 @@ export const AUDIT_RESOURCE_REGISTRY = [
   "stadium_booking",
   "stream",
   "user",
+  "verification",
   "withdrawal",
   "withdrawal_request",
 ] as const;

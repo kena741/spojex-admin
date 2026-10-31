@@ -64,6 +64,7 @@ export async function POST(request: Request) {
       blurb: body.blurb ?? "",
       sort_order: body.sort_order ?? 0,
       is_system: false,
+      is_active: true,
     })
     .select("*, identity_role_groups(slug, label)")
     .single();

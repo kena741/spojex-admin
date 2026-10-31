@@ -569,13 +569,6 @@ export default function DonationDetailPage() {
               </button>
               <button
                 type="button"
-                onClick={() => switchTab("settings")}
-                className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
-              >
-                Edit campaign
-              </button>
-              <button
-                type="button"
                 onClick={() => void remove()}
                 className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
               >
@@ -877,16 +870,96 @@ export default function DonationDetailPage() {
 
       {tab === "disbursements" ? (
         <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
-          <h2 className="mb-2 text-sm font-semibold">Disbursements</h2>
-          <p className="text-sm text-text-secondary">
-            {workspace.disbursements?.message ||
-              "Campaign disbursement is not implemented. Coin wallet credit is not a campaign payout."}
-          </p>
-          <p className="mt-3 text-sm">
-            <Link href="/admin/finance/transactions?module=donations" className="text-primary hover:underline">
-              Open Finance transactions
+          <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">Disbursements</h2>
+              <p className="mt-1 text-sm text-text-secondary">
+                {(workspace.disbursements as { message?: string } | undefined)?.message ||
+                  "Completed contributions credit the recipient wallet at payment time."}
+              </p>
+            </div>
+            <Link
+              href={
+                (workspace.disbursements as { finance_href?: string } | undefined)?.finance_href ||
+                `/admin/finance/transactions?module=donations&q=${encodeURIComponent(id)}`
+              }
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              Open Finance
             </Link>
-          </p>
+          </div>
+          {(() => {
+            const d = workspace.disbursements as
+              | {
+                  totals?: { etb?: string; coins?: string; recipient_count?: number };
+                  recipients?: {
+                    credited_user_id?: string;
+                    recipient_name?: string;
+                    currency?: string;
+                    contribution_count?: number;
+                    total_amount?: string;
+                    finance_href?: string;
+                  }[];
+                }
+              | undefined;
+            const totals = d?.totals;
+            const recipients = d?.recipients ?? [];
+            return (
+              <>
+                <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg border border-border bg-muted/20 p-3">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-text-hint">ETB credited</p>
+                    <p className="mt-1 text-xl font-semibold tabular-nums">{totals?.etb ?? "0.00"}</p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-muted/20 p-3">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-text-hint">Coins credited</p>
+                    <p className="mt-1 text-xl font-semibold tabular-nums">{totals?.coins ?? "0.00"}</p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-muted/20 p-3">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-text-hint">Recipients</p>
+                    <p className="mt-1 text-xl font-semibold tabular-nums">{totals?.recipient_count ?? 0}</p>
+                  </div>
+                </div>
+                {recipients.length === 0 ? (
+                  <p className="text-sm text-text-hint">No completed contribution credits yet.</p>
+                ) : (
+                  <div className="overflow-x-auto rounded-lg border border-border">
+                    <table className="min-w-full text-left text-sm">
+                      <thead className="border-b border-border bg-muted/30 text-xs text-text-hint">
+                        <tr>
+                          <th className="px-3 py-2 font-medium">Recipient</th>
+                          <th className="px-3 py-2 font-medium">Currency</th>
+                          <th className="px-3 py-2 font-medium">Contributions</th>
+                          <th className="px-3 py-2 font-medium">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {recipients.map((r, i) => (
+                          <tr key={`${r.credited_user_id || "none"}-${r.currency}-${i}`}>
+                            <td className="px-3 py-2">
+                              {r.credited_user_id ? (
+                                <Link
+                                  href={`/admin/people/${r.credited_user_id}`}
+                                  className="text-primary hover:underline"
+                                >
+                                  {r.recipient_name || r.credited_user_id}
+                                </Link>
+                              ) : (
+                                r.recipient_name || "Unassigned"
+                              )}
+                            </td>
+                            <td className="px-3 py-2 tabular-nums">{r.currency || "—"}</td>
+                            <td className="px-3 py-2 tabular-nums">{r.contribution_count ?? 0}</td>
+                            <td className="px-3 py-2 tabular-nums">{r.total_amount ?? "0"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </section>
       ) : null}
 

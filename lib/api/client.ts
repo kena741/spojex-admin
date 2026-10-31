@@ -287,12 +287,10 @@ export function createSpojexClient(options: SpojexClientOptions = {}) {
       ) {
         try {
           if (patch.password) {
-            return {
-              data: { user: null },
-              error: authError(
-                "Password updates via admin API are not available yet. Ask the user to reset via the app, or recreate the login.",
-              ),
-            };
+            // Admin-only Cloud Run reset — does not change mobile auth flows.
+            await http.post(`/api/v1/admin/users/${id}/reset-password`, {
+              password: patch.password,
+            });
           }
           const body: Record<string, unknown> = {};
           if (patch.email) body.email = patch.email.trim().toLowerCase();
@@ -312,20 +310,28 @@ export function createSpojexClient(options: SpojexClientOptions = {}) {
           if (!Object.keys(body).length) {
             return { data: { user: { id } }, error: null };
           }
-          const updated = (await http.patch(`/api/v1/data/users/${id}`, body)) as Record<
-            string,
-            unknown
-          >;
-          return {
-            data: {
-              user: {
-                id: String(updated.id ?? id),
-                email: (updated.email as string | undefined) ?? patch.email,
-                user_metadata: meta,
+          try {
+            const updated = (await http.patch(`/api/v1/data/users/${id}`, body)) as Record<
+              string,
+              unknown
+            >;
+            return {
+              data: {
+                user: {
+                  id: String(updated.id ?? id),
+                  email: (updated.email as string | undefined) ?? patch.email,
+                  user_metadata: meta,
+                },
               },
-            },
-            error: null,
-          };
+              error: null,
+            };
+          } catch (patchErr) {
+            // Password may already be set via admin reset; auth uid can differ from users.id.
+            if (patch.password) {
+              return { data: { user: { id } }, error: null };
+            }
+            throw patchErr;
+          }
         } catch (err) {
           return {
             data: { user: null },

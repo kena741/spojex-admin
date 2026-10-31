@@ -179,7 +179,15 @@ export type StadiumRevenueTotals = {
   currency: string;
 };
 
-/** Completed payments: today, last 7 days, and the current calendar month. */
+const STADIUM_VERIFIED_STATUSES = new Set([
+  "completed",
+  "paid",
+  "success",
+  "verified",
+]);
+const STADIUM_REFUND_STATUSES = new Set(["refunded", "partial_refund"]);
+
+/** Verified booking payments: today, last 7 days, and the current calendar month. */
 export function stadiumRevenueFromPayments(
   rows: {
     amount?: number | null;
@@ -187,9 +195,16 @@ export function stadiumRevenueFromPayments(
     status?: string | null;
     paid_at?: string | null;
     created_at?: string | null;
+    commission_amount?: number | null;
   }[],
   fallbackCurrency = "ETB",
-): StadiumRevenueTotals {
+  /** ponytail: stadium_payments has no commission column — estimate from admin % when set */
+  commissionPercent: number | null = null,
+): StadiumRevenueTotals & {
+  total: number;
+  commission: number;
+  refunds: number;
+} {
   const now = new Date();
   const today = localDateOnly(now);
   const weekStart = localDateOnly(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6));
@@ -198,20 +213,38 @@ export function stadiumRevenueFromPayments(
   let daily = 0;
   let weekly = 0;
   let monthly = 0;
+  let total = 0;
+  let commission = 0;
+  let refunds = 0;
   let currency = fallbackCurrency;
+  const rate =
+    commissionPercent != null && Number.isFinite(commissionPercent)
+      ? Math.max(0, commissionPercent) / 100
+      : null;
 
   for (const row of rows) {
-    if (row.status && row.status !== "completed") continue;
+    const status = String(row.status || "").toLowerCase();
     const paid = `${row.paid_at || row.created_at || ""}`.slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(paid)) continue;
     const amount = Number(row.amount) || 0;
     if (row.currency) currency = row.currency;
+
+    if (STADIUM_REFUND_STATUSES.has(status)) {
+      refunds += amount;
+      continue;
+    }
+    if (!STADIUM_VERIFIED_STATUSES.has(status)) continue;
+
+    total += amount;
+    const stored = Number(row.commission_amount);
+    if (Number.isFinite(stored) && stored > 0) commission += stored;
+    else if (rate != null) commission += amount * rate;
     if (paid >= monthStart) monthly += amount;
     if (paid >= weekStart) weekly += amount;
     if (paid === today) daily += amount;
   }
 
-  return { daily, weekly, monthly, currency };
+  return { daily, weekly, monthly, total, commission, refunds, currency };
 }
 
 export function generateStadiumManagerPassword() {

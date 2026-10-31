@@ -94,6 +94,7 @@ export default function StadiumDetailPage() {
   const [revenuePayments, setRevenuePayments] = useState<
     Pick<StadiumPaymentRow, "amount" | "currency" | "status" | "paid_at" | "created_at">[]
   >([]);
+  const [commissionPercent, setCommissionPercent] = useState<number | null>(null);
   const [managers, setManagers] = useState<StadiumManagerRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -131,6 +132,7 @@ export default function StadiumDetailPage() {
     subscriptions: StadiumSubscriptionRow[];
     payments: StadiumPaymentRow[];
     revenuePayments: Pick<StadiumPaymentRow, "amount" | "currency" | "status" | "paid_at" | "created_at">[];
+    commissionPercent: number | null;
     managers: StadiumManagerRow[];
     weekHours: StadiumWeekHour[];
     blocks: StadiumAvailabilityBlock[];
@@ -146,7 +148,8 @@ export default function StadiumDetailPage() {
     key: adminCacheKey(["stadiums", "detail", id]),
     fetcher: async () => {
       const spojex = getSpojexClient();
-      const [stadiumRes, bookingsRes, subsRes, paymentsRes, revenueRes, managersRes, hoursRes] = await Promise.all([
+      const [stadiumRes, bookingsRes, subsRes, paymentsRes, revenueRes, managersRes, hoursRes, commissionRes] =
+        await Promise.all([
         spojex
           .from("stadiums")
           .select("*, users:owner_user_id(id, display_name, email)")
@@ -169,10 +172,11 @@ export default function StadiumDetailPage() {
           .from("stadium_payments")
           .select("amount, currency, status, paid_at, created_at")
           .eq("stadium_id", id)
-          .eq("status", "completed")
+          .in("status", ["completed", "paid", "success", "verified", "refunded", "partial_refund"])
           .limit(2000),
         fetch(`/api/admin/stadiums/${id}/managers`, { credentials: "same-origin" }),
         fetch(`/api/admin/stadiums/${id}/availability`, { credentials: "same-origin" }),
+        spojex.from("app_settings").select("id, data").eq("id", "admin_commission").maybeSingle(),
       ]);
       if (stadiumRes.error) throw stadiumRes.error;
       let softError: string | null = null;
@@ -214,6 +218,12 @@ export default function StadiumDetailPage() {
       }
 
       const stadium = stadiumRes.data as StadiumRow | null;
+      const commissionData = (commissionRes.data as { data?: { value?: unknown; active?: unknown } } | null)
+        ?.data;
+      const commissionPercent =
+        commissionData && commissionData.active !== false
+          ? Number(commissionData.value)
+          : null;
       return {
         stadium,
         pricing: parseStadiumPricing(stadium?.pricing),
@@ -225,6 +235,8 @@ export default function StadiumDetailPage() {
           StadiumPaymentRow,
           "amount" | "currency" | "status" | "paid_at" | "created_at"
         >[],
+        commissionPercent:
+          commissionPercent != null && Number.isFinite(commissionPercent) ? commissionPercent : null,
         managers,
         weekHours,
         blocks,
@@ -241,6 +253,7 @@ export default function StadiumDetailPage() {
     setSubscriptions(snap.subscriptions);
     setPayments(snap.payments);
     setRevenuePayments(snap.revenuePayments);
+    setCommissionPercent(snap.commissionPercent);
     setManagers(snap.managers);
     setWeekHours(snap.weekHours);
     setBlocks(snap.blocks);
@@ -474,8 +487,8 @@ export default function StadiumDetailPage() {
   };
 
   const revenue = useMemo(
-    () => stadiumRevenueFromPayments(revenuePayments, pricing.currency),
-    [pricing.currency, revenuePayments],
+    () => stadiumRevenueFromPayments(revenuePayments, pricing.currency, commissionPercent),
+    [commissionPercent, pricing.currency, revenuePayments],
   );
   const monthLabel = useMemo(
     () => new Date().toLocaleString("en-US", { month: "long", year: "numeric" }),
@@ -675,9 +688,9 @@ export default function StadiumDetailPage() {
           ) : null}
           <section className="rounded-2xl border border-border bg-card p-4 sm:p-6">
             <div className="mb-5 flex flex-wrap items-baseline justify-between gap-3">
-              <h2 className="font-heading text-sm font-semibold">Revenue</h2>
+              <h2 className="font-heading text-sm font-semibold">Revenue &amp; earnings</h2>
               <div className="flex items-center gap-3">
-                <p className="text-xs text-text-hint">Completed payments</p>
+                <p className="text-xs text-text-hint">Verified booking payments</p>
                 <Link
                   href={`/admin/finance/transactions?module=stadium&view=business&q=${encodeURIComponent(id)}`}
                   className="text-xs font-medium text-primary hover:underline"
@@ -685,6 +698,30 @@ export default function StadiumDetailPage() {
                   Open in Finance
                 </Link>
               </div>
+            </div>
+            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {[
+                { label: "Total earnings", hint: "All verified payments", value: revenue.total },
+                {
+                  label: "Admin commission",
+                  hint:
+                    commissionPercent != null
+                      ? `Estimated at ${commissionPercent}% (global setting)`
+                      : "Set admin commission in Settings",
+                  value: revenue.commission,
+                },
+                { label: "Refunds", hint: "Refunded / partial", value: revenue.refunds },
+              ].map((item) => (
+                <div key={item.label} className="rounded-lg border border-border bg-muted/20 p-3">
+                  <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-text-hint">
+                    {item.label}
+                  </p>
+                  <p className="mt-1 text-xl font-semibold tabular-nums text-text-primary">
+                    {formatPrice(item.value, revenue.currency)}
+                  </p>
+                  <p className="mt-0.5 text-xs text-text-secondary">{item.hint}</p>
+                </div>
+              ))}
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-border">
               {[

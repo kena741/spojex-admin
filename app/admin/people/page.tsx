@@ -16,8 +16,8 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone, verifiedTone } from "@/components/status-badge";
 import { UserAvatar } from "@/components/user-avatar";
-import { adminCacheKey } from "@/lib/admin-session-cache";
-import { useIdentityCatalog } from "@/lib/hooks";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
+import { deleteAdmin, useIdentityCatalog } from "@/lib/hooks";
 import { useAdminQuery } from "@/lib/use-admin-query";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { cn, formatDate, formatStatusLabel } from "@/lib/utils";
@@ -76,9 +76,12 @@ export default function PeopleDirectoryPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { can } = useAdminPermissions();
+  const canDelete = can("users:delete") || can("users:write");
   const { roleLabel } = useIdentityCatalog();
 
   const [selected, setSelected] = useState<string[]>([]);
+  const [deleting, setDeleting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const q = searchParams.get("q") || "";
   const profile = searchParams.get("profile") || "all";
@@ -173,6 +176,29 @@ export default function PeopleDirectoryPage() {
     [rows, selected],
   );
 
+  const deletePeople = async (ids: string[]) => {
+    if (!ids.length || !canDelete) return;
+    const label =
+      ids.length === 1
+        ? "Delete this person? Soft-delete removes login access; financial history is kept."
+        : `Delete ${ids.length} people? Soft-delete removes login access; financial history is kept.`;
+    if (!window.confirm(label)) return;
+    setDeleting(true);
+    setActionError(null);
+    try {
+      for (const id of ids) {
+        await deleteAdmin(`/api/admin/users/${id}`);
+      }
+      setSelected([]);
+      invalidateAdminCache(adminCacheKey(["people"]));
+      await refresh();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <AdminPageHeader
@@ -199,6 +225,7 @@ export default function PeopleDirectoryPage() {
       />
 
       {error ? <AdminErrorAlert message={error} /> : null}
+      {actionError ? <AdminErrorAlert message={actionError} /> : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard label="Total people" value={summary?.total_people} loading={loading && !summary} />
@@ -308,6 +335,16 @@ export default function PeopleDirectoryPage() {
               {selected.length ? `${selected.length} selected` : `${total} people`}
             </label>
             <div className="flex items-center gap-2">
+              {canDelete && selected.length > 0 ? (
+                <button
+                  type="button"
+                  disabled={deleting}
+                  onClick={() => void deletePeople(selected)}
+                  className="rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                >
+                  {deleting ? "Deleting…" : `Delete selected (${selected.length})`}
+                </button>
+              ) : null}
               <button
                 type="button"
                 disabled={page <= 1 || loading}
@@ -397,6 +434,19 @@ export default function PeopleDirectoryPage() {
                   <div className="hidden w-24 shrink-0 text-right text-[11px] text-text-hint xl:block">
                     {row.last_activity_at ? formatDate(row.last_activity_at) : "-"}
                   </div>
+                  {canDelete ? (
+                    <button
+                      type="button"
+                      disabled={deleting}
+                      className="shrink-0 rounded-md border border-red-200 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void deletePeople([row.id]);
+                      }}
+                    >
+                      Delete
+                    </button>
+                  ) : null}
                 </div>
               </li>
             ))}

@@ -529,6 +529,7 @@ export type StadiumPaymentRow = {
   provider_ref: string;
   paid_at: string | null;
   created_at: string;
+  commission_amount?: number | null;
   users?: Pick<UserRow, "id" | "display_name"> | null;
 };
 

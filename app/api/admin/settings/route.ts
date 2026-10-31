@@ -236,6 +236,20 @@ export async function POST(request: Request) {
             .update({ code, name, active: Boolean(language.active) })
             .eq("id", language.id);
           if (error) throw new Error(error.message);
+          continue;
+        }
+        // Upsert by code so re-saving existing languages is not a duplicate error.
+        const { data: existing } = await client
+          .from("languages")
+          .select("id")
+          .eq("code", code)
+          .maybeSingle();
+        if (existing?.id) {
+          const { error } = await client
+            .from("languages")
+            .update({ name, active: Boolean(language.active) })
+            .eq("id", existing.id);
+          if (error) throw new Error(error.message);
         } else {
           const { error } = await client.from("languages").insert({
             code,

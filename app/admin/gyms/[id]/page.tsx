@@ -308,6 +308,8 @@ function actionConsequence(action: UiAction, gym: GymRow, ws: GymWorkspace | nul
       return "Listing becomes inactive and is hidden from the app. Members, plans and payment history are kept.";
     case "reject_listing":
       return "Listing and verification are both set to Rejected.";
+    case "delete_gym":
+      return "Gym is soft-deleted (status deleted), hidden from the app. Payments and memberships are kept.";
     case "suspend":
       return `Listing becomes inactive and verification is suspended. ${
         ws?.suspension_policy?.note ?? ws?.readiness?.suspension_policy?.note ?? ""

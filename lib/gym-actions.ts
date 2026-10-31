@@ -7,6 +7,7 @@ export type GymActionId =
   | "activate_listing"
   | "deactivate_listing"
   | "reject_listing"
+  | "delete_gym"
   | "suspend"
   | "reactivate"
   | "feature_approve"
@@ -85,6 +86,16 @@ export function gymAllowedActions(row: GymRow): GymAction[] {
     });
   }
 
+  if (listing !== "deleted") {
+    actions.push({
+      id: "delete_gym",
+      label: "Delete gym",
+      tone: "danger",
+      needsReason: true,
+      description: "Hides the gym from the app. Payment and membership history are kept.",
+    });
+  }
+
   if (feature === "pending") {
     actions.push({ id: "feature_approve", label: "Approve featuring", tone: "success" });
     actions.push({
@@ -130,6 +141,8 @@ export function gymActionPatch(
       return { action: "deactivate_listing" };
     case "reject_listing":
       return { action: "reject_listing" };
+    case "delete_gym":
+      return { action: "delete_gym" };
     case "suspend":
       return { action: "suspend" };
     case "reactivate":
