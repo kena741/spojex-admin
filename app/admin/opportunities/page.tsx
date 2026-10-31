@@ -20,7 +20,7 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
 import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
-import { adminFetch, deleteAdmin, postAdmin, postAdminResponse } from "@/lib/hooks";
+import { adminFetch, deleteAdmin, postAdmin, postAdminResponse, uploadAdmin } from "@/lib/hooks";
 import { toBackendMediaUrl } from "@/lib/spojex-media";
 import {
   ELIGIBLE_ROLE_OPTIONS,
@@ -93,6 +93,7 @@ export default function OpportunitiesPage() {
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const writeParams = useCallback(
@@ -169,6 +170,24 @@ export default function OpportunitiesPage() {
   const openCreate = () => {
     setDraft(emptyOpportunityDraft());
     setModalOpen(true);
+  };
+
+  const uploadCover = async (file: File) => {
+    if (!canWrite) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const payload = await uploadAdmin("/api/admin/opportunities/upload", file);
+      const url = toBackendMediaUrl(
+        typeof payload.image_url === "string" ? payload.image_url : "",
+      );
+      if (!url) throw new Error("Upload did not return an image URL");
+      setDraft((d) => ({ ...d, cover_image_url: url }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Cover upload failed");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const rememberReturn = () => {
@@ -643,6 +662,44 @@ export default function OpportunitiesPage() {
               value={draft.title}
               onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
               required
+            />
+          </label>
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            <span className="text-text-secondary">Cover image</span>
+            <div className="flex flex-wrap items-center gap-3">
+              {draft.cover_image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={toBackendMediaUrl(draft.cover_image_url) || draft.cover_image_url}
+                  alt=""
+                  className="h-16 w-24 rounded-md object-cover"
+                />
+              ) : (
+                <div className="grid h-16 w-24 place-items-center rounded-md bg-muted text-[10px] text-text-hint">
+                  No cover
+                </div>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                disabled={uploading || saving}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void uploadCover(file);
+                  e.target.value = "";
+                }}
+                className="text-sm"
+              />
+              {uploading ? <span className="text-xs text-text-hint">Uploading…</span> : null}
+            </div>
+          </label>
+          <label className="grid gap-1 text-sm sm:col-span-2">
+            <span className="text-text-secondary">Description</span>
+            <textarea
+              className="min-h-[96px] w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-text-primary shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60"
+              value={draft.description}
+              onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+              placeholder="What applicants should know…"
             />
           </label>
           <label className="grid gap-1 text-sm">

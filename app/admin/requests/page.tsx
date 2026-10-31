@@ -353,16 +353,48 @@ export default function RequestsPage() {
             <option value="yes">Has appointment</option>
             <option value="no">Unscheduled</option>
           </AdminSelect>
+          <label className="grid gap-1 text-xs text-text-secondary">
+            <span>From date</span>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) =>
+                writeParams({
+                  from: e.target.value || null,
+                  event: e.target.value || dateTo ? event || "created" : null,
+                  page: "1",
+                })
+              }
+              className="h-10 rounded-lg border border-border bg-card px-3 text-sm text-text-primary shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </label>
+          <label className="grid gap-1 text-xs text-text-secondary">
+            <span>To date</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) =>
+                writeParams({
+                  to: e.target.value || null,
+                  event: e.target.value || dateFrom ? event || "created" : null,
+                  page: "1",
+                })
+              }
+              className="h-10 rounded-lg border border-border bg-card px-3 text-sm text-text-primary shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </label>
         </div>
-        {(dateFrom || dateTo || event) && (
+        {(dateFrom || dateTo) && (
           <p className="mt-2 text-xs text-text-hint">
-            Date filter ({event || "created"}): {dateFrom && dateTo ? `${dateFrom} → ${dateTo}` : ""}
+            Filtering by {event || "created"} date
+            {dateFrom ? ` from ${dateFrom}` : ""}
+            {dateTo ? ` to ${dateTo}` : ""}
             <button
               type="button"
               className="ml-2 text-primary hover:underline"
               onClick={() => writeParams({ from: null, to: null, event: null, page: "1" })}
             >
-              Clear
+              Clear dates
             </button>
           </p>
         )}
@@ -449,22 +481,22 @@ export default function RequestsPage() {
               return (
                 <li
                   key={row.id}
-                  className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center"
+                  className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(9rem,auto)_auto] lg:items-center"
                 >
                   <button
                     type="button"
                     onClick={() => openBooking(row.id)}
-                    className="flex min-w-0 flex-1 gap-3 text-left"
+                    className="flex min-w-0 gap-3 text-left"
                   >
                     {row.service?.cover_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={row.service.cover_url}
                         alt=""
-                        className="aspect-[4/3] w-20 shrink-0 rounded-md object-cover bg-muted"
+                        className="h-14 w-14 shrink-0 rounded-md object-cover bg-muted"
                       />
                     ) : (
-                      <div className="grid aspect-[4/3] w-20 shrink-0 place-items-center rounded-md bg-muted text-[10px] text-text-hint">
+                      <div className="grid h-14 w-14 shrink-0 place-items-center rounded-md bg-muted text-[10px] text-text-hint">
                         No photo
                       </div>
                     )}
@@ -472,10 +504,10 @@ export default function RequestsPage() {
                       <p className="font-mono text-[10px] text-text-hint">
                         {row.reference || `BK-${row.id.slice(0, 8).toUpperCase()}`}
                       </p>
-                      <p className="font-medium text-text-primary">
+                      <p className="truncate font-medium text-text-primary">
                         {row.service?.title || row.service_id.slice(0, 8)}
                       </p>
-                      <p className="text-xs text-text-secondary">
+                      <p className="whitespace-nowrap text-xs text-text-secondary">
                         {row.appointment_label === "Not scheduled" ||
                         (!row.requested_at && !row.requested_on) ? (
                           <span className="text-text-hint">Not scheduled</span>
@@ -486,13 +518,13 @@ export default function RequestsPage() {
                           <span className="ml-1 font-medium text-red-600">· Overdue</span>
                         ) : null}
                       </p>
-                      <p className="text-[11px] text-text-hint">
+                      <p className="whitespace-nowrap text-[11px] text-text-hint">
                         Created {row.created_at ? formatDateTime(row.created_at) : "-"}
                       </p>
                     </div>
                   </button>
 
-                  <div className="flex shrink-0 flex-wrap items-center gap-4 lg:justify-end">
+                  <div className="flex min-w-0 flex-wrap items-center gap-3">
                     <PersonCell
                       person={row.requester}
                       href={row.people_customer_href || `/admin/people/${row.requester?.id}`}
@@ -501,22 +533,28 @@ export default function RequestsPage() {
                       person={row.provider}
                       href={row.people_provider_href || `/admin/people/${row.provider?.id}`}
                     />
-                    <div className="min-w-[7rem] text-right text-xs">
-                      <p className="font-medium">{row.payment?.label || "-"}</p>
-                      {row.payment?.amount != null ? (
-                        <p className="text-text-hint">
-                          {row.payment.currency}{" "}
-                          {Number(row.payment.amount).toLocaleString("en-ET")}
-                        </p>
-                      ) : row.agreed_amount != null ? (
-                        <p className="text-text-hint">
-                          {row.agreed_currency} {Number(row.agreed_amount).toLocaleString("en-ET")}
-                        </p>
-                      ) : null}
+                  </div>
+
+                  <div className="min-w-0 text-xs lg:text-right">
+                    <p className="font-medium">{row.payment?.label || "-"}</p>
+                    {row.payment?.amount != null ? (
+                      <p className="whitespace-nowrap text-text-hint">
+                        {row.payment.currency}{" "}
+                        {Number(row.payment.amount).toLocaleString("en-ET")}
+                      </p>
+                    ) : row.agreed_amount != null ? (
+                      <p className="whitespace-nowrap text-text-hint">
+                        {row.agreed_currency} {Number(row.agreed_amount).toLocaleString("en-ET")}
+                      </p>
+                    ) : null}
+                    <div className="mt-1 lg:flex lg:justify-end">
+                      <StatusBadge tone={requestTone(row.status)}>
+                        {formatStatusLabel(row.status)}
+                      </StatusBadge>
                     </div>
-                    <StatusBadge tone={requestTone(row.status)}>
-                      {formatStatusLabel(row.status)}
-                    </StatusBadge>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
                     <button
                       type="button"
                       onClick={() => openBooking(row.id)}
@@ -524,9 +562,8 @@ export default function RequestsPage() {
                     >
                       Open
                     </button>
-                    {canWrite && actions.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {actions.map((a) => (
+                    {canWrite && actions.length > 0
+                      ? actions.map((a) => (
                           <button
                             key={a.status}
                             type="button"
@@ -537,9 +574,8 @@ export default function RequestsPage() {
                           >
                             {a.label}
                           </button>
-                        ))}
-                      </div>
-                    ) : null}
+                        ))
+                      : null}
                   </div>
                 </li>
               );

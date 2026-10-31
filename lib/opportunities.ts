@@ -120,6 +120,8 @@ export function formatOpportunityFee(
 /** Client-side checks mirroring Python validate_opportunity_payload. */
 export function validateOpportunityDraft(draft: OpportunityDraft): string | null {
   if (!draft.title.trim()) return "Title is required";
+  if (!draft.description.trim()) return "Description is required";
+  if (!draft.cover_image_url.trim()) return "Cover image is required";
   if (draft.fee_type === "paid" && !(Number(draft.fee_amount) > 0)) {
     return "Paid opportunities need a fee greater than 0";
   }

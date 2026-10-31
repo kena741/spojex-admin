@@ -18,7 +18,8 @@ import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import type { CoinWalletRow, OrganizationRow } from "@/lib/types";
 import { cn, formatCoins, formatDate, locationLabel } from "@/lib/utils";
 import {
-  AssignManagerModal,
+  StaffAccessModal,
+  type StaffUserOption,
   OrgChatsPanel,
   OrgContentPanel,
 } from "@/components/org-manager-panels";
@@ -140,7 +141,8 @@ export default function OrganizationDetailPage() {
   const [reassignUserId, setReassignUserId] = useState("");
   const [reassignReason, setReassignReason] = useState("");
   const [reassignBusy, setReassignBusy] = useState(false);
-  const [assignManagerOpen, setAssignManagerOpen] = useState(false);
+  const [staffModalOpen, setStaffModalOpen] = useState(false);
+  const [staffPreset, setStaffPreset] = useState<StaffUserOption | null>(null);
   const [managerActionBusy, setManagerActionBusy] = useState<string | null>(null);
   const [draft, setDraft] = useState({
     name: "",
@@ -181,7 +183,7 @@ export default function OrganizationDetailPage() {
       .eq("id", id)
       .maybeSingle();
     if (loadError) throw new Error(loadError.message);
-    let next = data as OrganizationRow | null;
+    const next = data as OrganizationRow | null;
     if (!next) {
       return {
         org: null,
@@ -787,6 +789,11 @@ export default function OrganizationDetailPage() {
     { id: "settings", label: "Settings" },
   ];
 
+  const openStaffModal = (preset?: StaffUserOption) => {
+    setStaffPreset(preset ?? null);
+    setStaffModalOpen(true);
+  };
+
   const removeStaff = async (userId: string) => {
     if (!canWrite) return;
     if (
@@ -917,7 +924,18 @@ export default function OrganizationDetailPage() {
                   type="button"
                   disabled={managerActionBusy === m.user_id}
                   onClick={() => {
-                    setAssignManagerOpen(true);
+                    openStaffModal(
+                      m.users
+                        ? {
+                            id: m.users.id,
+                            display_name: m.users.display_name,
+                            email: m.users.email,
+                            username: m.users.username,
+                            role: m.users.role,
+                            avatar_url: m.users.avatar_url,
+                          }
+                        : undefined,
+                    );
                   }}
                   className="text-xs text-primary hover:underline disabled:opacity-50"
                   title="Promote to staff via Add staff"
@@ -1292,22 +1310,29 @@ export default function OrganizationDetailPage() {
                   <div>
                     <h2 className="font-heading text-sm font-semibold">Staff &amp; access</h2>
                     <p className="mt-1 text-xs text-text-secondary">
-                      Every organization must have an owner linked to a Spojex user. Add staff by
-                      @username or email — they get the same day-to-day access as the owner. Chat
-                      members are not staff unless added here. Platform profile roles are never
-                      overwritten.
+                      Every organization must have an owner linked to a Spojex user. Staff get the
+                      same day-to-day access as the owner. Link an existing person or create a new
+                      account — chat members are not staff unless added here. Platform profile roles
+                      are never overwritten.
                     </p>
                   </div>
                   {canWrite && !org.is_platform ? (
                     <button
                       type="button"
-                      onClick={() => setAssignManagerOpen(true)}
+                      onClick={() => openStaffModal()}
                       className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
                     >
                       Add staff
                     </button>
                   ) : null}
                 </div>
+
+                {org.is_platform ? (
+                  <p className="mb-3 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-text-secondary">
+                    Staff can&apos;t be assigned to the Spojex platform organization — it is managed
+                    by the platform team.
+                  </p>
+                ) : null}
 
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-secondary">
                   Owner
@@ -1345,13 +1370,13 @@ export default function OrganizationDetailPage() {
                     <p className="text-sm font-medium">No staff yet</p>
                     <p className="mt-1 text-xs text-text-secondary">
                       {canWrite
-                        ? "Add a Spojex user by @username or email to grant staff access."
+                        ? "Link an existing Spojex user or create a new person to grant staff access."
                         : "Staff assignments appear here."}
                     </p>
                     {canWrite && !org.is_platform ? (
                       <button
                         type="button"
-                        onClick={() => setAssignManagerOpen(true)}
+                        onClick={() => openStaffModal()}
                         className="mt-3 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
                       >
                         Add staff
@@ -1363,6 +1388,21 @@ export default function OrganizationDetailPage() {
                     {people.staff.map((m) => renderPersonRow(m, "staff"))}
                   </ul>
                 )}
+
+                {people.members.length > 0 ? (
+                  <>
+                    <h3 className="mb-2 mt-5 text-xs font-semibold uppercase tracking-wide text-text-secondary">
+                      Members ({people.members.length})
+                    </h3>
+                    <p className="mb-2 text-xs text-text-secondary">
+                      Organization chat members. Promote someone to staff, or leave them as a
+                      regular member.
+                    </p>
+                    <ul className="divide-y divide-border">
+                      {people.members.map((m) => renderPersonRow(m, "member"))}
+                    </ul>
+                  </>
+                ) : null}
               </section>
             ) : null}
 
@@ -1702,16 +1742,24 @@ export default function OrganizationDetailPage() {
         </div>
       ) : null}
 
-      <AssignManagerModal
-        open={assignManagerOpen}
+      <StaffAccessModal
+        open={staffModalOpen}
         orgId={id}
         orgName={org.name || "Organization"}
         ownerUserId={org.user_id}
         members={members}
         canWrite={canWrite}
-        onClose={() => setAssignManagerOpen(false)}
-        onAssigned={async () => {
-          setNotice("Staff assigned.");
+        preset={staffPreset}
+        onClose={() => {
+          setStaffModalOpen(false);
+          setStaffPreset(null);
+        }}
+        onAssigned={async (result) => {
+          setNotice(
+            result.created
+              ? `${result.name} was created and added as staff.`
+              : `${result.name} now has staff access.`,
+          );
           await load();
         }}
       />

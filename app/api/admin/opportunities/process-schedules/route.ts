@@ -44,28 +44,29 @@ export async function POST() {
           source: payload.source || "python",
         });
       }
-    } catch {
-      // fall through
+      return NextResponse.json(
+        {
+          error:
+            (payload.error as string) ||
+            (payload.message as string) ||
+            "Could not process opportunity schedules",
+        },
+        { status: res.status >= 400 ? res.status : 400 },
+      );
+    } catch (err) {
+      return NextResponse.json(
+        {
+          error:
+            err instanceof Error ? err.message : "Could not reach schedule processor",
+        },
+        { status: 502 },
+      );
     }
   }
 
-  const { data, error } = await auth.context.client.rpc("process_opportunity_schedules");
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
-  }
-
-  const openedIds = Array.isArray(data?.opened_ids) ? data.opened_ids.map(String) : [];
-  const notifies = [];
-  for (const id of openedIds) {
-    notifies.push(await notifyOpportunityWaitlist(auth.context.client, id));
-  }
-
-  return NextResponse.json({
-    ok: true,
-    schedules: data,
-    notifies,
-    source: "rpc",
-    behavior:
-      "Opens published coming_soon when application_opens_at ≤ now; closes open when deadline ≤ now. Waitlist notified once via notified_at.",
-  });
+  // ponytail: no RPC fallback — process_opportunity_schedules is not on Cloud SQL
+  return NextResponse.json(
+    { error: "Schedule processor unavailable. Try again after deploy." },
+    { status: 503 },
+  );
 }

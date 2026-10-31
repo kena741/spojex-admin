@@ -117,21 +117,26 @@ async function localOverview(opts: {
     return null;
   };
 
-  const pending = reqs.filter((r) =>
+  const pendingAll = reqs.filter((r) =>
     ["pending", "awaiting_payment"].includes(String(r.status).toLowerCase()),
   );
+  const pending = pendingAll.filter((r) => inPeriod(r.created_at));
+  const bookingRequests = reqs.filter((r) => inPeriod(r.created_at));
+  const publishedInPeriod = svc.filter((s) => s.published && inPeriod(s.created_at));
+  const providersInPeriod = new Set(publishedInPeriod.map((s) => s.provider_id));
   const upcoming = reqs.filter((r) => {
     if (String(r.status).toLowerCase() !== "accepted") return false;
     const at = appointmentAt(r);
     if (!at) return false;
     return at >= now && at <= soon;
   });
-  const unscheduled = reqs.filter(
+  const unscheduledAll = reqs.filter(
     (r) =>
       String(r.status).toLowerCase() === "accepted" &&
       !r.requested_at &&
       !r.requested_on,
   );
+  const unscheduled = unscheduledAll.filter((r) => inPeriod(r.created_at));
   const overdue = reqs.filter((r) => {
     if (String(r.status).toLowerCase() !== "accepted") return false;
     const at = appointmentAt(r);
@@ -169,7 +174,6 @@ async function localOverview(opts: {
     commissionAvailable = false;
   }
 
-  const providers = new Set(svc.filter((s) => s.published).map((s) => s.provider_id));
   const pendingServices = svc.filter((s) => !s.published);
   const openOpps = ((opps.data ?? []) as Array<{ status?: string }>).filter(
     (o) => String(o.status).toLowerCase() === "open",
@@ -228,26 +232,46 @@ async function localOverview(opts: {
           to: endDate,
         }),
       }),
-      published_services: metric(svc.filter((s) => s.published).length, !services.error, {
-        kind: "snapshot",
+      published_services: metric(publishedInPeriod.length, !services.error, {
+        kind: "period",
         href: "/admin/services?published=yes",
+        timestamp_field: "created_at",
       }),
-      active_providers: metric(providers.size, !services.error, { kind: "snapshot" }),
+      active_providers: metric(providersInPeriod.size, !services.error, {
+        kind: "period",
+        timestamp_field: "created_at",
+      }),
       pending_approvals: metric(pendingServices.length, !services.error, {
         kind: "snapshot",
         href: "/admin/services?published=pending",
       }),
       pending_bookings: metric(pending.length, !requests.error, {
-        kind: "snapshot",
-        href: bookingsHref({ status: ["pending", "awaiting_payment"] }),
+        kind: "period",
+        href: bookingsHref({
+          status: ["pending", "awaiting_payment"],
+          from: startDate,
+          to: endDate,
+        }),
+        timestamp_field: "created_at",
+      }),
+      booking_requests_period: metric(bookingRequests.length, !requests.error, {
+        kind: "period",
+        href: bookingsHref({ from: startDate, to: endDate }),
+        timestamp_field: "created_at",
       }),
       payment_exceptions: metric(failedPays.length, !payments.error, {
         kind: "snapshot",
         href: "/admin/finance/transactions?module=service&asset=money&status=failed&range=365d",
       }),
       accepted_unscheduled: metric(unscheduled.length, !requests.error, {
-        kind: "snapshot",
-        href: bookingsHref({ status: "accepted", schedule: "unscheduled" }),
+        kind: "period",
+        href: bookingsHref({
+          status: "accepted",
+          schedule: "unscheduled",
+          from: startDate,
+          to: endDate,
+        }),
+        timestamp_field: "created_at",
       }),
       overdue_appointments: metric(overdue.length, !requests.error, {
         kind: "snapshot",
@@ -302,8 +326,8 @@ async function localOverview(opts: {
         })),
       },
       pending_bookings: {
-        total: pending.length,
-        items: pending.slice(0, 8).map((r) => ({
+        total: pendingAll.length,
+        items: pendingAll.slice(0, 8).map((r) => ({
           id: r.id,
           status: r.status,
           created_at: r.created_at,
@@ -312,8 +336,8 @@ async function localOverview(opts: {
         })),
       },
       unscheduled: {
-        total: unscheduled.length,
-        items: unscheduled.slice(0, 8).map((r) => ({
+        total: unscheduledAll.length,
+        items: unscheduledAll.slice(0, 8).map((r) => ({
           id: r.id,
           status: r.status,
           appointment_label: "Not scheduled",

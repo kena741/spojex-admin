@@ -368,8 +368,8 @@ export default function MarketplaceOverviewPage() {
                 label="Published services"
                 value={displayMetric(m.published_services)}
                 href={m.published_services?.href}
-                hint="Snapshot - current published listings"
-                badge="Snapshot"
+                hint={defs.published_service || m.published_services?.note}
+                delta={<Delta m={m.published_services} />}
                 available={m.published_services?.available !== false}
                 sectionOk={sections.services?.available !== false}
               />
@@ -378,12 +378,17 @@ export default function MarketplaceOverviewPage() {
                 label="Active providers"
                 value={displayMetric(m.active_providers)}
                 hint={defs.active_provider}
-                badge="Snapshot"
+                delta={<Delta m={m.active_providers} />}
                 available={m.active_providers?.available !== false}
                 sectionOk={sections.services?.available !== false}
               />
             </div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <CompactMoney
+                label="Booking requests"
+                metric={m.booking_requests_period}
+                sectionOk={sections.bookings?.available !== false}
+              />
               <CompactMoney
                 label="Refunds"
                 metric={m.refunds_etb}

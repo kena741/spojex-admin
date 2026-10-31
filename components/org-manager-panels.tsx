@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { Check, Copy } from "lucide-react";
+import { allRoles } from "@/lib/catalog";
 import { adminFetch } from "@/lib/hooks";
 import { cn, formatDate } from "@/lib/utils";
 
 const fieldClass = "h-10 w-full rounded-lg border border-border px-3 text-sm";
 
-type SearchUser = {
+export type StaffUserOption = {
   id: string;
   display_name: string;
   email: string | null;
@@ -51,13 +53,14 @@ type ConversationRow = {
   member_count?: number | null;
 };
 
-export function AssignManagerModal({
+export function StaffAccessModal({
   open,
   orgId,
   orgName,
   ownerUserId,
   members,
   canWrite,
+  preset,
   onClose,
   onAssigned,
 }: {
@@ -67,29 +70,66 @@ export function AssignManagerModal({
   ownerUserId: string;
   members: MemberHint[];
   canWrite: boolean;
+  /** Member row that opened the modal, so "Make staff…" lands pre-selected. */
+  preset?: StaffUserOption | null;
   onClose: () => void;
-  onAssigned: () => Promise<void> | void;
+  onAssigned: (result: { name: string; created: boolean }) => Promise<void> | void;
 }) {
+  const [mode, setMode] = useState<"link" | "create">("link");
+
   const [query, setQuery] = useState("");
-  const [options, setOptions] = useState<SearchUser[]>([]);
-  const [selected, setSelected] = useState<SearchUser | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [options, setOptions] = useState<StaffUserOption[]>([]);
+  const [selected, setSelected] = useState<StaffUserOption | null>(null);
   const [searching, setSearching] = useState(false);
   const reqSeq = useRef(0);
 
-  useEffect(() => {
-    if (!open) {
-      setQuery("");
-      setOptions([]);
-      setSelected(null);
-      setError(null);
-      return;
-    }
-  }, [open]);
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [role, setRole] = useState("fan");
+  const [password, setPassword] = useState("");
+
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  /** Set when the account was created but granting staff failed, so retry skips re-creating it. */
+  const [pendingUserId, setPendingUserId] = useState<string | null>(null);
+  const [pendingPassword, setPendingPassword] = useState<string | undefined>(undefined);
+  const [created, setCreated] = useState<{
+    name: string;
+    email: string;
+    password?: string;
+    linkedExisting: boolean;
+  } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!open) return;
+    setMode("link");
+    setQuery("");
+    setOptions([]);
+    setSelected(preset ?? null);
+    setSearching(false);
+    setFullName("");
+    setEmail("");
+    setPhone("");
+    setRole("fan");
+    setPassword("");
+    setBusy(false);
+    setError(null);
+    setPendingUserId(null);
+    setPendingPassword(undefined);
+    setCreated(null);
+    setCopied(false);
+  }, [open, preset]);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 1600);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  useEffect(() => {
+    if (!open || mode !== "link") return;
     const raw = query.trim().replace(/^@+/, "");
     if (raw.length < 2) {
       setOptions([]);
@@ -102,7 +142,7 @@ export function AssignManagerModal({
       void adminFetch(`/api/admin/users?q=${encodeURIComponent(raw)}&limit=12`)
         .then(async (res) => {
           const json = (await res.json().catch(() => ({}))) as {
-            data?: SearchUser[];
+            data?: StaffUserOption[];
             error?: string;
           };
           if (seq !== reqSeq.current) return;
@@ -124,7 +164,7 @@ export function AssignManagerModal({
         });
     }, 300);
     return () => window.clearTimeout(timer);
-  }, [open, query]);
+  }, [open, mode, query]);
 
   const membershipById = useMemo(() => {
     const map = new Map<string, MemberHint>();
@@ -132,33 +172,106 @@ export function AssignManagerModal({
     return map;
   }, [members]);
 
-  const roleLabel = (userId: string) => {
+  const memberBadge = (userId: string) => {
     if (userId === ownerUserId) return "Owner";
     const m = membershipById.get(userId);
     if (!m) return null;
-    // Product "Staff" = DB member_role admin (ops manager).
     if (m.member_role === "admin") return "Staff";
     if (m.member_role === "owner") return "Owner";
     if (m.member_role === "moderator") return "Moderator";
     return m.member_role || "Member";
   };
 
+  const assign = async (userId: string) => {
+    const res = await adminFetch(`/api/admin/organizations/${orgId}/managers`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId }),
+    });
+    const payload = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) throw new Error(payload.error || "Add staff failed");
+  };
+
   const submit = async () => {
-    if (!canWrite || !selected) return;
-    setBusy(true);
+    if (!canWrite || busy) return;
     setError(null);
+    if (mode === "link" && !selected) return;
+
+    setBusy(true);
+    let accountReady = Boolean(pendingUserId);
     try {
-      const res = await adminFetch(`/api/admin/organizations/${orgId}/managers`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: selected.id }),
+      if (mode === "link" && selected) {
+        await assign(selected.id);
+        await onAssigned({ name: selected.display_name, created: false });
+        onClose();
+        return;
+      }
+
+      const name = fullName.trim();
+      const address = email.trim().toLowerCase();
+      if (!name) throw new Error("Full name is required.");
+      if (!address.includes("@")) throw new Error("A valid email is required.");
+      if (password.trim() && password.trim().length < 6) {
+        throw new Error(
+          "Password must be at least 6 characters, or leave it blank to auto-generate.",
+        );
+      }
+
+      let userId = pendingUserId;
+      let temporaryPassword = pendingPassword;
+      let linkedExisting = false;
+
+      if (!userId) {
+        const res = await adminFetch("/api/admin/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            full_name: name,
+            email: address,
+            phone: phone.trim(),
+            role,
+            ...(password.trim() ? { password: password.trim() } : {}),
+          }),
+        });
+        const payload = (await res.json().catch(() => ({}))) as {
+          data?: { id?: string };
+          password?: string;
+          attached_existing?: boolean;
+          error?: string;
+        };
+        if (!res.ok) throw new Error(payload.error || "Could not create the account.");
+        userId = payload.data?.id ?? null;
+        if (!userId) throw new Error("The account was created but no user id came back.");
+        temporaryPassword = payload.password;
+        linkedExisting = Boolean(payload.attached_existing);
+        accountReady = true;
+        setPendingUserId(userId);
+        setPendingPassword(temporaryPassword);
+      }
+
+      await assign(userId);
+      await onAssigned({ name, created: !linkedExisting });
+
+      setCreated({
+        name,
+        email: address,
+        password: temporaryPassword,
+        linkedExisting,
       });
-      const payload = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) throw new Error(payload.error || "Add staff failed");
-      await onAssigned();
-      onClose();
+      setPendingUserId(null);
+      setPendingPassword(undefined);
+      setFullName("");
+      setEmail("");
+      setPhone("");
+      setPassword("");
+      setRole("fan");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Add staff failed");
+      const base = err instanceof Error ? err.message : "Add staff failed";
+      setError(
+        accountReady && mode === "create"
+          ? `${base} The account already exists — press “Create & add staff” again to retry staff access.`
+          : base,
+      );
     } finally {
       setBusy(false);
     }
@@ -168,119 +281,327 @@ export function AssignManagerModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
-      <div className="w-full max-w-lg rounded-xl border border-border bg-card p-5 shadow-lg">
-        <h3 className="font-heading text-sm font-semibold">Add staff</h3>
-        <p className="mt-1 text-xs text-text-secondary">
-          Organization: <span className="font-medium text-text-primary">{orgName}</span>
-        </p>
-        <p className="mt-2 text-xs text-text-secondary">
-          Staff get the same day-to-day access as the owner: edit profile/logo, publish and manage
-          org content, comment as the organization, moderate comments, and manage org chats. This
-          does <strong>not</strong> transfer ownership, delete the organization, grant finance
-          access, or change platform verification. Chat membership alone does not grant staff
-          access.
-        </p>
+      <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+        <div className="border-b border-border px-5 py-4">
+          <h3 className="font-heading text-sm font-semibold">
+            {created ? "Staff access granted" : "Add staff"}
+          </h3>
+          <p className="mt-1 text-xs text-text-secondary">
+            Organization: <span className="font-medium text-text-primary">{orgName}</span>
+          </p>
+        </div>
 
-        <label className="mt-3 block text-sm">
-          <span className="mb-1 block text-text-secondary">Username or email</span>
-          <input
-            className={fieldClass}
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setSelected(null);
-            }}
-            placeholder="@username or name@example.com"
-          />
-        </label>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {created ? (
+            <div className="space-y-3">
+              <p className="text-sm text-text-secondary">
+                <span className="font-medium text-text-primary">{created.name}</span>{" "}
+                {created.linkedExisting
+                  ? "already had a Spojex account, so it was linked as staff."
+                  : "was created and added as staff."}
+              </p>
+              {created.password ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/30">
+                  <p className="text-xs font-semibold text-amber-900 dark:text-amber-200">
+                    Temporary password
+                  </p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <code className="min-w-0 flex-1 truncate rounded bg-white/70 px-2 py-1 font-mono text-sm dark:bg-black/20">
+                      {created.password}
+                    </code>
+                    <button
+                      type="button"
+                      aria-label="Copy temporary password"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(created.password ?? "");
+                          setCopied(true);
+                        } catch {
+                          setCopied(false);
+                        }
+                      }}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-xs font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    >
+                      {copied ? (
+                        <Check className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5" aria-hidden />
+                      )}
+                      {copied ? "Copied" : "Copy"}
+                    </button>
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-amber-800 dark:text-amber-300">
+                    Share it with {created.email} now — it is not shown again.
+                  </p>
+                </div>
+              ) : (
+                <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-text-secondary">
+                  {created.email} already had a Spojex login, so no new password was created.
+                </p>
+              )}
+              <p className="text-xs text-text-secondary">
+                They can now edit the organization profile, publish content, and manage chats — but
+                cannot take ownership, delete the organization, or reach finance.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-xs text-text-secondary">
+                Staff get the same day-to-day access as the owner. This does not transfer ownership,
+                delete the organization, or grant finance access.
+              </p>
 
-        {searching ? (
-          <p className="mt-2 text-xs text-text-hint">Searching…</p>
-        ) : null}
-        {!searching && query.trim().length >= 2 && options.length === 0 ? (
-          <p className="mt-2 text-xs text-text-hint">No users found. Try another email or username.</p>
-        ) : null}
-
-        {options.length > 0 ? (
-          <ul className="mt-2 max-h-48 overflow-y-auto rounded-lg border border-border">
-            {options.map((u) => {
-              const label = roleLabel(u.id);
-              return (
-                <li key={u.id}>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    { id: "link", label: "Link existing user" },
+                    { id: "create", label: "Create new person" },
+                  ] as const
+                ).map((item) => (
                   <button
+                    key={item.id}
                     type="button"
-                    disabled={u.id === ownerUserId || label === "Staff" || label === "Owner"}
+                    aria-pressed={mode === item.id}
                     onClick={() => {
-                      setSelected(u);
-                      setQuery(
-                        [u.display_name, u.username ? `@${u.username}` : null, u.email]
-                          .filter(Boolean)
-                          .join(" · "),
-                      );
+                      setMode(item.id);
+                      setError(null);
                     }}
                     className={cn(
-                      "flex w-full items-start gap-3 px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50",
-                      selected?.id === u.id ? "bg-primary/10" : "",
+                      "rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                      mode === item.id
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border hover:bg-muted",
                     )}
                   >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-xs font-semibold">
-                      {u.avatar_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={u.avatar_url} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        (u.display_name || "?").slice(0, 1).toUpperCase()
-                      )}
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+
+              {mode === "link" ? (
+                <div className="space-y-3">
+                  {selected ? (
+                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-text-primary">
+                            {selected.display_name}
+                          </p>
+                          <p className="truncate text-xs text-text-secondary">
+                            {[
+                              selected.username ? `@${selected.username}` : null,
+                              selected.email,
+                              selected.role,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelected(null)}
+                          className="shrink-0 text-xs font-medium text-text-secondary hover:text-text-primary"
+                        >
+                          Change
+                        </button>
+                      </div>
+                      <p className="mt-1 font-mono text-[10px] text-text-hint">ID: {selected.id}</p>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium">{u.display_name}</p>
-                      <p className="truncate text-xs text-text-secondary">
-                        {[u.username ? `@${u.username}` : null, u.email, u.role]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
-                      {label ? (
-                        <p className="mt-0.5 text-[10px] font-semibold uppercase text-text-hint">
-                          Already {label}
+                  ) : (
+                    <>
+                      <label className="block text-sm">
+                        <span className="mb-1 block text-text-secondary">Username or email</span>
+                        <input
+                          className={fieldClass}
+                          value={query}
+                          onChange={(e) => {
+                            setQuery(e.target.value);
+                            setSelected(null);
+                          }}
+                          placeholder="@username or name@example.com"
+                          autoComplete="off"
+                        />
+                      </label>
+
+                      {searching ? <p className="text-xs text-text-hint">Searching…</p> : null}
+                      {!searching && query.trim().length >= 2 && options.length === 0 ? (
+                        <p className="text-xs text-text-hint">
+                          No users found. Switch to “Create new person” to make an account.
                         </p>
                       ) : null}
-                    </div>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        ) : null}
 
-        {selected ? (
-          <div className="mt-3 rounded-lg border border-border bg-muted/40 p-3 text-xs">
-            <p className="font-medium text-text-primary">Confirm assignment</p>
-            <p className="mt-1 text-text-secondary">
-              {selected.display_name}
-              {selected.username ? ` (@${selected.username})` : ""}
-              {selected.email ? ` · ${selected.email}` : ""}
-            </p>
-            <p className="mt-1 font-mono text-[10px] text-text-hint">ID: {selected.id}</p>
-          </div>
-        ) : null}
+                      {options.length > 0 ? (
+                        <ul className="max-h-48 overflow-y-auto rounded-lg border border-border">
+                          {options.map((u) => {
+                            const badge = memberBadge(u.id);
+                            return (
+                              <li key={u.id}>
+                                <button
+                                  type="button"
+                                  disabled={
+                                    u.id === ownerUserId || badge === "Staff" || badge === "Owner"
+                                  }
+                                  onClick={() => setSelected(u)}
+                                  className="flex w-full items-start gap-3 px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
+                                >
+                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-xs font-semibold">
+                                    {u.avatar_url ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img
+                                        src={u.avatar_url}
+                                        alt=""
+                                        className="h-full w-full object-cover"
+                                      />
+                                    ) : (
+                                      (u.display_name || "?").slice(0, 1).toUpperCase()
+                                    )}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-medium">{u.display_name}</p>
+                                    <p className="truncate text-xs text-text-secondary">
+                                      {[u.username ? `@${u.username}` : null, u.email, u.role]
+                                        .filter(Boolean)
+                                        .join(" · ")}
+                                    </p>
+                                    {badge ? (
+                                      <p className="mt-0.5 text-[10px] font-semibold uppercase text-text-hint">
+                                        Already {badge}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-text-secondary">Full name</span>
+                    <input
+                      className={fieldClass}
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="e.g. Sara Bekele"
+                      autoComplete="off"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-text-secondary">Email</span>
+                    <input
+                      className={fieldClass}
+                      type="email"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        setPendingUserId(null);
+                        setPendingPassword(undefined);
+                      }}
+                      placeholder="name@example.com"
+                      autoComplete="off"
+                    />
+                  </label>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-text-secondary">Phone (optional)</span>
+                      <input
+                        className={fieldClass}
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="+251 …"
+                        autoComplete="off"
+                      />
+                    </label>
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-text-secondary">Platform role</span>
+                      <select
+                        className={fieldClass}
+                        value={role}
+                        onChange={(e) => setRole(e.target.value)}
+                      >
+                        {allRoles
+                          .filter((item) => item.id)
+                          .map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.label}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  </div>
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-text-secondary">Temporary password (optional)</span>
+                    <input
+                      className={fieldClass}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Leave blank to auto-generate"
+                      autoComplete="new-password"
+                    />
+                  </label>
+                  <p className="text-xs text-text-secondary">
+                    If the email is new this creates a Spojex account and shows a one-time password.
+                    If it already exists, that account is linked instead. Their platform role only
+                    affects their profile — staff access is granted separately.
+                  </p>
+                </div>
+              )}
 
-        {error ? <p className="mt-2 text-xs text-red-600">{error}</p> : null}
+              {error ? (
+                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
+                  {error}
+                </p>
+              ) : null}
+            </div>
+          )}
+        </div>
 
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-border px-3 py-2 text-sm"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            disabled={busy || !selected || !canWrite}
-            onClick={() => void submit()}
-            className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
-          >
-            {busy ? "Saving…" : "Add staff"}
-          </button>
+        <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3">
+          {created ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setCreated(null);
+                  setMode("create");
+                  setError(null);
+                }}
+                className="rounded-md border border-border px-3 py-2 text-sm hover:bg-muted"
+              >
+                Add another
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+              >
+                Done
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={busy}
+                className="rounded-md border border-border px-3 py-2 text-sm disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy || !canWrite || (mode === "link" && !selected)}
+                onClick={() => void submit()}
+                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+              >
+                {busy ? "Saving…" : mode === "link" ? "Add staff" : "Create & add staff"}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

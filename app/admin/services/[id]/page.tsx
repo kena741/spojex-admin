@@ -389,9 +389,21 @@ export default function ServiceDetailPage() {
   const moderate = async (action: string) => {
     if (!service) return;
     let reason: string | undefined;
+    let fields: string[] | undefined;
     if (["unpublish", "reject", "request_changes"].includes(action)) {
       reason = window.prompt(`Reason for ${action.replace(/_/g, " ")} (required):`) || undefined;
       if (!reason?.trim()) return;
+    }
+    if (action === "request_changes") {
+      const raw =
+        window.prompt(
+          "Fields to update (comma-separated, e.g. title, cover, price, description):",
+        ) || "";
+      fields = raw
+        .split(",")
+        .map((f) => f.trim())
+        .filter(Boolean);
+      if (!fields.length) return;
     }
     if (action === "approve") {
       if (
@@ -407,6 +419,7 @@ export default function ServiceDetailPage() {
       await postAdminResponse(`/api/admin/services/${service.id}/moderate`, {
         action,
         reason,
+        fields,
       });
       setNotice(
         action === "approve"
