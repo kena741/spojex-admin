@@ -871,7 +871,6 @@ function FieldsTab({
                     <td className="px-3 py-2 text-xs text-text-secondary">
                       {f.is_required ? "Required · " : ""}
                       {f.visibility}
-                      {f.editable_by === "admin" ? " · admin-only" : ""}
                       {f.options.length ? ` · ${f.options.filter((o) => o.status === "active").length} options` : ""}
                     </td>
                     <td className="px-3 py-2 text-xs">{usage[f.id] ?? 0}</td>
@@ -949,7 +948,13 @@ function FieldEditor({
       footer={
         <AdminModalFooter
           onCancel={onClose}
-          onSave={() => onSave({ ...f, validation: Object.fromEntries(Object.entries(f.validation).filter(([, x]) => x !== undefined)) })}
+          onSave={() =>
+            onSave({
+              ...f,
+              editable_by: "owner",
+              validation: Object.fromEntries(Object.entries(f.validation).filter(([, x]) => x !== undefined)),
+            })
+          }
           disabled={!f.label.trim() || !keyValid || (isSelect && options.length === 0 && !v.allow_custom)}
           saveLabel="Apply to draft"
         />
@@ -1005,12 +1010,6 @@ function FieldEditor({
             <option value="private">Private (owner + reviewers)</option>
           </select>
         </Field>
-        <Field label="Who can edit">
-          <select className={inputClass} value={f.editable_by} onChange={(e) => setF({ ...f, editable_by: e.target.value as CatalogField["editable_by"] })}>
-            <option value="owner">Profile owner</option>
-            <option value="admin">Spojex admins only</option>
-          </select>
-        </Field>
         <label className="flex items-center gap-2 pt-6 text-sm">
           <input
             type="checkbox"
@@ -1045,9 +1044,6 @@ function FieldEditor({
           </label>
         ) : null}
       </div>
-      {f.is_required && f.editable_by === "admin" ? (
-        <p className="mt-2 text-xs text-red-600">A required field must be editable by the profile owner, or nobody can complete it.</p>
-      ) : null}
       {isSelect ? (
         <div className="mt-4 space-y-2">
           <p className="text-xs font-medium text-text-secondary">Options (values are permanent; archived options stay on existing answers)</p>
