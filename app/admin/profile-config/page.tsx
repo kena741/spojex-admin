@@ -671,7 +671,10 @@ function FieldsTab({
       achievements: 0,
       portfolio: 0,
     };
-    for (const f of doc.fields) out[fieldBucket(f)] += 1;
+    for (const f of doc.fields) {
+      if (f.status !== "active") continue;
+      out[fieldBucket(f)] += 1;
+    }
     return out;
   }, [doc.fields]);
 
@@ -692,7 +695,8 @@ function FieldsTab({
       list = list.filter((f) => scopeKey(f) === portfolioRole);
     } else {
       list = list.filter((f) => COMMON_FIELD_SCOPES.has(f.scope_kind));
-      list = dedupeFields(list);
+      // Overview only — career/achievements keep every shared entry field.
+      if (bucket === "overview") list = dedupeFields(list);
     }
     return [...list].sort(bySort);
   }, [doc.fields, bucket, portfolioRole]);
@@ -803,7 +807,12 @@ function FieldsTab({
             disabled={!editable || (bucket === "portfolio" && roleScopes.length === 0)}
             onClick={() => onEdit(defaultNewField())}
           >
-            <Plus className="h-4 w-4" /> Add field
+            <Plus className="h-4 w-4" />{" "}
+            {bucket === "career"
+              ? "Add career field"
+              : bucket === "achievements"
+                ? "Add achievement field"
+                : "Add field"}
           </button>
         </div>
 
@@ -813,7 +822,9 @@ function FieldsTab({
             description={
               bucket === "portfolio"
                 ? "Pick a sport or profession, then add any field type (text, date, select, image, …)."
-                : "Add a field for this section. These entities are shared across roles."
+                : bucket === "career"
+                  ? "Add fields shown on every career entry (text, date, select, url, …). Same for all roles."
+                  : "Add a field for this section. These entities are shared across roles."
             }
           />
         ) : (
@@ -931,6 +942,8 @@ function FieldEditor({
   const [f, setF] = useState<CatalogField>(field);
   const [newOption, setNewOption] = useState("");
   const typeLocked = !isNew && usage > 0;
+  // Structured storage columns can't change type; career/achievement entry fields can.
+  const typeFrozen = typeLocked || Boolean(f.storage_column);
   const isSelect = f.input_type === "single_select" || f.input_type === "multi_select";
   const isNumber = f.input_type === "integer" || f.input_type === "decimal";
   const v = f.validation as Record<string, string | number | boolean | undefined>;
@@ -938,6 +951,28 @@ function FieldEditor({
     setF({ ...f, validation: { ...f.validation, [key]: value === "" ? undefined : value } });
   const options = [...f.options].sort(bySort);
   const keyValid = /^[a-z][a-z0-9_]{1,62}$/.test(f.key);
+
+  const targetForSection = (section: string, current: CatalogField["target"]): CatalogField["target"] => {
+    if (section === "career") return "career";
+    if (section === "achievements") return "achievement";
+    if (section === "clips") return current === "clip" ? "clip" : "profile";
+    if (section === "photos") return current === "photo" ? "photo" : "profile";
+    if (section === "links") return current === "link" ? "link" : "profile";
+    return "profile";
+  };
+
+  const recordLabel =
+    f.target === "career"
+      ? "Career entry"
+      : f.target === "achievement"
+        ? "Achievement entry"
+        : f.target === "clip"
+          ? "Clip entry"
+          : f.target === "photo"
+            ? "Photo entry"
+            : f.target === "link"
+              ? "Link entry"
+              : "Profile";
 
   return (
     <AdminModal
@@ -952,6 +987,7 @@ function FieldEditor({
             onSave({
               ...f,
               editable_by: "owner",
+              target: targetForSection(f.section ?? "overview", f.target),
               validation: Object.fromEntries(Object.entries(f.validation).filter(([, x]) => x !== undefined)),
             })
           }
@@ -975,7 +1011,14 @@ function FieldEditor({
           <input className={inputClass} value={f.help_text} onChange={(e) => setF({ ...f, help_text: e.target.value })} />
         </Field>
         <Field label="Section">
-          <select className={inputClass} value={f.section ?? ""} onChange={(e) => setF({ ...f, section: e.target.value })}>
+          <select
+            className={inputClass}
+            value={f.section ?? ""}
+            onChange={(e) => {
+              const section = e.target.value;
+              setF({ ...f, section, target: targetForSection(section, f.target) });
+            }}
+          >
             {doc.sections
               .filter((s) => !(s.status === "archived" && s.key === "portfolio"))
               .map((s) => (
@@ -986,14 +1029,17 @@ function FieldEditor({
               ))}
           </select>
         </Field>
+        <Field label="Record">
+          <input className={inputClass} value={recordLabel} disabled readOnly />
+        </Field>
         <Field
           label="Input type"
-          hint={typeLocked ? `${usage} saved answers — archive this field and add a replacement to change its type.` : undefined}
+          hint={typeFrozen ? `${usage > 0 ? `${usage} saved answers — ` : ""}type is locked for this field.` : undefined}
         >
           <select
             className={inputClass}
             value={f.input_type}
-            disabled={typeLocked || f.is_system}
+            disabled={typeFrozen}
             onChange={(e) => setF({ ...f, input_type: e.target.value })}
           >
             {Object.keys(inputTypes).map((t) => (
