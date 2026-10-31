@@ -554,22 +554,13 @@ const COMMON_FIELD_SCOPES = new Set(["account", "fan", "athlete", "professional"
 
 /** Overview keys that must live under one canonical scope (no cross-scope clones). */
 const CANONICAL_FIELD_SCOPE: Record<string, CatalogField["scope_kind"]> = {
-  headline: "account",
-  website: "account",
   display_name: "account",
   bio: "account",
   country: "account",
   city: "account",
-  team: "athlete",
-  playing_level: "athlete",
-  height_cm: "athlete",
-  weight_kg: "athlete",
-  opportunity_interests: "athlete",
   date_of_birth: "athlete",
   nationality: "athlete",
   looking_for_opportunities: "athlete",
-  age_groups: "professional",
-  notes: "professional",
   organization: "professional",
   specializations: "professional",
   regions: "professional",
