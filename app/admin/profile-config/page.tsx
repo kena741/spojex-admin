@@ -22,7 +22,6 @@ import {
   type CatalogCheck,
   type CatalogDocument,
   type CatalogField,
-  type CatalogMetric,
   type CatalogOverview,
   type CatalogProfession,
   type CatalogSport,
@@ -30,12 +29,11 @@ import {
 } from "@/lib/profile-catalog";
 import { cn } from "@/lib/utils";
 
-type Tab = "categories" | "fields" | "metrics" | "sections" | "verification" | "history";
+type Tab = "categories" | "fields" | "sections" | "verification" | "history";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "categories", label: "Sports & professions" },
   { id: "fields", label: "Entities" },
-  { id: "metrics", label: "Sport metrics" },
   { id: "sections", label: "Sections" },
   { id: "verification", label: "Verification documents" },
   { id: "history", label: "Versions" },
@@ -105,7 +103,6 @@ export default function ProfileConfigPage() {
   const [check, setCheck] = useState<CatalogCheck | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
   const [editingField, setEditingField] = useState<CatalogField | null>(null);
-  const [editingMetric, setEditingMetric] = useState<CatalogMetric | null>(null);
   const [editingCategory, setEditingCategory] = useState<
     { kind: "sports" | "professions"; row: CatalogSport | CatalogProfession } | null
   >(null);
@@ -149,7 +146,7 @@ export default function ProfileConfigPage() {
   const liveIds = useMemo(() => {
     const live = overview?.live;
     if (!live) return new Set<string>();
-    return new Set([...live.fields, ...live.metrics, ...live.sports, ...live.professions].map((r) => r.id));
+    return new Set([...live.fields, ...live.sports, ...live.professions].map((r) => r.id));
   }, [overview]);
 
   const update = (fn: (d: CatalogDocument) => CatalogDocument) => {
@@ -285,7 +282,7 @@ export default function ProfileConfigPage() {
         description={
           overview
             ? `Live catalog v${overview.live.version}${draft ? ` · editing draft based on v${draft.base_version}` : " · read-only (start a draft to edit)"}`
-            : "Sports, professions, profile fields, metrics, and verification requirements"
+            : "Sports, professions, profile fields, and verification requirements"
         }
         actions={headerActions}
       />
@@ -337,9 +334,6 @@ export default function ProfileConfigPage() {
               onChange={update}
             />
           ) : null}
-          {tab === "metrics" ? (
-            <MetricsTab doc={doc} editable={editable} usage={usage} onEdit={setEditingMetric} onChange={update} />
-          ) : null}
           {tab === "sections" ? <SectionsTab doc={doc} editable={editable} onChange={update} /> : null}
           {tab === "verification" ? (
             <VerificationTab doc={doc} editable={editable} documentTypes={overview.document_types} onChange={update} />
@@ -364,24 +358,6 @@ export default function ProfileConfigPage() {
                 : [...d.fields, next],
             }));
             setEditingField(null);
-          }}
-        />
-      ) : null}
-      {editingMetric && doc ? (
-        <MetricEditor
-          metric={editingMetric}
-          doc={doc}
-          isNew={!liveIds.has(editingMetric.id)}
-          usage={usage[editingMetric.id] ?? 0}
-          onClose={() => setEditingMetric(null)}
-          onSave={(next) => {
-            update((d) => ({
-              ...d,
-              metrics: d.metrics.some((m) => m.id === next.id)
-                ? d.metrics.map((m) => (m.id === next.id ? next : m))
-                : [...d.metrics, next],
-            }));
-            setEditingMetric(null);
           }}
         />
       ) : null}
@@ -1092,249 +1068,6 @@ function FieldEditor({
           </div>
         </div>
       ) : null}
-    </AdminModal>
-  );
-}
-
-function MetricsTab({
-  doc,
-  editable,
-  usage,
-  onEdit,
-  onChange,
-}: {
-  doc: CatalogDocument;
-  editable: boolean;
-  usage: Record<string, number>;
-  onEdit: (m: CatalogMetric) => void;
-  onChange: (fn: (d: CatalogDocument) => CatalogDocument) => void;
-}) {
-  const [sport, setSport] = useState(doc.sports[0]?.slug ?? "");
-  const rows = doc.metrics.filter((m) => m.sport === sport).sort(bySort);
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-2">
-        <Field label="Sport">
-          <select className={inputClass} value={sport} onChange={(e) => setSport(e.target.value)}>
-            {doc.sports.map((s) => (
-              <option key={s.slug} value={s.slug}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <button
-          type="button"
-          className={primaryButtonClass}
-          disabled={!editable || !sport}
-          onClick={() =>
-            onEdit({
-              id: newId(), sport, key: "", label: "", value_type: "integer", unit: "", precision: 0, format: "",
-              min_value: 0, max_value: null, lower_is_better: false, applies_when: {}, show_on_profile: true,
-              show_on_career: true, sort_order: (rows.at(-1)?.sort_order ?? 0) + 10, legacy_column: null, status: "active",
-            })
-          }
-        >
-          <Plus className="h-4 w-4" /> Add metric
-        </button>
-      </div>
-      <div className="overflow-x-auto rounded-xl border border-border bg-card">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/40 text-left text-xs text-text-secondary">
-            <tr>
-              <th className="px-3 py-2">Order</th>
-              <th className="px-3 py-2">Metric</th>
-              <th className="px-3 py-2">Type</th>
-              <th className="px-3 py-2">Shown on</th>
-              <th className="px-3 py-2">Usage</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {rows.map((m) => (
-              <tr key={m.id} className={m.status === "archived" ? "opacity-60" : undefined}>
-                <td className="px-3 py-2">
-                  <div className="flex gap-1">
-                    <button type="button" className={buttonClass} aria-label="Move up" disabled={!editable}
-                      onClick={() => onChange((d) => ({ ...d, metrics: reorder(d.metrics, rows, m.id, -1) }))}>
-                      <ArrowUp className="h-3.5 w-3.5" />
-                    </button>
-                    <button type="button" className={buttonClass} aria-label="Move down" disabled={!editable}
-                      onClick={() => onChange((d) => ({ ...d, metrics: reorder(d.metrics, rows, m.id, 1) }))}>
-                      <ArrowDown className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </td>
-                <td className="px-3 py-2">
-                  <p className="font-medium">{m.label}</p>
-                  <p className="text-xs text-text-hint">
-                    {m.key}
-                    {m.applies_when?.field ? ` · when ${m.applies_when.field} ∈ ${(m.applies_when.in ?? []).join(", ")}` : ""}
-                  </p>
-                </td>
-                <td className="px-3 py-2 text-xs">
-                  {m.value_type}
-                  {m.unit ? ` (${m.unit})` : ""}
-                  {m.value_type === "duration" ? ` · ${m.format}` : ""}
-                </td>
-                <td className="px-3 py-2 text-xs">
-                  {[m.show_on_profile && "profile", m.show_on_career && "career"].filter(Boolean).join(", ") || "—"}
-                </td>
-                <td className="px-3 py-2 text-xs">{usage[m.id] ?? 0}</td>
-                <td className="px-3 py-2">
-                  <StatusPill status={m.status} />
-                </td>
-                <td className="px-3 py-2">
-                  <div className="flex justify-end gap-1">
-                    <button type="button" className={buttonClass} disabled={!editable} onClick={() => onEdit(m)}>
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      className={buttonClass}
-                      disabled={!editable}
-                      onClick={() =>
-                        onChange((d) => ({
-                          ...d,
-                          metrics: d.metrics.map((x) =>
-                            x.id === m.id ? { ...x, status: x.status === "active" ? "archived" : "active" } : x,
-                          ),
-                        }))
-                      }
-                    >
-                      {m.status === "active" ? <Archive className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function MetricEditor({
-  metric,
-  doc,
-  isNew,
-  usage,
-  onClose,
-  onSave,
-}: {
-  metric: CatalogMetric;
-  doc: CatalogDocument;
-  isNew: boolean;
-  usage: number;
-  onClose: () => void;
-  onSave: (m: CatalogMetric) => void;
-}) {
-  const [m, setM] = useState(metric);
-  const locked = !isNew && usage > 0;
-  const sportFields = doc.fields.filter(
-    (f) => f.scope_kind === "sport" && f.scope_ref === m.sport && f.input_type.endsWith("select") && f.status === "active",
-  );
-  const condField = sportFields.find((f) => f.key === m.applies_when?.field);
-  const num = (s: string) => (s === "" ? null : Number(s));
-  return (
-    <AdminModal
-      open
-      title={isNew ? "Add metric" : `Edit “${metric.label}”`}
-      onClose={onClose}
-      className="max-w-2xl"
-      footer={
-        <AdminModalFooter
-          onCancel={onClose}
-          onSave={() => onSave(m)}
-          disabled={!m.label.trim() || !/^[a-z][a-z0-9_]{1,62}$/.test(m.key) || (m.value_type === "duration" && !m.format)}
-          saveLabel="Apply to draft"
-        />
-      }
-    >
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Label">
-          <input className={inputClass} value={m.label} onChange={(e) => setM({ ...m, label: e.target.value, key: isNew && !metric.key ? slugify(e.target.value) : m.key })} />
-        </Field>
-        <Field label="Key (permanent, per sport)">
-          <input className={inputClass} value={m.key} disabled={!isNew} onChange={(e) => setM({ ...m, key: slugify(e.target.value) })} />
-        </Field>
-        <Field label="Value type" hint={locked ? `${usage} saved values — add a replacement metric to change type or unit.` : undefined}>
-          <select className={inputClass} value={m.value_type} disabled={locked} onChange={(e) => setM({ ...m, value_type: e.target.value as CatalogMetric["value_type"], format: e.target.value === "duration" ? m.format || "m:ss.SS" : "" })}>
-            <option value="integer">Whole number</option>
-            <option value="decimal">Decimal</option>
-            <option value="duration">Duration (time)</option>
-          </select>
-        </Field>
-        <Field label="Unit">
-          <input className={inputClass} value={m.unit} disabled={locked} onChange={(e) => setM({ ...m, unit: e.target.value })} />
-        </Field>
-        {m.value_type === "duration" ? (
-          <Field label="Time format">
-            <select className={inputClass} value={m.format} onChange={(e) => setM({ ...m, format: e.target.value })}>
-              <option value="ss.SS">ss.SS (sprints)</option>
-              <option value="m:ss.SS">m:ss.SS (middle distance)</option>
-              <option value="h:mm:ss">h:mm:ss (marathon)</option>
-            </select>
-          </Field>
-        ) : null}
-        {m.value_type !== "integer" ? (
-          <Field label="Decimal places">
-            <input className={inputClass} type="number" min={0} max={4} value={m.precision} onChange={(e) => setM({ ...m, precision: Number(e.target.value) })} />
-          </Field>
-        ) : null}
-        <Field label="Minimum">
-          <input className={inputClass} type="number" value={m.min_value ?? ""} onChange={(e) => setM({ ...m, min_value: num(e.target.value) })} />
-        </Field>
-        <Field label="Maximum">
-          <input className={inputClass} type="number" value={m.max_value ?? ""} onChange={(e) => setM({ ...m, max_value: num(e.target.value) })} />
-        </Field>
-        <Field label="Only when field" hint="E.g. show a 100 m personal best only for 100 m sprinters.">
-          <select
-            className={inputClass}
-            value={m.applies_when?.field ?? ""}
-            onChange={(e) => setM({ ...m, applies_when: e.target.value ? { field: e.target.value, in: [] } : {} })}
-          >
-            <option value="">Always</option>
-            {sportFields.map((f) => (
-              <option key={f.key} value={f.key}>
-                {f.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        {condField ? (
-          <Field label="…has one of">
-            <select
-              multiple
-              className="h-28 w-full rounded-lg border border-border bg-background px-2 text-sm"
-              value={m.applies_when.in ?? []}
-              onChange={(e) =>
-                setM({ ...m, applies_when: { field: condField.key, in: Array.from(e.target.selectedOptions).map((o) => o.value) } })
-              }
-            >
-              {condField.options.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </Field>
-        ) : null}
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={m.show_on_profile} onChange={(e) => setM({ ...m, show_on_profile: e.target.checked })} />
-          Show on profile
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={m.show_on_career} onChange={(e) => setM({ ...m, show_on_career: e.target.checked })} />
-          Track per career entry
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={m.lower_is_better} onChange={(e) => setM({ ...m, lower_is_better: e.target.checked })} />
-          Lower is better (times)
-        </label>
-      </div>
     </AdminModal>
   );
 }
