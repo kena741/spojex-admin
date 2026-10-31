@@ -552,6 +552,32 @@ function scopeKey(f: Pick<CatalogField, "scope_kind" | "scope_ref">) {
 const PORTFOLIO_SECTION_KEYS = new Set(["clips", "photos", "links"]);
 const COMMON_FIELD_SCOPES = new Set(["account", "fan", "athlete", "professional"]);
 
+/** Overview keys that must live under one canonical scope (no cross-scope clones). */
+const CANONICAL_FIELD_SCOPE: Record<string, CatalogField["scope_kind"]> = {
+  headline: "account",
+  website: "account",
+  display_name: "account",
+  bio: "account",
+  country: "account",
+  city: "account",
+  team: "athlete",
+  playing_level: "athlete",
+  height_cm: "athlete",
+  weight_kg: "athlete",
+  opportunity_interests: "athlete",
+  date_of_birth: "athlete",
+  nationality: "athlete",
+  looking_for_opportunities: "athlete",
+  age_groups: "professional",
+  notes: "professional",
+  organization: "professional",
+  specializations: "professional",
+  regions: "professional",
+  license: "professional",
+  certified: "professional",
+  license_document: "professional",
+};
+
 type FieldsBucket = "overview" | "career" | "achievements" | "portfolio";
 
 function fieldBucket(f: CatalogField): FieldsBucket {
@@ -569,6 +595,44 @@ function fieldBucket(f: CatalogField): FieldsBucket {
     return "portfolio";
   }
   return "overview";
+}
+
+function fieldIdentity(f: CatalogField) {
+  return `${f.scope_kind}:${f.scope_ref ?? ""}:${f.target}:${f.key}`;
+}
+
+function preferField(a: CatalogField, b: CatalogField) {
+  const score = (f: CatalogField) =>
+    (f.status === "active" ? 8 : 0) +
+    (f.storage_column ? 4 : 0) +
+    (f.is_system ? 2 : 0) +
+    (CANONICAL_FIELD_SCOPE[f.key] === f.scope_kind ? 1 : 0);
+  return score(a) >= score(b) ? a : b;
+}
+
+/** Drop cross-scope clones and exact identity duplicates. */
+function dedupeFields(list: CatalogField[]) {
+  const byIdentity = new Map<string, CatalogField>();
+  for (const f of list) {
+    const id = fieldIdentity(f);
+    const prev = byIdentity.get(id);
+    byIdentity.set(id, prev ? preferField(f, prev) : f);
+  }
+  const byKey = new Map<string, CatalogField>();
+  for (const f of byIdentity.values()) {
+    const canonical = CANONICAL_FIELD_SCOPE[f.key];
+    if (!canonical || f.target !== "profile" || !COMMON_FIELD_SCOPES.has(f.scope_kind)) {
+      byKey.set(`${fieldIdentity(f)}`, f);
+      continue;
+    }
+    const prev = byKey.get(f.key);
+    if (!prev) {
+      byKey.set(f.key, f);
+      continue;
+    }
+    byKey.set(f.key, preferField(f.scope_kind === canonical ? f : prev, prev.scope_kind === canonical ? prev : f));
+  }
+  return [...byKey.values()];
 }
 
 function scopeLabel(doc: CatalogDocument, f: CatalogField) {
@@ -636,11 +700,12 @@ function FieldsTab({
   ];
 
   const rows = useMemo(() => {
-    let list = doc.fields.filter((f) => fieldBucket(f) === bucket);
+    let list = doc.fields.filter((f) => fieldBucket(f) === bucket && f.status === "active");
     if (bucket === "portfolio") {
       list = list.filter((f) => scopeKey(f) === portfolioRole);
     } else {
       list = list.filter((f) => COMMON_FIELD_SCOPES.has(f.scope_kind));
+      list = dedupeFields(list);
     }
     return [...list].sort(bySort);
   }, [doc.fields, bucket, portfolioRole]);
