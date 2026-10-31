@@ -601,6 +601,11 @@ function FieldsTab({
 
   return (
     <div className="space-y-3">
+      <p className="text-sm text-text-secondary">
+        Shared fields (Everyone / All athletes / All professionals) appear on every matching role.
+        Sport-scoped fields are the difference: a football athlete only sees football entities, a
+        basketball athlete only sees basketball entities.
+      </p>
       <div className="flex flex-wrap items-end gap-2">
         <Field label="Applies to">
           <select className={inputClass} value={scope} onChange={(e) => setScope(e.target.value)}>
@@ -616,6 +621,7 @@ function FieldsTab({
             <option value="profile">Profile</option>
             <option value="career">Career entries</option>
             <option value="achievement">Achievements</option>
+            <option value="portfolio">Portfolio entries</option>
           </select>
         </Field>
         <button
@@ -629,7 +635,14 @@ function FieldsTab({
               scope_kind: kind as CatalogField["scope_kind"],
               scope_ref: ref ?? null,
               target,
-              section: target === "profile" ? "overview" : target === "career" ? "career" : "achievements",
+              section:
+                target === "profile"
+                  ? "overview"
+                  : target === "career"
+                    ? "career"
+                    : target === "portfolio"
+                      ? "portfolio"
+                      : "achievements",
               label: "",
               help_text: "",
               input_type: "text",
@@ -1234,6 +1247,12 @@ function SectionsTab({
 }) {
   const rows = [...doc.sections].sort(bySort);
   return (
+    <div className="space-y-3">
+      <p className="text-sm text-text-secondary">
+        Overview, Career, Achievements, and Portfolio are the same tabs for every role. Football
+        fields and stats stay on football profiles; basketball fields and stats stay on basketball
+        profiles. Toggle a role only when a section should be hidden for that account type.
+      </p>
     <ul className="divide-y divide-border rounded-xl border border-border bg-card">
       {rows.map((s) => (
         <li key={s.id} className="flex flex-wrap items-center gap-2 px-4 py-2.5 text-sm">
@@ -1293,6 +1312,7 @@ function SectionsTab({
         </li>
       ))}
     </ul>
+    </div>
   );
 }
 

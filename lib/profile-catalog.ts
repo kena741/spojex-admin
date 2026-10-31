@@ -17,7 +17,7 @@ export type CatalogField = {
   key: string;
   scope_kind: "account" | "fan" | "athlete" | "professional" | "sport" | "profession";
   scope_ref: string | null;
-  target: "profile" | "career" | "achievement";
+  target: "profile" | "career" | "achievement" | "portfolio";
   section: string | null;
   label: string;
   help_text: string;
