@@ -34,7 +34,7 @@ type Tab = "categories" | "fields" | "metrics" | "sections" | "verification" | "
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "categories", label: "Sports & professions" },
-  { id: "fields", label: "Fields" },
+  { id: "fields", label: "Entities" },
   { id: "metrics", label: "Sport metrics" },
   { id: "sections", label: "Sections" },
   { id: "verification", label: "Verification documents" },
@@ -573,6 +573,40 @@ function scopeKey(f: Pick<CatalogField, "scope_kind" | "scope_ref">) {
   return f.scope_ref ? `${f.scope_kind}:${f.scope_ref}` : f.scope_kind;
 }
 
+const PORTFOLIO_SECTION_KEYS = new Set(["clips", "photos", "links"]);
+const COMMON_FIELD_SCOPES = new Set(["account", "fan", "athlete", "professional"]);
+
+type FieldsBucket = "overview" | "career" | "achievements" | "portfolio";
+
+function fieldBucket(f: CatalogField): FieldsBucket {
+  if (f.section === "career" || f.target === "career") return "career";
+  if (f.section === "achievements" || f.target === "achievement") return "achievements";
+  if (
+    PORTFOLIO_SECTION_KEYS.has(f.section ?? "") ||
+    f.target === "clip" ||
+    f.target === "photo" ||
+    f.target === "link" ||
+    f.target === "portfolio" ||
+    f.scope_kind === "sport" ||
+    f.scope_kind === "profession"
+  ) {
+    return "portfolio";
+  }
+  return "overview";
+}
+
+function scopeLabel(doc: CatalogDocument, f: CatalogField) {
+  if (f.scope_kind === "sport") {
+    const sport = doc.sports.find((s) => s.slug === f.scope_ref);
+    return sport ? `Sport · ${sport.label}` : `Sport · ${f.scope_ref}`;
+  }
+  if (f.scope_kind === "profession") {
+    const profession = doc.professions.find((p) => p.slug === f.scope_ref);
+    return profession ? `Profession · ${profession.label}` : `Profession · ${f.scope_ref}`;
+  }
+  return SCOPE_LABELS[f.scope_kind] ?? f.scope_kind;
+}
+
 function FieldsTab({
   doc,
   editable,
@@ -586,163 +620,288 @@ function FieldsTab({
   onEdit: (f: CatalogField) => void;
   onChange: (fn: (d: CatalogDocument) => CatalogDocument) => void;
 }) {
-  const [scope, setScope] = useState("sport:football");
-  const [target, setTarget] = useState<CatalogField["target"]>("profile");
-  const scopes = [
-    ...Object.entries(SCOPE_LABELS).map(([value, label]) => ({ value, label })),
-    ...doc.sports.map((s) => ({ value: `sport:${s.slug}`, label: `Sport · ${s.label}${s.status === "archived" ? " (archived)" : ""}` })),
-    ...doc.professions.map((p) => ({ value: `profession:${p.slug}`, label: `Profession · ${p.label}${p.status === "archived" ? " (archived)" : ""}` })),
+  const [bucket, setBucket] = useState<FieldsBucket>("overview");
+  const [portfolioRole, setPortfolioRole] = useState(() =>
+    doc.sports.find((s) => s.slug === "football" && s.status === "active")
+      ? "sport:football"
+      : doc.sports.find((s) => s.status === "active")
+        ? `sport:${doc.sports.find((s) => s.status === "active")!.slug}`
+        : doc.professions.find((p) => p.status === "active")
+          ? `profession:${doc.professions.find((p) => p.status === "active")!.slug}`
+          : "sport:football",
+  );
+  const [portfolioGroup, setPortfolioGroup] = useState<"all" | "clips" | "photos" | "links">("all");
+
+  const buckets: { id: FieldsBucket; label: string; hint: string }[] = [
+    { id: "overview", label: "Overview", hint: "Same for every role" },
+    { id: "career", label: "Career", hint: "Same for every role" },
+    { id: "achievements", label: "Achievements", hint: "Same for every role" },
+    { id: "portfolio", label: "Portfolio", hint: "Clips, Photos, Links · role-unique" },
   ];
-  const rows = doc.fields.filter((f) => scopeKey(f) === scope && f.target === target).sort(bySort);
-  const [kind, ref] = scope.split(":");
+
+  const counts = useMemo(() => {
+    const out: Record<FieldsBucket, number> = {
+      overview: 0,
+      career: 0,
+      achievements: 0,
+      portfolio: 0,
+    };
+    for (const f of doc.fields) out[fieldBucket(f)] += 1;
+    return out;
+  }, [doc.fields]);
+
+  const roleScopes = [
+    ...doc.sports.map((s) => ({
+      value: `sport:${s.slug}`,
+      label: `Sport · ${s.label}${s.status === "archived" ? " (archived)" : ""}`,
+    })),
+    ...doc.professions.map((p) => ({
+      value: `profession:${p.slug}`,
+      label: `Profession · ${p.label}${p.status === "archived" ? " (archived)" : ""}`,
+    })),
+  ];
+
+  const rows = useMemo(() => {
+    let list = doc.fields.filter((f) => fieldBucket(f) === bucket);
+    if (bucket === "portfolio") {
+      list = list.filter((f) => scopeKey(f) === portfolioRole);
+      if (portfolioGroup !== "all") {
+        list = list.filter(
+          (f) =>
+            f.section === portfolioGroup ||
+            (portfolioGroup === "clips" && (f.target === "clip" || f.target === "portfolio")) ||
+            (portfolioGroup === "photos" && f.target === "photo") ||
+            (portfolioGroup === "links" && f.target === "link"),
+        );
+      }
+    } else {
+      list = list.filter((f) => COMMON_FIELD_SCOPES.has(f.scope_kind));
+    }
+    return [...list].sort(bySort);
+  }, [doc.fields, bucket, portfolioRole, portfolioGroup]);
+
   const sectionLabel = (key: string | null) => doc.sections.find((s) => s.key === key)?.label ?? "—";
+  const [roleKind, roleRef] = portfolioRole.split(":");
+
+  const defaultNewField = (): CatalogField => {
+    if (bucket === "portfolio") {
+      const group = portfolioGroup === "all" ? "clips" : portfolioGroup;
+      const target =
+        group === "photos" ? "photo" : group === "links" ? "link" : ("profile" as CatalogField["target"]);
+      return {
+        id: newId(),
+        key: "",
+        scope_kind: roleKind as CatalogField["scope_kind"],
+        scope_ref: roleRef ?? null,
+        target: target === "profile" ? "profile" : target,
+        section: group,
+        label: "",
+        help_text: "",
+        input_type: "text",
+        is_required: false,
+        validation: {},
+        sort_order: (rows.at(-1)?.sort_order ?? 0) + 10,
+        visibility: "public",
+        editable_by: "owner",
+        storage_column: null,
+        legacy_column: null,
+        is_system: false,
+        status: "active",
+        replaced_by_id: null,
+        options: [],
+      };
+    }
+    const target =
+      bucket === "career" ? "career" : bucket === "achievements" ? "achievement" : ("profile" as const);
+    return {
+      id: newId(),
+      key: "",
+      scope_kind: "account",
+      scope_ref: null,
+      target,
+      section: bucket,
+      label: "",
+      help_text: "",
+      input_type: "text",
+      is_required: false,
+      validation: {},
+      sort_order: (rows.at(-1)?.sort_order ?? 0) + 10,
+      visibility: "public",
+      editable_by: "owner",
+      storage_column: null,
+      legacy_column: null,
+      is_system: false,
+      status: "active",
+      replaced_by_id: null,
+      options: [],
+    };
+  };
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-2">
-        <Field label="Applies to">
-          <select className={inputClass} value={scope} onChange={(e) => setScope(e.target.value)}>
-            {scopes.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Record">
-          <select className={inputClass} value={target} onChange={(e) => setTarget(e.target.value as CatalogField["target"])}>
-            <option value="profile">Profile attributes</option>
-            <option value="career">Career entries</option>
-            <option value="achievement">Achievement entries</option>
-            <option value="clip">Clip entries</option>
-            <option value="photo">Photo entries</option>
-            <option value="link">Link entries</option>
-          </select>
-        </Field>
-        <button
-          type="button"
-          className={primaryButtonClass}
-          disabled={!editable}
-          onClick={() =>
-            onEdit({
-              id: newId(),
-              key: "",
-              scope_kind: kind as CatalogField["scope_kind"],
-              scope_ref: ref ?? null,
-              target,
-              section:
-                target === "profile"
-                  ? "overview"
-                  : target === "career"
-                    ? "career"
-                    : target === "clip"
-                      ? "clips"
-                      : target === "photo"
-                        ? "photos"
-                        : target === "link"
-                          ? "links"
-                          : "achievements",
-              label: "",
-              help_text: "",
-              input_type: "text",
-              is_required: false,
-              validation: {},
-              sort_order: (rows.at(-1)?.sort_order ?? 0) + 10,
-              visibility: "public",
-              editable_by: "owner",
-              storage_column: null,
-              legacy_column: null,
-              is_system: false,
-              status: "active",
-              replaced_by_id: null,
-              options: [],
-            })
-          }
-        >
-          <Plus className="h-4 w-4" /> Add field
-        </button>
-      </div>
-      {rows.length === 0 ? (
-        <AdminEmpty title="No fields here yet" description="Add a field, or pick another category or record type." />
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-card">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left text-xs text-text-secondary">
-              <tr>
-                <th className="px-3 py-2">Order</th>
-                <th className="px-3 py-2">Field</th>
-                <th className="px-3 py-2">Type</th>
-                <th className="px-3 py-2">Section</th>
-                <th className="px-3 py-2">Rules</th>
-                <th className="px-3 py-2">Usage</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {rows.map((f) => (
-                <tr key={f.id} className={f.status === "archived" ? "opacity-60" : undefined}>
-                  <td className="px-3 py-2">
-                    <div className="flex gap-1">
-                      <button type="button" className={buttonClass} aria-label="Move up" disabled={!editable}
-                        onClick={() => onChange((d) => ({ ...d, fields: reorder(d.fields, rows, f.id, -1) }))}>
-                        <ArrowUp className="h-3.5 w-3.5" />
-                      </button>
-                      <button type="button" className={buttonClass} aria-label="Move down" disabled={!editable}
-                        onClick={() => onChange((d) => ({ ...d, fields: reorder(d.fields, rows, f.id, 1) }))}>
-                        <ArrowDown className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </td>
-                  <td className="px-3 py-2">
-                    <p className="font-medium">{f.label || "(no label)"}</p>
-                    <p className="text-xs text-text-hint">
-                      {f.key}
-                      {f.is_system ? " · built-in" : ""}
-                      {f.storage_column ? ` · ${f.storage_column}` : ""}
-                    </p>
-                  </td>
-                  <td className="px-3 py-2">{INPUT_TYPE_LABELS[f.input_type] ?? f.input_type}</td>
-                  <td className="px-3 py-2">{sectionLabel(f.section)}</td>
-                  <td className="px-3 py-2 text-xs text-text-secondary">
-                    {f.is_required ? "Required · " : ""}
-                    {f.visibility}
-                    {f.editable_by === "admin" ? " · admin-only" : ""}
-                    {f.options.length ? ` · ${f.options.filter((o) => o.status === "active").length} options` : ""}
-                  </td>
-                  <td className="px-3 py-2 text-xs">{usage[f.id] ?? 0}</td>
-                  <td className="px-3 py-2">
-                    <StatusPill status={f.status} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex justify-end gap-1">
-                      <button type="button" className={buttonClass} disabled={!editable} onClick={() => onEdit(f)}>
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className={buttonClass}
-                        disabled={!editable}
-                        title={f.status === "active" ? "Archive (answers are kept)" : "Restore"}
-                        onClick={() =>
-                          onChange((d) => ({
-                            ...d,
-                            fields: d.fields.map((x) =>
-                              x.id === f.id ? { ...x, status: x.status === "active" ? "archived" : "active" } : x,
-                            ),
-                          }))
-                        }
-                      >
-                        {f.status === "active" ? <Archive className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
+      <ul className="divide-y divide-border rounded-xl border border-border bg-card self-start">
+        {buckets.map((b) => (
+          <li key={b.id}>
+            <button
+              type="button"
+              className={cn(
+                "flex w-full flex-col items-start gap-0.5 px-4 py-3 text-left text-sm transition-colors",
+                bucket === b.id ? "bg-muted/60" : "hover:bg-muted/30",
+              )}
+              onClick={() => setBucket(b.id)}
+            >
+              <span className="flex w-full items-center justify-between gap-2 font-medium">
+                {b.label}
+                <span className="text-xs font-normal text-text-hint">{counts[b.id]}</span>
+              </span>
+              <span className="text-xs text-text-hint">{b.hint}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-end gap-2">
+          {bucket === "portfolio" ? (
+            <>
+              <Field label="Role">
+                <select
+                  className={inputClass}
+                  value={portfolioRole}
+                  onChange={(e) => setPortfolioRole(e.target.value)}
+                >
+                  {roleScopes.map((s) => (
+                    <option key={s.value} value={s.value}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Group">
+                <select
+                  className={inputClass}
+                  value={portfolioGroup}
+                  onChange={(e) => setPortfolioGroup(e.target.value as typeof portfolioGroup)}
+                >
+                  <option value="all">All Portfolio</option>
+                  <option value="clips">Clips</option>
+                  <option value="photos">Photos</option>
+                  <option value="links">Links</option>
+                </select>
+              </Field>
+            </>
+          ) : null}
+          <button
+            type="button"
+            className={primaryButtonClass}
+            disabled={!editable || (bucket === "portfolio" && roleScopes.length === 0)}
+            onClick={() => onEdit(defaultNewField())}
+          >
+            <Plus className="h-4 w-4" /> Add field
+          </button>
         </div>
-      )}
+
+        {rows.length === 0 ? (
+          <AdminEmpty
+            title="No entities here yet"
+            description={
+              bucket === "portfolio"
+                ? "Pick a sport or profession, then add fields for Clips, Photos, or Links."
+                : "Add a field for this section. These entities are shared across roles."
+            }
+          />
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-border bg-card">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-left text-xs text-text-secondary">
+                <tr>
+                  <th className="px-3 py-2">Order</th>
+                  <th className="px-3 py-2">Field</th>
+                  <th className="px-3 py-2">Type</th>
+                  {bucket === "portfolio" ? <th className="px-3 py-2">Group</th> : <th className="px-3 py-2">Applies to</th>}
+                  <th className="px-3 py-2">Rules</th>
+                  <th className="px-3 py-2">Usage</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {rows.map((f) => (
+                  <tr key={f.id} className={f.status === "archived" ? "opacity-60" : undefined}>
+                    <td className="px-3 py-2">
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          className={buttonClass}
+                          aria-label="Move up"
+                          disabled={!editable}
+                          onClick={() => onChange((d) => ({ ...d, fields: reorder(d.fields, rows, f.id, -1) }))}
+                        >
+                          <ArrowUp className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          className={buttonClass}
+                          aria-label="Move down"
+                          disabled={!editable}
+                          onClick={() => onChange((d) => ({ ...d, fields: reorder(d.fields, rows, f.id, 1) }))}
+                        >
+                          <ArrowDown className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <p className="font-medium">{f.label || "(no label)"}</p>
+                      <p className="text-xs text-text-hint">
+                        {f.key}
+                        {f.is_system ? " · built-in" : ""}
+                        {f.storage_column ? ` · ${f.storage_column}` : ""}
+                      </p>
+                    </td>
+                    <td className="px-3 py-2">{INPUT_TYPE_LABELS[f.input_type] ?? f.input_type}</td>
+                    <td className="px-3 py-2 text-xs text-text-secondary">
+                      {bucket === "portfolio" ? sectionLabel(f.section) : scopeLabel(doc, f)}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-text-secondary">
+                      {f.is_required ? "Required · " : ""}
+                      {f.visibility}
+                      {f.editable_by === "admin" ? " · admin-only" : ""}
+                      {f.options.length ? ` · ${f.options.filter((o) => o.status === "active").length} options` : ""}
+                    </td>
+                    <td className="px-3 py-2 text-xs">{usage[f.id] ?? 0}</td>
+                    <td className="px-3 py-2">
+                      <StatusPill status={f.status} />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex justify-end gap-1">
+                        <button type="button" className={buttonClass} disabled={!editable} onClick={() => onEdit(f)}>
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className={buttonClass}
+                          disabled={!editable}
+                          title={f.status === "active" ? "Archive (answers are kept)" : "Restore"}
+                          onClick={() =>
+                            onChange((d) => ({
+                              ...d,
+                              fields: d.fields.map((x) =>
+                                x.id === f.id ? { ...x, status: x.status === "active" ? "archived" : "active" } : x,
+                              ),
+                            }))
+                          }
+                        >
+                          {f.status === "active" ? <Archive className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
