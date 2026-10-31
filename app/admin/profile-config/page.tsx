@@ -600,9 +600,9 @@ function FieldsTab({
   return (
     <div className="space-y-3">
       <p className="text-sm text-text-secondary">
-        Shared fields (Everyone / All athletes / All professionals) appear on every matching role.
-        Sport-scoped fields are the difference: a football athlete only sees football entities, a
-        basketball athlete only sees basketball entities.
+        Link each field to a section. Overview, Career, and Achievements stay the same for every
+        role. Put sport- or profession-unique entities on Clips, Photos, or Links — the app shows
+        those on the Portfolio tab for that profile only.
       </p>
       <div className="flex flex-wrap items-end gap-2">
         <Field label="Applies to">
@@ -616,10 +616,12 @@ function FieldsTab({
         </Field>
         <Field label="Record">
           <select className={inputClass} value={target} onChange={(e) => setTarget(e.target.value as CatalogField["target"])}>
-            <option value="profile">Profile</option>
+            <option value="profile">Profile attributes</option>
             <option value="career">Career entries</option>
-            <option value="achievement">Achievements</option>
-            <option value="portfolio">Portfolio entries</option>
+            <option value="achievement">Achievement entries</option>
+            <option value="clip">Clip entries</option>
+            <option value="photo">Photo entries</option>
+            <option value="link">Link entries</option>
           </select>
         </Field>
         <button
@@ -638,9 +640,13 @@ function FieldsTab({
                   ? "overview"
                   : target === "career"
                     ? "career"
-                    : target === "portfolio"
-                      ? "portfolio"
-                      : "achievements",
+                    : target === "clip"
+                      ? "clips"
+                      : target === "photo"
+                        ? "photos"
+                        : target === "link"
+                          ? "links"
+                          : "achievements",
               label: "",
               help_text: "",
               input_type: "text",
@@ -803,14 +809,19 @@ function FieldEditor({
         <Field label="Help text">
           <input className={inputClass} value={f.help_text} onChange={(e) => setF({ ...f, help_text: e.target.value })} />
         </Field>
-        <Field label="Section">
+        <Field
+          label="Section"
+          hint="Overview / Career / Achievements are shared. Clips, Photos, Links feed the app Portfolio tab."
+        >
           <select className={inputClass} value={f.section ?? ""} onChange={(e) => setF({ ...f, section: e.target.value })}>
-            {doc.sections.map((s) => (
-              <option key={s.key} value={s.key}>
-                {s.label}
-                {s.status === "archived" ? " (archived)" : ""}
-              </option>
-            ))}
+            {doc.sections
+              .filter((s) => !(s.status === "archived" && s.key === "portfolio"))
+              .map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                  {s.status === "archived" ? " (archived)" : ""}
+                </option>
+              ))}
           </select>
         </Field>
         <Field
@@ -1244,14 +1255,20 @@ function SectionsTab({
   onChange: (fn: (d: CatalogDocument) => CatalogDocument) => void;
 }) {
   const rows = [...doc.sections]
-    .filter((s) => !(s.status === "archived" && (s.key === "performance" || s.key === "qualifications")))
+    .filter(
+      (s) =>
+        !(
+          s.status === "archived" &&
+          (s.key === "performance" || s.key === "qualifications" || s.key === "portfolio")
+        ),
+    )
     .sort(bySort);
   return (
     <div className="space-y-3">
       <p className="text-sm text-text-secondary">
-        Overview, Career, Achievements, and Portfolio are the same tabs for every role. Put
-        sport- or profession-unique fields on Portfolio (Applies to → Sport · Football, etc.) so
-        the app only shows them for that profile. Sport stats stay under Sport metrics.
+        Overview, Career, and Achievements are the same for every role. Clips, Photos, and Links
+        hold role-unique entities (Applies to → Sport · Football, Profession · Coach, etc.); the
+        app Portfolio tab shows those three groups. Sport stats stay under Sport metrics.
       </p>
     <ul className="divide-y divide-border rounded-xl border border-border bg-card">
       {rows.map((s) => (
