@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Archive, Eye, Plus, RotateCcw, Smartphone } from "lucide-react";
+import { ArrowDown, ArrowUp, Archive, Plus, RotateCcw } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -30,7 +30,7 @@ import {
 } from "@/lib/profile-catalog";
 import { cn } from "@/lib/utils";
 
-type Tab = "categories" | "fields" | "metrics" | "sections" | "verification" | "preview" | "history";
+type Tab = "categories" | "fields" | "metrics" | "sections" | "verification" | "history";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "categories", label: "Sports & professions" },
@@ -38,7 +38,6 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "metrics", label: "Sport metrics" },
   { id: "sections", label: "Sections" },
   { id: "verification", label: "Verification documents" },
-  { id: "preview", label: "Mobile preview" },
   { id: "history", label: "Versions" },
 ];
 
@@ -345,7 +344,6 @@ export default function ProfileConfigPage() {
           {tab === "verification" ? (
             <VerificationTab doc={doc} editable={editable} documentTypes={overview.document_types} onChange={update} />
           ) : null}
-          {tab === "preview" ? <PreviewTab doc={doc} draft={draft} dirty={dirty} onSave={saveDraft} /> : null}
           {tab === "history" ? <HistoryTab versions={overview.versions} /> : null}
         </>
       ) : null}
@@ -1399,128 +1397,6 @@ function VerificationTab({
       >
         <Plus className="h-4 w-4" /> Add requirement
       </button>
-    </div>
-  );
-}
-
-type PreviewForm = {
-  profile_title: string;
-  sections: { key: string; label: string; kind: string; fields: (CatalogField & { supported_from_schema?: number })[] }[];
-  metrics: CatalogMetric[];
-};
-
-function PreviewTab({
-  doc,
-  draft,
-  dirty,
-  onSave,
-}: {
-  doc: CatalogDocument;
-  draft: CatalogVersionRow | null;
-  dirty: boolean;
-  onSave: () => Promise<boolean>;
-}) {
-  const [role, setRole] = useState("athlete");
-  const [sport, setSport] = useState(doc.sports[0]?.slug ?? "");
-  const [profession, setProfession] = useState(doc.professions[0]?.slug ?? "");
-  const [form, setForm] = useState<PreviewForm | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
-  const run = async () => {
-    if (!draft) return;
-    setErr(null);
-    if (dirty && !(await onSave())) return;
-    try {
-      const qs = new URLSearchParams({ role, sport, profession });
-      const out = await catalogRequest<{ form: PreviewForm }>(`/drafts/${draft.id}/preview?${qs}`);
-      setForm(out.form);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Preview failed");
-    }
-  };
-
-  if (!draft) return <AdminEmpty title="Start a draft to preview" description="The preview renders a draft exactly as the app would." />;
-  return (
-    <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
-      <div className="space-y-3">
-        <Field label="Role">
-          <select className={inputClass} value={role} onChange={(e) => setRole(e.target.value)}>
-            <option value="fan">Fan</option>
-            <option value="athlete">Athlete</option>
-            <option value="professional">Professional</option>
-          </select>
-        </Field>
-        {role === "athlete" ? (
-          <Field label="Sport">
-            <select className={inputClass} value={sport} onChange={(e) => setSport(e.target.value)}>
-              {doc.sports.map((s) => (
-                <option key={s.slug} value={s.slug}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </Field>
-        ) : null}
-        {role === "professional" ? (
-          <Field label="Profession">
-            <select className={inputClass} value={profession} onChange={(e) => setProfession(e.target.value)}>
-              {doc.professions.map((p) => (
-                <option key={p.slug} value={p.slug}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </Field>
-        ) : null}
-        <button type="button" className={primaryButtonClass} onClick={() => void run()}>
-          <Eye className="h-4 w-4" /> Render preview
-        </button>
-        {err ? <AdminErrorAlert message={err} /> : null}
-      </div>
-      <div className="mx-auto w-full max-w-sm rounded-[2rem] border-8 border-zinc-800 bg-background p-4 shadow-xl">
-        <div className="mb-3 flex items-center gap-2 text-xs text-text-hint">
-          <Smartphone className="h-4 w-4" /> Complete your profile
-        </div>
-        {form ? (
-          <div className="space-y-4">
-            <p className="font-heading text-lg font-semibold">{form.profile_title || "Profile"}</p>
-            {form.sections.map((s) => (
-              <div key={s.key} className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">{s.label}</p>
-                {s.kind !== "attributes" && s.fields.length === 0 ? (
-                  <p className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-text-hint">
-                    Repeatable {s.label.toLowerCase()} entries
-                  </p>
-                ) : null}
-                {s.fields.map((f) => (
-                  <div key={f.id} className="rounded-lg border border-border px-3 py-2">
-                    <p className="text-sm font-medium">
-                      {f.label}
-                      {f.is_required ? <span className="text-red-500"> *</span> : null}
-                    </p>
-                    <p className="text-xs text-text-hint">
-                      {INPUT_TYPE_LABELS[f.input_type] ?? `Unsupported: ${f.input_type}`}
-                      {f.options?.length ? ` · ${f.options.filter((o) => o.status === "active").map((o) => o.label).join(", ")}` : ""}
-                      {f.visibility !== "public" ? ` · ${f.visibility}` : ""}
-                    </p>
-                    {f.help_text ? <p className="text-xs text-text-secondary">{f.help_text}</p> : null}
-                  </div>
-                ))}
-              </div>
-            ))}
-            {form.metrics.length > 0 ? (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">Sport stats</p>
-                <p className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-text-hint">
-                  {form.metrics.map((m) => m.label).join(", ")}
-                </p>
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <p className="text-sm text-text-secondary">Choose a role and category, then render.</p>
-        )}
-      </div>
     </div>
   );
 }
