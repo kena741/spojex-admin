@@ -1251,9 +1251,9 @@ function SectionsTab({
   return (
     <div className="space-y-3">
       <p className="text-sm text-text-secondary">
-        Overview, Career, Achievements, and Portfolio are the same tabs for every role. Football
-        fields stay on football profiles; basketball fields stay on basketball profiles. Sport
-        stats are configured under Sport metrics, not as a separate section.
+        Overview, Career, Achievements, and Portfolio are the same tabs for every role. Put
+        sport- or profession-unique fields on Portfolio (Applies to → Sport · Football, etc.) so
+        the app only shows them for that profile. Sport stats stay under Sport metrics.
       </p>
     <ul className="divide-y divide-border rounded-xl border border-border bg-card">
       {rows.map((s) => (
