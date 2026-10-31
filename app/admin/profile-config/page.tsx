@@ -1245,13 +1245,15 @@ function SectionsTab({
   editable: boolean;
   onChange: (fn: (d: CatalogDocument) => CatalogDocument) => void;
 }) {
-  const rows = [...doc.sections].sort(bySort);
+  const rows = [...doc.sections]
+    .filter((s) => !(s.status === "archived" && (s.key === "performance" || s.key === "qualifications")))
+    .sort(bySort);
   return (
     <div className="space-y-3">
       <p className="text-sm text-text-secondary">
         Overview, Career, Achievements, and Portfolio are the same tabs for every role. Football
-        fields and stats stay on football profiles; basketball fields and stats stay on basketball
-        profiles. Toggle a role only when a section should be hidden for that account type.
+        fields stay on football profiles; basketball fields stay on basketball profiles. Sport
+        stats are configured under Sport metrics, not as a separate section.
       </p>
     <ul className="divide-y divide-border rounded-xl border border-border bg-card">
       {rows.map((s) => (
@@ -1487,9 +1489,7 @@ function PreviewTab({
                 <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">{s.label}</p>
                 {s.kind !== "attributes" && s.fields.length === 0 ? (
                   <p className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-text-hint">
-                    {s.kind === "performance"
-                      ? `Stats: ${form.metrics.map((m) => m.label).join(", ") || "none"}`
-                      : `Repeatable ${s.label.toLowerCase()} entries`}
+                    Repeatable {s.label.toLowerCase()} entries
                   </p>
                 ) : null}
                 {s.fields.map((f) => (
@@ -1508,6 +1508,14 @@ function PreviewTab({
                 ))}
               </div>
             ))}
+            {form.metrics.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-text-secondary">Sport stats</p>
+                <p className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-text-hint">
+                  {form.metrics.map((m) => m.label).join(", ")}
+                </p>
+              </div>
+            ) : null}
           </div>
         ) : (
           <p className="text-sm text-text-secondary">Choose a role and category, then render.</p>

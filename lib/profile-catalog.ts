@@ -55,7 +55,7 @@ export type CatalogSection = {
   key: string;
   label: string;
   description: string;
-  kind: "attributes" | "career" | "achievements" | "performance" | "portfolio";
+  kind: "attributes" | "career" | "achievements" | "portfolio";
   roles: string[];
   sort_order: number;
   status: CatalogStatus;
