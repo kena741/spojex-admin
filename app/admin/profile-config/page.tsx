@@ -599,11 +599,6 @@ function FieldsTab({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-text-secondary">
-        Link each field to a section. Overview, Career, and Achievements stay the same for every
-        role. Put sport- or profession-unique entities on Clips, Photos, or Links — the app shows
-        those on the Portfolio tab for that profile only.
-      </p>
       <div className="flex flex-wrap items-end gap-2">
         <Field label="Applies to">
           <select className={inputClass} value={scope} onChange={(e) => setScope(e.target.value)}>
@@ -809,10 +804,7 @@ function FieldEditor({
         <Field label="Help text">
           <input className={inputClass} value={f.help_text} onChange={(e) => setF({ ...f, help_text: e.target.value })} />
         </Field>
-        <Field
-          label="Section"
-          hint="Overview / Career / Achievements are shared. Clips, Photos, Links feed the app Portfolio tab."
-        >
+        <Field label="Section">
           <select className={inputClass} value={f.section ?? ""} onChange={(e) => setF({ ...f, section: e.target.value })}>
             {doc.sections
               .filter((s) => !(s.status === "archived" && s.key === "portfolio"))
@@ -1265,11 +1257,6 @@ function SectionsTab({
     .sort(bySort);
   return (
     <div className="space-y-3">
-      <p className="text-sm text-text-secondary">
-        Overview, Career, and Achievements are the same for every role. Clips, Photos, and Links
-        hold role-unique entities (Applies to → Sport · Football, Profession · Coach, etc.); the
-        app Portfolio tab shows those three groups. Sport stats stay under Sport metrics.
-      </p>
     <ul className="divide-y divide-border rounded-xl border border-border bg-card">
       {rows.map((s) => (
         <li key={s.id} className="flex flex-wrap items-center gap-2 px-4 py-2.5 text-sm">
@@ -1357,9 +1344,6 @@ function VerificationTab({
     }));
   return (
     <div className="space-y-3">
-      <p className="text-sm text-text-secondary">
-        Requirements resolve through the account role plus the selected sport or profession. Document types are managed under Verification documents.
-      </p>
       {rows.map((r) => (
         <div key={r.id} className="grid gap-2 rounded-xl border border-border bg-card p-3 sm:grid-cols-[1fr_1fr_1fr_auto_auto]">
           <select className={inputClass} disabled={!editable} value={r.role_slug} onChange={(e) => setReq(r.id, { role_slug: e.target.value, sport: e.target.value === "athlete" ? r.sport : null })}>
