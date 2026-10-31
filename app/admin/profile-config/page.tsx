@@ -536,8 +536,8 @@ function CategoriesTab({
   };
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      {block("sports", "Sports")}
-      {block("professions", "Professions")}
+      {block("sports", "Athlete · sports")}
+      {block("professions", "Professional · roles")}
     </div>
   );
 }
@@ -626,11 +626,11 @@ function dedupeFields(list: CatalogField[]) {
 function scopeLabel(doc: CatalogDocument, f: CatalogField) {
   if (f.scope_kind === "sport") {
     const sport = doc.sports.find((s) => s.slug === f.scope_ref);
-    return sport ? `Sport · ${sport.label}` : `Sport · ${f.scope_ref}`;
+    return sport ? `Athlete · ${sport.label}` : `Athlete · ${f.scope_ref}`;
   }
   if (f.scope_kind === "profession") {
     const profession = doc.professions.find((p) => p.slug === f.scope_ref);
-    return profession ? `Profession · ${profession.label}` : `Profession · ${f.scope_ref}`;
+    return profession ? `Professional · ${profession.label}` : `Professional · ${f.scope_ref}`;
   }
   return SCOPE_LABELS[f.scope_kind] ?? f.scope_kind;
 }
@@ -679,16 +679,46 @@ function FieldsTab({
     return out;
   }, [doc.fields]);
 
-  const roleScopes = [
-    ...doc.sports.map((s) => ({
-      value: `sport:${s.slug}`,
-      label: `Sport · ${s.label}${s.status === "archived" ? " (archived)" : ""}`,
-    })),
-    ...doc.professions.map((p) => ({
-      value: `profession:${p.slug}`,
-      label: `Profession · ${p.label}${p.status === "archived" ? " (archived)" : ""}`,
-    })),
-  ];
+  const athleteRoles = useMemo(
+    () =>
+      [...doc.sports]
+        .sort(bySort)
+        .map((s) => ({
+          value: `sport:${s.slug}`,
+          label: `${s.label}${s.status === "archived" ? " (archived)" : ""}`,
+          active: s.status === "active",
+        })),
+    [doc.sports],
+  );
+  const professionalRoles = useMemo(
+    () =>
+      [...doc.professions]
+        .sort(bySort)
+        .map((p) => ({
+          value: `profession:${p.slug}`,
+          label: `${p.label}${p.status === "archived" ? " (archived)" : ""}`,
+          active: p.status === "active",
+        })),
+    [doc.professions],
+  );
+  const roleScopes = [...athleteRoles, ...professionalRoles];
+
+  const portfolioGroup: "athlete" | "professional" = portfolioRole.startsWith("profession:")
+    ? "professional"
+    : "athlete";
+  const rolesInGroup = portfolioGroup === "athlete" ? athleteRoles : professionalRoles;
+
+  // Keep selection valid when sports/professions change.
+  useEffect(() => {
+    if (roleScopes.length === 0) return;
+    if (roleScopes.some((s) => s.value === portfolioRole)) return;
+    const preferred =
+      (portfolioGroup === "athlete" ? athleteRoles : professionalRoles).find((r) => r.active) ??
+      athleteRoles.find((r) => r.active) ??
+      professionalRoles.find((r) => r.active) ??
+      roleScopes[0];
+    if (preferred) setPortfolioRole(preferred.value);
+  }, [athleteRoles, professionalRoles, portfolioGroup, portfolioRole, roleScopes]);
 
   const rows = useMemo(() => {
     let list = doc.fields.filter((f) => fieldBucket(f) === bucket && f.status === "active");
@@ -704,6 +734,12 @@ function FieldsTab({
 
   const sectionLabel = (key: string | null) => doc.sections.find((s) => s.key === key)?.label ?? "—";
   const [roleKind, roleRef] = portfolioRole.split(":");
+
+  const setPortfolioGroup = (group: "athlete" | "professional") => {
+    const list = group === "athlete" ? athleteRoles : professionalRoles;
+    const next = list.find((r) => r.active) ?? list[0];
+    if (next) setPortfolioRole(next.value);
+  };
 
   const defaultNewField = (): CatalogField => {
     if (bucket === "portfolio") {
@@ -790,19 +826,45 @@ function FieldsTab({
       <div className="space-y-3">
         <div className="flex flex-wrap items-end gap-2">
           {bucket === "portfolio" ? (
-            <Field label="Role">
-              <select
-                className={inputClass}
-                value={portfolioRole}
-                onChange={(e) => setPortfolioRole(e.target.value)}
+            <>
+              <Field label="Account role">
+                <select
+                  className={inputClass}
+                  value={portfolioGroup}
+                  onChange={(e) => setPortfolioGroup(e.target.value as "athlete" | "professional")}
+                >
+                  <option value="athlete">Athlete</option>
+                  <option value="professional">Professional</option>
+                </select>
+              </Field>
+              <Field
+                label={portfolioGroup === "athlete" ? "Sport" : "Profession"}
+                hint={
+                  rolesInGroup.length === 0
+                    ? `Add ${portfolioGroup === "athlete" ? "sports" : "professions"} under Sports & professions first.`
+                    : portfolioGroup === "athlete"
+                      ? "All sports added for athletes."
+                      : "All professional roles you added."
+                }
               >
-                {roleScopes.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
+                <select
+                  className={inputClass}
+                  value={portfolioRole}
+                  disabled={rolesInGroup.length === 0}
+                  onChange={(e) => setPortfolioRole(e.target.value)}
+                >
+                  {rolesInGroup.length === 0 ? (
+                    <option value="">No roles yet</option>
+                  ) : (
+                    rolesInGroup.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </Field>
+            </>
           ) : null}
           <button
             type="button"
@@ -824,7 +886,7 @@ function FieldsTab({
             title="No entities here yet"
             description={
               bucket === "portfolio"
-                ? "Pick a sport or profession, then add any field type (text, date, select, image, …)."
+                ? "Choose Athlete or Professional, pick a specific sport/role, then add fields for that role."
                 : bucket === "career"
                   ? "Add fields shown on every career entry (text, date, select, url, …). Same for all roles."
                   : "Add a field for this section. These entities are shared across roles."
@@ -1049,6 +1111,40 @@ function FieldEditor({
         <Field label="Record">
           <input className={inputClass} value={recordLabel} disabled readOnly />
         </Field>
+        {(f.scope_kind === "sport" || f.scope_kind === "profession") && (
+          <Field label="Applies to" hint="Athlete sports or professional roles from Sports & professions.">
+            <select
+              className={inputClass}
+              value={`${f.scope_kind}:${f.scope_ref ?? ""}`}
+              disabled={!isNew && usage > 0}
+              onChange={(e) => {
+                const [kind, ref] = e.target.value.split(":");
+                setF({
+                  ...f,
+                  scope_kind: kind as CatalogField["scope_kind"],
+                  scope_ref: ref || null,
+                });
+              }}
+            >
+              <optgroup label="Athlete · sports">
+                {doc.sports.map((s) => (
+                  <option key={s.id} value={`sport:${s.slug}`}>
+                    {s.label}
+                    {s.status === "archived" ? " (archived)" : ""}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Professional · roles">
+                {doc.professions.map((p) => (
+                  <option key={p.id} value={`profession:${p.slug}`}>
+                    {p.label}
+                    {p.status === "archived" ? " (archived)" : ""}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+          </Field>
+        )}
         <Field
           label="Input type"
           hint={typeFrozen ? `${usage > 0 ? `${usage} saved answers — ` : ""}type is locked for this field.` : undefined}
