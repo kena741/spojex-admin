@@ -606,13 +606,11 @@ function FieldsTab({
           ? `profession:${doc.professions.find((p) => p.status === "active")!.slug}`
           : "sport:football",
   );
-  const [portfolioGroup, setPortfolioGroup] = useState<"all" | "clips" | "photos" | "links">("all");
-
   const buckets: { id: FieldsBucket; label: string; hint: string }[] = [
     { id: "overview", label: "Overview", hint: "Same for every role" },
     { id: "career", label: "Career", hint: "Same for every role" },
     { id: "achievements", label: "Achievements", hint: "Same for every role" },
-    { id: "portfolio", label: "Portfolio", hint: "Clips, Photos, Links · role-unique" },
+    { id: "portfolio", label: "Portfolio", hint: "Role-unique · any input type" },
   ];
 
   const counts = useMemo(() => {
@@ -641,36 +639,30 @@ function FieldsTab({
     let list = doc.fields.filter((f) => fieldBucket(f) === bucket);
     if (bucket === "portfolio") {
       list = list.filter((f) => scopeKey(f) === portfolioRole);
-      if (portfolioGroup !== "all") {
-        list = list.filter(
-          (f) =>
-            f.section === portfolioGroup ||
-            (portfolioGroup === "clips" && (f.target === "clip" || f.target === "portfolio")) ||
-            (portfolioGroup === "photos" && f.target === "photo") ||
-            (portfolioGroup === "links" && f.target === "link"),
-        );
-      }
     } else {
       list = list.filter((f) => COMMON_FIELD_SCOPES.has(f.scope_kind));
     }
     return [...list].sort(bySort);
-  }, [doc.fields, bucket, portfolioRole, portfolioGroup]);
+  }, [doc.fields, bucket, portfolioRole]);
 
   const sectionLabel = (key: string | null) => doc.sections.find((s) => s.key === key)?.label ?? "—";
   const [roleKind, roleRef] = portfolioRole.split(":");
 
   const defaultNewField = (): CatalogField => {
     if (bucket === "portfolio") {
-      const group = portfolioGroup === "all" ? "clips" : portfolioGroup;
-      const target =
-        group === "photos" ? "photo" : group === "links" ? "link" : ("profile" as CatalogField["target"]);
+      // Role-unique attribute — any input type (text, date, select, …).
+      // Section defaults to Clips; change it in the editor if needed.
+      const section =
+        roleKind === "profession"
+          ? "links"
+          : doc.sections.find((s) => s.key === "clips" && s.status === "active")?.key ?? "clips";
       return {
         id: newId(),
         key: "",
         scope_kind: roleKind as CatalogField["scope_kind"],
         scope_ref: roleRef ?? null,
-        target: target === "profile" ? "profile" : target,
-        section: group,
+        target: "profile",
+        section,
         label: "",
         help_text: "",
         input_type: "text",
@@ -739,33 +731,19 @@ function FieldsTab({
       <div className="space-y-3">
         <div className="flex flex-wrap items-end gap-2">
           {bucket === "portfolio" ? (
-            <>
-              <Field label="Role">
-                <select
-                  className={inputClass}
-                  value={portfolioRole}
-                  onChange={(e) => setPortfolioRole(e.target.value)}
-                >
-                  {roleScopes.map((s) => (
-                    <option key={s.value} value={s.value}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Group">
-                <select
-                  className={inputClass}
-                  value={portfolioGroup}
-                  onChange={(e) => setPortfolioGroup(e.target.value as typeof portfolioGroup)}
-                >
-                  <option value="all">All Portfolio</option>
-                  <option value="clips">Clips</option>
-                  <option value="photos">Photos</option>
-                  <option value="links">Links</option>
-                </select>
-              </Field>
-            </>
+            <Field label="Role">
+              <select
+                className={inputClass}
+                value={portfolioRole}
+                onChange={(e) => setPortfolioRole(e.target.value)}
+              >
+                {roleScopes.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
           ) : null}
           <button
             type="button"
@@ -782,7 +760,7 @@ function FieldsTab({
             title="No entities here yet"
             description={
               bucket === "portfolio"
-                ? "Pick a sport or profession, then add fields for Clips, Photos, or Links."
+                ? "Pick a sport or profession, then add any field type (text, date, select, image, …)."
                 : "Add a field for this section. These entities are shared across roles."
             }
           />
