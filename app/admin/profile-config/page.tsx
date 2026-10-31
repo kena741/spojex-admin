@@ -29,13 +29,12 @@ import {
 } from "@/lib/profile-catalog";
 import { cn } from "@/lib/utils";
 
-type Tab = "categories" | "fields" | "sections" | "verification" | "history";
+type Tab = "categories" | "fields" | "sections" | "history";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "categories", label: "Sports & professions" },
   { id: "fields", label: "Entities" },
   { id: "sections", label: "Sections" },
-  { id: "verification", label: "Verification documents" },
   { id: "history", label: "Versions" },
 ];
 
@@ -282,7 +281,7 @@ export default function ProfileConfigPage() {
         description={
           overview
             ? `Live catalog v${overview.live.version}${draft ? ` · editing draft based on v${draft.base_version}` : " · read-only (start a draft to edit)"}`
-            : "Sports, professions, profile fields, and verification requirements"
+            : "Sports, professions, profile fields, and sections"
         }
         actions={headerActions}
       />
@@ -335,9 +334,6 @@ export default function ProfileConfigPage() {
             />
           ) : null}
           {tab === "sections" ? <SectionsTab doc={doc} editable={editable} onChange={update} /> : null}
-          {tab === "verification" ? (
-            <VerificationTab doc={doc} editable={editable} documentTypes={overview.document_types} onChange={update} />
-          ) : null}
           {tab === "history" ? <HistoryTab versions={overview.versions} /> : null}
         </>
       ) : null}
@@ -1242,88 +1238,6 @@ function SectionsTab({
         </li>
       ))}
     </ul>
-    </div>
-  );
-}
-
-function VerificationTab({
-  doc,
-  editable,
-  documentTypes,
-  onChange,
-}: {
-  doc: CatalogDocument;
-  editable: boolean;
-  documentTypes: CatalogOverview["document_types"];
-  onChange: (fn: (d: CatalogDocument) => CatalogDocument) => void;
-}) {
-  const roles = [
-    { value: "athlete", label: "All athletes" },
-    { value: "professional", label: "All professionals" },
-    ...doc.professions.map((p) => ({ value: p.slug, label: `Profession · ${p.label}` })),
-  ];
-  const rows = [...doc.verification_requirements].sort(bySort);
-  const setReq = (id: string, patch: Partial<(typeof rows)[number]>) =>
-    onChange((d) => ({
-      ...d,
-      verification_requirements: d.verification_requirements.map((r) => (r.id === id ? { ...r, ...patch } : r)),
-    }));
-  return (
-    <div className="space-y-3">
-      {rows.map((r) => (
-        <div key={r.id} className="grid gap-2 rounded-xl border border-border bg-card p-3 sm:grid-cols-[1fr_1fr_1fr_auto_auto]">
-          <select className={inputClass} disabled={!editable} value={r.role_slug} onChange={(e) => setReq(r.id, { role_slug: e.target.value, sport: e.target.value === "athlete" ? r.sport : null })}>
-            {roles.map((x) => (
-              <option key={x.value} value={x.value}>
-                {x.label}
-              </option>
-            ))}
-          </select>
-          <select className={inputClass} disabled={!editable || r.role_slug !== "athlete"} value={r.sport ?? ""} onChange={(e) => setReq(r.id, { sport: e.target.value || null })}>
-            <option value="">Any sport</option>
-            {doc.sports.map((s) => (
-              <option key={s.slug} value={s.slug}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-          <select className={inputClass} disabled={!editable} value={r.document} onChange={(e) => setReq(r.id, { document: e.target.value })}>
-            {documentTypes.map((t) => (
-              <option key={t.slug} value={t.slug}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-          <label className="flex items-center gap-1 text-sm">
-            <input type="checkbox" disabled={!editable} checked={r.is_required} onChange={(e) => setReq(r.id, { is_required: e.target.checked })} />
-            Required
-          </label>
-          <button
-            type="button"
-            className={buttonClass}
-            disabled={!editable}
-            onClick={() => onChange((d) => ({ ...d, verification_requirements: d.verification_requirements.filter((x) => x.id !== r.id) }))}
-          >
-            Remove
-          </button>
-        </div>
-      ))}
-      <button
-        type="button"
-        className={buttonClass}
-        disabled={!editable || documentTypes.length === 0}
-        onClick={() =>
-          onChange((d) => ({
-            ...d,
-            verification_requirements: [
-              ...d.verification_requirements,
-              { id: newId(), role_slug: "professional", sport: null, document: documentTypes[0]?.slug ?? "", is_required: true, description: "", sort_order: (rows.at(-1)?.sort_order ?? 0) + 10 },
-            ],
-          }))
-        }
-      >
-        <Plus className="h-4 w-4" /> Add requirement
-      </button>
     </div>
   );
 }
