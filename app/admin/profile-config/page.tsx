@@ -24,6 +24,7 @@ import {
   type CatalogField,
   type CatalogOverview,
   type CatalogProfession,
+  type CatalogSection,
   type CatalogSport,
   type CatalogVersionRow,
 } from "@/lib/profile-catalog";
@@ -721,6 +722,7 @@ function FieldsTab({
         section,
         label: "",
         help_text: "",
+        placeholder: "",
         input_type: "text",
         is_required: false,
         validation: {},
@@ -746,6 +748,7 @@ function FieldsTab({
       section: bucket,
       label: "",
       help_text: "",
+      placeholder: "",
       input_type: "text",
       is_required: false,
       validation: {},
@@ -983,14 +986,21 @@ function FieldEditor({
       footer={
         <AdminModalFooter
           onCancel={onClose}
-          onSave={() =>
+          onSave={() => {
+            const validation = Object.fromEntries(
+              Object.entries(f.validation).filter(([, x]) => x !== undefined),
+            ) as Record<string, unknown>;
+            const placeholder = (f.placeholder ?? "").trim();
+            if (placeholder) validation.placeholder = placeholder;
+            else delete validation.placeholder;
             onSave({
               ...f,
+              placeholder,
               editable_by: "owner",
               target: targetForSection(f.section ?? "overview", f.target),
-              validation: Object.fromEntries(Object.entries(f.validation).filter(([, x]) => x !== undefined)),
-            })
-          }
+              validation,
+            });
+          }}
           disabled={!f.label.trim() || !keyValid || (isSelect && options.length === 0 && !v.allow_custom)}
           saveLabel="Apply to draft"
         />
@@ -1009,6 +1019,13 @@ function FieldEditor({
         </Field>
         <Field label="Help text">
           <input className={inputClass} value={f.help_text} onChange={(e) => setF({ ...f, help_text: e.target.value })} />
+        </Field>
+        <Field label="Placeholder" hint="Shown inside empty inputs on mobile.">
+          <input
+            className={inputClass}
+            value={f.placeholder ?? (typeof f.validation.placeholder === "string" ? f.validation.placeholder : "")}
+            onChange={(e) => setF({ ...f, placeholder: e.target.value })}
+          />
         </Field>
         <Field label="Section">
           <select
@@ -1060,10 +1077,9 @@ function FieldEditor({
           <input
             type="checkbox"
             checked={f.is_required}
-            disabled={f.target !== "profile"}
             onChange={(e) => setF({ ...f, is_required: e.target.checked })}
           />
-          Required for profile completion
+          {f.target === "profile" ? "Required for profile completion" : "Required when saving an entry"}
         </label>
         {isNumber ? (
           <>
@@ -1201,6 +1217,15 @@ function CategoryEditor({
   );
 }
 
+const SECTION_KINDS: CatalogSection["kind"][] = [
+  "attributes",
+  "career",
+  "achievements",
+  "clips",
+  "photos",
+  "links",
+];
+
 function SectionsTab({
   doc,
   editable,
@@ -1210,6 +1235,9 @@ function SectionsTab({
   editable: boolean;
   onChange: (fn: (d: CatalogDocument) => CatalogDocument) => void;
 }) {
+  const [adding, setAdding] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const [newKind, setNewKind] = useState<CatalogSection["kind"]>("attributes");
   const rows = [...doc.sections]
     .filter(
       (s) =>
@@ -1219,8 +1247,70 @@ function SectionsTab({
         ),
     )
     .sort(bySort);
+
+  const addSection = () => {
+    const label = newLabel.trim();
+    if (!label) return;
+    let key = slugify(label);
+    const used = new Set(doc.sections.map((s) => s.key));
+    if (used.has(key)) {
+      let i = 2;
+      while (used.has(`${key}_${i}`)) i += 1;
+      key = `${key}_${i}`;
+    }
+    const section: CatalogSection = {
+      id: newId(),
+      key,
+      label,
+      description: "",
+      kind: newKind,
+      roles: ["fan", "athlete", "professional"],
+      sort_order: (rows.at(-1)?.sort_order ?? 0) + 10,
+      status: "active",
+    };
+    onChange((d) => ({ ...d, sections: [...d.sections, section] }));
+    setNewLabel("");
+    setNewKind("attributes");
+    setAdding(false);
+  };
+
   return (
     <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-text-secondary">
+          Role checkboxes control which account roles see each section. Portfolio on mobile is Clips + Photos + Links.
+        </p>
+        <button
+          type="button"
+          className={primaryButtonClass}
+          disabled={!editable}
+          onClick={() => setAdding((v) => !v)}
+        >
+          <Plus className="h-4 w-4" /> Add section
+        </button>
+      </div>
+      {adding ? (
+        <div className="flex flex-wrap items-end gap-2 rounded-xl border border-border bg-card p-3">
+          <Field label="Label">
+            <input className={inputClass} value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="e.g. Overview" />
+          </Field>
+          <Field label="Kind">
+            <select className={inputClass} value={newKind} onChange={(e) => setNewKind(e.target.value as CatalogSection["kind"])}>
+              {SECTION_KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {k}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <button type="button" className={primaryButtonClass} disabled={!newLabel.trim()} onClick={addSection}>
+            Create
+          </button>
+          <button type="button" className={buttonClass} onClick={() => setAdding(false)}>
+            Cancel
+          </button>
+        </div>
+      ) : null}
     <ul className="divide-y divide-border rounded-xl border border-border bg-card">
       {rows.map((s) => (
         <li key={s.id} className="flex flex-wrap items-center gap-2 px-4 py-2.5 text-sm">

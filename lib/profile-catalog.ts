@@ -21,6 +21,8 @@ export type CatalogField = {
   section: string | null;
   label: string;
   help_text: string;
+  /** Shown inside empty inputs on mobile; stored in validation.placeholder when published. */
+  placeholder?: string;
   input_type: string;
   is_required: boolean;
   validation: Record<string, unknown>;
