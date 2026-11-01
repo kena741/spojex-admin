@@ -137,10 +137,10 @@ export default function AdminDashboardPage() {
       const type = row.content_type === "news" ? "news" : "gym_video";
       const data = await fetchContentDetail(type, row.id, query);
       setDetail(data);
-    } catch (err) {
+      } catch (err) {
       setDetail({ error: err instanceof Error ? err.message : "Failed to load" });
-    }
-  };
+      }
+    };
 
   return (
     <div className="space-y-5">
@@ -487,9 +487,36 @@ function UsersPanel({ loading, data }: { loading: boolean; data: Record<string, 
           <p className="text-xs text-text-hint">
             {data.acquisition_sources?.message || "Acquisition sources: Not tracked yet"}
           </p>
-          <p className="mt-2 text-xs text-text-hint">
-            {data.platforms?.message || "Android vs iOS: Not tracked yet"}
-          </p>
+          <div className="mt-3">
+            <p className="mb-2 text-xs font-medium text-text-secondary">Signup device (Android vs iOS)</p>
+            {data.platforms?.status === "ok" && (data.platforms?.series?.length ?? 0) > 0 ? (
+              <div className="h-40">
+                <SimpleBarChart
+                  data={(data.platforms.series || [])
+                    .filter((p: any) => p.platform === "android" || p.platform === "ios" || Number(p.users) > 0)
+                    .map((p: any) => ({
+                      label: p.label || p.platform,
+                      value: Number(p.users) || 0,
+                    }))}
+                />
+              </div>
+            ) : (
+              <p className="text-xs text-text-hint">
+                {data.platforms?.message || "Android vs iOS: Not tracked yet"}
+              </p>
+            )}
+            {data.platforms?.status === "ok" ? (
+              <div className="mt-2 flex flex-wrap gap-3 text-xs text-text-secondary">
+                {(data.platforms.series || [])
+                  .filter((p: any) => p.platform === "android" || p.platform === "ios")
+                  .map((p: any) => (
+                    <span key={p.platform}>
+                      {p.label}: <span className="font-medium tabular-nums text-text-primary">{formatCompact(p.users)}</span>
+                    </span>
+                  ))}
+              </div>
+            ) : null}
+          </div>
         </section>
       </div>
 
@@ -611,7 +638,7 @@ function GymsPanel({
               <div key={status} className="flex justify-between rounded-lg bg-muted/50 px-3 py-2">
                 <span className="capitalize text-text-secondary">{status}</span>
                 <span className="font-medium tabular-nums">{formatCompact(Number(cnt))}</span>
-              </div>
+                </div>
             ))}
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-text-secondary">
