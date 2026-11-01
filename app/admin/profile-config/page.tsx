@@ -1175,7 +1175,7 @@ function FieldsTab({
   const fieldActions = (f: CatalogField) => {
     const clones = sharedBucketCloneIds(doc.fields, f).filter((id) => id !== f.id);
     return (
-      <div className="flex flex-wrap gap-1">
+      <div className="inline-flex flex-nowrap items-center gap-1 whitespace-nowrap">
         <button type="button" className={buttonClass} disabled={!editable} onClick={() => onEdit(f)}>
           Edit
         </button>
@@ -1394,7 +1394,7 @@ function FieldsTab({
                       <td className="whitespace-nowrap px-3 py-2">
                         <StatusPill status={f.status} />
                       </td>
-                      <td className="whitespace-nowrap px-3 py-2">
+                      <td className="whitespace-nowrap px-3 py-2 align-middle">
                         <div className="flex justify-end">{fieldActions(f)}</div>
                       </td>
                     </tr>
