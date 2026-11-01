@@ -17,15 +17,23 @@ import {
   INPUT_TYPE_LABELS,
   newId,
   optionValue,
+  parseScope,
   SCOPE_LABELS,
+  scopeReaches,
+  scopeValue,
+  SECTION_KINDS,
   slugify,
+  tabReaches,
+  targetForStorage,
   type CatalogCheck,
   type CatalogDocument,
   type CatalogField,
+  type CatalogGroup,
   type CatalogOverview,
   type CatalogProfession,
   type CatalogSection,
   type CatalogSport,
+  type CatalogStatus,
   type CatalogVersionDetail,
   type CatalogVersionRow,
 } from "@/lib/profile-catalog";
@@ -34,9 +42,9 @@ import { cn } from "@/lib/utils";
 type Tab = "categories" | "fields" | "sections" | "history";
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "fields", label: "Tabs" },
+  { id: "fields", label: "Fields" },
+  { id: "sections", label: "Tabs" },
   { id: "categories", label: "Roles" },
-  { id: "sections", label: "Sections" },
   { id: "history", label: "Versions" },
 ];
 
@@ -107,6 +115,7 @@ export default function ProfileConfigPage() {
   const [versionDetail, setVersionDetail] = useState<CatalogVersionDetail | null>(null);
   const [versionDetailLoading, setVersionDetailLoading] = useState(false);
   const [editingField, setEditingField] = useState<CatalogField | null>(null);
+  const [editingGroup, setEditingGroup] = useState<CatalogGroup | null>(null);
   const [editingCategory, setEditingCategory] = useState<
     { kind: "sports" | "professions"; row: CatalogSport | CatalogProfession } | null
   >(null);
@@ -154,7 +163,9 @@ export default function ProfileConfigPage() {
   const liveIds = useMemo(() => {
     const live = overview?.live;
     if (!live) return new Set<string>();
-    return new Set([...live.fields, ...live.sports, ...live.professions].map((r) => r.id));
+    return new Set(
+      [...live.fields, ...live.sports, ...live.professions, ...live.sections, ...(live.groups ?? [])].map((r) => r.id),
+    );
   }, [overview]);
 
   const update = (fn: (d: CatalogDocument) => CatalogDocument) => {
@@ -277,7 +288,7 @@ export default function ProfileConfigPage() {
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Save failed";
-      // Optimistic lock: server draft moved (Validate/heal, another tab, or another admin).
+      // Optimistic lock: another tab or admin saved this draft.
       if (/reload it before saving|draft_conflict|someone else saved/i.test(message)) {
         try {
           const full = await catalogRequest<CatalogVersionRow>(`/drafts/${draft.id}`);
@@ -306,7 +317,7 @@ export default function ProfileConfigPage() {
         `/drafts/${draft.id}/validate`,
         { method: "POST", body: "{}" },
       );
-      // Server heals hard-removed live fields as archived — refresh local draft + updated_at.
+      // The response carries the draft (document + updated_at) so the save lock stays in sync.
       if (result.document) {
         setDoc(result.document);
         setDraft({
@@ -502,6 +513,7 @@ export default function ProfileConfigPage() {
               usage={usage}
               liveIds={liveIds}
               onEdit={setEditingField}
+              onEditGroup={setEditingGroup}
               onChange={update}
             />
           ) : null}
@@ -537,6 +549,26 @@ export default function ProfileConfigPage() {
                 : [...d.fields, next],
             }));
             setEditingField(null);
+          }}
+        />
+      ) : null}
+      {editingGroup && doc ? (
+        <GroupEditor
+          group={editingGroup}
+          doc={doc}
+          isNew={!liveIds.has(editingGroup.id)}
+          onClose={() => setEditingGroup(null)}
+          onSave={(next) => {
+            update((d) => {
+              const before = d.groups.find((g) => g.id === next.id);
+              return {
+                ...d,
+                groups: before ? d.groups.map((g) => (g.id === next.id ? next : g)) : [...d.groups, next],
+                // Fields follow their group to its tab.
+                fields: d.fields.map((f) => (f.group === next.key ? { ...f, section: next.section } : f)),
+              };
+            });
+            setEditingGroup(null);
           }}
         />
       ) : null}
@@ -774,137 +806,68 @@ function CategoriesTab({
   );
 }
 
-function scopeKey(f: Pick<CatalogField, "scope_kind" | "scope_ref">) {
-  return f.scope_ref ? `${f.scope_kind}:${f.scope_ref}` : f.scope_kind;
-}
-
-/** Portfolio Me tab — single section (legacy clips/photos/links still recognized). */
-const PORTFOLIO_SECTION_KEYS = new Set(["portfolio", "clips", "photos", "links"]);
-const LEGACY_PORTFOLIO_SECTION_KEYS = new Set(["clips", "photos", "links"]);
-const COMMON_FIELD_SCOPES = new Set(["account", "fan", "athlete", "professional"]);
-
-/** Overview keys that must live under one canonical scope (no cross-scope clones). */
-const CANONICAL_FIELD_SCOPE: Record<string, CatalogField["scope_kind"]> = {
-  display_name: "account",
-  bio: "account",
-  country: "account",
-  city: "account",
-  date_of_birth: "athlete",
-  nationality: "athlete",
-  looking_for_opportunities: "athlete",
-  organization: "professional",
-  specializations: "professional",
-  regions: "professional",
-  license: "professional",
-  certified: "professional",
-  license_document: "professional",
-};
-
-type FieldsBucket = "overview" | "career" | "achievements" | "media" | "portfolio";
-
-function fieldBucket(f: CatalogField): FieldsBucket {
-  if (f.section === "career" || f.target === "career") return "career";
-  if (f.section === "achievements" || f.target === "achievement") return "achievements";
-  // Media tab (highlights / gallery) — same label as mobile Me → Media.
-  if (f.section === "media" || f.target === "media") return "media";
-  if (
-    PORTFOLIO_SECTION_KEYS.has(f.section ?? "") ||
-    f.target === "clip" ||
-    f.target === "photo" ||
-    f.target === "link" ||
-    f.target === "portfolio" ||
-    f.scope_kind === "sport" ||
-    f.scope_kind === "profession"
-  ) {
-    return "portfolio";
+function scopeLabel(doc: CatalogDocument, row: { scope_kind: string; scope_ref: string | null }) {
+  if (row.scope_kind === "sport") {
+    const sport = doc.sports.find((s) => s.slug === row.scope_ref);
+    return `Athlete · ${sport?.label ?? row.scope_ref}`;
   }
-  return "overview";
-}
-
-function fieldIdentity(f: CatalogField) {
-  return `${f.scope_kind}:${f.scope_ref ?? ""}:${f.target}:${f.key}`;
-}
-
-function preferField(a: CatalogField, b: CatalogField) {
-  const score = (f: CatalogField) =>
-    (f.status === "active" ? 8 : 0) +
-    (f.storage_column ? 4 : 0) +
-    (f.is_system ? 2 : 0) +
-    (CANONICAL_FIELD_SCOPE[f.key] === f.scope_kind ? 1 : 0);
-  return score(a) >= score(b) ? a : b;
-}
-
-/** Drop cross-scope clones and exact identity duplicates. */
-function dedupeFields(list: CatalogField[]) {
-  const byIdentity = new Map<string, CatalogField>();
-  for (const f of list) {
-    const id = fieldIdentity(f);
-    const prev = byIdentity.get(id);
-    byIdentity.set(id, prev ? preferField(f, prev) : f);
+  if (row.scope_kind === "profession") {
+    const profession = doc.professions.find((p) => p.slug === row.scope_ref);
+    return `Professional · ${profession?.label ?? row.scope_ref}`;
   }
-  const byKey = new Map<string, CatalogField>();
-  for (const f of byIdentity.values()) {
-    const canonical = CANONICAL_FIELD_SCOPE[f.key];
-    if (!canonical || f.target !== "profile" || !COMMON_FIELD_SCOPES.has(f.scope_kind)) {
-      byKey.set(`${fieldIdentity(f)}`, f);
-      continue;
-    }
-    const prev = byKey.get(f.key);
-    if (!prev) {
-      byKey.set(f.key, f);
-      continue;
-    }
-    byKey.set(f.key, preferField(f.scope_kind === canonical ? f : prev, prev.scope_kind === canonical ? prev : f));
-  }
-  return [...byKey.values()];
+  return SCOPE_LABELS[row.scope_kind] ?? row.scope_kind;
 }
 
-function scopeLabel(doc: CatalogDocument, f: CatalogField) {
-  if (f.scope_kind === "sport") {
-    const sport = doc.sports.find((s) => s.slug === f.scope_ref);
-    return sport ? `Athlete · ${sport.label}` : `Athlete · ${f.scope_ref}`;
-  }
-  if (f.scope_kind === "profession") {
-    const profession = doc.professions.find((p) => p.slug === f.scope_ref);
-    return profession ? `Professional · ${profession.label}` : `Professional · ${f.scope_ref}`;
-  }
-  return SCOPE_LABELS[f.scope_kind] ?? f.scope_kind;
+/** Every audience a field, group, or the preview filter can target. */
+function audienceOptions(doc: CatalogDocument) {
+  return [
+    { label: "Roles", options: (["account", "fan", "athlete", "professional"] as const).map((v) => ({ value: v, label: SCOPE_LABELS[v] })) },
+    {
+      label: "Athlete · sports",
+      options: [...doc.sports].sort(bySort).map((s) => ({
+        value: `sport:${s.slug}`,
+        label: `${s.label}${s.status === "archived" ? " (archived)" : ""}`,
+      })),
+    },
+    {
+      label: "Professional · professions",
+      options: [...doc.professions].sort(bySort).map((p) => ({
+        value: `profession:${p.slug}`,
+        label: `${p.label}${p.status === "archived" ? " (archived)" : ""}`,
+      })),
+    },
+  ];
 }
 
-const SHARED_ENTITY_BUCKETS = new Set<FieldsBucket>(["overview", "career", "achievements", "media"]);
-
-function sharedBucketCloneIds(fields: CatalogField[], field: CatalogField): string[] {
-  /** Same key under different common scopes within Overview / Career / Achievements / Media. */
-  const bucket = fieldBucket(field);
-  if (!SHARED_ENTITY_BUCKETS.has(bucket)) return [field.id];
-  return fields
-    .filter(
-      (f) =>
-        fieldBucket(f) === bucket &&
-        f.key === field.key &&
-        f.target === field.target &&
-        COMMON_FIELD_SCOPES.has(f.scope_kind),
-    )
-    .map((f) => f.id);
-}
-
-function preferSharedField(a: CatalogField, b: CatalogField) {
-  const score = (f: CatalogField) =>
-    (f.status === "active" ? 8 : 0) +
-    (f.scope_kind === "account" ? 4 : 0) +
-    (f.is_system ? 2 : 0) +
-    (f.storage_column ? 1 : 0);
-  return score(a) >= score(b) ? a : b;
-}
-
-/** Keep one active copy per key within a shared Tabs bucket. */
-function dedupeSharedBucket(list: CatalogField[]) {
-  const byKey = new Map<string, CatalogField>();
-  for (const f of list) {
-    const prev = byKey.get(f.key);
-    byKey.set(f.key, prev ? preferSharedField(f, prev) : f);
-  }
-  return [...byKey.values()];
+function AudienceSelect({
+  doc,
+  value,
+  onChange,
+  disabled,
+  includeAll,
+}: {
+  doc: CatalogDocument;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  includeAll?: boolean;
+}) {
+  return (
+    <select className={inputClass} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+      {includeAll ? <option value="all">Everything</option> : null}
+      {audienceOptions(doc).map((group) => (
+        <optgroup key={group.label} label={group.label}>
+          {group.options
+            .filter((o) => !(includeAll && o.value === "account"))
+            .map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+        </optgroup>
+      ))}
+    </select>
+  );
 }
 
 function FieldsTab({
@@ -913,6 +876,7 @@ function FieldsTab({
   usage,
   liveIds,
   onEdit,
+  onEditGroup,
   onChange,
 }: {
   doc: CatalogDocument;
@@ -920,501 +884,423 @@ function FieldsTab({
   usage: Record<string, number>;
   liveIds: Set<string>;
   onEdit: (f: CatalogField) => void;
+  onEditGroup: (g: CatalogGroup) => void;
   onChange: (fn: (d: CatalogDocument) => CatalogDocument) => void;
 }) {
-  const [bucket, setBucket] = useState<FieldsBucket>("overview");
   const [showArchived, setShowArchived] = useState(false);
-  const [portfolioRole, setPortfolioRole] = useState(() =>
-    doc.sports.find((s) => s.slug === "football" && s.status === "active")
-      ? "sport:football"
-      : doc.sports.find((s) => s.status === "active")
-        ? `sport:${doc.sports.find((s) => s.status === "active")!.slug}`
-        : doc.professions.find((p) => p.status === "active")
-          ? `profession:${doc.professions.find((p) => p.status === "active")!.slug}`
-          : "sport:football",
+  // "all" | role | "sport:<slug>" | "profession:<slug>" — shows what that audience gets.
+  const [audience, setAudience] = useState("all");
+  const tabs = useMemo(
+    () => [...doc.sections].filter((s) => showArchived || s.status === "active").sort(bySort),
+    [doc.sections, showArchived],
   );
-  const buckets: { id: FieldsBucket; label: string; hint: string }[] = [
-    { id: "overview", label: "Overview", hint: "Same for every role" },
-    { id: "career", label: "Career", hint: "Same for every role" },
-    { id: "achievements", label: "Achievements", hint: "Same for every role" },
-    { id: "media", label: "Media", hint: "Photos & highlights · mobile Media tab" },
-    { id: "portfolio", label: "Portfolio", hint: "Role-unique fields · one Me tab" },
-  ];
+  const [tabKey, setTabKey] = useState<string>(() => tabs[0]?.key ?? "");
+  const tab = tabs.find((t) => t.key === tabKey) ?? tabs[0];
+
+  const visible = useCallback(
+    (row: { status: CatalogStatus; scope_kind: string; scope_ref: string | null }) =>
+      (showArchived || row.status === "active") && scopeReaches(row, audience),
+    [showArchived, audience],
+  );
 
   const counts = useMemo(() => {
-    const out: Record<FieldsBucket, number> = {
-      overview: 0,
-      career: 0,
-      achievements: 0,
-      media: 0,
-      portfolio: 0,
-    };
+    const out: Record<string, number> = {};
     for (const f of doc.fields) {
-      if (f.status !== "active") continue;
-      out[fieldBucket(f)] += 1;
+      if (f.status !== "active" || !f.section || !scopeReaches(f, audience)) continue;
+      out[f.section] = (out[f.section] ?? 0) + 1;
     }
     return out;
-  }, [doc.fields]);
+  }, [doc.fields, audience]);
 
-  const athleteRoles = useMemo(
-    () =>
-      [...doc.sports]
-        .sort(bySort)
-        .map((s) => ({
-          value: `sport:${s.slug}`,
-          label: `${s.label}${s.status === "archived" ? " (archived)" : ""}`,
-          active: s.status === "active",
-        })),
-    [doc.sports],
-  );
-  const professionalRoles = useMemo(
-    () =>
-      [...doc.professions]
-        .sort(bySort)
-        .map((p) => ({
-          value: `profession:${p.slug}`,
-          label: `${p.label}${p.status === "archived" ? " (archived)" : ""}`,
-          active: p.status === "active",
-        })),
-    [doc.professions],
-  );
-  const roleScopes = [...athleteRoles, ...professionalRoles];
+  if (!tab) {
+    return <AdminEmpty title="No tabs yet" description="Add a tab under Sections first." />;
+  }
 
-  const portfolioGroup: "athlete" | "professional" = portfolioRole.startsWith("profession:")
-    ? "professional"
-    : "athlete";
-  const rolesInGroup = portfolioGroup === "athlete" ? athleteRoles : professionalRoles;
+  const singleFields = doc.fields.filter((f) => f.section === tab.key && !f.group && visible(f)).sort(bySort);
+  const groups = (doc.groups ?? []).filter((g) => g.section === tab.key && visible(g)).sort(bySort);
+  const defaultScope = parseScope(audience === "all" ? "account" : audience);
 
-  // Keep selection valid when sports/professions change.
-  useEffect(() => {
-    if (roleScopes.length === 0) return;
-    if (roleScopes.some((s) => s.value === portfolioRole)) return;
-    const preferred =
-      (portfolioGroup === "athlete" ? athleteRoles : professionalRoles).find((r) => r.active) ??
-      athleteRoles.find((r) => r.active) ??
-      professionalRoles.find((r) => r.active) ??
-      roleScopes[0];
-    if (preferred) setPortfolioRole(preferred.value);
-  }, [athleteRoles, professionalRoles, portfolioGroup, portfolioRole, roleScopes]);
+  const newField = (group: CatalogGroup | null, siblings: CatalogField[]): CatalogField => ({
+    id: newId(),
+    key: "",
+    ...(group ? { scope_kind: "account" as const, scope_ref: null } : defaultScope),
+    target: targetForStorage(group?.storage),
+    group: group?.key ?? null,
+    section: tab.key,
+    label: "",
+    help_text: "",
+    placeholder: "",
+    input_type: "text",
+    is_required: false,
+    validation: {},
+    sort_order: (siblings.at(-1)?.sort_order ?? 0) + 10,
+    visibility: "public",
+    editable_by: "owner",
+    storage_column: null,
+    legacy_column: null,
+    is_system: false,
+    status: "active",
+    replaced_by_id: null,
+    options: [],
+  });
 
-  const rows = useMemo(() => {
-    let list = doc.fields.filter((f) => fieldBucket(f) === bucket);
-    if (!showArchived) list = list.filter((f) => f.status === "active");
-    if (bucket === "portfolio") {
-      list = list.filter((f) => scopeKey(f) === portfolioRole);
-    } else if (bucket === "media") {
-      // Account + sport/profession-scoped highlight fields for the Media tab.
-    } else {
-      list = list.filter((f) => COMMON_FIELD_SCOPES.has(f.scope_kind));
-      // Overview shows every copy (including cross-scope duplicates) so they can be deleted.
-    }
-    return [...list].sort(bySort);
-  }, [doc.fields, bucket, portfolioRole, showArchived]);
+  const newGroup = (): CatalogGroup => ({
+    id: newId(),
+    key: "",
+    section: tab.key,
+    label: "",
+    item_label: "",
+    description: "",
+    ...defaultScope,
+    storage: "entry",
+    max_items: null,
+    sort_order: (groups.at(-1)?.sort_order ?? 0) + 10,
+    status: "active",
+  });
 
-  const bucketLabel =
-    bucket === "overview"
-      ? "Overview"
-      : bucket === "career"
-        ? "Career"
-        : bucket === "achievements"
-          ? "Achievements"
-          : bucket === "media"
-            ? "Media"
-            : "Portfolio";
-
-  const duplicateKeys = useMemo(() => {
-    if (!SHARED_ENTITY_BUCKETS.has(bucket)) return new Set<string>();
-    const counts = new Map<string, number>();
-    for (const f of rows) {
-      if (f.status !== "active") continue;
-      counts.set(f.key, (counts.get(f.key) ?? 0) + 1);
-    }
-    return new Set([...counts.entries()].filter(([, n]) => n > 1).map(([k]) => k));
-  }, [bucket, rows]);
-
-  const sectionLabel = (key: string | null) => doc.sections.find((s) => s.key === key)?.label ?? "—";
-  const [roleKind, roleRef] = portfolioRole.split(":");
-
-  const removeFields = (targets: CatalogField[]) => {
-    if (!targets.length) return;
-    const liveOnes = targets.filter((f) => liveIds.has(f.id));
-    const draftOnes = targets.filter((f) => !liveIds.has(f.id));
-    const labels = targets.map((f) => f.label || f.key).join(", ");
-    const msg =
-      liveOnes.length === 0
-        ? `Delete ${targets.length === 1 ? `"${labels}"` : `${targets.length} fields`} from this draft?`
-        : draftOnes.length === 0
-          ? `Remove ${targets.length === 1 ? `"${labels}"` : `${targets.length} fields`} from ${bucketLabel}? Existing answers stay; the field is archived and hidden from forms.`
-          : `Remove ${targets.length} field(s)? Draft-only copies are deleted; published ones are archived (answers kept).`;
-    if (!window.confirm(msg)) return;
-    const archiveIds = new Set(liveOnes.map((f) => f.id));
-    const deleteIds = new Set(draftOnes.map((f) => f.id));
-    onChange((d) => ({
-      ...d,
-      fields: d.fields
-        .filter((x) => !deleteIds.has(x.id))
-        .map((x) => (archiveIds.has(x.id) ? { ...x, status: "archived" as const } : x)),
-    }));
-  };
-
-  const cleanBucketDuplicates = () => {
-    const active = doc.fields.filter(
-      (f) =>
-        fieldBucket(f) === bucket &&
-        f.status === "active" &&
-        (bucket === "media" || COMMON_FIELD_SCOPES.has(f.scope_kind)),
-    );
-    const keep = new Set(
-      (bucket === "overview" ? dedupeFields(active) : dedupeSharedBucket(active)).map((f) => f.id),
-    );
-    const drop = active.filter((f) => !keep.has(f.id));
-    if (drop.length === 0) {
-      window.alert(`No ${bucketLabel} duplicates to clean.`);
+  const toggleGroup = (g: CatalogGroup) => {
+    if (!liveIds.has(g.id)) {
+      if (!window.confirm(`Delete group "${g.label || g.key}" and its fields from this draft?`)) return;
+      onChange((d) => ({
+        ...d,
+        groups: d.groups.filter((x) => x.id !== g.id),
+        fields: d.fields.filter((f) => f.group !== g.key),
+      }));
       return;
     }
-    removeFields(drop);
-  };
-
-  const setPortfolioGroup = (group: "athlete" | "professional") => {
-    const list = group === "athlete" ? athleteRoles : professionalRoles;
-    const next = list.find((r) => r.active) ?? list[0];
-    if (next) setPortfolioRole(next.value);
-  };
-
-  const defaultNewField = (): CatalogField => {
-    if (bucket === "portfolio") {
-      // Role-unique attribute — any input type (text, date, select, …).
-      // Section defaults to Clips; change it in the editor if needed.
-      return {
-        id: newId(),
-        key: "",
-        scope_kind: roleKind as CatalogField["scope_kind"],
-        scope_ref: roleRef ?? null,
-        target: "profile",
-        section: "portfolio",
-        label: "",
-        help_text: "",
-        placeholder: "",
-        input_type: "text",
-        is_required: false,
-        validation: {},
-        sort_order: (rows.at(-1)?.sort_order ?? 0) + 10,
-        visibility: "public",
-        editable_by: "owner",
-        storage_column: null,
-        legacy_column: null,
-        is_system: false,
-        status: "active",
-        replaced_by_id: null,
-        options: [],
-      };
-    }
-    const target =
-      bucket === "career"
-        ? "career"
-        : bucket === "achievements"
-          ? "achievement"
-          : bucket === "media"
-            ? "media"
-            : ("profile" as const);
-    return {
-      id: newId(),
-      key: "",
-      scope_kind: "account",
-      scope_ref: null,
-      target,
-      section: bucket === "media" ? "media" : bucket,
-      label: "",
-      help_text: "",
-      placeholder: "",
-      input_type: "text",
-      is_required: false,
-      validation: {},
-      sort_order: (rows.at(-1)?.sort_order ?? 0) + 10,
-      visibility: "public",
-      editable_by: "owner",
-      storage_column: null,
-      legacy_column: null,
-      is_system: false,
-      status: "active",
-      replaced_by_id: null,
-      options: [],
-    };
-  };
-
-  const activeRows = rows.filter((r) => r.status === "active");
-
-  const moveField = (f: CatalogField, dir: -1 | 1) => {
-    onChange((d) => ({ ...d, fields: reorder(d.fields, activeRows, f.id, dir) }));
-  };
-
-  const toggleArchive = (f: CatalogField) => {
     onChange((d) => ({
       ...d,
-      fields: d.fields.map((x) =>
-        x.id === f.id ? { ...x, status: x.status === "active" ? "archived" : "active" } : x,
-      ),
+      groups: d.groups.map((x) => (x.id === g.id ? { ...x, status: x.status === "active" ? "archived" : "active" } : x)),
     }));
-  };
-
-  const deleteField = (f: CatalogField) => {
-    const ids = sharedBucketCloneIds(doc.fields, f);
-    const all = doc.fields.filter((x) => ids.includes(x.id) && x.status === "active");
-    if (
-      all.length > 1 &&
-      window.confirm(
-        `"${f.label || f.key}" also has ${all.length - 1} duplicate copy(ies) under other scopes. Include those too?`,
-      )
-    ) {
-      removeFields(all);
-      return;
-    }
-    removeFields([f]);
-  };
-
-  const fieldMeta = (f: CatalogField) => (
-    <>
-      {f.key}
-      {f.is_system ? " · built-in" : ""}
-      {f.storage_column ? ` · ${f.storage_column}` : ""}
-      {!liveIds.has(f.id) ? " · draft only" : ""}
-    </>
-  );
-
-  const fieldRules = (f: CatalogField) => (
-    <>
-      {f.is_required ? "Required · " : ""}
-      {f.visibility}
-      {f.options.length ? ` · ${f.options.filter((o) => o.status === "active").length} options` : ""}
-    </>
-  );
-
-  const fieldActions = (f: CatalogField) => {
-    const clones = sharedBucketCloneIds(doc.fields, f).filter((id) => id !== f.id);
-    return (
-      <div className="inline-flex flex-nowrap items-center gap-1 whitespace-nowrap">
-        <button type="button" className={buttonClass} disabled={!editable} onClick={() => onEdit(f)}>
-          Edit
-        </button>
-        <button
-          type="button"
-          className={buttonClass}
-          disabled={!editable}
-          title={f.status === "active" ? "Archive (answers are kept)" : "Restore"}
-          onClick={() => toggleArchive(f)}
-        >
-          {f.status === "active" ? <Archive className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
-        </button>
-        <button
-          type="button"
-          className={buttonClass}
-          disabled={!editable || f.status !== "active"}
-          title={
-            clones.length > 0
-              ? "Delete this field (prompts to include duplicates)"
-              : liveIds.has(f.id)
-                ? `Remove from ${bucketLabel} (archive)`
-                : "Delete from draft"
-          }
-          onClick={() => deleteField(f)}
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
-      </div>
-    );
   };
 
   return (
     <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
       <ul className="flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1 lg:block lg:divide-y lg:overflow-visible lg:p-0 lg:self-start">
-        {buckets.map((b) => (
-          <li key={b.id} className="shrink-0 lg:shrink">
+        {tabs.map((t) => (
+          <li key={t.id} className="shrink-0 lg:shrink">
             <button
               type="button"
               className={cn(
                 "flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left text-sm transition-colors lg:px-4 lg:py-3",
-                bucket === b.id ? "rounded-lg bg-muted/60 lg:rounded-none" : "hover:bg-muted/30",
+                tab.key === t.key ? "rounded-lg bg-muted/60 lg:rounded-none" : "hover:bg-muted/30",
+                (t.status === "archived" || !tabReaches(t, audience)) && "opacity-60",
               )}
-              onClick={() => setBucket(b.id)}
+              onClick={() => setTabKey(t.key)}
             >
               <span className="flex w-full items-center justify-between gap-2 font-medium whitespace-nowrap">
-                {b.label}
-                <span className="text-xs font-normal text-text-hint">{counts[b.id]}</span>
+                {t.label}
+                <span className="text-xs font-normal text-text-hint">{counts[t.key] ?? 0}</span>
               </span>
-              <span className="hidden text-xs text-text-hint lg:inline">{b.hint}</span>
+              <span className="hidden text-xs text-text-hint lg:inline">{tabAudienceLabel(doc, t)}</span>
             </button>
           </li>
         ))}
       </ul>
 
-      <div className="min-w-0 space-y-3">
+      <div className="min-w-0 space-y-4">
         <div className="flex flex-wrap items-end gap-2">
-          {bucket === "portfolio" ? (
-            <>
-              <Field label="Account role">
-                <select
-                  className={inputClass}
-                  value={portfolioGroup}
-                  onChange={(e) => setPortfolioGroup(e.target.value as "athlete" | "professional")}
-                >
-                  <option value="athlete">Athlete</option>
-                  <option value="professional">Professional</option>
-                </select>
-              </Field>
-              <Field
-                label={portfolioGroup === "athlete" ? "Sport" : "Profession"}
-                hint={
-                  rolesInGroup.length === 0
-                    ? `Add ${portfolioGroup === "athlete" ? "sports" : "professions"} under Roles first.`
-                    : portfolioGroup === "athlete"
-                      ? "All sports added for athletes."
-                      : "All professional roles you added."
-                }
-              >
-                <select
-                  className={inputClass}
-                  value={portfolioRole}
-                  disabled={rolesInGroup.length === 0}
-                  onChange={(e) => setPortfolioRole(e.target.value)}
-                >
-                  {rolesInGroup.length === 0 ? (
-                    <option value="">No roles yet</option>
-                  ) : (
-                    rolesInGroup.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {s.label}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </Field>
-            </>
-          ) : null}
-          <button
-            type="button"
-            className={primaryButtonClass}
-            disabled={!editable || (bucket === "portfolio" && roleScopes.length === 0)}
-            onClick={() => onEdit(defaultNewField())}
-          >
-            <Plus className="h-4 w-4" />{" "}
-            {bucket === "career"
-              ? "Add career field"
-              : bucket === "achievements"
-                ? "Add achievement field"
-                : bucket === "media"
-                  ? "Add media field"
-                  : "Add field"}
+          <Field label="Show what this audience gets">
+            <AudienceSelect doc={doc} value={audience} onChange={setAudience} includeAll />
+          </Field>
+          <button type="button" className={primaryButtonClass} disabled={!editable} onClick={() => onEdit(newField(null, singleFields))}>
+            <Plus className="h-4 w-4" /> Add field
+          </button>
+          <button type="button" className={buttonClass} disabled={!editable} onClick={() => onEditGroup(newGroup())}>
+            <Plus className="h-4 w-4" /> Add repeatable group
           </button>
           <label className="flex items-center gap-2 text-xs text-text-secondary sm:ml-auto">
             <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
             Show archived
           </label>
-          {SHARED_ENTITY_BUCKETS.has(bucket) && duplicateKeys.size > 0 ? (
-            <button
-              type="button"
-              className={buttonClass}
-              disabled={!editable}
-              title="Keep one copy of each duplicate key; archive or delete the rest"
-              onClick={() => cleanBucketDuplicates()}
-            >
-              Clean {duplicateKeys.size} duplicate key{duplicateKeys.size === 1 ? "" : "s"}
-            </button>
-          ) : null}
         </div>
+        {audience !== "all" && !tabReaches(tab, audience) ? (
+          <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-text-secondary">
+            This tab isn&apos;t shown to the selected audience (see Sections).
+          </p>
+        ) : null}
 
-        {rows.length === 0 ? (
-          <AdminEmpty
-            title="No entities here yet"
-            description={
-              bucket === "portfolio"
-                ? "Choose Athlete or Professional, pick a specific sport/role, then add fields for that role."
-                : bucket === "career"
-                  ? "Add fields shown on every career entry (text, date, select, url, …). Same for all roles."
-                  : "Add a field for this section. These entities are shared across roles."
-            }
+        <section className="space-y-2">
+          <h3 className="text-sm font-semibold">Single-value fields</h3>
+          <p className="text-xs text-text-hint">One answer per profile. Required ones count toward profile completion.</p>
+          <FieldTable
+            doc={doc}
+            rows={singleFields}
+            editable={editable}
+            usage={usage}
+            liveIds={liveIds}
+            onEdit={onEdit}
+            onChange={onChange}
+            empty="No single-value fields on this tab for this audience."
           />
-        ) : (
-          <div className="max-w-full overflow-x-auto overscroll-x-contain rounded-xl border border-border bg-card [-webkit-overflow-scrolling:touch]">
-            <table className="w-full min-w-[880px] border-collapse text-sm">
-              <thead className="bg-muted/40 text-left text-xs text-text-secondary">
-                <tr>
-                  <th className="whitespace-nowrap px-3 py-2">Order</th>
-                  <th className="whitespace-nowrap px-3 py-2">Field</th>
-                  <th className="whitespace-nowrap px-3 py-2">Type</th>
-                  {bucket === "portfolio" ? (
-                    <th className="whitespace-nowrap px-3 py-2">Section</th>
-                  ) : (
-                    <th className="whitespace-nowrap px-3 py-2">Applies to</th>
-                  )}
-                  <th className="whitespace-nowrap px-3 py-2">Rules</th>
-                  <th className="whitespace-nowrap px-3 py-2">Usage</th>
-                  <th className="whitespace-nowrap px-3 py-2">Status</th>
-                  <th className="whitespace-nowrap px-3 py-2" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {rows.map((f) => {
-                  const isDuplicate = duplicateKeys.has(f.key);
-                  return (
-                    <tr key={f.id} className={f.status === "archived" ? "opacity-60" : undefined}>
-                      <td className="whitespace-nowrap px-3 py-2">
-                        <div className="flex gap-1">
-                          <button
-                            type="button"
-                            className={buttonClass}
-                            aria-label="Move up"
-                            disabled={!editable || f.status !== "active"}
-                            onClick={() => moveField(f, -1)}
-                          >
-                            <ArrowUp className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            className={buttonClass}
-                            aria-label="Move down"
-                            disabled={!editable || f.status !== "active"}
-                            onClick={() => moveField(f, 1)}
-                          >
-                            <ArrowDown className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                      <td className="min-w-[12rem] px-3 py-2">
-                        <p className="font-medium">
-                          {f.label || "(no label)"}
-                          {isDuplicate ? (
-                            <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-                              duplicate
-                            </span>
-                          ) : null}
-                        </p>
-                        <p className="text-xs text-text-hint">{fieldMeta(f)}</p>
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2">
-                        {INPUT_TYPE_LABELS[f.input_type] ?? f.input_type}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2 text-xs text-text-secondary">
-                        {bucket === "portfolio" ? sectionLabel(f.section) : scopeLabel(doc, f)}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2 text-xs text-text-secondary">
-                        {fieldRules(f)}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2 text-xs">{usage[f.id] ?? 0}</td>
-                      <td className="whitespace-nowrap px-3 py-2">
-                        <StatusPill status={f.status} />
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2 align-middle">
-                        <div className="flex justify-end">{fieldActions(f)}</div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        </section>
+
+        {groups.map((g) => {
+          const groupFields = doc.fields.filter((f) => f.group === g.key && visible(f)).sort(bySort);
+          return (
+            <section key={g.id} className={cn("space-y-2 rounded-xl border border-border p-3", g.status === "archived" && "opacity-60")}>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-sm font-semibold">
+                    {g.label || "(no label)"} <span className="font-normal text-text-hint">· repeatable</span>
+                  </h3>
+                  <p className="text-xs text-text-hint">
+                    {g.key} · {scopeLabel(doc, g)} · each item: {g.item_label || "item"}
+                    {g.max_items ? ` · up to ${g.max_items}` : ""}
+                    {g.storage !== "entry" ? ` · built-in ${g.storage} records` : ""}
+                  </p>
+                </div>
+                <StatusPill status={g.status} />
+                <button type="button" className={buttonClass} disabled={!editable} onClick={() => onEditGroup(g)}>
+                  Edit group
+                </button>
+                <button
+                  type="button"
+                  className={buttonClass}
+                  disabled={!editable || g.storage !== "entry"}
+                  title={g.storage !== "entry" ? "Built-in group" : g.status === "active" ? "Archive (records are kept)" : "Restore"}
+                  onClick={() => toggleGroup(g)}
+                >
+                  {g.status === "active" ? <Archive className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
+                </button>
+                <button
+                  type="button"
+                  className={primaryButtonClass}
+                  disabled={!editable || g.status !== "active"}
+                  onClick={() => onEdit(newField(g, groupFields))}
+                >
+                  <Plus className="h-4 w-4" /> Add field
+                </button>
+              </div>
+              <FieldTable
+                doc={doc}
+                rows={groupFields}
+                editable={editable}
+                usage={usage}
+                liveIds={liveIds}
+                onEdit={onEdit}
+                onChange={onChange}
+                empty="No fields in this group for this audience."
+              />
+            </section>
+          );
+        })}
       </div>
     </div>
+  );
+}
+
+function tabAudienceLabel(doc: CatalogDocument, s: CatalogSection) {
+  const roles = s.roles.length === 3 ? "Everyone" : s.roles.join(", ") || "Nobody";
+  if (!s.categories?.length) return roles;
+  const names = s.categories.map((c) => {
+    const [kind, slug] = c.split(":");
+    const rows = kind === "sport" ? doc.sports : doc.professions;
+    return rows.find((r) => r.slug === slug)?.label ?? slug;
+  });
+  return `${roles} · ${names.join(", ")}`;
+}
+
+function FieldTable({
+  doc,
+  rows,
+  editable,
+  usage,
+  liveIds,
+  onEdit,
+  onChange,
+  empty,
+}: {
+  doc: CatalogDocument;
+  rows: CatalogField[];
+  editable: boolean;
+  usage: Record<string, number>;
+  liveIds: Set<string>;
+  onEdit: (f: CatalogField) => void;
+  onChange: (fn: (d: CatalogDocument) => CatalogDocument) => void;
+  empty: string;
+}) {
+  if (rows.length === 0) return <p className="text-xs text-text-hint">{empty}</p>;
+  const activeRows = rows.filter((r) => r.status === "active");
+  const setStatus = (f: CatalogField) => {
+    if (!liveIds.has(f.id)) {
+      if (!window.confirm(`Delete "${f.label || f.key}" from this draft?`)) return;
+      onChange((d) => ({ ...d, fields: d.fields.filter((x) => x.id !== f.id) }));
+      return;
+    }
+    onChange((d) => ({
+      ...d,
+      fields: d.fields.map((x) => (x.id === f.id ? { ...x, status: x.status === "active" ? "archived" : "active" } : x)),
+    }));
+  };
+  return (
+    <div className="max-w-full overflow-x-auto overscroll-x-contain rounded-xl border border-border bg-card [-webkit-overflow-scrolling:touch]">
+      <table className="w-full min-w-[820px] border-collapse text-sm">
+        <thead className="bg-muted/40 text-left text-xs text-text-secondary">
+          <tr>
+            <th className="whitespace-nowrap px-3 py-2">Order</th>
+            <th className="whitespace-nowrap px-3 py-2">Field</th>
+            <th className="whitespace-nowrap px-3 py-2">Type</th>
+            <th className="whitespace-nowrap px-3 py-2">Applies to</th>
+            <th className="whitespace-nowrap px-3 py-2">Rules</th>
+            <th className="whitespace-nowrap px-3 py-2">Usage</th>
+            <th className="whitespace-nowrap px-3 py-2">Status</th>
+            <th className="whitespace-nowrap px-3 py-2" />
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {rows.map((f) => (
+            <tr key={f.id} className={f.status === "archived" ? "opacity-60" : undefined}>
+              <td className="whitespace-nowrap px-3 py-2">
+                <div className="flex gap-1">
+                  {([-1, 1] as const).map((dir) => (
+                    <button
+                      key={dir}
+                      type="button"
+                      className={buttonClass}
+                      aria-label={dir < 0 ? "Move up" : "Move down"}
+                      disabled={!editable || f.status !== "active"}
+                      onClick={() => onChange((d) => ({ ...d, fields: reorder(d.fields, activeRows, f.id, dir) }))}
+                    >
+                      {dir < 0 ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
+                    </button>
+                  ))}
+                </div>
+              </td>
+              <td className="min-w-[12rem] px-3 py-2">
+                <p className="font-medium">{f.label || "(no label)"}</p>
+                <p className="text-xs text-text-hint">
+                  {f.key}
+                  {f.is_system ? " · built-in" : ""}
+                  {f.storage_column ? ` · ${f.storage_column}` : ""}
+                  {!liveIds.has(f.id) ? " · draft only" : ""}
+                </p>
+              </td>
+              <td className="whitespace-nowrap px-3 py-2">{INPUT_TYPE_LABELS[f.input_type] ?? f.input_type}</td>
+              <td className="whitespace-nowrap px-3 py-2 text-xs text-text-secondary">{scopeLabel(doc, f)}</td>
+              <td className="whitespace-nowrap px-3 py-2 text-xs text-text-secondary">
+                {f.is_required ? "Required · " : ""}
+                {f.visibility}
+                {f.options.length ? ` · ${f.options.filter((o) => o.status === "active").length} options` : ""}
+              </td>
+              <td className="whitespace-nowrap px-3 py-2 text-xs">{usage[f.id] ?? 0}</td>
+              <td className="whitespace-nowrap px-3 py-2">
+                <StatusPill status={f.status} />
+              </td>
+              <td className="whitespace-nowrap px-3 py-2 align-middle">
+                <div className="flex justify-end gap-1">
+                  <button type="button" className={buttonClass} disabled={!editable} onClick={() => onEdit(f)}>
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    disabled={!editable}
+                    title={!liveIds.has(f.id) ? "Delete from draft" : f.status === "active" ? "Archive (answers are kept)" : "Restore"}
+                    onClick={() => setStatus(f)}
+                  >
+                    {!liveIds.has(f.id) ? (
+                      <Trash2 className="h-4 w-4" />
+                    ) : f.status === "active" ? (
+                      <Archive className="h-4 w-4" />
+                    ) : (
+                      <RotateCcw className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function GroupEditor({
+  group,
+  doc,
+  isNew,
+  onClose,
+  onSave,
+}: {
+  group: CatalogGroup;
+  doc: CatalogDocument;
+  isNew: boolean;
+  onClose: () => void;
+  onSave: (g: CatalogGroup) => void;
+}) {
+  const [g, setG] = useState<CatalogGroup>(group);
+  const keyValid = /^[a-z][a-z0-9_]{1,62}$/.test(g.key);
+  const keyTaken = isNew && doc.groups.some((x) => x.key === g.key);
+  return (
+    <AdminModal
+      open
+      title={isNew ? "Add repeatable group" : `Edit “${group.label}”`}
+      onClose={onClose}
+      className="max-w-2xl"
+      footer={
+        <AdminModalFooter
+          onCancel={onClose}
+          onSave={() => onSave({ ...g, label: g.label.trim(), item_label: g.item_label.trim() })}
+          disabled={!g.label.trim() || !keyValid || keyTaken}
+          saveLabel="Apply to draft"
+        />
+      }
+    >
+      <p className="mb-3 text-xs text-text-hint">
+        A repeatable group lets people add many items (for example highlight reels or teams coached). Its fields are added
+        from the group&apos;s card after saving.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Label">
+          <input
+            className={inputClass}
+            value={g.label}
+            onChange={(e) => setG({ ...g, label: e.target.value, key: isNew && !group.key ? slugify(e.target.value) : g.key })}
+          />
+        </Field>
+        <Field label="Key (permanent)" hint={keyTaken ? "Another group already uses this key." : undefined}>
+          <input className={inputClass} value={g.key} disabled={!isNew} onChange={(e) => setG({ ...g, key: slugify(e.target.value) })} />
+        </Field>
+        <Field label="One item is called" hint="e.g. Reel, Team, Highlight">
+          <input className={inputClass} value={g.item_label} onChange={(e) => setG({ ...g, item_label: e.target.value })} />
+        </Field>
+        <Field label="Tab">
+          <select
+            className={inputClass}
+            value={g.section}
+            onChange={(e) => setG({ ...g, section: e.target.value })}
+          >
+            {doc.sections
+              .filter((s) => s.status === "active" || s.key === g.section)
+              .sort(bySort)
+              .map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                </option>
+              ))}
+          </select>
+        </Field>
+        <Field label="Applies to" hint={isNew ? undefined : "Can't change after publishing; add a new group instead."}>
+          <AudienceSelect
+            doc={doc}
+            value={scopeValue(g)}
+            disabled={!isNew}
+            onChange={(value) => setG({ ...g, ...parseScope(value) })}
+          />
+        </Field>
+        <Field label="Maximum items" hint="Leave empty for no limit.">
+          <input
+            className={inputClass}
+            type="number"
+            min={1}
+            value={g.max_items ?? ""}
+            onChange={(e) => setG({ ...g, max_items: e.target.value === "" ? null : Math.max(1, Number(e.target.value)) })}
+          />
+        </Field>
+      </div>
+    </AdminModal>
   );
 }
 
@@ -1437,8 +1323,9 @@ function FieldEditor({
 }) {
   const [f, setF] = useState<CatalogField>(field);
   const [newOption, setNewOption] = useState("");
+  const group = f.group ? doc.groups.find((g) => g.key === f.group) ?? null : null;
   const typeLocked = !isNew && usage > 0;
-  // Structured storage columns can't change type; career/achievement entry fields can.
+  // Structured storage columns can't change type.
   const typeFrozen = typeLocked || Boolean(f.storage_column);
   const isSelect = f.input_type === "single_select" || f.input_type === "multi_select";
   const isNumber = f.input_type === "integer" || f.input_type === "decimal";
@@ -1447,33 +1334,6 @@ function FieldEditor({
     setF({ ...f, validation: { ...f.validation, [key]: value === "" ? undefined : value } });
   const options = [...f.options].sort(bySort);
   const keyValid = /^[a-z][a-z0-9_]{1,62}$/.test(f.key);
-
-  const targetForSection = (section: string, current: CatalogField["target"]): CatalogField["target"] => {
-    if (section === "career") return "career";
-    if (section === "achievements") return "achievement";
-    if (section === "media") return "media";
-    if (section === "portfolio" || LEGACY_PORTFOLIO_SECTION_KEYS.has(section)) {
-      return current === "portfolio" || current === "clip" || current === "photo" || current === "link"
-        ? "portfolio"
-        : "profile";
-    }
-    return "profile";
-  };
-
-  const recordLabel =
-    f.target === "career"
-      ? "Career entry"
-      : f.target === "achievement"
-        ? "Achievement entry"
-        : f.target === "media"
-          ? "Media / highlight entry"
-          : f.target === "clip"
-            ? "Clip entry"
-            : f.target === "photo"
-              ? "Photo entry"
-              : f.target === "link"
-                ? "Link entry"
-                : "Profile";
 
   return (
     <AdminModal
@@ -1495,7 +1355,8 @@ function FieldEditor({
               ...f,
               placeholder,
               editable_by: "owner",
-              target: targetForSection(f.section ?? "overview", f.target),
+              // Group fields always sit on their group's tab.
+              section: group ? group.section : f.section,
               validation,
             });
           }}
@@ -1525,66 +1386,33 @@ function FieldEditor({
             onChange={(e) => setF({ ...f, placeholder: e.target.value })}
           />
         </Field>
-        <Field label="Section">
-          <select
-            className={inputClass}
-            value={f.section ?? ""}
-            onChange={(e) => {
-              const section = e.target.value;
-              setF({ ...f, section, target: targetForSection(section, f.target) });
-            }}
-          >
-            {doc.sections
-              .filter(
-                (s) =>
-                  !LEGACY_PORTFOLIO_SECTION_KEYS.has(s.key) &&
-                  (s.status === "active" || s.key === (f.section ?? "")),
-              )
-              .map((s) => (
-                <option key={s.key} value={s.key}>
-                  {s.label}
-                  {s.status === "archived" ? " (archived)" : ""}
-                </option>
-              ))}
-          </select>
-        </Field>
-        <Field label="Record">
-          <input className={inputClass} value={recordLabel} disabled readOnly />
-        </Field>
-        {(f.scope_kind === "sport" || f.scope_kind === "profession") && (
-          <Field label="Applies to" hint="Athlete sports or professional roles from Roles.">
-            <select
-              className={inputClass}
-              value={`${f.scope_kind}:${f.scope_ref ?? ""}`}
-              disabled={!isNew && usage > 0}
-              onChange={(e) => {
-                const [kind, ref] = e.target.value.split(":");
-                setF({
-                  ...f,
-                  scope_kind: kind as CatalogField["scope_kind"],
-                  scope_ref: ref || null,
-                });
-              }}
-            >
-              <optgroup label="Athlete · sports">
-                {doc.sports.map((s) => (
-                  <option key={s.id} value={`sport:${s.slug}`}>
+        {group ? (
+          <Field label="Group" hint="Each item in the group has this field.">
+            <input className={inputClass} value={`${group.label} (repeatable)`} disabled readOnly />
+          </Field>
+        ) : (
+          <Field label="Tab" hint="Where the field is shown. Independent of who it applies to.">
+            <select className={inputClass} value={f.section ?? ""} onChange={(e) => setF({ ...f, section: e.target.value })}>
+              {doc.sections
+                .filter((s) => s.status === "active" || s.key === f.section)
+                .sort(bySort)
+                .map((s) => (
+                  <option key={s.key} value={s.key}>
                     {s.label}
                     {s.status === "archived" ? " (archived)" : ""}
                   </option>
                 ))}
-              </optgroup>
-              <optgroup label="Professional · roles">
-                {doc.professions.map((p) => (
-                  <option key={p.id} value={`profession:${p.slug}`}>
-                    {p.label}
-                    {p.status === "archived" ? " (archived)" : ""}
-                  </option>
-                ))}
-              </optgroup>
             </select>
           </Field>
         )}
+        <Field label="Applies to" hint={isNew ? undefined : "Can't change after publishing; archive and add a new field instead."}>
+          <AudienceSelect
+            doc={doc}
+            value={scopeValue(f)}
+            disabled={!isNew || Boolean(f.storage_column)}
+            onChange={(value) => setF({ ...f, ...parseScope(value) })}
+          />
+        </Field>
         <Field
           label="Input type"
           hint={typeFrozen ? `${usage > 0 ? `${usage} saved answers — ` : ""}type is locked for this field.` : undefined}
@@ -1615,7 +1443,7 @@ function FieldEditor({
             checked={f.is_required}
             onChange={(e) => setF({ ...f, is_required: e.target.checked })}
           />
-          {f.target === "profile" ? "Required for profile completion" : "Required when saving an entry"}
+          {group ? `Required on every ${group.item_label || "item"}` : "Required for profile completion"}
         </label>
         {isNumber ? (
           <>
@@ -1753,14 +1581,6 @@ function CategoryEditor({
   );
 }
 
-const SECTION_KINDS: CatalogSection["kind"][] = [
-  "attributes",
-  "career",
-  "achievements",
-  "media",
-  "portfolio",
-];
-
 function SectionsTab({
   doc,
   editable,
@@ -1772,18 +1592,11 @@ function SectionsTab({
 }) {
   const [adding, setAdding] = useState(false);
   const [newLabel, setNewLabel] = useState("");
-  const [newKind, setNewKind] = useState<CatalogSection["kind"]>("attributes");
-  const rows = [...doc.sections]
-    .filter(
-      (s) =>
-        // Hide legacy Clips/Photos/Links — Portfolio is the single Me tab.
-        !LEGACY_PORTFOLIO_SECTION_KEYS.has(s.key) &&
-        !(
-          s.status === "archived" &&
-          (s.key === "performance" || s.key === "qualifications")
-        ),
-    )
-    .sort(bySort);
+  const [newKind, setNewKind] = useState<string>("attributes");
+  const [showArchived, setShowArchived] = useState(false);
+  const rows = [...doc.sections].filter((s) => showArchived || s.status === "active").sort(bySort);
+  const setSection = (id: string, patch: (s: CatalogSection) => CatalogSection) =>
+    onChange((d) => ({ ...d, sections: d.sections.map((x) => (x.id === id ? patch(x) : x)) }));
 
   const addSection = () => {
     const label = newLabel.trim();
@@ -1802,6 +1615,7 @@ function SectionsTab({
       description: "",
       kind: newKind,
       roles: ["fan", "athlete", "professional"],
+      categories: [],
       sort_order: (rows.at(-1)?.sort_order ?? 0) + 10,
       status: "active",
     };
@@ -1815,7 +1629,8 @@ function SectionsTab({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-text-secondary">
-          Role checkboxes control which account roles see each Me tab section (Overview, Career, Achievements, Media, Portfolio).
+          Tabs on the app profile. Roles decide who sees a tab; tick sports or professions to narrow it further
+          (none ticked = everyone in that role). Kind only picks the icon.
         </p>
         <button
           type="button"
@@ -1823,8 +1638,12 @@ function SectionsTab({
           disabled={!editable}
           onClick={() => setAdding((v) => !v)}
         >
-          <Plus className="h-4 w-4" /> Add section
+          <Plus className="h-4 w-4" /> Add tab
         </button>
+        <label className="flex items-center gap-2 text-xs text-text-secondary">
+          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+          Show archived
+        </label>
       </div>
       {adding ? (
         <div className="flex flex-wrap items-end gap-2 rounded-xl border border-border bg-card p-3">
@@ -1832,7 +1651,7 @@ function SectionsTab({
             <input className={inputClass} value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="e.g. Overview" />
           </Field>
           <Field label="Kind">
-            <select className={inputClass} value={newKind} onChange={(e) => setNewKind(e.target.value as CatalogSection["kind"])}>
+            <select className={inputClass} value={newKind} onChange={(e) => setNewKind(e.target.value)}>
               {SECTION_KINDS.map((k) => (
                 <option key={k} value={k}>
                   {k}
@@ -1870,6 +1689,19 @@ function SectionsTab({
           <span className="text-xs text-text-hint">
             {s.key} · {s.kind}
           </span>
+          <select
+            className={cn(inputClass, "h-8 w-32")}
+            value={s.kind}
+            disabled={!editable}
+            aria-label="Icon kind"
+            onChange={(e) => setSection(s.id, (x) => ({ ...x, kind: e.target.value }))}
+          >
+            {SECTION_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {k}
+              </option>
+            ))}
+          </select>
           {(["fan", "athlete", "professional"] as const).map((role) => (
             <label key={role} className="flex items-center gap-1 text-xs">
               <input
@@ -1877,19 +1709,21 @@ function SectionsTab({
                 disabled={!editable}
                 checked={s.roles.includes(role)}
                 onChange={(e) =>
-                  onChange((d) => ({
-                    ...d,
-                    sections: d.sections.map((x) =>
-                      x.id === s.id
-                        ? { ...x, roles: e.target.checked ? [...x.roles, role] : x.roles.filter((y) => y !== role) }
-                        : x,
-                    ),
-                  }))
+                  setSection(s.id, (x) => {
+                    const roles = e.target.checked ? [...x.roles, role] : x.roles.filter((y) => y !== role);
+                    // Dropping a role drops its sport / profession narrowing too.
+                    const prefix = role === "athlete" ? "sport:" : role === "professional" ? "profession:" : null;
+                    const categories = e.target.checked || !prefix
+                      ? x.categories ?? []
+                      : (x.categories ?? []).filter((c) => !c.startsWith(prefix));
+                    return { ...x, roles, categories };
+                  })
                 }
               />
               {role}
             </label>
           ))}
+          <CategoryPicker doc={doc} section={s} editable={editable} onChange={(categories) => setSection(s.id, (x) => ({ ...x, categories }))} />
           <StatusPill status={s.status} />
           <button
             type="button"
@@ -1908,6 +1742,51 @@ function SectionsTab({
       ))}
     </ul>
     </div>
+  );
+}
+
+function CategoryPicker({
+  doc,
+  section,
+  editable,
+  onChange,
+}: {
+  doc: CatalogDocument;
+  section: CatalogSection;
+  editable: boolean;
+  onChange: (categories: string[]) => void;
+}) {
+  const selected = section.categories ?? [];
+  const choices = [
+    ...(section.roles.includes("athlete")
+      ? doc.sports.filter((x) => x.status === "active").map((x) => ({ value: `sport:${x.slug}`, label: x.label }))
+      : []),
+    ...(section.roles.includes("professional")
+      ? doc.professions.filter((x) => x.status === "active").map((x) => ({ value: `profession:${x.slug}`, label: x.label }))
+      : []),
+  ];
+  if (choices.length === 0) return null;
+  return (
+    <details className="text-xs">
+      <summary className="cursor-pointer text-text-secondary">
+        {selected.length ? `Only ${selected.length} sport/profession${selected.length === 1 ? "" : "s"}` : "All sports & professions"}
+      </summary>
+      <div className="mt-2 flex max-w-xl flex-wrap gap-x-3 gap-y-1">
+        {choices.map((c) => (
+          <label key={c.value} className="flex items-center gap-1">
+            <input
+              type="checkbox"
+              disabled={!editable}
+              checked={selected.includes(c.value)}
+              onChange={(e) =>
+                onChange(e.target.checked ? [...selected, c.value] : selected.filter((x) => x !== c.value))
+              }
+            />
+            {c.label}
+          </label>
+        ))}
+      </div>
+    </details>
   );
 }
 

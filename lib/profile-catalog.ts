@@ -12,12 +12,21 @@ export type CatalogOption = {
   status: CatalogStatus;
 };
 
+export type CatalogScopeKind = "account" | "fan" | "athlete" | "professional" | "sport" | "profession";
+
+/** Group storage: which table holds the records. Career / achievement are single system groups. */
+export type CatalogGroupStorage = "career" | "achievement" | "entry";
+
 export type CatalogField = {
   id: string;
   key: string;
-  scope_kind: "account" | "fan" | "athlete" | "professional" | "sport" | "profession";
+  scope_kind: CatalogScopeKind;
   scope_ref: string | null;
-  target: "profile" | "career" | "achievement" | "clip" | "photo" | "link" | "portfolio" | "media";
+  /** "profile" for single values; record fields use their group's storage ("entry" for new ones). */
+  target: string;
+  /** Repeatable group key, or null for a single-value field. */
+  group: string | null;
+  /** Tab the field is shown on (for group fields: the group's tab). */
   section: string | null;
   label: string;
   help_text: string;
@@ -52,13 +61,34 @@ export type CatalogProfession = CatalogSport & {
   default_service_category_slug: string;
 };
 
+/** A profile tab. */
 export type CatalogSection = {
   id: string;
   key: string;
   label: string;
   description: string;
-  kind: "attributes" | "career" | "achievements" | "media" | "clips" | "photos" | "links" | "portfolio";
+  /** Rendering hint only (icon / older apps). */
+  kind: string;
+  /** Account roles that see the tab. */
   roles: string[];
+  /** Optional narrowing: "sport:<slug>" / "profession:<slug>". Empty = everyone in the roles. */
+  categories: string[];
+  sort_order: number;
+  status: CatalogStatus;
+};
+
+/** A repeatable record group on a tab (Career entries, Highlights, Highlight reels, …). */
+export type CatalogGroup = {
+  id: string;
+  key: string;
+  section: string;
+  label: string;
+  item_label: string;
+  description: string;
+  scope_kind: CatalogScopeKind;
+  scope_ref: string | null;
+  storage: CatalogGroupStorage;
+  max_items: number | null;
   sort_order: number;
   status: CatalogStatus;
 };
@@ -100,6 +130,7 @@ export type CatalogDocument = {
   sports: CatalogSport[];
   professions: CatalogProfession[];
   sections: CatalogSection[];
+  groups: CatalogGroup[];
   fields: CatalogField[];
   metrics: CatalogMetric[];
   verification_requirements: CatalogRequirement[];
@@ -160,6 +191,7 @@ export type CatalogOverview = {
   versions: CatalogVersionRow[];
   min_client_schema_version: number;
   input_types: Record<string, number>;
+  group_storages: CatalogGroupStorage[];
   document_types: { slug: string; label: string; is_active: boolean }[];
 };
 
@@ -175,14 +207,57 @@ export const INPUT_TYPE_LABELS: Record<string, string> = {
   url: "Web link",
   file: "File (private document)",
   image: "Image",
+  video: "Video",
 };
 
+export const SECTION_KINDS = ["attributes", "career", "achievements", "media", "portfolio"] as const;
+
 export const SCOPE_LABELS: Record<string, string> = {
-  account: "Everyone (account)",
+  account: "Everyone",
   fan: "Fans",
   athlete: "All athletes",
   professional: "All professionals",
 };
+
+/** "account" | role | "sport:<slug>" | "profession:<slug>" — one select value per audience. */
+export function scopeValue(row: { scope_kind: string; scope_ref: string | null }) {
+  return row.scope_ref ? `${row.scope_kind}:${row.scope_ref}` : row.scope_kind;
+}
+
+export function parseScope(value: string): { scope_kind: CatalogScopeKind; scope_ref: string | null } {
+  const [kind, ref] = value.split(":");
+  return { scope_kind: kind as CatalogScopeKind, scope_ref: ref || null };
+}
+
+/** Field target for a new field: single values are "profile"; record fields follow the group's storage. */
+export function targetForStorage(storage: CatalogGroupStorage | null | undefined) {
+  return storage ?? "profile";
+}
+
+/**
+ * Whether someone with [audience] ("all", a role, or "sport:x" / "profession:x") sees a
+ * row scoped [row]. Mirrors the backend audience rule (account → role → category).
+ */
+export function scopeReaches(row: { scope_kind: string; scope_ref: string | null }, audience: string) {
+  if (audience === "all") return true;
+  const [kind, ref] = audience.split(":");
+  const role = kind === "sport" ? "athlete" : kind === "profession" ? "professional" : kind;
+  if (row.scope_kind === "account") return true;
+  if (row.scope_kind === "fan" || row.scope_kind === "athlete" || row.scope_kind === "professional") {
+    return row.scope_kind === role;
+  }
+  return row.scope_kind === kind && row.scope_ref === ref;
+}
+
+/** Whether a tab is shown to [audience]. */
+export function tabReaches(section: CatalogSection, audience: string) {
+  if (audience === "all") return true;
+  const [kind] = audience.split(":");
+  const role = kind === "sport" ? "athlete" : kind === "profession" ? "professional" : kind;
+  if (!section.roles.includes(role)) return false;
+  if (!section.categories?.length || !audience.includes(":")) return true;
+  return section.categories.includes(audience);
+}
 
 export function newId() {
   return crypto.randomUUID();
