@@ -850,18 +850,40 @@ function scopeLabel(doc: CatalogDocument, f: CatalogField) {
   return SCOPE_LABELS[f.scope_kind] ?? f.scope_kind;
 }
 
-function overviewCloneIds(fields: CatalogField[], field: CatalogField): string[] {
-  /** Same Overview key under different common scopes (duplicate copies). */
-  if (fieldBucket(field) !== "overview") return [field.id];
+const SHARED_ENTITY_BUCKETS = new Set<FieldsBucket>(["overview", "career", "achievements", "media"]);
+
+function sharedBucketCloneIds(fields: CatalogField[], field: CatalogField): string[] {
+  /** Same key under different common scopes within Overview / Career / Achievements / Media. */
+  const bucket = fieldBucket(field);
+  if (!SHARED_ENTITY_BUCKETS.has(bucket)) return [field.id];
   return fields
     .filter(
       (f) =>
-        fieldBucket(f) === "overview" &&
+        fieldBucket(f) === bucket &&
         f.key === field.key &&
         f.target === field.target &&
         COMMON_FIELD_SCOPES.has(f.scope_kind),
     )
     .map((f) => f.id);
+}
+
+function preferSharedField(a: CatalogField, b: CatalogField) {
+  const score = (f: CatalogField) =>
+    (f.status === "active" ? 8 : 0) +
+    (f.scope_kind === "account" ? 4 : 0) +
+    (f.is_system ? 2 : 0) +
+    (f.storage_column ? 1 : 0);
+  return score(a) >= score(b) ? a : b;
+}
+
+/** Keep one active copy per key within a shared Entities bucket. */
+function dedupeSharedBucket(list: CatalogField[]) {
+  const byKey = new Map<string, CatalogField>();
+  for (const f of list) {
+    const prev = byKey.get(f.key);
+    byKey.set(f.key, prev ? preferSharedField(f, prev) : f);
+  }
+  return [...byKey.values()];
 }
 
 function FieldsTab({
@@ -968,8 +990,19 @@ function FieldsTab({
     return [...list].sort(bySort);
   }, [doc.fields, bucket, portfolioRole, showArchived]);
 
+  const bucketLabel =
+    bucket === "overview"
+      ? "Overview"
+      : bucket === "career"
+        ? "Career"
+        : bucket === "achievements"
+          ? "Achievements"
+          : bucket === "media"
+            ? "Media"
+            : "Portfolio";
+
   const duplicateKeys = useMemo(() => {
-    if (bucket !== "overview") return new Set<string>();
+    if (!SHARED_ENTITY_BUCKETS.has(bucket)) return new Set<string>();
     const counts = new Map<string, number>();
     for (const f of rows) {
       if (f.status !== "active") continue;
@@ -990,7 +1023,7 @@ function FieldsTab({
       liveOnes.length === 0
         ? `Delete ${targets.length === 1 ? `"${labels}"` : `${targets.length} fields`} from this draft?`
         : draftOnes.length === 0
-          ? `Remove ${targets.length === 1 ? `"${labels}"` : `${targets.length} fields`} from Overview? Existing answers stay; the field is archived and hidden from forms.`
+          ? `Remove ${targets.length === 1 ? `"${labels}"` : `${targets.length} fields`} from ${bucketLabel}? Existing answers stay; the field is archived and hidden from forms.`
           : `Remove ${targets.length} field(s)? Draft-only copies are deleted; published ones are archived (answers kept).`;
     if (!window.confirm(msg)) return;
     const archiveIds = new Set(liveOnes.map((f) => f.id));
@@ -1003,14 +1036,19 @@ function FieldsTab({
     }));
   };
 
-  const cleanOverviewDuplicates = () => {
+  const cleanBucketDuplicates = () => {
     const active = doc.fields.filter(
-      (f) => fieldBucket(f) === "overview" && f.status === "active" && COMMON_FIELD_SCOPES.has(f.scope_kind),
+      (f) =>
+        fieldBucket(f) === bucket &&
+        f.status === "active" &&
+        (bucket === "media" || COMMON_FIELD_SCOPES.has(f.scope_kind)),
     );
-    const keep = new Set(dedupeFields(active).map((f) => f.id));
+    const keep = new Set(
+      (bucket === "overview" ? dedupeFields(active) : dedupeSharedBucket(active)).map((f) => f.id),
+    );
     const drop = active.filter((f) => !keep.has(f.id));
     if (drop.length === 0) {
-      window.alert("No Overview duplicates to clean.");
+      window.alert(`No ${bucketLabel} duplicates to clean.`);
       return;
     }
     removeFields(drop);
@@ -1172,24 +1210,24 @@ function FieldsTab({
             <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
             Show archived
           </label>
-          {bucket === "overview" && duplicateKeys.size > 0 ? (
+          {SHARED_ENTITY_BUCKETS.has(bucket) && duplicateKeys.size > 0 ? (
             <button
               type="button"
               className={buttonClass}
               disabled={!editable}
               title="Keep one copy of each duplicate key; archive or delete the rest"
-              onClick={() => cleanOverviewDuplicates()}
+              onClick={() => cleanBucketDuplicates()}
             >
               Clean {duplicateKeys.size} duplicate key{duplicateKeys.size === 1 ? "" : "s"}
             </button>
           ) : null}
         </div>
 
-        {bucket === "overview" ? (
+        {SHARED_ENTITY_BUCKETS.has(bucket) ? (
           <p className="text-xs text-text-secondary">
-            Use Delete to remove unnecessary Overview entities. Published fields are archived (answers kept);
-            draft-only fields are removed. Duplicate keys across Fan/Athlete/Professional scopes are listed so you
-            can delete extras or use Clean duplicates.
+            Use Delete to remove unnecessary {bucketLabel} entities. Published fields are archived (answers kept)
+            and stay removed after reload; draft-only fields are deleted. Use Clean duplicates when the same key
+            appears more than once.
           </p>
         ) : null}
 
@@ -1221,7 +1259,7 @@ function FieldsTab({
               </thead>
               <tbody className="divide-y divide-border">
                 {rows.map((f) => {
-                  const clones = overviewCloneIds(doc.fields, f).filter((id) => id !== f.id);
+                  const clones = sharedBucketCloneIds(doc.fields, f).filter((id) => id !== f.id);
                   const isDuplicate = duplicateKeys.has(f.key);
                   return (
                   <tr key={f.id} className={f.status === "archived" ? "opacity-60" : undefined}>
@@ -1309,7 +1347,7 @@ function FieldsTab({
                                 : "Delete from draft"
                           }
                           onClick={() => {
-                            const ids = overviewCloneIds(doc.fields, f);
+                            const ids = sharedBucketCloneIds(doc.fields, f);
                             const all = doc.fields.filter((x) => ids.includes(x.id) && x.status === "active");
                             if (
                               all.length > 1 &&
