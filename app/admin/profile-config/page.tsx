@@ -1125,30 +1125,112 @@ function FieldsTab({
     };
   };
 
+  const activeRows = rows.filter((r) => r.status === "active");
+
+  const moveField = (f: CatalogField, dir: -1 | 1) => {
+    onChange((d) => ({ ...d, fields: reorder(d.fields, activeRows, f.id, dir) }));
+  };
+
+  const toggleArchive = (f: CatalogField) => {
+    onChange((d) => ({
+      ...d,
+      fields: d.fields.map((x) =>
+        x.id === f.id ? { ...x, status: x.status === "active" ? "archived" : "active" } : x,
+      ),
+    }));
+  };
+
+  const deleteField = (f: CatalogField) => {
+    const ids = sharedBucketCloneIds(doc.fields, f);
+    const all = doc.fields.filter((x) => ids.includes(x.id) && x.status === "active");
+    if (
+      all.length > 1 &&
+      window.confirm(
+        `"${f.label || f.key}" also has ${all.length - 1} duplicate copy(ies) under other scopes. Include those too?`,
+      )
+    ) {
+      removeFields(all);
+      return;
+    }
+    removeFields([f]);
+  };
+
+  const fieldMeta = (f: CatalogField) => (
+    <>
+      {f.key}
+      {f.is_system ? " · built-in" : ""}
+      {f.storage_column ? ` · ${f.storage_column}` : ""}
+      {!liveIds.has(f.id) ? " · draft only" : ""}
+    </>
+  );
+
+  const fieldRules = (f: CatalogField) => (
+    <>
+      {f.is_required ? "Required · " : ""}
+      {f.visibility}
+      {f.options.length ? ` · ${f.options.filter((o) => o.status === "active").length} options` : ""}
+    </>
+  );
+
+  const fieldActions = (f: CatalogField) => {
+    const clones = sharedBucketCloneIds(doc.fields, f).filter((id) => id !== f.id);
+    return (
+      <div className="flex flex-wrap gap-1">
+        <button type="button" className={buttonClass} disabled={!editable} onClick={() => onEdit(f)}>
+          Edit
+        </button>
+        <button
+          type="button"
+          className={buttonClass}
+          disabled={!editable}
+          title={f.status === "active" ? "Archive (answers are kept)" : "Restore"}
+          onClick={() => toggleArchive(f)}
+        >
+          {f.status === "active" ? <Archive className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
+        </button>
+        <button
+          type="button"
+          className={buttonClass}
+          disabled={!editable || f.status !== "active"}
+          title={
+            clones.length > 0
+              ? "Delete this field (prompts to include duplicates)"
+              : liveIds.has(f.id)
+                ? `Remove from ${bucketLabel} (archive)`
+                : "Delete from draft"
+          }
+          onClick={() => deleteField(f)}
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
-      <ul className="divide-y divide-border rounded-xl border border-border bg-card self-start">
+      <ul className="flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1 lg:block lg:divide-y lg:overflow-visible lg:p-0 lg:self-start">
         {buckets.map((b) => (
-          <li key={b.id}>
+          <li key={b.id} className="shrink-0 lg:shrink">
             <button
               type="button"
               className={cn(
-                "flex w-full flex-col items-start gap-0.5 px-4 py-3 text-left text-sm transition-colors",
-                bucket === b.id ? "bg-muted/60" : "hover:bg-muted/30",
+                "flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left text-sm transition-colors lg:px-4 lg:py-3",
+                bucket === b.id ? "rounded-lg bg-muted/60 lg:rounded-none" : "hover:bg-muted/30",
               )}
               onClick={() => setBucket(b.id)}
             >
-              <span className="flex w-full items-center justify-between gap-2 font-medium">
+              <span className="flex w-full items-center justify-between gap-2 font-medium whitespace-nowrap">
                 {b.label}
                 <span className="text-xs font-normal text-text-hint">{counts[b.id]}</span>
               </span>
-              <span className="text-xs text-text-hint">{b.hint}</span>
+              <span className="hidden text-xs text-text-hint lg:inline">{b.hint}</span>
             </button>
           </li>
         ))}
       </ul>
 
-      <div className="space-y-3">
+      <div className="min-w-0 space-y-3">
         <div className="flex flex-wrap items-end gap-2">
           {bucket === "portfolio" ? (
             <>
@@ -1206,7 +1288,7 @@ function FieldsTab({
                   ? "Add media field"
                   : "Add field"}
           </button>
-          <label className="ml-auto flex items-center gap-2 text-xs text-text-secondary">
+          <label className="flex items-center gap-2 text-xs text-text-secondary sm:ml-auto">
             <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
             Show archived
           </label>
@@ -1243,34 +1325,47 @@ function FieldsTab({
             }
           />
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-border bg-card">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/40 text-left text-xs text-text-secondary">
-                <tr>
-                  <th className="px-3 py-2">Order</th>
-                  <th className="px-3 py-2">Field</th>
-                  <th className="px-3 py-2">Type</th>
-                  {bucket === "portfolio" ? <th className="px-3 py-2">Section</th> : <th className="px-3 py-2">Applies to</th>}
-                  <th className="px-3 py-2">Rules</th>
-                  <th className="px-3 py-2">Usage</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {rows.map((f) => {
-                  const clones = sharedBucketCloneIds(doc.fields, f).filter((id) => id !== f.id);
-                  const isDuplicate = duplicateKeys.has(f.key);
-                  return (
-                  <tr key={f.id} className={f.status === "archived" ? "opacity-60" : undefined}>
-                    <td className="px-3 py-2">
+          <>
+            {/* Mobile cards */}
+            <ul className="space-y-3 md:hidden">
+              {rows.map((f) => {
+                const isDuplicate = duplicateKeys.has(f.key);
+                return (
+                  <li
+                    key={f.id}
+                    className={cn(
+                      "rounded-xl border border-border bg-card p-3 shadow-sm",
+                      f.status === "archived" && "opacity-60",
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-text-primary">
+                          {f.label || "(no label)"}
+                          {isDuplicate ? (
+                            <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                              duplicate
+                            </span>
+                          ) : null}
+                        </p>
+                        <p className="mt-0.5 break-all text-xs text-text-hint">{fieldMeta(f)}</p>
+                      </div>
+                      <StatusPill status={f.status} />
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-secondary">
+                      <span>{INPUT_TYPE_LABELS[f.input_type] ?? f.input_type}</span>
+                      <span>{bucket === "portfolio" ? sectionLabel(f.section) : scopeLabel(doc, f)}</span>
+                      <span>{fieldRules(f)}</span>
+                      <span>{usage[f.id] ?? 0} saved</span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                       <div className="flex gap-1">
                         <button
                           type="button"
                           className={buttonClass}
                           aria-label="Move up"
                           disabled={!editable || f.status !== "active"}
-                          onClick={() => onChange((d) => ({ ...d, fields: reorder(d.fields, rows.filter((r) => r.status === "active"), f.id, -1) }))}
+                          onClick={() => moveField(f, -1)}
                         >
                           <ArrowUp className="h-3.5 w-3.5" />
                         </button>
@@ -1279,98 +1374,94 @@ function FieldsTab({
                           className={buttonClass}
                           aria-label="Move down"
                           disabled={!editable || f.status !== "active"}
-                          onClick={() => onChange((d) => ({ ...d, fields: reorder(d.fields, rows.filter((r) => r.status === "active"), f.id, 1) }))}
+                          onClick={() => moveField(f, 1)}
                         >
                           <ArrowDown className="h-3.5 w-3.5" />
                         </button>
                       </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <p className="font-medium">
-                        {f.label || "(no label)"}
-                        {isDuplicate ? (
-                          <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-                            duplicate
-                          </span>
-                        ) : null}
-                      </p>
-                      <p className="text-xs text-text-hint">
-                        {f.key}
-                        {f.is_system ? " · built-in" : ""}
-                        {f.storage_column ? ` · ${f.storage_column}` : ""}
-                        {!liveIds.has(f.id) ? " · draft only" : ""}
-                      </p>
-                    </td>
-                    <td className="px-3 py-2">{INPUT_TYPE_LABELS[f.input_type] ?? f.input_type}</td>
-                    <td className="px-3 py-2 text-xs text-text-secondary">
-                      {bucket === "portfolio" ? sectionLabel(f.section) : scopeLabel(doc, f)}
-                    </td>
-                    <td className="px-3 py-2 text-xs text-text-secondary">
-                      {f.is_required ? "Required · " : ""}
-                      {f.visibility}
-                      {f.options.length ? ` · ${f.options.filter((o) => o.status === "active").length} options` : ""}
-                    </td>
-                    <td className="px-3 py-2 text-xs">{usage[f.id] ?? 0}</td>
-                    <td className="px-3 py-2">
-                      <StatusPill status={f.status} />
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex justify-end gap-1">
-                        <button type="button" className={buttonClass} disabled={!editable} onClick={() => onEdit(f)}>
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          className={buttonClass}
-                          disabled={!editable}
-                          title={f.status === "active" ? "Archive (answers are kept)" : "Restore"}
-                          onClick={() =>
-                            onChange((d) => ({
-                              ...d,
-                              fields: d.fields.map((x) =>
-                                x.id === f.id ? { ...x, status: x.status === "active" ? "archived" : "active" } : x,
-                              ),
-                            }))
-                          }
-                        >
-                          {f.status === "active" ? <Archive className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
-                        </button>
-                        <button
-                          type="button"
-                          className={buttonClass}
-                          disabled={!editable || f.status !== "active"}
-                          title={
-                            clones.length > 0
-                              ? "Delete this field (prompts to include duplicates)"
-                              : liveIds.has(f.id)
-                                ? "Remove from Overview (archive)"
-                                : "Delete from draft"
-                          }
-                          onClick={() => {
-                            const ids = sharedBucketCloneIds(doc.fields, f);
-                            const all = doc.fields.filter((x) => ids.includes(x.id) && x.status === "active");
-                            if (
-                              all.length > 1 &&
-                              window.confirm(
-                                `"${f.label || f.key}" also has ${all.length - 1} duplicate copy(ies) under other scopes. Include those too?`,
-                              )
-                            ) {
-                              removeFields(all);
-                              return;
-                            }
-                            removeFields([f]);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
+                      {fieldActions(f)}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {/* Desktop table */}
+            <div className="hidden overflow-x-auto rounded-xl border border-border bg-card md:block">
+              <table className="w-full min-w-[720px] text-sm">
+                <thead className="bg-muted/40 text-left text-xs text-text-secondary">
+                  <tr>
+                    <th className="px-3 py-2">Order</th>
+                    <th className="px-3 py-2">Field</th>
+                    <th className="px-3 py-2">Type</th>
+                    {bucket === "portfolio" ? (
+                      <th className="px-3 py-2">Section</th>
+                    ) : (
+                      <th className="px-3 py-2">Applies to</th>
+                    )}
+                    <th className="px-3 py-2">Rules</th>
+                    <th className="px-3 py-2">Usage</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2" />
                   </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {rows.map((f) => {
+                    const isDuplicate = duplicateKeys.has(f.key);
+                    return (
+                      <tr key={f.id} className={f.status === "archived" ? "opacity-60" : undefined}>
+                        <td className="px-3 py-2">
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              className={buttonClass}
+                              aria-label="Move up"
+                              disabled={!editable || f.status !== "active"}
+                              onClick={() => moveField(f, -1)}
+                            >
+                              <ArrowUp className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              className={buttonClass}
+                              aria-label="Move down"
+                              disabled={!editable || f.status !== "active"}
+                              onClick={() => moveField(f, 1)}
+                            >
+                              <ArrowDown className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <p className="font-medium">
+                            {f.label || "(no label)"}
+                            {isDuplicate ? (
+                              <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                                duplicate
+                              </span>
+                            ) : null}
+                          </p>
+                          <p className="text-xs text-text-hint">{fieldMeta(f)}</p>
+                        </td>
+                        <td className="px-3 py-2">{INPUT_TYPE_LABELS[f.input_type] ?? f.input_type}</td>
+                        <td className="px-3 py-2 text-xs text-text-secondary">
+                          {bucket === "portfolio" ? sectionLabel(f.section) : scopeLabel(doc, f)}
+                        </td>
+                        <td className="px-3 py-2 text-xs text-text-secondary">{fieldRules(f)}</td>
+                        <td className="px-3 py-2 text-xs">{usage[f.id] ?? 0}</td>
+                        <td className="px-3 py-2">
+                          <StatusPill status={f.status} />
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex justify-end">{fieldActions(f)}</div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>
