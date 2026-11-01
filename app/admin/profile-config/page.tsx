@@ -271,11 +271,26 @@ export default function ProfileConfigPage() {
         body: JSON.stringify({ document: doc, expected_updated_at: draft.updated_at }),
       });
       setDraft(saved);
+      if (saved.document) setDoc(saved.document);
       setDirty(false);
       setNotice("Draft saved.");
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
+      const message = err instanceof Error ? err.message : "Save failed";
+      // Optimistic lock: server draft moved (Validate/heal, another tab, or another admin).
+      if (/reload it before saving|draft_conflict|someone else saved/i.test(message)) {
+        try {
+          const full = await catalogRequest<CatalogVersionRow>(`/drafts/${draft.id}`);
+          setDraft(full);
+          setDoc(full.document ?? null);
+          setDirty(false);
+          setError("Draft was updated on the server. Reloaded — re-apply your edits, then Save.");
+          return false;
+        } catch {
+          /* fall through */
+        }
+      }
+      setError(message);
       return false;
     } finally {
       setBusy(false);
@@ -287,14 +302,18 @@ export default function ProfileConfigPage() {
     if (dirty && !(await saveDraft())) return null;
     setBusy(true);
     try {
-      const result = await catalogRequest<CatalogCheck & { document?: CatalogDocument }>(
+      const result = await catalogRequest<CatalogCheck & CatalogVersionRow>(
         `/drafts/${draft.id}/validate`,
         { method: "POST", body: "{}" },
       );
-      // Server heals hard-removed live fields as archived — refresh local draft.
+      // Server heals hard-removed live fields as archived — refresh local draft + updated_at.
       if (result.document) {
         setDoc(result.document);
-        setDraft((d) => (d ? { ...d, document: result.document } : d));
+        setDraft({
+          ...draft,
+          ...result,
+          document: result.document,
+        });
         setDirty(false);
       } else {
         const full = await catalogRequest<CatalogVersionRow>(`/drafts/${draft.id}`);
