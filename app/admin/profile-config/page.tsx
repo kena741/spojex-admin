@@ -1667,80 +1667,90 @@ function SectionsTab({
           </button>
         </div>
       ) : null}
-    <ul className="divide-y divide-border rounded-xl border border-border bg-card">
-      {rows.map((s) => (
-        <li key={s.id} className="flex flex-wrap items-center gap-2 px-4 py-2.5 text-sm">
-          <div className="flex gap-1">
-            <button type="button" className={buttonClass} aria-label="Move up" disabled={!editable}
-              onClick={() => onChange((d) => ({ ...d, sections: reorder(d.sections, rows, s.id, -1) }))}>
-              <ArrowUp className="h-3.5 w-3.5" />
-            </button>
-            <button type="button" className={buttonClass} aria-label="Move down" disabled={!editable}
-              onClick={() => onChange((d) => ({ ...d, sections: reorder(d.sections, rows, s.id, 1) }))}>
-              <ArrowDown className="h-3.5 w-3.5" />
-            </button>
-          </div>
-          <input
-            className={cn(inputClass, "max-w-xs")}
-            value={s.label}
-            disabled={!editable}
-            onChange={(e) => onChange((d) => ({ ...d, sections: d.sections.map((x) => (x.id === s.id ? { ...x, label: e.target.value } : x)) }))}
-          />
-          <span className="text-xs text-text-hint">
-            {s.key} · {s.kind}
-          </span>
-          <select
-            className={cn(inputClass, "h-8 w-32")}
-            value={s.kind}
-            disabled={!editable}
-            aria-label="Icon kind"
-            onChange={(e) => setSection(s.id, (x) => ({ ...x, kind: e.target.value }))}
+    <div className="max-w-full overflow-x-auto overscroll-x-contain rounded-xl border border-border bg-card [-webkit-overflow-scrolling:touch]">
+      <ul className="min-w-[1100px] divide-y divide-border">
+        {rows.map((s) => (
+          <li
+            key={s.id}
+            className="flex flex-nowrap items-center gap-2 whitespace-nowrap px-4 py-2.5 text-sm"
           >
-            {SECTION_KINDS.map((k) => (
-              <option key={k} value={k}>
-                {k}
-              </option>
+            <div className="flex shrink-0 gap-1">
+              <button type="button" className={buttonClass} aria-label="Move up" disabled={!editable}
+                onClick={() => onChange((d) => ({ ...d, sections: reorder(d.sections, rows, s.id, -1) }))}>
+                <ArrowUp className="h-3.5 w-3.5" />
+              </button>
+              <button type="button" className={buttonClass} aria-label="Move down" disabled={!editable}
+                onClick={() => onChange((d) => ({ ...d, sections: reorder(d.sections, rows, s.id, 1) }))}>
+                <ArrowDown className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <input
+              className={cn(inputClass, "w-44 shrink-0")}
+              value={s.label}
+              disabled={!editable}
+              onChange={(e) => onChange((d) => ({ ...d, sections: d.sections.map((x) => (x.id === s.id ? { ...x, label: e.target.value } : x)) }))}
+            />
+            <span className="shrink-0 text-xs text-text-hint">
+              {s.key} · {s.kind}
+            </span>
+            <select
+              className={cn(inputClass, "h-8 w-32 shrink-0")}
+              value={s.kind}
+              disabled={!editable}
+              aria-label="Icon kind"
+              onChange={(e) => setSection(s.id, (x) => ({ ...x, kind: e.target.value }))}
+            >
+              {SECTION_KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {k}
+                </option>
+              ))}
+            </select>
+            {(["fan", "athlete", "professional"] as const).map((role) => (
+              <label key={role} className="flex shrink-0 items-center gap-1 text-xs">
+                <input
+                  type="checkbox"
+                  disabled={!editable}
+                  checked={s.roles.includes(role)}
+                  onChange={(e) =>
+                    setSection(s.id, (x) => {
+                      const roles = e.target.checked ? [...x.roles, role] : x.roles.filter((y) => y !== role);
+                      // Dropping a role drops its sport / profession narrowing too.
+                      const prefix = role === "athlete" ? "sport:" : role === "professional" ? "profession:" : null;
+                      const categories = e.target.checked || !prefix
+                        ? x.categories ?? []
+                        : (x.categories ?? []).filter((c) => !c.startsWith(prefix));
+                      return { ...x, roles, categories };
+                    })
+                  }
+                />
+                {role}
+              </label>
             ))}
-          </select>
-          {(["fan", "athlete", "professional"] as const).map((role) => (
-            <label key={role} className="flex items-center gap-1 text-xs">
-              <input
-                type="checkbox"
+            <div className="shrink-0">
+              <CategoryPicker doc={doc} section={s} editable={editable} onChange={(categories) => setSection(s.id, (x) => ({ ...x, categories }))} />
+            </div>
+            <span className="ml-auto flex shrink-0 items-center gap-2">
+              <StatusPill status={s.status} />
+              <button
+                type="button"
+                className={buttonClass}
                 disabled={!editable}
-                checked={s.roles.includes(role)}
-                onChange={(e) =>
-                  setSection(s.id, (x) => {
-                    const roles = e.target.checked ? [...x.roles, role] : x.roles.filter((y) => y !== role);
-                    // Dropping a role drops its sport / profession narrowing too.
-                    const prefix = role === "athlete" ? "sport:" : role === "professional" ? "profession:" : null;
-                    const categories = e.target.checked || !prefix
-                      ? x.categories ?? []
-                      : (x.categories ?? []).filter((c) => !c.startsWith(prefix));
-                    return { ...x, roles, categories };
-                  })
+                title={s.status === "active" ? "Archive" : "Restore"}
+                onClick={() =>
+                  onChange((d) => ({
+                    ...d,
+                    sections: d.sections.map((x) => (x.id === s.id ? { ...x, status: x.status === "active" ? "archived" : "active" } : x)),
+                  }))
                 }
-              />
-              {role}
-            </label>
-          ))}
-          <CategoryPicker doc={doc} section={s} editable={editable} onChange={(categories) => setSection(s.id, (x) => ({ ...x, categories }))} />
-          <StatusPill status={s.status} />
-          <button
-            type="button"
-            className={buttonClass}
-            disabled={!editable}
-            onClick={() =>
-              onChange((d) => ({
-                ...d,
-                sections: d.sections.map((x) => (x.id === s.id ? { ...x, status: x.status === "active" ? "archived" : "active" } : x)),
-              }))
-            }
-          >
-            {s.status === "active" ? <Archive className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
-          </button>
-        </li>
-      ))}
-    </ul>
+              >
+                {s.status === "active" ? <Archive className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
     </div>
   );
 }
