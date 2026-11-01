@@ -283,7 +283,21 @@ export default function ProfileConfigPage() {
     if (dirty && !(await saveDraft())) return null;
     setBusy(true);
     try {
-      const result = await catalogRequest<CatalogCheck>(`/drafts/${draft.id}/validate`, { method: "POST", body: "{}" });
+      const result = await catalogRequest<CatalogCheck & { document?: CatalogDocument }>(
+        `/drafts/${draft.id}/validate`,
+        { method: "POST", body: "{}" },
+      );
+      // Server heals hard-removed live fields as archived — refresh local draft.
+      if (result.document) {
+        setDoc(result.document);
+        setDraft((d) => (d ? { ...d, document: result.document } : d));
+        setDirty(false);
+      } else {
+        const full = await catalogRequest<CatalogVersionRow>(`/drafts/${draft.id}`);
+        setDraft(full);
+        setDoc(full.document ?? null);
+        setDirty(false);
+      }
       setCheck(result);
       return result;
     } catch (err) {
@@ -660,11 +674,13 @@ const CANONICAL_FIELD_SCOPE: Record<string, CatalogField["scope_kind"]> = {
   license_document: "professional",
 };
 
-type FieldsBucket = "overview" | "career" | "achievements" | "portfolio";
+type FieldsBucket = "overview" | "career" | "achievements" | "media" | "portfolio";
 
 function fieldBucket(f: CatalogField): FieldsBucket {
   if (f.section === "career" || f.target === "career") return "career";
   if (f.section === "achievements" || f.target === "achievement") return "achievements";
+  // Media tab (highlights / gallery) — same label as mobile Me → Media.
+  if (f.section === "media" || f.target === "media") return "media";
   if (
     PORTFOLIO_SECTION_KEYS.has(f.section ?? "") ||
     f.target === "clip" ||
@@ -756,6 +772,7 @@ function FieldsTab({
     { id: "overview", label: "Overview", hint: "Same for every role" },
     { id: "career", label: "Career", hint: "Same for every role" },
     { id: "achievements", label: "Achievements", hint: "Same for every role" },
+    { id: "media", label: "Media", hint: "Photos & highlights · mobile Media tab" },
     { id: "portfolio", label: "Portfolio", hint: "Role-unique · any input type" },
   ];
 
@@ -764,6 +781,7 @@ function FieldsTab({
       overview: 0,
       career: 0,
       achievements: 0,
+      media: 0,
       portfolio: 0,
     };
     for (const f of doc.fields) {
@@ -818,6 +836,8 @@ function FieldsTab({
     let list = doc.fields.filter((f) => fieldBucket(f) === bucket && f.status === "active");
     if (bucket === "portfolio") {
       list = list.filter((f) => scopeKey(f) === portfolioRole);
+    } else if (bucket === "media") {
+      // Account + sport/profession-scoped highlight fields for the Media tab.
     } else {
       list = list.filter((f) => COMMON_FIELD_SCOPES.has(f.scope_kind));
       // Overview only — career/achievements keep every shared entry field.
@@ -868,14 +888,20 @@ function FieldsTab({
       };
     }
     const target =
-      bucket === "career" ? "career" : bucket === "achievements" ? "achievement" : ("profile" as const);
+      bucket === "career"
+        ? "career"
+        : bucket === "achievements"
+          ? "achievement"
+          : bucket === "media"
+            ? "media"
+            : ("profile" as const);
     return {
       id: newId(),
       key: "",
       scope_kind: "account",
       scope_ref: null,
       target,
-      section: bucket,
+      section: bucket === "media" ? "media" : bucket,
       label: "",
       help_text: "",
       placeholder: "",
@@ -971,7 +997,9 @@ function FieldsTab({
               ? "Add career field"
               : bucket === "achievements"
                 ? "Add achievement field"
-                : "Add field"}
+                : bucket === "media"
+                  ? "Add media field"
+                  : "Add field"}
           </button>
         </div>
 
@@ -1114,6 +1142,7 @@ function FieldEditor({
   const targetForSection = (section: string, current: CatalogField["target"]): CatalogField["target"] => {
     if (section === "career") return "career";
     if (section === "achievements") return "achievement";
+    if (section === "media") return "media";
     if (section === "clips") return current === "clip" ? "clip" : "profile";
     if (section === "photos") return current === "photo" ? "photo" : "profile";
     if (section === "links") return current === "link" ? "link" : "profile";
@@ -1125,13 +1154,15 @@ function FieldEditor({
       ? "Career entry"
       : f.target === "achievement"
         ? "Achievement entry"
-        : f.target === "clip"
-          ? "Clip entry"
-          : f.target === "photo"
-            ? "Photo entry"
-            : f.target === "link"
-              ? "Link entry"
-              : "Profile";
+        : f.target === "media"
+          ? "Media / highlight entry"
+          : f.target === "clip"
+            ? "Clip entry"
+            : f.target === "photo"
+              ? "Photo entry"
+              : f.target === "link"
+                ? "Link entry"
+                : "Profile";
 
   return (
     <AdminModal
@@ -1411,6 +1442,7 @@ const SECTION_KINDS: CatalogSection["kind"][] = [
   "attributes",
   "career",
   "achievements",
+  "media",
   "clips",
   "photos",
   "links",

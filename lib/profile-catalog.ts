@@ -17,7 +17,7 @@ export type CatalogField = {
   key: string;
   scope_kind: "account" | "fan" | "athlete" | "professional" | "sport" | "profession";
   scope_ref: string | null;
-  target: "profile" | "career" | "achievement" | "clip" | "photo" | "link" | "portfolio";
+  target: "profile" | "career" | "achievement" | "clip" | "photo" | "link" | "portfolio" | "media";
   section: string | null;
   label: string;
   help_text: string;
@@ -57,7 +57,7 @@ export type CatalogSection = {
   key: string;
   label: string;
   description: string;
-  kind: "attributes" | "career" | "achievements" | "clips" | "photos" | "links" | "portfolio";
+  kind: "attributes" | "career" | "achievements" | "media" | "clips" | "photos" | "links" | "portfolio";
   roles: string[];
   sort_order: number;
   status: CatalogStatus;
