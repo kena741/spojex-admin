@@ -26,6 +26,7 @@ import {
   type CatalogProfession,
   type CatalogSection,
   type CatalogSport,
+  type CatalogVersionDetail,
   type CatalogVersionRow,
 } from "@/lib/profile-catalog";
 import { cn } from "@/lib/utils";
@@ -102,6 +103,9 @@ export default function ProfileConfigPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [check, setCheck] = useState<CatalogCheck | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [publishTitle, setPublishTitle] = useState("");
+  const [versionDetail, setVersionDetail] = useState<CatalogVersionDetail | null>(null);
+  const [versionDetailLoading, setVersionDetailLoading] = useState(false);
   const [editingField, setEditingField] = useState<CatalogField | null>(null);
   const [editingCategory, setEditingCategory] = useState<
     { kind: "sports" | "professions"; row: CatalogSport | CatalogProfession } | null
@@ -325,24 +329,72 @@ export default function ProfileConfigPage() {
 
   const openPublish = async () => {
     const result = await validate();
-    if (result) setPublishOpen(true);
+    if (result) {
+      setPublishTitle((draft?.title || draft?.notes || "").trim());
+      setPublishOpen(true);
+    }
   };
 
   const publish = async () => {
     if (!draft) return;
+    const title = publishTitle.trim();
+    if (!title) {
+      setError("Give this version a short title before publishing.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const out = await catalogRequest<{ version: number; recomputed_profiles: number }>(
         `/drafts/${draft.id}/publish`,
-        { method: "POST", body: JSON.stringify({ confirm: true, expected_base_version: draft.base_version }) },
+        {
+          method: "POST",
+          body: JSON.stringify({
+            confirm: true,
+            expected_base_version: draft.base_version,
+            title,
+          }),
+        },
       );
       setPublishOpen(false);
       setCheck(null);
-      setNotice(`Published version ${out.version}. ${out.recomputed_profiles} profiles had their completion updated.`);
+      setNotice(`Published v${out.version} “${title}”. ${out.recomputed_profiles} profiles had their completion updated.`);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Publish failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openVersionDetail = async (row: CatalogVersionRow) => {
+    setVersionDetailLoading(true);
+    setError(null);
+    try {
+      const detail = await catalogRequest<CatalogVersionDetail>(`/versions/${row.id}`);
+      setVersionDetail(detail);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load version details");
+    } finally {
+      setVersionDetailLoading(false);
+    }
+  };
+
+  const renameVersion = async (row: CatalogVersionRow, title: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await catalogRequest(`/versions/${row.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ title }),
+      });
+      setNotice("Version title saved.");
+      if (versionDetail?.id === row.id) {
+        setVersionDetail({ ...versionDetail, title, notes: title });
+      }
+      await load(draft?.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save title");
     } finally {
       setBusy(false);
     }
@@ -439,9 +491,11 @@ export default function ProfileConfigPage() {
               versions={overview.versions}
               activeDraftId={draft?.id ?? null}
               canWrite={canWrite}
-              busy={busy}
-              onOpen={(v) => void openVersion(v)}
+              busy={busy || versionDetailLoading}
+              onOpenDetail={(v) => void openVersionDetail(v)}
+              onEdit={(v) => void openVersion(v)}
               onDelete={(v) => void deleteVersion(v)}
+              onRename={(v, title) => void renameVersion(v, title)}
             />
           ) : null}
         </>
@@ -495,12 +549,62 @@ export default function ProfileConfigPage() {
             onCancel={() => setPublishOpen(false)}
             onSave={() => void publish()}
             saving={busy}
-            disabled={!check?.ok}
+            disabled={!check?.ok || !publishTitle.trim()}
             saveLabel={check?.ok ? "Publish" : "Fix errors first"}
           />
         }
       >
+        <div className="mb-4 space-y-1">
+          <label className="block text-xs font-medium text-text-secondary">Version title</label>
+          <input
+            className={inputClass}
+            value={publishTitle}
+            maxLength={200}
+            placeholder="e.g. Media tab fields + football highlights"
+            onChange={(e) => setPublishTitle(e.target.value)}
+          />
+          <p className="text-xs text-text-hint">Shown in Versions history so you can tell publishes apart.</p>
+        </div>
         {check ? <ImpactSummary check={check} /> : null}
+      </AdminModal>
+      <AdminModal
+        open={Boolean(versionDetail)}
+        title={
+          versionDetail
+            ? versionDetail.version
+              ? `v${versionDetail.version}${versionDetail.title ? ` — ${versionDetail.title}` : ""}`
+              : `Draft${versionDetail.title ? ` — ${versionDetail.title}` : ""}`
+            : "Version"
+        }
+        onClose={() => setVersionDetail(null)}
+        className="max-w-2xl"
+        footer={
+          versionDetail ? (
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                className={buttonClass}
+                onClick={() => setVersionDetail(null)}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className={primaryButtonClass}
+                disabled={!canWrite || busy}
+                onClick={() => {
+                  const row = versionDetail;
+                  setVersionDetail(null);
+                  void openVersion(row);
+                }}
+              >
+                {versionDetail.status === "draft" ? "Open draft" : "Edit as new draft"}
+              </button>
+            </div>
+          ) : null
+        }
+      >
+        {versionDetail ? <VersionDetailBody detail={versionDetail} canWrite={canWrite} onRename={renameVersion} /> : null}
       </AdminModal>
     </div>
   );
@@ -1596,87 +1700,212 @@ function SectionsTab({
   );
 }
 
+function versionDisplayTitle(v: CatalogVersionRow) {
+  const title = (v.title || v.notes || "").trim();
+  if (title) return title;
+  if (v.version != null) return `Catalog v${v.version}`;
+  return `Draft from v${v.base_version ?? "—"}`;
+}
+
+function VersionDetailBody({
+  detail,
+  canWrite,
+  onRename,
+}: {
+  detail: CatalogVersionDetail;
+  canWrite: boolean;
+  onRename: (row: CatalogVersionRow, title: string) => void;
+}) {
+  const [title, setTitle] = useState((detail.title || detail.notes || "").trim());
+  useEffect(() => {
+    setTitle((detail.title || detail.notes || "").trim());
+  }, [detail.id, detail.title, detail.notes]);
+
+  const changes = detail.diff?.changes ?? detail.impact?.changes ?? [];
+  const changeCount = detail.diff?.change_count ?? detail.change_count ?? changes.length;
+
+  return (
+    <div className="space-y-4 text-sm">
+      <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
+        <p className="text-xs text-text-hint">What makes versions different</p>
+        <p className="mt-1 text-text-secondary">
+          Each published version is a full snapshot of sports, professions, sections, and fields. The list below
+          shows only what changed compared to{" "}
+          <span className="font-medium text-text-primary">
+            {detail.compared_to?.label ?? "an empty catalog"}
+          </span>
+          .
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+          <StatusPill status={detail.status} />
+          {detail.version != null ? <span className="rounded-full bg-muted px-2 py-0.5">v{detail.version}</span> : null}
+          {detail.base_version != null && detail.status === "draft" ? (
+            <span className="rounded-full bg-muted px-2 py-0.5">based on v{detail.base_version}</span>
+          ) : null}
+          <span className="rounded-full bg-muted px-2 py-0.5">{changeCount} change(s)</span>
+        </div>
+      </div>
+
+      <Field label="Title">
+        <div className="flex gap-2">
+          <input
+            className={inputClass}
+            value={title}
+            maxLength={200}
+            disabled={!canWrite}
+            placeholder="Name this version"
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <button
+            type="button"
+            className={buttonClass}
+            disabled={!canWrite || title.trim() === (detail.title || detail.notes || "").trim()}
+            onClick={() => onRename(detail, title.trim())}
+          >
+            Save
+          </button>
+        </div>
+      </Field>
+
+      <div>
+        <p className="mb-2 text-xs font-medium text-text-secondary">
+          Changes vs {detail.compared_to?.label ?? "previous"}
+        </p>
+        {changes.length === 0 ? (
+          <p className="text-text-secondary">No differences from the previous snapshot.</p>
+        ) : (
+          <ul className="max-h-80 space-y-2 overflow-y-auto">
+            {changes.map((c) => (
+              <li key={`${c.kind}-${c.id}-${c.change}`} className="rounded-lg border border-border px-3 py-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs uppercase text-text-hint">{c.kind}</span>
+                  <span className="font-medium">{c.name}</span>
+                  <StatusPill status={c.change} />
+                  {c.newly_required ? <StatusPill status="newly required" /> : null}
+                  <span className="ml-auto text-xs text-text-secondary">{c.usage} saved</span>
+                </div>
+                {c.fields_changed?.length ? (
+                  <p className="mt-1 text-xs text-text-hint">Updated: {c.fields_changed.join(", ")}</p>
+                ) : null}
+                {c.note ? <p className="mt-1 text-xs text-text-secondary">{c.note}</p> : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function HistoryTab({
   versions,
   activeDraftId,
   canWrite,
   busy,
-  onOpen,
+  onOpenDetail,
+  onEdit,
   onDelete,
+  onRename,
 }: {
   versions: CatalogVersionRow[];
   activeDraftId: string | null;
   canWrite: boolean;
   busy: boolean;
-  onOpen: (v: CatalogVersionRow) => void;
+  onOpenDetail: (v: CatalogVersionRow) => void;
+  onEdit: (v: CatalogVersionRow) => void;
   onDelete: (v: CatalogVersionRow) => void;
+  onRename: (v: CatalogVersionRow, title: string) => void;
 }) {
   return (
-    <div className="space-y-3">
-      <p className="text-sm text-text-secondary">
-        Click a version to edit it. Drafts open directly; published or superseded versions start a new draft
-        forked from that snapshot. The live published catalog cannot be deleted — remove superseded history or
-        unused drafts instead.
-      </p>
-      <ul className="divide-y divide-border rounded-xl border border-border bg-card">
+    <div className="space-y-4">
+      <div className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-text-secondary">
+        <p className="font-medium text-text-primary">Versions</p>
+        <p className="mt-1">
+          A version is a published snapshot of the whole profile catalog. Open <span className="font-medium">Details</span>{" "}
+          to see what changed from the previous publish. Give each publish a title so history stays readable. Drafts are
+          unpublished work-in-progress.
+        </p>
+      </div>
+      <ul className="space-y-2">
         {versions.map((v) => {
           const active = activeDraftId === v.id;
           const canDelete = canWrite && (v.status === "draft" || v.status === "superseded");
+          const changes = v.change_count ?? v.impact?.change_count ?? 0;
           return (
             <li
               key={v.id}
               className={cn(
-                "flex flex-wrap items-center gap-3 px-4 py-2.5 text-sm",
-                active && "bg-primary/5",
+                "rounded-xl border border-border bg-card px-4 py-3",
+                active && "border-primary/40 bg-primary/5",
               )}
             >
-              <button
-                type="button"
-                className="min-w-0 flex-1 text-left"
-                disabled={busy || !canWrite}
-                onClick={() => onOpen(v)}
-              >
-                <span className="font-medium">
-                  {v.version ? `v${v.version}` : `Draft from v${v.base_version}`}
-                  {active ? " · editing" : ""}
-                </span>
-                <span className="ml-2 inline-flex align-middle">
-                  <StatusPill status={v.status} />
-                </span>
-                {v.notes ? <span className="mt-0.5 block text-xs text-text-secondary">{v.notes}</span> : null}
-                <span className="mt-0.5 block text-xs text-text-hint">
-                  {v.published_at
-                    ? `published ${new Date(v.published_at).toLocaleString()}`
-                    : v.updated_at
-                      ? `updated ${new Date(v.updated_at).toLocaleString()}`
-                      : ""}
-                </span>
-              </button>
-              <div className="flex items-center gap-1">
+              <div className="flex flex-wrap items-start gap-3">
                 <button
                   type="button"
-                  className={buttonClass}
-                  disabled={busy || !canWrite}
-                  title={v.status === "draft" ? "Open draft" : "Edit as new draft"}
-                  onClick={() => onOpen(v)}
+                  className="min-w-0 flex-1 text-left"
+                  disabled={busy}
+                  onClick={() => onOpenDetail(v)}
                 >
-                  <Pencil className="h-4 w-4" />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-text-hint">
+                      {v.version != null ? `v${v.version}` : "Draft"}
+                    </span>
+                    <StatusPill status={v.status} />
+                    {active ? <span className="text-xs text-primary">editing now</span> : null}
+                  </div>
+                  <p className="mt-1 text-base font-semibold text-text-primary">{versionDisplayTitle(v)}</p>
+                  <p className="mt-1 text-xs text-text-secondary">
+                    {changes > 0 ? `${changes} change(s) from previous` : "No stored change summary"}
+                    {v.published_at
+                      ? ` · published ${new Date(v.published_at).toLocaleString()}`
+                      : v.updated_at
+                        ? ` · updated ${new Date(v.updated_at).toLocaleString()}`
+                        : ""}
+                    {v.status === "draft" && v.base_version != null ? ` · based on v${v.base_version}` : ""}
+                  </p>
                 </button>
-                <button
-                  type="button"
-                  className={buttonClass}
-                  disabled={busy || !canDelete}
-                  title={
-                    v.status === "published"
-                      ? "Live published catalog can’t be deleted"
-                      : v.status === "draft"
-                        ? "Delete draft"
-                        : "Remove from history"
-                  }
-                  onClick={() => onDelete(v)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <div className="flex flex-wrap items-center gap-1">
+                  <button type="button" className={buttonClass} disabled={busy} onClick={() => onOpenDetail(v)}>
+                    Details
+                  </button>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    disabled={busy || !canWrite}
+                    title={v.status === "draft" ? "Open draft" : "Fork into a new draft"}
+                    onClick={() => onEdit(v)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    disabled={busy || !canWrite}
+                    title="Rename"
+                    onClick={() => {
+                      const next = window.prompt("Version title", (v.title || v.notes || "").trim());
+                      if (next == null) return;
+                      onRename(v, next.trim());
+                    }}
+                  >
+                    Title
+                  </button>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    disabled={busy || !canDelete}
+                    title={
+                      v.status === "published"
+                        ? "Live published catalog can’t be deleted"
+                        : v.status === "draft"
+                          ? "Delete draft"
+                          : "Remove from history"
+                    }
+                    onClick={() => onDelete(v)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
             </li>
           );

@@ -131,11 +131,27 @@ export type CatalogVersionRow = {
   version: number | null;
   base_version: number | null;
   status: "draft" | "published" | "superseded" | "discarded";
+  /** Admin-facing version title (stored as notes). */
+  title?: string;
   notes: string;
+  change_count?: number;
+  impact?: { changes?: CatalogChange[]; change_count?: number };
   updated_at: string | null;
   published_at: string | null;
+  created_at?: string | null;
   document?: CatalogDocument;
   validation?: { errors?: CatalogIssue[]; warnings?: CatalogIssue[] };
+};
+
+export type CatalogVersionDetail = CatalogVersionRow & {
+  diff: { changes: CatalogChange[]; change_count: number };
+  compared_to: {
+    id: string;
+    version: number | null;
+    title: string;
+    status: string;
+    label: string;
+  } | null;
 };
 
 export type CatalogOverview = {
