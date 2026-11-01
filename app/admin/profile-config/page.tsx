@@ -34,7 +34,7 @@ import { cn } from "@/lib/utils";
 type Tab = "categories" | "fields" | "sections" | "history";
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "fields", label: "Entities" },
+  { id: "fields", label: "Tabs" },
   { id: "categories", label: "Roles" },
   { id: "sections", label: "Sections" },
   { id: "history", label: "Versions" },
@@ -778,7 +778,9 @@ function scopeKey(f: Pick<CatalogField, "scope_kind" | "scope_ref">) {
   return f.scope_ref ? `${f.scope_kind}:${f.scope_ref}` : f.scope_kind;
 }
 
-const PORTFOLIO_SECTION_KEYS = new Set(["clips", "photos", "links"]);
+/** Portfolio Me tab — single section (legacy clips/photos/links still recognized). */
+const PORTFOLIO_SECTION_KEYS = new Set(["portfolio", "clips", "photos", "links"]);
+const LEGACY_PORTFOLIO_SECTION_KEYS = new Set(["clips", "photos", "links"]);
 const COMMON_FIELD_SCOPES = new Set(["account", "fan", "athlete", "professional"]);
 
 /** Overview keys that must live under one canonical scope (no cross-scope clones). */
@@ -895,7 +897,7 @@ function preferSharedField(a: CatalogField, b: CatalogField) {
   return score(a) >= score(b) ? a : b;
 }
 
-/** Keep one active copy per key within a shared Entities bucket. */
+/** Keep one active copy per key within a shared Tabs bucket. */
 function dedupeSharedBucket(list: CatalogField[]) {
   const byKey = new Map<string, CatalogField>();
   for (const f of list) {
@@ -936,7 +938,7 @@ function FieldsTab({
     { id: "career", label: "Career", hint: "Same for every role" },
     { id: "achievements", label: "Achievements", hint: "Same for every role" },
     { id: "media", label: "Media", hint: "Photos & highlights · mobile Media tab" },
-    { id: "portfolio", label: "Portfolio", hint: "Role-unique · any input type" },
+    { id: "portfolio", label: "Portfolio", hint: "Role-unique fields · one Me tab" },
   ];
 
   const counts = useMemo(() => {
@@ -1083,17 +1085,13 @@ function FieldsTab({
     if (bucket === "portfolio") {
       // Role-unique attribute — any input type (text, date, select, …).
       // Section defaults to Clips; change it in the editor if needed.
-      const section =
-        roleKind === "profession"
-          ? "links"
-          : doc.sections.find((s) => s.key === "clips" && s.status === "active")?.key ?? "clips";
       return {
         id: newId(),
         key: "",
         scope_kind: roleKind as CatalogField["scope_kind"],
         scope_ref: roleRef ?? null,
         target: "profile",
-        section,
+        section: "portfolio",
         label: "",
         help_text: "",
         placeholder: "",
@@ -1454,9 +1452,11 @@ function FieldEditor({
     if (section === "career") return "career";
     if (section === "achievements") return "achievement";
     if (section === "media") return "media";
-    if (section === "clips") return current === "clip" ? "clip" : "profile";
-    if (section === "photos") return current === "photo" ? "photo" : "profile";
-    if (section === "links") return current === "link" ? "link" : "profile";
+    if (section === "portfolio" || LEGACY_PORTFOLIO_SECTION_KEYS.has(section)) {
+      return current === "portfolio" || current === "clip" || current === "photo" || current === "link"
+        ? "portfolio"
+        : "profile";
+    }
     return "profile";
   };
 
@@ -1535,7 +1535,11 @@ function FieldEditor({
             }}
           >
             {doc.sections
-              .filter((s) => !(s.status === "archived" && s.key === "portfolio"))
+              .filter(
+                (s) =>
+                  !LEGACY_PORTFOLIO_SECTION_KEYS.has(s.key) &&
+                  (s.status === "active" || s.key === (f.section ?? "")),
+              )
               .map((s) => (
                 <option key={s.key} value={s.key}>
                   {s.label}
@@ -1754,9 +1758,7 @@ const SECTION_KINDS: CatalogSection["kind"][] = [
   "career",
   "achievements",
   "media",
-  "clips",
-  "photos",
-  "links",
+  "portfolio",
 ];
 
 function SectionsTab({
@@ -1774,9 +1776,11 @@ function SectionsTab({
   const rows = [...doc.sections]
     .filter(
       (s) =>
+        // Hide legacy Clips/Photos/Links — Portfolio is the single Me tab.
+        !LEGACY_PORTFOLIO_SECTION_KEYS.has(s.key) &&
         !(
           s.status === "archived" &&
-          (s.key === "performance" || s.key === "qualifications" || s.key === "portfolio")
+          (s.key === "performance" || s.key === "qualifications")
         ),
     )
     .sort(bySort);
@@ -1811,7 +1815,7 @@ function SectionsTab({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-text-secondary">
-          Role checkboxes control which account roles see each section. Portfolio on mobile is Clips + Photos + Links.
+          Role checkboxes control which account roles see each Me tab section (Overview, Career, Achievements, Media, Portfolio).
         </p>
         <button
           type="button"
