@@ -35,6 +35,12 @@ export async function PUT(request: Request, { params }: Ctx) {
   return proxyProfileCatalog(await subPath(params), { method: "PUT", body: await request.text() });
 }
 
+export async function PATCH(request: Request, { params }: Ctx) {
+  const auth = await requireAnyAdminPermission(WRITE);
+  if (!auth.ok) return auth.error;
+  return proxyProfileCatalog(await subPath(params), { method: "PATCH", body: await request.text() });
+}
+
 export async function DELETE(_request: Request, { params }: Ctx) {
   const auth = await requireAnyAdminPermission(WRITE);
   if (!auth.ok) return auth.error;
