@@ -34,8 +34,8 @@ import { cn } from "@/lib/utils";
 type Tab = "categories" | "fields" | "sections" | "history";
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "categories", label: "Sports & professions" },
   { id: "fields", label: "Entities" },
+  { id: "categories", label: "Roles" },
   { id: "sections", label: "Sections" },
   { id: "history", label: "Versions" },
 ];
@@ -92,7 +92,7 @@ export default function ProfileConfigPage() {
   const { can } = useAdminPermissions();
   const canWrite = can("profile_catalog:write");
   const canPublish = can("profile_catalog:publish");
-  const [tab, setTab] = useState<Tab>("categories");
+  const [tab, setTab] = useState<Tab>("fields");
   const [overview, setOverview] = useState<CatalogOverview | null>(null);
   const [draft, setDraft] = useState<CatalogVersionRow | null>(null);
   const [doc, setDoc] = useState<CatalogDocument | null>(null);
@@ -1267,7 +1267,7 @@ function FieldsTab({
                 label={portfolioGroup === "athlete" ? "Sport" : "Profession"}
                 hint={
                   rolesInGroup.length === 0
-                    ? `Add ${portfolioGroup === "athlete" ? "sports" : "professions"} under Sports & professions first.`
+                    ? `Add ${portfolioGroup === "athlete" ? "sports" : "professions"} under Roles first.`
                     : portfolioGroup === "athlete"
                       ? "All sports added for athletes."
                       : "All professional roles you added."
@@ -1548,7 +1548,7 @@ function FieldEditor({
           <input className={inputClass} value={recordLabel} disabled readOnly />
         </Field>
         {(f.scope_kind === "sport" || f.scope_kind === "profession") && (
-          <Field label="Applies to" hint="Athlete sports or professional roles from Sports & professions.">
+          <Field label="Applies to" hint="Athlete sports or professional roles from Roles.">
             <select
               className={inputClass}
               value={`${f.scope_kind}:${f.scope_ref ?? ""}`}
