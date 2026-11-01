@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Archive, Plus, RotateCcw } from "lucide-react";
+import { ArrowDown, ArrowUp, Archive, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -107,13 +107,17 @@ export default function ProfileConfigPage() {
     { kind: "sports" | "professions"; row: CatalogSport | CatalogProfession } | null
   >(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (preferDraftId?: string | null) => {
     setLoading(true);
     setError(null);
     try {
       const data = await catalogRequest<CatalogOverview>("");
       setOverview(data);
-      const open = data.versions.find((v) => v.status === "draft");
+      const drafts = data.versions.filter((v) => v.status === "draft");
+      const open =
+        (preferDraftId ? drafts.find((v) => v.id === preferDraftId) : null) ??
+        drafts[0] ??
+        null;
       if (open) {
         const full = await catalogRequest<CatalogVersionRow>(`/drafts/${open.id}`);
         setDraft(full);
@@ -156,17 +160,98 @@ export default function ProfileConfigPage() {
     setCheck(null);
   };
 
-  const startDraft = async () => {
+  const startDraft = async (fromVersionId?: string) => {
+    if (dirty && !window.confirm("Discard unsaved draft edits and start from this version?")) return;
+    const otherDrafts = (overview?.versions ?? []).filter(
+      (v) => v.status === "draft" && v.id !== fromVersionId,
+    );
+    if (
+      fromVersionId &&
+      otherDrafts.length > 0 &&
+      !window.confirm(
+        `You already have ${otherDrafts.length} open draft(s). Create another from this version? You can delete unused drafts in Versions.`,
+      )
+    ) {
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      const created = await catalogRequest<CatalogVersionRow>("/drafts", { method: "POST", body: "{}" });
+      const created = await catalogRequest<CatalogVersionRow>("/drafts", {
+        method: "POST",
+        body: JSON.stringify(fromVersionId ? { from_version_id: fromVersionId } : {}),
+      });
       setDraft(created);
       setDoc(created.document ?? null);
       setDirty(false);
-      setNotice(`Draft started from version ${created.base_version}.`);
+      setCheck(null);
+      setTab("fields");
+      setNotice(
+        fromVersionId
+          ? `Editing a new draft forked from the selected version (based on live v${created.base_version}).`
+          : `Draft started from version ${created.base_version}.`,
+      );
+      await load(created.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start a draft");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openVersion = async (row: CatalogVersionRow) => {
+    if (row.status === "draft") {
+      if (dirty && draft?.id !== row.id && !window.confirm("Switch drafts? Unsaved edits will be lost.")) return;
+      setBusy(true);
+      setError(null);
+      try {
+        const full = await catalogRequest<CatalogVersionRow>(`/drafts/${row.id}`);
+        setDraft(full);
+        setDoc(full.document ?? null);
+        setDirty(false);
+        setCheck(null);
+        setTab("fields");
+        setNotice("Opened draft for editing.");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not open draft");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    // Published / superseded → fork into a new editable draft.
+    await startDraft(row.id);
+  };
+
+  const deleteVersion = async (row: CatalogVersionRow) => {
+    if (row.status === "published") {
+      setError("The live published catalog can't be deleted. Publish a newer version first.");
+      return;
+    }
+    const label = row.version ? `v${row.version}` : `draft from v${row.base_version}`;
+    if (
+      !window.confirm(
+        row.status === "draft"
+          ? `Delete ${label}? Unpublished changes are lost.`
+          : `Remove superseded ${label} from history? This cannot be undone from the admin UI.`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await catalogRequest(`/versions/${row.id}`, { method: "DELETE" });
+      if (draft?.id === row.id) {
+        setDraft(null);
+        setDoc(null);
+        setDirty(false);
+        setCheck(null);
+      }
+      setNotice(row.status === "draft" ? "Draft deleted." : `Superseded ${label} removed.`);
+      await load(draft?.id === row.id ? null : draft?.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete version");
     } finally {
       setBusy(false);
     }
@@ -335,7 +420,16 @@ export default function ProfileConfigPage() {
             />
           ) : null}
           {tab === "sections" ? <SectionsTab doc={doc} editable={editable} onChange={update} /> : null}
-          {tab === "history" ? <HistoryTab versions={overview.versions} /> : null}
+          {tab === "history" ? (
+            <HistoryTab
+              versions={overview.versions}
+              activeDraftId={draft?.id ?? null}
+              canWrite={canWrite}
+              busy={busy}
+              onOpen={(v) => void openVersion(v)}
+              onDelete={(v) => void deleteVersion(v)}
+            />
+          ) : null}
         </>
       ) : null}
 
@@ -1470,19 +1564,92 @@ function SectionsTab({
   );
 }
 
-function HistoryTab({ versions }: { versions: CatalogVersionRow[] }) {
+function HistoryTab({
+  versions,
+  activeDraftId,
+  canWrite,
+  busy,
+  onOpen,
+  onDelete,
+}: {
+  versions: CatalogVersionRow[];
+  activeDraftId: string | null;
+  canWrite: boolean;
+  busy: boolean;
+  onOpen: (v: CatalogVersionRow) => void;
+  onDelete: (v: CatalogVersionRow) => void;
+}) {
   return (
-    <ul className="divide-y divide-border rounded-xl border border-border bg-card">
-      {versions.map((v) => (
-        <li key={v.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5 text-sm">
-          <span className="font-medium">{v.version ? `v${v.version}` : `Draft from v${v.base_version}`}</span>
-          <StatusPill status={v.status} />
-          <span className="text-xs text-text-secondary">{v.notes}</span>
-          <span className="ml-auto text-xs text-text-hint">
-            {v.published_at ? `published ${new Date(v.published_at).toLocaleString()}` : v.updated_at ? `updated ${new Date(v.updated_at).toLocaleString()}` : ""}
-          </span>
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-3">
+      <p className="text-sm text-text-secondary">
+        Click a version to edit it. Drafts open directly; published or superseded versions start a new draft
+        forked from that snapshot. The live published catalog cannot be deleted — remove superseded history or
+        unused drafts instead.
+      </p>
+      <ul className="divide-y divide-border rounded-xl border border-border bg-card">
+        {versions.map((v) => {
+          const active = activeDraftId === v.id;
+          const canDelete = canWrite && (v.status === "draft" || v.status === "superseded");
+          return (
+            <li
+              key={v.id}
+              className={cn(
+                "flex flex-wrap items-center gap-3 px-4 py-2.5 text-sm",
+                active && "bg-primary/5",
+              )}
+            >
+              <button
+                type="button"
+                className="min-w-0 flex-1 text-left"
+                disabled={busy || !canWrite}
+                onClick={() => onOpen(v)}
+              >
+                <span className="font-medium">
+                  {v.version ? `v${v.version}` : `Draft from v${v.base_version}`}
+                  {active ? " · editing" : ""}
+                </span>
+                <span className="ml-2 inline-flex align-middle">
+                  <StatusPill status={v.status} />
+                </span>
+                {v.notes ? <span className="mt-0.5 block text-xs text-text-secondary">{v.notes}</span> : null}
+                <span className="mt-0.5 block text-xs text-text-hint">
+                  {v.published_at
+                    ? `published ${new Date(v.published_at).toLocaleString()}`
+                    : v.updated_at
+                      ? `updated ${new Date(v.updated_at).toLocaleString()}`
+                      : ""}
+                </span>
+              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  className={buttonClass}
+                  disabled={busy || !canWrite}
+                  title={v.status === "draft" ? "Open draft" : "Edit as new draft"}
+                  onClick={() => onOpen(v)}
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  className={buttonClass}
+                  disabled={busy || !canDelete}
+                  title={
+                    v.status === "published"
+                      ? "Live published catalog can’t be deleted"
+                      : v.status === "draft"
+                        ? "Delete draft"
+                        : "Remove from history"
+                  }
+                  onClick={() => onDelete(v)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
