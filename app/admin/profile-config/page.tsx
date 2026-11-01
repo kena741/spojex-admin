@@ -1325,22 +1325,53 @@ function FieldsTab({
             }
           />
         ) : (
-          <>
-            {/* Mobile cards */}
-            <ul className="space-y-3 md:hidden">
-              {rows.map((f) => {
-                const isDuplicate = duplicateKeys.has(f.key);
-                return (
-                  <li
-                    key={f.id}
-                    className={cn(
-                      "rounded-xl border border-border bg-card p-3 shadow-sm",
-                      f.status === "archived" && "opacity-60",
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-text-primary">
+          <div className="max-w-full overflow-x-auto overscroll-x-contain rounded-xl border border-border bg-card [-webkit-overflow-scrolling:touch]">
+            <table className="w-full min-w-[880px] border-collapse text-sm">
+              <thead className="bg-muted/40 text-left text-xs text-text-secondary">
+                <tr>
+                  <th className="whitespace-nowrap px-3 py-2">Order</th>
+                  <th className="whitespace-nowrap px-3 py-2">Field</th>
+                  <th className="whitespace-nowrap px-3 py-2">Type</th>
+                  {bucket === "portfolio" ? (
+                    <th className="whitespace-nowrap px-3 py-2">Section</th>
+                  ) : (
+                    <th className="whitespace-nowrap px-3 py-2">Applies to</th>
+                  )}
+                  <th className="whitespace-nowrap px-3 py-2">Rules</th>
+                  <th className="whitespace-nowrap px-3 py-2">Usage</th>
+                  <th className="whitespace-nowrap px-3 py-2">Status</th>
+                  <th className="whitespace-nowrap px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {rows.map((f) => {
+                  const isDuplicate = duplicateKeys.has(f.key);
+                  return (
+                    <tr key={f.id} className={f.status === "archived" ? "opacity-60" : undefined}>
+                      <td className="whitespace-nowrap px-3 py-2">
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            className={buttonClass}
+                            aria-label="Move up"
+                            disabled={!editable || f.status !== "active"}
+                            onClick={() => moveField(f, -1)}
+                          >
+                            <ArrowUp className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            className={buttonClass}
+                            aria-label="Move down"
+                            disabled={!editable || f.status !== "active"}
+                            onClick={() => moveField(f, 1)}
+                          >
+                            <ArrowDown className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="min-w-[12rem] px-3 py-2">
+                        <p className="font-medium">
                           {f.label || "(no label)"}
                           {isDuplicate ? (
                             <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
@@ -1348,120 +1379,30 @@ function FieldsTab({
                             </span>
                           ) : null}
                         </p>
-                        <p className="mt-0.5 break-all text-xs text-text-hint">{fieldMeta(f)}</p>
-                      </div>
-                      <StatusPill status={f.status} />
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-secondary">
-                      <span>{INPUT_TYPE_LABELS[f.input_type] ?? f.input_type}</span>
-                      <span>{bucket === "portfolio" ? sectionLabel(f.section) : scopeLabel(doc, f)}</span>
-                      <span>{fieldRules(f)}</span>
-                      <span>{usage[f.id] ?? 0} saved</span>
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex gap-1">
-                        <button
-                          type="button"
-                          className={buttonClass}
-                          aria-label="Move up"
-                          disabled={!editable || f.status !== "active"}
-                          onClick={() => moveField(f, -1)}
-                        >
-                          <ArrowUp className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          className={buttonClass}
-                          aria-label="Move down"
-                          disabled={!editable || f.status !== "active"}
-                          onClick={() => moveField(f, 1)}
-                        >
-                          <ArrowDown className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                      {fieldActions(f)}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-
-            {/* Desktop table */}
-            <div className="hidden overflow-x-auto rounded-xl border border-border bg-card md:block">
-              <table className="w-full min-w-[720px] text-sm">
-                <thead className="bg-muted/40 text-left text-xs text-text-secondary">
-                  <tr>
-                    <th className="px-3 py-2">Order</th>
-                    <th className="px-3 py-2">Field</th>
-                    <th className="px-3 py-2">Type</th>
-                    {bucket === "portfolio" ? (
-                      <th className="px-3 py-2">Section</th>
-                    ) : (
-                      <th className="px-3 py-2">Applies to</th>
-                    )}
-                    <th className="px-3 py-2">Rules</th>
-                    <th className="px-3 py-2">Usage</th>
-                    <th className="px-3 py-2">Status</th>
-                    <th className="px-3 py-2" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {rows.map((f) => {
-                    const isDuplicate = duplicateKeys.has(f.key);
-                    return (
-                      <tr key={f.id} className={f.status === "archived" ? "opacity-60" : undefined}>
-                        <td className="px-3 py-2">
-                          <div className="flex gap-1">
-                            <button
-                              type="button"
-                              className={buttonClass}
-                              aria-label="Move up"
-                              disabled={!editable || f.status !== "active"}
-                              onClick={() => moveField(f, -1)}
-                            >
-                              <ArrowUp className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              className={buttonClass}
-                              aria-label="Move down"
-                              disabled={!editable || f.status !== "active"}
-                              onClick={() => moveField(f, 1)}
-                            >
-                              <ArrowDown className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                        <td className="px-3 py-2">
-                          <p className="font-medium">
-                            {f.label || "(no label)"}
-                            {isDuplicate ? (
-                              <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-                                duplicate
-                              </span>
-                            ) : null}
-                          </p>
-                          <p className="text-xs text-text-hint">{fieldMeta(f)}</p>
-                        </td>
-                        <td className="px-3 py-2">{INPUT_TYPE_LABELS[f.input_type] ?? f.input_type}</td>
-                        <td className="px-3 py-2 text-xs text-text-secondary">
-                          {bucket === "portfolio" ? sectionLabel(f.section) : scopeLabel(doc, f)}
-                        </td>
-                        <td className="px-3 py-2 text-xs text-text-secondary">{fieldRules(f)}</td>
-                        <td className="px-3 py-2 text-xs">{usage[f.id] ?? 0}</td>
-                        <td className="px-3 py-2">
-                          <StatusPill status={f.status} />
-                        </td>
-                        <td className="px-3 py-2">
-                          <div className="flex justify-end">{fieldActions(f)}</div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </>
+                        <p className="text-xs text-text-hint">{fieldMeta(f)}</p>
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2">
+                        {INPUT_TYPE_LABELS[f.input_type] ?? f.input_type}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 text-xs text-text-secondary">
+                        {bucket === "portfolio" ? sectionLabel(f.section) : scopeLabel(doc, f)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 text-xs text-text-secondary">
+                        {fieldRules(f)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2 text-xs">{usage[f.id] ?? 0}</td>
+                      <td className="whitespace-nowrap px-3 py-2">
+                        <StatusPill status={f.status} />
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2">
+                        <div className="flex justify-end">{fieldActions(f)}</div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
