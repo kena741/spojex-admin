@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Archive, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Archive, Info, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -72,10 +72,32 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
+/** Small ⓘ with the explanation in a native tooltip. */
+function InfoTip({ text }: { text: string }) {
+  return (
+    <span title={text} aria-label={text} className="inline-flex cursor-help align-middle text-text-hint">
+      <Info className="h-3.5 w-3.5" />
+    </span>
+  );
+}
+
+function Field({
+  label,
+  children,
+  hint,
+  tip,
+}: {
+  label: string;
+  children: React.ReactNode;
+  hint?: string;
+  tip?: string;
+}) {
   return (
     <label className="block space-y-1">
-      <span className="text-xs font-medium text-text-secondary">{label}</span>
+      <span className="flex items-center gap-1 text-xs font-medium text-text-secondary">
+        {label}
+        {tip ? <InfoTip text={tip} /> : null}
+      </span>
       {children}
       {hint ? <span className="block text-xs text-text-hint">{hint}</span> : null}
     </label>
@@ -184,7 +206,7 @@ export default function ProfileConfigPage() {
       fromVersionId &&
       otherDrafts.length > 0 &&
       !window.confirm(
-        `You already have ${otherDrafts.length} open draft(s). Create another from this version? You can delete unused drafts in Versions.`,
+        `${otherDrafts.length} draft(s) already open. Create another?`,
       )
     ) {
       return;
@@ -203,8 +225,8 @@ export default function ProfileConfigPage() {
       setTab("fields");
       setNotice(
         fromVersionId
-          ? `Editing a new draft forked from the selected version (based on live v${created.base_version}).`
-          : `Draft started from version ${created.base_version}.`,
+          ? `New draft from the selected version.`
+          : `Draft started from v${created.base_version}.`,
       );
       await load(created.id);
     } catch (err) {
@@ -240,7 +262,7 @@ export default function ProfileConfigPage() {
 
   const deleteVersion = async (row: CatalogVersionRow) => {
     if (row.status === "published") {
-      setError("The live published catalog can't be deleted. Publish a newer version first.");
+      setError("The live version can't be deleted.");
       return;
     }
     const label = row.version ? `v${row.version}` : `draft from v${row.base_version}`;
@@ -248,7 +270,7 @@ export default function ProfileConfigPage() {
       !window.confirm(
         row.status === "draft"
           ? `Delete ${label}? Unpublished changes are lost.`
-          : `Remove superseded ${label} from history? This cannot be undone from the admin UI.`,
+          : `Remove ${label} from history?`,
       )
     ) {
       return;
@@ -295,7 +317,7 @@ export default function ProfileConfigPage() {
           setDraft(full);
           setDoc(full.document ?? null);
           setDirty(false);
-          setError("Draft was updated on the server. Reloaded — re-apply your edits, then Save.");
+          setError("Draft changed elsewhere and was reloaded. Re-apply your edits.");
           return false;
         } catch {
           /* fall through */
@@ -388,7 +410,7 @@ export default function ProfileConfigPage() {
       );
       setPublishOpen(false);
       setCheck(null);
-      setNotice(`Published v${out.version} “${title}”. ${out.recomputed_profiles} profiles had their completion updated.`);
+      setNotice(`Published v${out.version}.`);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Publish failed");
@@ -462,8 +484,8 @@ export default function ProfileConfigPage() {
         title="Profile Configuration"
         description={
           overview
-            ? `Live catalog v${overview.live.version}${draft ? ` · editing draft based on v${draft.base_version}` : " · read-only (start a draft to edit)"}`
-            : "Sports, professions, profile fields, and sections"
+            ? `Live v${overview.live.version}${draft ? ` · draft from v${draft.base_version}` : " · read-only"}`
+            : "Profile tabs and fields"
         }
         actions={headerActions}
       />
@@ -607,7 +629,9 @@ export default function ProfileConfigPage() {
         }
       >
         <div className="mb-4 space-y-1">
-          <label className="block text-xs font-medium text-text-secondary">Version title</label>
+          <label className="flex items-center gap-1 text-xs font-medium text-text-secondary">
+            Version title <InfoTip text="Shown in Versions history." />
+          </label>
           <input
             className={inputClass}
             value={publishTitle}
@@ -615,7 +639,6 @@ export default function ProfileConfigPage() {
             placeholder="e.g. Media tab fields + football highlights"
             onChange={(e) => setPublishTitle(e.target.value)}
           />
-          <p className="text-xs text-text-hint">Shown in Versions history so you can tell publishes apart.</p>
         </div>
         {check ? <ImpactSummary check={check} /> : null}
       </AdminModal>
@@ -671,10 +694,10 @@ function CheckPanel({ check }: { check: CatalogCheck }) {
       )}
     >
       <p className="font-medium text-text-primary">
-        {check.ok ? "Draft is valid." : `${check.errors.length} error(s) must be fixed before publishing.`}{" "}
+        {check.ok ? "Draft is valid." : `${check.errors.length} error(s) to fix.`}{" "}
         {check.impact.change_count} change(s)
         {check.impact.profiles_needing_update
-          ? ` · ${check.impact.profiles_needing_update} complete profile(s) will be asked to update`
+          ? ` · ${check.impact.profiles_needing_update} profile(s) need an update`
           : ""}
       </p>
       {[...check.errors.map((e) => ({ ...e, level: "error" })), ...check.warnings.map((w) => ({ ...w, level: "warning" }))].map(
@@ -1000,7 +1023,7 @@ function FieldsTab({
 
       <div className="min-w-0 space-y-4">
         <div className="flex flex-wrap items-end gap-2">
-          <Field label="Show what this audience gets">
+          <Field label="Preview as" tip="Show only what this role, sport, or profession sees.">
             <AudienceSelect doc={doc} value={audience} onChange={setAudience} includeAll />
           </Field>
           <button type="button" className={primaryButtonClass} disabled={!editable} onClick={() => onEdit(newField(null, singleFields))}>
@@ -1016,13 +1039,14 @@ function FieldsTab({
         </div>
         {audience !== "all" && !tabReaches(tab, audience) ? (
           <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-text-secondary">
-            This tab isn&apos;t shown to the selected audience (see Sections).
+            Hidden for this audience.
           </p>
         ) : null}
 
         <section className="space-y-2">
-          <h3 className="text-sm font-semibold">Single-value fields</h3>
-          <p className="text-xs text-text-hint">One answer per profile. Required ones count toward profile completion.</p>
+          <h3 className="flex items-center gap-1 text-sm font-semibold">
+            Single-value fields <InfoTip text="One answer per profile. Required ones count toward completion." />
+          </h3>
           <FieldTable
             doc={doc}
             rows={singleFields}
@@ -1031,7 +1055,7 @@ function FieldsTab({
             liveIds={liveIds}
             onEdit={onEdit}
             onChange={onChange}
-            empty="No single-value fields on this tab for this audience."
+            empty="No fields."
           />
         </section>
 
@@ -1042,7 +1066,8 @@ function FieldsTab({
               <div className="flex flex-wrap items-center gap-2">
                 <div className="min-w-0 flex-1">
                   <h3 className="text-sm font-semibold">
-                    {g.label || "(no label)"} <span className="font-normal text-text-hint">· repeatable</span>
+                    {g.label || "(no label)"} <span className="font-normal text-text-hint">· repeatable</span>{" "}
+                    <InfoTip text="People can add many items, each with these fields." />
                   </h3>
                   <p className="text-xs text-text-hint">
                     {g.key} · {scopeLabel(doc, g)} · each item: {g.item_label || "item"}
@@ -1080,7 +1105,7 @@ function FieldsTab({
                 liveIds={liveIds}
                 onEdit={onEdit}
                 onChange={onChange}
-                empty="No fields in this group for this audience."
+                empty="No fields."
               />
             </section>
           );
@@ -1248,10 +1273,6 @@ function GroupEditor({
         />
       }
     >
-      <p className="mb-3 text-xs text-text-hint">
-        A repeatable group lets people add many items (for example highlight reels or teams coached). Its fields are added
-        from the group&apos;s card after saving.
-      </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Label">
           <input
@@ -1260,11 +1281,11 @@ function GroupEditor({
             onChange={(e) => setG({ ...g, label: e.target.value, key: isNew && !group.key ? slugify(e.target.value) : g.key })}
           />
         </Field>
-        <Field label="Key (permanent)" hint={keyTaken ? "Another group already uses this key." : undefined}>
+        <Field label="Key" tip="Permanent ID used by the API." hint={keyTaken ? "Already used." : undefined}>
           <input className={inputClass} value={g.key} disabled={!isNew} onChange={(e) => setG({ ...g, key: slugify(e.target.value) })} />
         </Field>
-        <Field label="One item is called" hint="e.g. Reel, Team, Highlight">
-          <input className={inputClass} value={g.item_label} onChange={(e) => setG({ ...g, item_label: e.target.value })} />
+        <Field label="Item name">
+          <input className={inputClass} placeholder="e.g. Reel" value={g.item_label} onChange={(e) => setG({ ...g, item_label: e.target.value })} />
         </Field>
         <Field label="Tab">
           <select
@@ -1282,7 +1303,7 @@ function GroupEditor({
               ))}
           </select>
         </Field>
-        <Field label="Applies to" hint={isNew ? undefined : "Can't change after publishing; add a new group instead."}>
+        <Field label="Applies to" tip={isNew ? undefined : "Locked after publishing."}>
           <AudienceSelect
             doc={doc}
             value={scopeValue(g)}
@@ -1290,11 +1311,12 @@ function GroupEditor({
             onChange={(value) => setG({ ...g, ...parseScope(value) })}
           />
         </Field>
-        <Field label="Maximum items" hint="Leave empty for no limit.">
+        <Field label="Max items">
           <input
             className={inputClass}
             type="number"
             min={1}
+            placeholder="No limit"
             value={g.max_items ?? ""}
             onChange={(e) => setG({ ...g, max_items: e.target.value === "" ? null : Math.max(1, Number(e.target.value)) })}
           />
@@ -1373,13 +1395,13 @@ function FieldEditor({
             onChange={(e) => setF({ ...f, label: e.target.value, key: isNew && !field.key ? slugify(e.target.value) : f.key })}
           />
         </Field>
-        <Field label="Key (permanent)" hint={isNew ? "Used by the API. Can't change after publishing." : "Keys never change; renaming the label is safe."}>
+        <Field label="Key" tip="Permanent ID used by the API. Renaming the label is safe.">
           <input className={inputClass} value={f.key} disabled={!isNew} onChange={(e) => setF({ ...f, key: slugify(e.target.value) })} />
         </Field>
         <Field label="Help text">
           <input className={inputClass} value={f.help_text} onChange={(e) => setF({ ...f, help_text: e.target.value })} />
         </Field>
-        <Field label="Placeholder" hint="Shown inside empty inputs on mobile.">
+        <Field label="Placeholder" tip="Hint inside the empty input in the app.">
           <input
             className={inputClass}
             value={f.placeholder ?? (typeof f.validation.placeholder === "string" ? f.validation.placeholder : "")}
@@ -1387,11 +1409,11 @@ function FieldEditor({
           />
         </Field>
         {group ? (
-          <Field label="Group" hint="Each item in the group has this field.">
+          <Field label="Group">
             <input className={inputClass} value={`${group.label} (repeatable)`} disabled readOnly />
           </Field>
         ) : (
-          <Field label="Tab" hint="Where the field is shown. Independent of who it applies to.">
+          <Field label="Tab" tip="Where it shows. Separate from who it applies to.">
             <select className={inputClass} value={f.section ?? ""} onChange={(e) => setF({ ...f, section: e.target.value })}>
               {doc.sections
                 .filter((s) => s.status === "active" || s.key === f.section)
@@ -1405,7 +1427,7 @@ function FieldEditor({
             </select>
           </Field>
         )}
-        <Field label="Applies to" hint={isNew ? undefined : "Can't change after publishing; archive and add a new field instead."}>
+        <Field label="Applies to" tip={isNew ? undefined : "Locked after publishing. Archive and add a new field instead."}>
           <AudienceSelect
             doc={doc}
             value={scopeValue(f)}
@@ -1415,7 +1437,8 @@ function FieldEditor({
         </Field>
         <Field
           label="Input type"
-          hint={typeFrozen ? `${usage > 0 ? `${usage} saved answers — ` : ""}type is locked for this field.` : undefined}
+          hint={typeFrozen ? "Locked" : undefined}
+          tip={typeFrozen && usage > 0 ? `${usage} saved answers` : undefined}
         >
           <select
             className={inputClass}
@@ -1472,7 +1495,9 @@ function FieldEditor({
       </div>
       {isSelect ? (
         <div className="mt-4 space-y-2">
-          <p className="text-xs font-medium text-text-secondary">Options (values are permanent; archived options stay on existing answers)</p>
+          <p className="flex items-center gap-1 text-xs font-medium text-text-secondary">
+            Options <InfoTip text="Values are permanent. Archived options stay on existing answers." />
+          </p>
           {options.map((o) => (
             <div key={o.id} className={cn("flex items-center gap-2", o.status === "archived" && "opacity-60")}>
               <input
@@ -1560,7 +1585,7 @@ function CategoryEditor({
         <Field label="Slug (permanent)">
           <input className={inputClass} value={r.slug} disabled={!isNew} onChange={(e) => setR({ ...r, slug: slugify(e.target.value) })} />
         </Field>
-        <Field label="Profile title" hint={kind === "sports" ? "Shown on profiles, e.g. “Basketball Player”." : "Shown on profiles, e.g. “Photographer”."}>
+        <Field label="Profile title" tip={kind === "sports" ? "e.g. Basketball Player" : "e.g. Photographer"}>
           <input className={inputClass} value={r.profile_title} onChange={(e) => setR({ ...r, profile_title: e.target.value })} />
         </Field>
         <Field label="Description">
@@ -1568,7 +1593,7 @@ function CategoryEditor({
         </Field>
         {kind === "professions" ? (
           <>
-            <Field label="License wording" hint="Label for the license field, e.g. “Coaching license”.">
+            <Field label="License label" tip="e.g. Coaching license">
               <input className={inputClass} value={pro.license_label} onChange={(e) => setR({ ...pro, license_label: e.target.value })} />
             </Field>
             <Field label="Default marketplace category (slug)">
@@ -1628,9 +1653,9 @@ function SectionsTab({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-text-secondary">
-          Tabs on the app profile. Roles decide who sees a tab; tick sports or professions to narrow it further
-          (none ticked = everyone in that role). Kind only picks the icon.
+        <p className="flex items-center gap-1 text-sm text-text-secondary">
+          Who sees each tab
+          <InfoTip text="Roles decide who sees a tab. Tick sports or professions to narrow it. Kind sets the icon." />
         </p>
         <button
           type="button"
@@ -1827,14 +1852,9 @@ function VersionDetailBody({
   return (
     <div className="space-y-4 text-sm">
       <div className="rounded-xl border border-border bg-muted/30 px-4 py-3">
-        <p className="text-xs text-text-hint">What makes versions different</p>
-        <p className="mt-1 text-text-secondary">
-          Each published version is a full snapshot of sports, professions, sections, and fields. The list below
-          shows only what changed compared to{" "}
-          <span className="font-medium text-text-primary">
-            {detail.compared_to?.label ?? "an empty catalog"}
-          </span>
-          .
+        <p className="text-text-secondary">
+          Compared with{" "}
+          <span className="font-medium text-text-primary">{detail.compared_to?.label ?? "an empty catalog"}</span>
         </p>
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
           <StatusPill status={detail.status} />
@@ -1919,11 +1939,9 @@ function HistoryTab({
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-text-secondary">
-        <p className="font-medium text-text-primary">Versions</p>
-        <p className="mt-1">
-          A version is a published snapshot of the whole profile catalog. Open <span className="font-medium">Details</span>{" "}
-          to see what changed from the previous publish. Give each publish a title so history stays readable. Drafts are
-          unpublished work-in-progress.
+        <p className="flex items-center gap-1 font-medium text-text-primary">
+          Versions
+          <InfoTip text="Each publish is a snapshot. Open Details to see what changed. Drafts are unpublished." />
         </p>
       </div>
       <ul className="space-y-2">
