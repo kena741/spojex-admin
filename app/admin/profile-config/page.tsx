@@ -481,6 +481,7 @@ export default function ProfileConfigPage() {
               doc={doc}
               editable={editable}
               usage={usage}
+              liveIds={liveIds}
               onEdit={setEditingField}
               onChange={update}
             />
@@ -849,20 +850,37 @@ function scopeLabel(doc: CatalogDocument, f: CatalogField) {
   return SCOPE_LABELS[f.scope_kind] ?? f.scope_kind;
 }
 
+function overviewCloneIds(fields: CatalogField[], field: CatalogField): string[] {
+  /** Same Overview key under different common scopes (duplicate copies). */
+  if (fieldBucket(field) !== "overview") return [field.id];
+  return fields
+    .filter(
+      (f) =>
+        fieldBucket(f) === "overview" &&
+        f.key === field.key &&
+        f.target === field.target &&
+        COMMON_FIELD_SCOPES.has(f.scope_kind),
+    )
+    .map((f) => f.id);
+}
+
 function FieldsTab({
   doc,
   editable,
   usage,
+  liveIds,
   onEdit,
   onChange,
 }: {
   doc: CatalogDocument;
   editable: boolean;
   usage: Record<string, number>;
+  liveIds: Set<string>;
   onEdit: (f: CatalogField) => void;
   onChange: (fn: (d: CatalogDocument) => CatalogDocument) => void;
 }) {
   const [bucket, setBucket] = useState<FieldsBucket>("overview");
+  const [showArchived, setShowArchived] = useState(false);
   const [portfolioRole, setPortfolioRole] = useState(() =>
     doc.sports.find((s) => s.slug === "football" && s.status === "active")
       ? "sport:football"
@@ -937,21 +955,66 @@ function FieldsTab({
   }, [athleteRoles, professionalRoles, portfolioGroup, portfolioRole, roleScopes]);
 
   const rows = useMemo(() => {
-    let list = doc.fields.filter((f) => fieldBucket(f) === bucket && f.status === "active");
+    let list = doc.fields.filter((f) => fieldBucket(f) === bucket);
+    if (!showArchived) list = list.filter((f) => f.status === "active");
     if (bucket === "portfolio") {
       list = list.filter((f) => scopeKey(f) === portfolioRole);
     } else if (bucket === "media") {
       // Account + sport/profession-scoped highlight fields for the Media tab.
     } else {
       list = list.filter((f) => COMMON_FIELD_SCOPES.has(f.scope_kind));
-      // Overview only — career/achievements keep every shared entry field.
-      if (bucket === "overview") list = dedupeFields(list);
+      // Overview shows every copy (including cross-scope duplicates) so they can be deleted.
     }
     return [...list].sort(bySort);
-  }, [doc.fields, bucket, portfolioRole]);
+  }, [doc.fields, bucket, portfolioRole, showArchived]);
+
+  const duplicateKeys = useMemo(() => {
+    if (bucket !== "overview") return new Set<string>();
+    const counts = new Map<string, number>();
+    for (const f of rows) {
+      if (f.status !== "active") continue;
+      counts.set(f.key, (counts.get(f.key) ?? 0) + 1);
+    }
+    return new Set([...counts.entries()].filter(([, n]) => n > 1).map(([k]) => k));
+  }, [bucket, rows]);
 
   const sectionLabel = (key: string | null) => doc.sections.find((s) => s.key === key)?.label ?? "—";
   const [roleKind, roleRef] = portfolioRole.split(":");
+
+  const removeFields = (targets: CatalogField[]) => {
+    if (!targets.length) return;
+    const liveOnes = targets.filter((f) => liveIds.has(f.id));
+    const draftOnes = targets.filter((f) => !liveIds.has(f.id));
+    const labels = targets.map((f) => f.label || f.key).join(", ");
+    const msg =
+      liveOnes.length === 0
+        ? `Delete ${targets.length === 1 ? `"${labels}"` : `${targets.length} fields`} from this draft?`
+        : draftOnes.length === 0
+          ? `Remove ${targets.length === 1 ? `"${labels}"` : `${targets.length} fields`} from Overview? Existing answers stay; the field is archived and hidden from forms.`
+          : `Remove ${targets.length} field(s)? Draft-only copies are deleted; published ones are archived (answers kept).`;
+    if (!window.confirm(msg)) return;
+    const archiveIds = new Set(liveOnes.map((f) => f.id));
+    const deleteIds = new Set(draftOnes.map((f) => f.id));
+    onChange((d) => ({
+      ...d,
+      fields: d.fields
+        .filter((x) => !deleteIds.has(x.id))
+        .map((x) => (archiveIds.has(x.id) ? { ...x, status: "archived" as const } : x)),
+    }));
+  };
+
+  const cleanOverviewDuplicates = () => {
+    const active = doc.fields.filter(
+      (f) => fieldBucket(f) === "overview" && f.status === "active" && COMMON_FIELD_SCOPES.has(f.scope_kind),
+    );
+    const keep = new Set(dedupeFields(active).map((f) => f.id));
+    const drop = active.filter((f) => !keep.has(f.id));
+    if (drop.length === 0) {
+      window.alert("No Overview duplicates to clean.");
+      return;
+    }
+    removeFields(drop);
+  };
 
   const setPortfolioGroup = (group: "athlete" | "professional") => {
     const list = group === "athlete" ? athleteRoles : professionalRoles;
@@ -1105,7 +1168,30 @@ function FieldsTab({
                   ? "Add media field"
                   : "Add field"}
           </button>
+          <label className="ml-auto flex items-center gap-2 text-xs text-text-secondary">
+            <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+            Show archived
+          </label>
+          {bucket === "overview" && duplicateKeys.size > 0 ? (
+            <button
+              type="button"
+              className={buttonClass}
+              disabled={!editable}
+              title="Keep one copy of each duplicate key; archive or delete the rest"
+              onClick={() => cleanOverviewDuplicates()}
+            >
+              Clean {duplicateKeys.size} duplicate key{duplicateKeys.size === 1 ? "" : "s"}
+            </button>
+          ) : null}
         </div>
+
+        {bucket === "overview" ? (
+          <p className="text-xs text-text-secondary">
+            Use Delete to remove unnecessary Overview entities. Published fields are archived (answers kept);
+            draft-only fields are removed. Duplicate keys across Fan/Athlete/Professional scopes are listed so you
+            can delete extras or use Clean duplicates.
+          </p>
+        ) : null}
 
         {rows.length === 0 ? (
           <AdminEmpty
@@ -1134,7 +1220,10 @@ function FieldsTab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {rows.map((f) => (
+                {rows.map((f) => {
+                  const clones = overviewCloneIds(doc.fields, f).filter((id) => id !== f.id);
+                  const isDuplicate = duplicateKeys.has(f.key);
+                  return (
                   <tr key={f.id} className={f.status === "archived" ? "opacity-60" : undefined}>
                     <td className="px-3 py-2">
                       <div className="flex gap-1">
@@ -1142,8 +1231,8 @@ function FieldsTab({
                           type="button"
                           className={buttonClass}
                           aria-label="Move up"
-                          disabled={!editable}
-                          onClick={() => onChange((d) => ({ ...d, fields: reorder(d.fields, rows, f.id, -1) }))}
+                          disabled={!editable || f.status !== "active"}
+                          onClick={() => onChange((d) => ({ ...d, fields: reorder(d.fields, rows.filter((r) => r.status === "active"), f.id, -1) }))}
                         >
                           <ArrowUp className="h-3.5 w-3.5" />
                         </button>
@@ -1151,19 +1240,27 @@ function FieldsTab({
                           type="button"
                           className={buttonClass}
                           aria-label="Move down"
-                          disabled={!editable}
-                          onClick={() => onChange((d) => ({ ...d, fields: reorder(d.fields, rows, f.id, 1) }))}
+                          disabled={!editable || f.status !== "active"}
+                          onClick={() => onChange((d) => ({ ...d, fields: reorder(d.fields, rows.filter((r) => r.status === "active"), f.id, 1) }))}
                         >
                           <ArrowDown className="h-3.5 w-3.5" />
                         </button>
                       </div>
                     </td>
                     <td className="px-3 py-2">
-                      <p className="font-medium">{f.label || "(no label)"}</p>
+                      <p className="font-medium">
+                        {f.label || "(no label)"}
+                        {isDuplicate ? (
+                          <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                            duplicate
+                          </span>
+                        ) : null}
+                      </p>
                       <p className="text-xs text-text-hint">
                         {f.key}
                         {f.is_system ? " · built-in" : ""}
                         {f.storage_column ? ` · ${f.storage_column}` : ""}
+                        {!liveIds.has(f.id) ? " · draft only" : ""}
                       </p>
                     </td>
                     <td className="px-3 py-2">{INPUT_TYPE_LABELS[f.input_type] ?? f.input_type}</td>
@@ -1200,10 +1297,39 @@ function FieldsTab({
                         >
                           {f.status === "active" ? <Archive className="h-4 w-4" /> : <RotateCcw className="h-4 w-4" />}
                         </button>
+                        <button
+                          type="button"
+                          className={buttonClass}
+                          disabled={!editable || f.status !== "active"}
+                          title={
+                            clones.length > 0
+                              ? "Delete this field (prompts to include duplicates)"
+                              : liveIds.has(f.id)
+                                ? "Remove from Overview (archive)"
+                                : "Delete from draft"
+                          }
+                          onClick={() => {
+                            const ids = overviewCloneIds(doc.fields, f);
+                            const all = doc.fields.filter((x) => ids.includes(x.id) && x.status === "active");
+                            if (
+                              all.length > 1 &&
+                              window.confirm(
+                                `"${f.label || f.key}" also has ${all.length - 1} duplicate copy(ies) under other scopes. Include those too?`,
+                              )
+                            ) {
+                              removeFields(all);
+                              return;
+                            }
+                            removeFields([f]);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
