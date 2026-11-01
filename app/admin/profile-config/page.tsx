@@ -1305,14 +1305,6 @@ function FieldsTab({
           ) : null}
         </div>
 
-        {SHARED_ENTITY_BUCKETS.has(bucket) ? (
-          <p className="text-xs text-text-secondary">
-            Use Delete to remove unnecessary {bucketLabel} entities. Published fields are archived (answers kept)
-            and stay removed after reload; draft-only fields are deleted. Use Clean duplicates when the same key
-            appears more than once.
-          </p>
-        ) : null}
-
         {rows.length === 0 ? (
           <AdminEmpty
             title="No entities here yet"
