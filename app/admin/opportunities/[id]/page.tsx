@@ -12,7 +12,7 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone, type StatusTone } from "@/components/status-badge";
 import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
-import { adminFetch, patchAdmin, uploadAdmin } from "@/lib/hooks";
+import { adminFetch, deleteAdmin, patchAdmin, uploadAdmin } from "@/lib/hooks";
 import {
   APPLICATION_TRANSITIONS,
   applicationActionLabel,
@@ -456,6 +456,42 @@ export default function OpportunityDetailPage() {
     await save({ status: "closed" });
   };
 
+  const removeOpportunity = async () => {
+    if (!canWrite || !row) return;
+    if (
+      !window.confirm(
+        `Delete “${row.title}”? Opportunities with applications/payments are unpublished and closed (history preserved). Empty ones are hard-deleted.`,
+      )
+    ) {
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const result = (await deleteAdmin(`/api/admin/opportunities/${id}`)) as {
+        archived?: boolean;
+        deleted?: boolean;
+        message?: string;
+      };
+      invalidateAdminCache("opportunities");
+      if (result?.deleted) {
+        router.replace(listReturn);
+        return;
+      }
+      setNotice(
+        result?.message ||
+          (result?.archived
+            ? "Archived (unpublished + closed). Applications and payments preserved."
+            : "Deleted."),
+      );
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const uploadCover = async (file: File) => {
     if (!canWrite) return;
     setUploading(true);
@@ -576,6 +612,14 @@ export default function OpportunityDetailPage() {
                   className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
                 >
                   Close applications
+                </button>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void removeOpportunity()}
+                  className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                >
+                  Delete
                 </button>
               </>
             ) : null}

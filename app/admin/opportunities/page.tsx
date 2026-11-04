@@ -240,7 +240,7 @@ export default function OpportunitiesPage() {
   const remove = async (id: string, title: string) => {
     if (
       !window.confirm(
-        `Archive “${title}”? Opportunities with applications/payments are unpublished and closed (not hard-deleted).`,
+        `Delete “${title}”? Opportunities with applications/payments are unpublished and closed (history preserved). Empty ones are hard-deleted.`,
       )
     ) {
       return;
@@ -259,7 +259,7 @@ export default function OpportunitiesPage() {
       );
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Archive failed");
+      setError(err instanceof Error ? err.message : "Delete failed");
     } finally {
       setBusyId(null);
     }
@@ -594,8 +594,8 @@ export default function OpportunitiesPage() {
                             ...(canWrite
                               ? [
                                   {
-                                    id: "archive",
-                                    label: "Archive",
+                                    id: "delete",
+                                    label: "Delete",
                                     tone: "danger" as const,
                                     separatorBefore: true,
                                     onClick: () => void remove(row.id, row.title),
