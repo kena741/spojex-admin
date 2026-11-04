@@ -177,7 +177,6 @@ export default function FinanceOverviewPage() {
     <div className="space-y-5">
       <AdminPageHeader
         title="Finance overview"
-        description="Verified collections vs platform revenue, refunds, recipient earnings, and payouts - money and coins kept separate."
         actions={
           <div className="flex flex-wrap gap-2">
             <AdminReloadButton

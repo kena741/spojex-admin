@@ -285,7 +285,6 @@ export default function NewsPage() {
     <>
       <AdminPageHeader
         title="Sport News"
-        description="Publish stories for the home feed. Filters persist in the URL so overview drill-downs stay selected."
         breadcrumbs={[
           { label: "Content", href: "/admin/content" },
           { label: "Sport News" },

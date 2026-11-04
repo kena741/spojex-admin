@@ -181,7 +181,6 @@ export default function ServiceSettingsPage() {
     <>
       <AdminPageHeader
         title="Service settings"
-        description="Categories and subcategories used to organize marketplace service listings."
         backHref="/admin/services"
         breadcrumbs={[
           { label: "Services", href: "/admin/services" },

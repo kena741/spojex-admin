@@ -17,7 +17,6 @@ export default function VerificationDocsRedirectPage() {
     <>
       <AdminPageHeader
         title="Document requirements"
-        description="Redirecting to Verification Center…"
         backHref="/admin/verifications"
       />
       <AdminLoadingRow label="Opening requirements editor…" />

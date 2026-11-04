@@ -138,7 +138,6 @@ export default function PaymentSettingsPage() {
 
       <AdminPageHeader
         title="Payment Settings"
-        description="Chapa, Telebirr, and wallet gateway configuration for Spojex"
         breadcrumbs={[
           { label: "Finance", href: "/admin/finance" },
           { label: "Payment Settings" },

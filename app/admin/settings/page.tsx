@@ -349,7 +349,6 @@ export default function GlobalSettingsPage() {
     <div className="space-y-4">
       <AdminPageHeader
         title="Global settings"
-        description="Platform-wide configuration for SpoJex."
         breadcrumbs={[
           { label: "Dashboard", href: "/admin/dashboard" },
           { label: "Global settings" },

@@ -344,7 +344,6 @@ function FeedInsightsPageInner() {
     <div className="space-y-4">
       <AdminPageHeader
         title="Feed Insights"
-        description="Performance, personalization evidence, and delivery health - read-only; ranking weights are not edited here."
         breadcrumbs={[
           { label: "Content", href: "/admin/content" },
           { label: "Feed Insights" },

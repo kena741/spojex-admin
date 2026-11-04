@@ -556,7 +556,7 @@ export default function DonationDetailPage() {
     <>
       <AdminPageHeader
         title={campaign.title}
-        description={campaign.summary || campaign.slug || ""}
+        description={campaign.slug || undefined}
         backHref="/admin/donations"
         breadcrumbs={[
           { label: "Donations", href: "/admin/donations" },

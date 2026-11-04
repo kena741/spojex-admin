@@ -392,7 +392,7 @@ export default function CoinCatalogPage() {
     <>
       <AdminPageHeader
         title="Coin catalog"
-        description="Coin packs, gift catalog, and redemption rates. Purchase history is under Finance → Transactions."
+        description="Packs, gifts, rates"
         breadcrumbs={[
           { label: "Finance", href: "/admin/finance" },
           { label: "Coins & Gifts", href: "/admin/finance/coins" },

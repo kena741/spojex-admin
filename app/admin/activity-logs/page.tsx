@@ -127,7 +127,6 @@ export default function ActivityLogsPage() {
       <>
         <AdminPageHeader
           title="Activity Logs"
-          description="Track actions performed by admin users"
         />
         <AdminLoadingRow label="Checking permissions…" />
       </>
@@ -139,7 +138,6 @@ export default function ActivityLogsPage() {
       <>
         <AdminPageHeader
           title="Activity Logs"
-          description="Track actions performed by admin users"
         />
         <AdminErrorAlert message="You need logs:read permission to view activity logs." />
       </>
@@ -150,7 +148,7 @@ export default function ActivityLogsPage() {
     <>
       <AdminPageHeader
         title="Activity Logs"
-        description={`${total} entries · times shown in your browser local timezone`}
+        description={`${total} entries`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <AdminReloadButton

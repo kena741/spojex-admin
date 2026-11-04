@@ -539,7 +539,6 @@ export default function NewsComposerPage() {
     <div className="pb-28">
       <AdminPageHeader
         title="Create news"
-        description="Post as an organization - media first, then caption."
         backHref="/admin/news"
         breadcrumbs={[
           { label: "Content", href: "/admin/content" },

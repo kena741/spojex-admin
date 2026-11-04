@@ -296,7 +296,6 @@ export default function FinanceTransactionsPage() {
     <div className="space-y-4">
       <AdminPageHeader
         title="Transactions"
-        description="Unified money and coin history across Spojex products"
         actions={
           <div className="flex flex-wrap gap-2">
             <AdminReloadButton

@@ -146,7 +146,6 @@ export default function AdminDashboardPage() {
     <div className="space-y-5">
       <AdminPageHeader
         title="Analytics"
-        description="User growth, gym growth, and sports content performance"
         actions={
           <div className="flex items-center gap-2">
             <AdminReloadButton

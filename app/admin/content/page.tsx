@@ -148,7 +148,6 @@ export default function ContentOverviewPage() {
     <div className="space-y-5">
       <AdminPageHeader
         title="Content overview"
-        description="Publishing health for Sport News, media, banners, and moderation - snapshots stay separate from period activity."
         actions={
           <AdminReloadButton
             loading={loading}

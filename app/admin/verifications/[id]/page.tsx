@@ -96,7 +96,6 @@ export default function VerificationDetailPage() {
     <>
       <AdminPageHeader
         title={person?.display_name || "Verification"}
-        description="Role-based identity and evidence documents"
         backHref="/admin/verifications"
         breadcrumbs={[
           { label: "Verifications", href: "/admin/verifications" },

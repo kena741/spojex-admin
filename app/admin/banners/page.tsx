@@ -274,7 +274,6 @@ export default function BannersPage() {
     <>
       <AdminPageHeader
         title="Banners"
-        description="Home / Services / Gym promo slides. Create with image, destination, and active state in one step."
         breadcrumbs={[
           { label: "Content", href: "/admin/content" },
           { label: "Banners" },

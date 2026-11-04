@@ -294,7 +294,6 @@ function MessagesPageInner() {
     <div className="space-y-4">
       <AdminPageHeader
         title="Messages"
-        description="Read-only observer of private and organization conversations. Viewing never marks messages read."
         breadcrumbs={[
           { label: "Network", href: "/admin/network" },
           { label: "Messages" },

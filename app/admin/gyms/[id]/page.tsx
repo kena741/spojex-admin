@@ -3236,7 +3236,6 @@ function ProfileSection({
   return (
     <Card
       title="Profile & location"
-      description="Listing and verification are changed from the Actions menu so each change is audited."
       actions={
         canWrite && !editing ? (
           <button type="button" className={btnPrimary} onClick={beginEdit}>
@@ -3446,7 +3445,7 @@ function MediaSection({
   const cover = gym.cover_url?.trim() || "";
 
   return (
-    <Card title="Media" description="Logo and cover shown on the gym's public page.">
+    <Card title="Media">
       {!canWrite ? (
         <p className="mb-4 text-xs text-text-secondary">You have read-only access.</p>
       ) : null}
@@ -3614,7 +3613,7 @@ function StaffSection({
     <div className="space-y-6">
       <Card
         title="Staff & access"
-        description="Assign an existing Spojex user or invite a new one. Gym staff role is separate from their platform profile role - assigning staff never overwrites it. Passwords are never shown in admin."
+        description="Existing user or invite. Staff role is separate from platform profile."
         actions={
           canWrite ? (
             <button
@@ -3993,7 +3992,7 @@ function OwnershipSection({
 
       <Card
         title="Transfer ownership"
-        description="Moves gym ownership to another existing SpoJex user. Does not move personal balances or rewrite historical payment recipients."
+        description="Transfer ownership to another SpoJex user."
       >
         {!canWrite ? (
           <p className="text-sm text-text-secondary">You have read-only access.</p>
@@ -4097,7 +4096,6 @@ function HistorySection({ ws }: { ws: GymWorkspace | null }) {
   return (
     <Card
       title="Listing & verification history"
-      description="Most recent admin events for this gym."
     >
       {!ws ? (
         <p className="text-sm text-text-hint">Unavailable - workspace summary could not be loaded.</p>

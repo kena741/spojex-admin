@@ -151,7 +151,6 @@ export default function CategoriesPage() {
     <>
       <AdminPageHeader
         title="Profile settings"
-        description="Customer profile types for mobile registration - separate from admin staff permissions"
         backHref="/admin/people"
         breadcrumbs={[
           { label: "People", href: "/admin/people" },

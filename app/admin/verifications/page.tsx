@@ -308,7 +308,6 @@ export default function VerificationCenterPage() {
     <div className="space-y-4">
       <AdminPageHeader
         title="Verification Center"
-        description="Identity and role-document review. Org and gym verification stay in their own directories."
         actions={
           <div className="flex flex-wrap gap-1.5">
             {tab === "requests" ? (

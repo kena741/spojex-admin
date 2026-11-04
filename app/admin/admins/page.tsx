@@ -344,7 +344,6 @@ export default function AdminsPage() {
     <>
       <AdminPageHeader
         title="Admins"
-        description="Create staff with a role and password, or grant access to an existing SpoJex account."
         actions={
           <div className="flex flex-wrap gap-2">
             <AdminReloadButton

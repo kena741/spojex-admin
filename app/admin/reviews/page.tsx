@@ -73,7 +73,6 @@ export default function ReviewsPage() {
     <>
       <AdminPageHeader
         title="Reviews"
-        description="Ratings left after a completed booking"
         actions={
           <AdminReloadButton loading={loading} refreshing={refreshing} onClick={() => void refresh()} />
         }

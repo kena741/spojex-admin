@@ -247,7 +247,7 @@ export default function FinancePayoutsPage() {
     <div className="space-y-4">
       <AdminPageHeader
         title="Payouts"
-        description="Provider money withdrawals and creator coin redemptions - manually recorded transfers"
+        description="Withdrawals & redemptions"
         actions={
           <AdminReloadButton
             loading={loading}

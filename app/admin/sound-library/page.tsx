@@ -265,7 +265,6 @@ export default function SoundLibraryPage() {
     <>
       <AdminPageHeader
         title="Sound library"
-        description="Upload → extract → trim → save. Prefer Media Library for browsing all asset types."
         breadcrumbs={[
           { label: "Content", href: "/admin/content" },
           { label: "Media Library", href: "/admin/media-library?type=sound" },

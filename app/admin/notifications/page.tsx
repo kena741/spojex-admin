@@ -195,7 +195,6 @@ export default function NotificationsPage() {
     <>
       <AdminPageHeader
         title="Notifications"
-        description="Platform notification history and authorized broadcasts"
         breadcrumbs={[
           { label: "Network", href: "/admin/network" },
           { label: "Notifications" },

@@ -104,7 +104,6 @@ export default function RolesPage() {
     <>
       <AdminPageHeader
         title="Roles & permissions"
-        description="System and custom roles. Custom roles do not silently receive newly introduced permissions."
         actions={
           <AdminReloadButton
             loading={loading}

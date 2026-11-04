@@ -484,8 +484,8 @@ export default function ProfileConfigPage() {
         title="Profile Configuration"
         description={
           overview
-            ? `Live v${overview.live.version}${draft ? ` · draft from v${draft.base_version}` : " · read-only"}`
-            : "Profile tabs and fields"
+            ? `v${overview.live.version}${draft ? ` · draft` : ""}`
+            : undefined
         }
         actions={headerActions}
       />

@@ -312,7 +312,6 @@ export default function EventsPage() {
     <>
       <AdminPageHeader
         title="Events"
-        description="Listings, tickets, and gate codes"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <AdminReloadButton

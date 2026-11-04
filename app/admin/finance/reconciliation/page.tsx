@@ -97,7 +97,6 @@ export default function FinanceReconciliationPage() {
     <div className="space-y-5">
       <AdminPageHeader
         title="Reconciliation"
-        description="Coverage diagnostics for verified payments, ledger gaps, and payout reservations. Read-only - no silent balance changes."
         actions={
           <div className="flex flex-wrap gap-2">
             <AdminReloadButton

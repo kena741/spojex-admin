@@ -297,7 +297,6 @@ export default function OpportunitiesPage() {
     <>
       <AdminPageHeader
         title="Opportunities"
-        description="Trials, jobs, and scouting listings - publication, applications, and interest waitlists are separate"
         actions={
           <div className="flex flex-wrap gap-2">
             <AdminReloadButton

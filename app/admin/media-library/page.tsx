@@ -336,7 +336,6 @@ function MediaLibraryPage() {
     <>
       <AdminPageHeader
         title="Media Library"
-        description="Find, preview, and reuse sounds, images, and videos. Storage stays in the existing media pipeline."
         breadcrumbs={[
           { label: "Content", href: "/admin/content" },
           { label: "Media Library" },

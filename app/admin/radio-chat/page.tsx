@@ -555,7 +555,6 @@ function RadioChatPage() {
       <>
         <AdminPageHeader
           title="Radio Chat"
-          description="Listener conversation moderation"
           breadcrumbs={[
             { label: "Content", href: "/admin/content" },
             { label: "Radio Chat" },
@@ -570,7 +569,6 @@ function RadioChatPage() {
     <>
       <AdminPageHeader
         title="Radio Chat"
-        description="Moderate listener conversations and reports. Station configuration stays under Streams."
         breadcrumbs={[
           { label: "Content", href: "/admin/content" },
           { label: "Radio Chat" },

@@ -86,7 +86,6 @@ export default function ProfileMediaPage() {
     <>
       <AdminPageHeader
         title="Photos & clips"
-        description="Profile photos and highlight videos uploaded in the app"
         actions={
           <AdminReloadButton
             loading={loading}

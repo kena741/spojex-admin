@@ -339,7 +339,6 @@ export default function DonationsPage() {
     <>
       <AdminPageHeader
         title="Donations"
-        description={`${rows.length} of ${total} · fundraising campaigns (ETB and coins tracked separately)`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <AdminReloadButton

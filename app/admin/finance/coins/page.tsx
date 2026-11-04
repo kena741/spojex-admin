@@ -24,7 +24,6 @@ export default function FinanceCoinsHubPage() {
     <div className="space-y-5">
       <AdminPageHeader
         title="Coins & Gifts"
-        description="Configure packs, gifts, and rates - purchases and gift transfers appear in Transactions (module filters: coins / gifts)."
         breadcrumbs={[{ label: "Finance", href: "/admin/finance" }, { label: "Coins & Gifts" }]}
         actions={
           <div className="flex flex-wrap gap-2">

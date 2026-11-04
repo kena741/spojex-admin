@@ -231,7 +231,6 @@ export default function MiniAppsPage() {
     <>
       <AdminPageHeader
         title="Mini apps"
-        description="HTTPS partner sites that open inside the Spojex WebView. Unpublished apps stay out of the public mobile catalog."
         actions={
           <AdminReloadButton
             loading={loading}

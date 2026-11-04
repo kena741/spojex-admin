@@ -244,7 +244,6 @@ export default function StadiumsPage() {
     <>
       <AdminPageHeader
         title="Stadiums"
-        description="Venues, hourly reservations, and access passes - pass codes stay on the detail workspace"
         actions={
           <div className="flex flex-wrap gap-2">
             <AdminReloadButton

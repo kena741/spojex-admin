@@ -444,7 +444,7 @@ export default function OrganizationsPage() {
     <>
       <AdminPageHeader
         title="Organizations"
-        description={`${total} total · page ${page} of ${totalPages}`}
+        description={`${total} total`}
         stackOnSmall
         actions={
           <div className="flex flex-wrap gap-2">

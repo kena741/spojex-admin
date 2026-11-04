@@ -71,7 +71,7 @@ export default function AdminPageHeader({
               {title}
             </h1>
             {description ? (
-              <p className="mt-0.5 line-clamp-2 min-w-0 text-sm text-text-secondary lg:mt-0 lg:truncate">
+              <p className="mt-0.5 line-clamp-1 min-w-0 text-xs text-text-hint lg:mt-0 lg:truncate">
                 {description}
               </p>
             ) : null}

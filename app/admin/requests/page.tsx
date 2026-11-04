@@ -366,7 +366,6 @@ export default function RequestsPage() {
     <div className="space-y-4">
       <AdminPageHeader
         title="Bookings"
-        description="Service appointments. Booking status and payment stay separate."
         actions={
           <AdminReloadButton loading={loading} refreshing={refreshing} onClick={() => void refresh()} />
         }

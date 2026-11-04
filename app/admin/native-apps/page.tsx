@@ -227,7 +227,6 @@ export default function NativeAppsOverviewPage() {
     <div className="space-y-6">
       <AdminPageHeader
         title="Native Apps"
-        description="Operations hub for venues, gyms, events, donations, and streams"
         actions={
           <AdminReloadButton
             loading={loading}

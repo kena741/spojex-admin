@@ -309,7 +309,6 @@ function NetworkPageInner() {
     <>
       <AdminPageHeader
         title="Connections"
-        description="Peer connections, directional follows, and personal blocks between users."
         breadcrumbs={[
           { label: "Network", href: "/admin/network" },
           { label: "Connections" },

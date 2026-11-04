@@ -209,7 +209,6 @@ export default function MarketplaceOverviewPage() {
     <div className="space-y-6">
       <AdminPageHeader
         title="Marketplace"
-        description="Live marketplace activity across services, bookings, and collections"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <button

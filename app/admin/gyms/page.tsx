@@ -880,7 +880,7 @@ export default function GymsAdminPage() {
     <>
       <AdminPageHeader
         title="Gyms"
-        description={`${filtered.length} of ${rows.length} · venues and fitness centers`}
+        description={`${filtered.length} of ${rows.length}`}
         actions={
           <div className="flex flex-wrap gap-2">
             <AdminReloadButton

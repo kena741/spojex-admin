@@ -203,7 +203,6 @@ export default function PeopleDirectoryPage() {
     <div className="space-y-4">
       <AdminPageHeader
         title="People"
-        description="Directory of Spojex accounts and role profiles"
         actions={
           <div className="flex flex-wrap gap-2">
             <AdminReloadButton

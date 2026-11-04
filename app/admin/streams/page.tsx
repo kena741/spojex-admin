@@ -183,7 +183,7 @@ function StreamsHub() {
   if (loading) {
     return (
       <>
-        <AdminPageHeader title="Streams" description="Radio stations and live events" />
+        <AdminPageHeader title="Streams" />
         <p className="text-sm text-text-secondary">Checking permissions…</p>
       </>
     );
@@ -192,7 +192,7 @@ function StreamsHub() {
   if (availableTabs.length === 0) {
     return (
       <>
-        <AdminPageHeader title="Streams" description="Radio stations and live events" />
+        <AdminPageHeader title="Streams" />
         <p className="text-sm text-text-secondary">You do not have permission to view streams.</p>
       </>
     );
@@ -202,7 +202,6 @@ function StreamsHub() {
     <>
       <AdminPageHeader
         title="Streams"
-        description="Radio stations and Live Events (video / audio broadcasts) in one place"
       />
 
       <StreamsOverviewCards enabled={canRadio} />
@@ -241,7 +240,7 @@ export default function StreamsPage() {
     <Suspense
       fallback={
         <>
-          <AdminPageHeader title="Streams" description="Radio stations and live events" />
+          <AdminPageHeader title="Streams" />
           <AdminLoadingRow label="Loading streams…" />
         </>
       }

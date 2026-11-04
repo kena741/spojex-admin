@@ -136,7 +136,6 @@ export default function GymCategoriesPage() {
     <>
       <AdminPageHeader
         title="Gym settings"
-        description="Category types shown on the Gym home screen and when creating gyms."
         backHref="/admin/gyms"
         breadcrumbs={[
           { label: "Gyms", href: "/admin/gyms" },
