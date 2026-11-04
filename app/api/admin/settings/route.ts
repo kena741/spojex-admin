@@ -61,13 +61,16 @@ async function upsertSection(
     ? patch
     : { ...parseObject(existing?.data), ...(patch as JsonObject) };
   const row = { id, data, updated_at: new Date().toISOString() };
-  if (existing?.id) {
-    const { error } = await client.from("app_settings").update(row).eq("id", id);
-    if (error) throw new Error(error.message);
+  if (existing != null) {
+    const { error } = await client
+      .from("app_settings")
+      .update({ data: row.data, updated_at: row.updated_at })
+      .eq("id", id);
+    if (error) throw new Error(`app_settings/${id}: ${error.message}`);
     return;
   }
   const { error } = await client.from("app_settings").insert(row);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`app_settings/${id}: ${error.message}`);
 }
 
 export async function GET() {
@@ -201,20 +204,30 @@ export async function POST(request: Request) {
         throw new Error("coins_per_birr must be greater than 0");
       }
       const etbPerCoin = 1 / perBirr;
-      const coinRow = {
-        id: 1,
-        etb_per_coin: etbPerCoin,
-        updated_at: new Date().toISOString(),
-      };
-      const { data: existingCoin } = await client
+      const nowIso = new Date().toISOString();
+      // ponytail: never include PK in PATCH; client upsert is insert-only.
+      const { data: updatedCoin, error: coinUpdateError } = await client
         .from("coin_settings")
-        .select("id")
+        .update({ etb_per_coin: etbPerCoin, updated_at: nowIso })
         .eq("id", 1)
+        .select("id")
         .maybeSingle();
-      const { error: coinError } = existingCoin?.id
-        ? await client.from("coin_settings").update(coinRow).eq("id", 1)
-        : await client.from("coin_settings").insert(coinRow);
-      if (coinError) throw new Error(coinError.message);
+      if (coinUpdateError) {
+        throw new Error(`coin_settings: ${coinUpdateError.message}`);
+      }
+      if (!updatedCoin) {
+        const { error: coinInsertError } = await client.from("coin_settings").insert({
+          id: 1,
+          etb_per_coin: etbPerCoin,
+          min_redemption_coins: 100,
+          max_redemption_coins: 50000,
+          max_pending_redemptions: 3,
+          updated_at: nowIso,
+        });
+        if (coinInsertError) {
+          throw new Error(`coin_settings: ${coinInsertError.message}`);
+        }
+      }
     }
 
     if (payload.languageDeletedIds?.length) {

@@ -304,7 +304,10 @@ export default function GlobalSettingsPage() {
         statusOptions: statusOptions.filter((s) => s.flag.trim()),
         constants: { ...constants, service_posting_tiers: tiers },
         paymentSettings: payment,
-        ...(Number.isFinite(rate) && rate > 0 ? { coins_per_birr: rate } : {}),
+        // Only touch coin_settings from the Payment tab (int PK path needs BE coerce).
+        ...(tab === "payment" && Number.isFinite(rate) && rate > 0
+          ? { coins_per_birr: rate }
+          : {}),
         languageSettings: languages,
         languageDeletedIds,
       });
