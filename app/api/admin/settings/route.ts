@@ -51,28 +51,22 @@ async function upsertSection(
   patch: JsonObject | unknown[],
   replace = false,
 ) {
-  if (replace) {
-    const { error } = await client
-      .from("app_settings")
-      .upsert(
-        { id, data: patch, updated_at: new Date().toISOString() },
-        { onConflict: "id" },
-      );
-    if (error) throw new Error(error.message);
-    return;
-  }
+  // ponytail: Spojex client upsert() is insert-only — update when the row exists.
   const { data: existing } = await client
     .from("app_settings")
     .select("id, data")
     .eq("id", id)
     .maybeSingle();
-  const merged = { ...parseObject(existing?.data), ...(patch as JsonObject) };
-  const { error } = await client
-    .from("app_settings")
-    .upsert(
-      { id, data: merged, updated_at: new Date().toISOString() },
-      { onConflict: "id" },
-    );
+  const data = replace
+    ? patch
+    : { ...parseObject(existing?.data), ...(patch as JsonObject) };
+  const row = { id, data, updated_at: new Date().toISOString() };
+  if (existing?.id) {
+    const { error } = await client.from("app_settings").update(row).eq("id", id);
+    if (error) throw new Error(error.message);
+    return;
+  }
+  const { error } = await client.from("app_settings").insert(row);
   if (error) throw new Error(error.message);
 }
 
@@ -207,14 +201,19 @@ export async function POST(request: Request) {
         throw new Error("coins_per_birr must be greater than 0");
       }
       const etbPerCoin = 1 / perBirr;
-      const { error: coinError } = await client.from("coin_settings").upsert(
-        {
-          id: 1,
-          etb_per_coin: etbPerCoin,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "id" },
-      );
+      const coinRow = {
+        id: 1,
+        etb_per_coin: etbPerCoin,
+        updated_at: new Date().toISOString(),
+      };
+      const { data: existingCoin } = await client
+        .from("coin_settings")
+        .select("id")
+        .eq("id", 1)
+        .maybeSingle();
+      const { error: coinError } = existingCoin?.id
+        ? await client.from("coin_settings").update(coinRow).eq("id", 1)
+        : await client.from("coin_settings").insert(coinRow);
       if (coinError) throw new Error(coinError.message);
     }
 
