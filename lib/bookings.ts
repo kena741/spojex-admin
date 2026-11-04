@@ -98,6 +98,27 @@ export function actionVerb(status: string, actions?: BookingAction[]) {
   return ACTION_FALLBACK[status] || status.replace(/_/g, " ");
 }
 
+/** Compact labels for dense list menus (full copy stays in `actionVerb` / title). */
+export function shortActionLabel(status: string, actions?: BookingAction[]) {
+  const full = actionVerb(status, actions);
+  if (/payment still due/i.test(full)) return "Accept (payment due)";
+  if (/^accept booking$/i.test(full)) return "Accept";
+  if (/^decline booking$/i.test(full)) return "Decline";
+  if (/^cancel booking$/i.test(full)) return "Cancel";
+  if (/^mark completed$/i.test(full)) return "Complete";
+  return full.length > 28 ? full.slice(0, 26).trimEnd() + "…" : full;
+}
+
+export function actionMenuTone(
+  status: string,
+): "default" | "danger" | "success" {
+  if (status === "accepted" || status === "completed") return "success";
+  if (status === "declined" || status === "cancelled" || status === "canceled") {
+    return "danger";
+  }
+  return "default";
+}
+
 export function reasonRequired(status: string, actions?: BookingAction[]) {
   const fromApi = actions?.find((a) => a.status === status);
   if (fromApi) return Boolean(fromApi.reason_required);

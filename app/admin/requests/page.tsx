@@ -10,23 +10,27 @@ import {
   AdminFilterPanel,
   AdminLoadingRow,
   AdminReloadButton,
+  AdminRowMenu,
   AdminSearchInput,
   AdminSelect,
   AdminStatCard,
   AdminTableShell,
+  type AdminRowMenuItem,
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import {
+  actionMenuTone,
   actionVerb,
   initials,
   reasonRequired,
+  shortActionLabel,
   type BookingRow,
   type BookingSummary,
 } from "@/lib/bookings";
 import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { useAdminQuery } from "@/lib/use-admin-query";
-import { cn, formatDateTime, formatStatusLabel } from "@/lib/utils";
+import { cn, formatDateTime, formatMoney, formatStatusLabel } from "@/lib/utils";
 
 type BookingsListData = {
   rows: BookingRow[];
@@ -36,36 +40,94 @@ type BookingsListData = {
   definitions: Record<string, string>;
 };
 
-function PersonCell({
+function PersonChip({
+  label,
   person,
   href,
 }: {
+  label: string;
   person?: BookingRow["requester"];
   href: string;
 }) {
-  if (!person?.id) return <span className="text-text-hint">-</span>;
+  if (!person?.id) {
+    return (
+      <div className="min-w-0">
+        <p className="text-[10px] font-medium uppercase tracking-wide text-text-hint">
+          {label}
+        </p>
+        <p className="text-sm text-text-hint">—</p>
+      </div>
+    );
+  }
   return (
-    <Link href={href} className="flex items-center gap-2 hover:opacity-90">
-      {person.avatar_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={person.avatar_url} alt="" className="h-7 w-7 rounded-full object-cover" />
-      ) : (
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary text-[10px] font-semibold text-primary">
-          {initials(person.display_name, person.id)}
-        </span>
-      )}
-      <span className="min-w-0">
-        <span className="block truncate text-sm font-medium text-primary">
-          {person.display_name || person.id.slice(0, 8)}
-        </span>
-        {person.role ? (
-          <span className="block truncate text-[10px] text-text-hint">
-            {formatStatusLabel(person.role)}
+    <div className="min-w-0">
+      <p className="text-[10px] font-medium uppercase tracking-wide text-text-hint">
+        {label}
+      </p>
+      <Link href={href} className="mt-0.5 flex min-w-0 items-center gap-2 hover:opacity-90">
+        {person.avatar_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={person.avatar_url}
+            alt=""
+            className="h-7 w-7 shrink-0 rounded-full object-cover"
+          />
+        ) : (
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-secondary text-[10px] font-semibold text-primary">
+            {initials(person.display_name, person.id)}
           </span>
-        ) : null}
-      </span>
-    </Link>
+        )}
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-medium text-text-primary">
+            {person.display_name || person.id.slice(0, 8)}
+          </span>
+          {person.role ? (
+            <span className="block truncate text-[11px] text-text-secondary">
+              {formatStatusLabel(person.role)}
+            </span>
+          ) : null}
+        </span>
+      </Link>
+    </div>
   );
+}
+
+function ServiceThumb({
+  coverUrl,
+  title,
+}: {
+  coverUrl?: string | null;
+  title?: string | null;
+}) {
+  if (coverUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={coverUrl}
+        alt=""
+        className="h-12 w-12 shrink-0 rounded-lg object-cover bg-muted sm:h-14 sm:w-14"
+      />
+    );
+  }
+  const letter = (title || "?").trim().charAt(0).toUpperCase() || "?";
+  return (
+    <div
+      className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-muted text-sm font-semibold text-text-secondary sm:h-14 sm:w-14"
+      aria-hidden
+    >
+      {letter}
+    </div>
+  );
+}
+
+function moneyLabel(row: BookingRow) {
+  if (row.payment?.amount != null) {
+    return formatMoney(Number(row.payment.amount), row.payment.currency || "ETB");
+  }
+  if (row.agreed_amount != null) {
+    return formatMoney(Number(row.agreed_amount), row.agreed_currency || "ETB");
+  }
+  return null;
 }
 
 export default function RequestsPage() {
@@ -166,7 +228,6 @@ export default function RequestsPage() {
   const error = actionError ?? loadError;
   const ok = listData != null && !loadError;
 
-  // Marketplace Overview `id=` drill-down → open detail
   useEffect(() => {
     if (deepId && /^[0-9a-f-]{36}$/i.test(deepId)) {
       router.replace(`/admin/requests/${deepId}`);
@@ -245,25 +306,25 @@ export default function RequestsPage() {
     },
     { key: "upcoming", title: "Upcoming (14d)", hrefKey: "upcoming" },
     { key: "completed_period", title: "Completed (period)", hrefKey: "completed_period" },
-    { key: "closed_period", title: "Cancelled/declined (period)", hrefKey: "closed_period" },
+    { key: "closed_period", title: "Cancelled/declined", hrefKey: "closed_period" },
   ];
 
   return (
     <div className="space-y-4">
       <AdminPageHeader
         title="Bookings"
-        description="Manage service appointments and requests. Booking status and payment status stay separate."
+        description="Service appointments and requests. Booking status and payment status stay separate."
         actions={
           <AdminReloadButton loading={loading} refreshing={refreshing} onClick={() => void refresh()} />
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {cards.map((c) => (
           <button
             key={c.key}
             type="button"
-            className="text-left"
+            className="text-left transition-opacity hover:opacity-90"
             onClick={() => {
               const href = summaryHrefs[c.hrefKey];
               if (href) router.push(href);
@@ -277,7 +338,7 @@ export default function RequestsPage() {
         ))}
       </div>
       {g.period_from && g.period_to ? (
-        <p className="text-xs text-text-hint">
+        <p className="text-xs text-text-secondary">
           Period cards: {g.period_from} → {g.period_to}
           {definitions.payment_policy ? ` · ${definitions.payment_policy}` : ""}
         </p>
@@ -407,181 +468,127 @@ export default function RequestsPage() {
       ) : null}
 
       {!loading && ok && rows.length === 0 && !error ? (
-        <AdminEmpty title="No bookings" description="Nothing matches these filters. Adjust filters and Reload." />
+        <AdminEmpty
+          title="No bookings"
+          description="Nothing matches these filters. Adjust filters and reload."
+        />
       ) : null}
 
-      {/* Mobile cards */}
       {!loading && rows.length > 0 ? (
-        <ul className="space-y-3 md:hidden">
-          {rows.map((row) => (
-            <li key={row.id} className="rounded-xl border border-border bg-card p-4 shadow-sm">
-              <div className="flex gap-3">
-                {row.service?.cover_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={row.service.cover_url}
-                    alt=""
-                    className="h-14 w-16 shrink-0 rounded object-cover"
-                  />
-                ) : (
-                  <div className="grid h-14 w-16 shrink-0 place-items-center rounded bg-muted text-[10px] text-text-hint">
-                    -
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="font-mono text-[10px] text-text-hint">
-                    {row.reference || `BK-${row.id.slice(0, 8).toUpperCase()}`}
-                  </p>
-                  <p className="font-medium text-text-primary">
-                    {row.service?.title || row.service_id.slice(0, 8)}
-                  </p>
-                  <p className="text-xs text-text-secondary">
-                    {row.appointment_label === "Not scheduled" ? (
-                      <span className="text-text-hint">Not scheduled</span>
-                    ) : (
-                      formatDateTime(row.requested_at || row.requested_on)
-                    )}
-                    {row.schedule_state === "overdue" ? (
-                      <span className="ml-1 font-medium text-red-600">· Overdue</span>
-                    ) : null}
-                  </p>
-                </div>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <StatusBadge tone={requestTone(row.status)}>
-                  {formatStatusLabel(row.status)}
-                </StatusBadge>
-                <span className="text-xs text-text-secondary">{row.payment?.label || "-"}</span>
-                <button
-                  type="button"
-                  onClick={() => openBooking(row.id)}
-                  className="ml-auto rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
-                >
-                  Open
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      {/* Desktop rich list */}
-      {!loading && rows.length > 0 ? (
-        <div className="hidden md:block">
         <AdminTableShell>
           <ul className="divide-y divide-border">
             {rows.map((row) => {
-              const actions: Array<{ status: string; label: string; note?: string }> =
-                row.allowed_actions?.length
-                  ? row.allowed_actions
-                  : (row.allowed_transitions || []).map((s) => ({
-                      status: s,
-                      label: actionVerb(s),
-                    }));
+              const actions = row.allowed_actions?.length
+                ? row.allowed_actions
+                : (row.allowed_transitions || []).map((s) => ({
+                    status: s,
+                    label: actionVerb(s),
+                  }));
+              const money = moneyLabel(row);
+              const ref = row.reference || `BK-${row.id.slice(0, 8).toUpperCase()}`;
+              const menuItems: AdminRowMenuItem[] = canWrite
+                ? actions.map((a, index) => ({
+                    id: a.status,
+                    label: shortActionLabel(a.status, row.allowed_actions),
+                    tone: actionMenuTone(a.status),
+                    disabled: busyId === row.id,
+                    separatorBefore: index > 0 && actionMenuTone(a.status) === "danger",
+                    onClick: () => void transition(row, a.status),
+                  }))
+                : [];
+
               return (
                 <li
                   key={row.id}
-                  className="grid gap-3 p-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(9rem,auto)_auto] lg:items-center"
+                  className={cn(
+                    "grid gap-3 p-3 sm:p-4",
+                    "sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_auto]",
+                    "sm:items-center",
+                  )}
                 >
                   <button
                     type="button"
                     onClick={() => openBooking(row.id)}
                     className="flex min-w-0 gap-3 text-left"
                   >
-                    {row.service?.cover_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={row.service.cover_url}
-                        alt=""
-                        className="h-14 w-14 shrink-0 rounded-md object-cover bg-muted"
-                      />
-                    ) : (
-                      <div className="grid h-14 w-14 shrink-0 place-items-center rounded-md bg-muted text-[10px] text-text-hint">
-                        No photo
+                    <ServiceThumb
+                      coverUrl={row.service?.cover_url}
+                      title={row.service?.title}
+                    />
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate text-sm font-semibold text-text-primary sm:text-[15px]">
+                          {row.service?.title || row.service_id.slice(0, 8)}
+                        </p>
+                        <StatusBadge tone={requestTone(row.status)}>
+                          {formatStatusLabel(row.status)}
+                        </StatusBadge>
                       </div>
-                    )}
-                    <div className="min-w-0">
-                      <p className="font-mono text-[10px] text-text-hint">
-                        {row.reference || `BK-${row.id.slice(0, 8).toUpperCase()}`}
-                      </p>
-                      <p className="truncate font-medium text-text-primary">
-                        {row.service?.title || row.service_id.slice(0, 8)}
-                      </p>
-                      <p className="whitespace-nowrap text-xs text-text-secondary">
+                      <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-text-secondary">
+                        <span className="font-mono text-text-hint">{ref}</span>
+                        <span aria-hidden className="text-border">
+                          ·
+                        </span>
                         {row.appointment_label === "Not scheduled" ||
                         (!row.requested_at && !row.requested_on) ? (
                           <span className="text-text-hint">Not scheduled</span>
                         ) : (
-                          formatDateTime(row.requested_at || row.requested_on)
+                          <span>{formatDateTime(row.requested_at || row.requested_on)}</span>
                         )}
                         {row.schedule_state === "overdue" ? (
-                          <span className="ml-1 font-medium text-red-600">· Overdue</span>
+                          <span className="font-medium text-red-600">Overdue</span>
                         ) : null}
                       </p>
-                      <p className="whitespace-nowrap text-[11px] text-text-hint">
-                        Created {row.created_at ? formatDateTime(row.created_at) : "-"}
+                      <p className="text-[11px] text-text-hint">
+                        Created {row.created_at ? formatDateTime(row.created_at) : "—"}
                       </p>
                     </div>
                   </button>
 
-                  <div className="flex min-w-0 flex-wrap items-center gap-3">
-                    <PersonCell
+                  <div className="grid min-w-0 grid-cols-2 gap-3 sm:gap-4">
+                    <PersonChip
+                      label="Customer"
                       person={row.requester}
                       href={row.people_customer_href || `/admin/people/${row.requester?.id}`}
                     />
-                    <PersonCell
+                    <PersonChip
+                      label="Provider"
                       person={row.provider}
                       href={row.people_provider_href || `/admin/people/${row.provider?.id}`}
                     />
                   </div>
 
-                  <div className="min-w-0 text-xs lg:text-right">
-                    <p className="font-medium">{row.payment?.label || "-"}</p>
-                    {row.payment?.amount != null ? (
-                      <p className="whitespace-nowrap text-text-hint">
-                        {row.payment.currency}{" "}
-                        {Number(row.payment.amount).toLocaleString("en-ET")}
+                  <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end sm:justify-center sm:gap-2">
+                    <div className="min-w-0 sm:text-right">
+                      <p className="text-xs font-medium text-text-primary">
+                        {row.payment?.label || "No payment record"}
                       </p>
-                    ) : row.agreed_amount != null ? (
-                      <p className="whitespace-nowrap text-text-hint">
-                        {row.agreed_currency} {Number(row.agreed_amount).toLocaleString("en-ET")}
-                      </p>
-                    ) : null}
-                    <div className="mt-1 lg:flex lg:justify-end">
-                      <StatusBadge tone={requestTone(row.status)}>
-                        {formatStatusLabel(row.status)}
-                      </StatusBadge>
+                      {money ? (
+                        <p className="tabular-nums text-[11px] text-text-secondary">{money}</p>
+                      ) : null}
                     </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
-                    <button
-                      type="button"
-                      onClick={() => openBooking(row.id)}
-                      className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
-                    >
-                      Open
-                    </button>
-                    {canWrite && actions.length > 0
-                      ? actions.map((a) => (
-                          <button
-                            key={a.status}
-                            type="button"
-                            disabled={busyId === row.id}
-                            title={a.note}
-                            onClick={() => void transition(row, a.status)}
-                            className="rounded border border-border px-2 py-1 text-[11px] font-medium hover:bg-muted disabled:opacity-50"
-                          >
-                            {a.label}
-                          </button>
-                        ))
-                      : null}
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => openBooking(row.id)}
+                        className="h-8 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90"
+                      >
+                        Open
+                      </button>
+                      {menuItems.length > 0 ? (
+                        <AdminRowMenu
+                          items={menuItems}
+                          disabled={busyId === row.id}
+                          aria-label={`Actions for ${ref}`}
+                        />
+                      ) : null}
+                    </div>
                   </div>
                 </li>
               );
             })}
           </ul>
-          <div className="flex items-center justify-between border-t border-border px-4 py-2 text-xs text-text-secondary">
+          <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-xs text-text-secondary">
             <span>
               Page {page} of {pageCount} · {total} matching
             </span>
@@ -590,7 +597,7 @@ export default function RequestsPage() {
                 type="button"
                 disabled={page <= 1}
                 onClick={() => writeParams({ page: String(page - 1) })}
-                className="rounded border border-border px-2 py-1 disabled:opacity-40"
+                className="rounded-md border border-border px-2.5 py-1 disabled:opacity-40"
               >
                 Prev
               </button>
@@ -598,14 +605,13 @@ export default function RequestsPage() {
                 type="button"
                 disabled={page >= pageCount}
                 onClick={() => writeParams({ page: String(page + 1) })}
-                className="rounded border border-border px-2 py-1 disabled:opacity-40"
+                className="rounded-md border border-border px-2.5 py-1 disabled:opacity-40"
               >
                 Next
               </button>
             </div>
           </div>
         </AdminTableShell>
-        </div>
       ) : null}
     </div>
   );
