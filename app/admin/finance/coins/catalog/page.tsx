@@ -10,6 +10,7 @@ import {
   AdminTableLoading,
   AdminTableShell,
 } from "@/components/admin-layout";
+import { EmojiPickerField } from "@/components/emoji-picker-field";
 import { adminCacheKey } from "@/lib/admin-session-cache";
 import { adminFetch, deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
 import { getSpojexClient } from "@/lib/spojex/client";
@@ -723,12 +724,7 @@ export default function CoinCatalogPage() {
               onSubmit={createGift}
               className="mb-4 grid gap-2 md:grid-cols-3"
             >
-              <input
-                value={giftEmoji}
-                onChange={(e) => setGiftEmoji(e.target.value)}
-                placeholder="Emoji"
-                className="h-10 rounded-lg border border-border px-3 text-sm"
-              />
+              <EmojiPickerField value={giftEmoji} onChange={setGiftEmoji} />
               <input
                 value={giftName}
                 onChange={(e) => setGiftName(e.target.value)}

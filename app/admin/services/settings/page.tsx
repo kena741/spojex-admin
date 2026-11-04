@@ -9,6 +9,7 @@ import {
   AdminTableLoading,
   AdminTableShell,
 } from "@/components/admin-layout";
+import { EmojiPickerField } from "@/components/emoji-picker-field";
 import { adminCacheKey } from "@/lib/admin-session-cache";
 import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
 import { slugifyCategory } from "@/lib/service-categories";
@@ -221,12 +222,7 @@ export default function ServiceSettingsPage() {
             placeholder="slug (coaching)"
             className="h-10 rounded-lg border border-border px-3 font-mono text-sm"
           />
-          <input
-            value={emoji}
-            onChange={(event) => setEmoji(event.target.value)}
-            placeholder="Emoji"
-            className="h-10 rounded-lg border border-border px-3 text-sm"
-          />
+          <EmojiPickerField value={emoji} onChange={setEmoji} />
           <label className="flex h-10 items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -295,12 +291,10 @@ export default function ServiceSettingsPage() {
                       </td>
                       <td className="px-4 py-3">
                         {isEditing ? (
-                          <input
+                          <EmojiPickerField
                             value={draft.emoji}
-                            onChange={(event) =>
-                              setDraft({ ...draft, emoji: event.target.value })
-                            }
-                            className="h-9 w-20 rounded-lg border border-border px-2 text-sm"
+                            onChange={(next) => setDraft({ ...draft, emoji: next })}
+                            buttonClassName="h-9 min-w-12"
                           />
                         ) : (
                           row.emoji
@@ -408,12 +402,7 @@ export default function ServiceSettingsPage() {
                 className="h-10 rounded-lg border border-border px-3 text-sm"
                 required
               />
-              <input
-                value={subEmoji}
-                onChange={(event) => setSubEmoji(event.target.value)}
-                placeholder="Emoji"
-                className="h-10 rounded-lg border border-border px-3 text-sm"
-              />
+              <EmojiPickerField value={subEmoji} onChange={setSubEmoji} />
               <button
                 type="submit"
                 className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"
