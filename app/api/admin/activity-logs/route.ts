@@ -30,6 +30,7 @@ export async function GET(request: Request) {
     const adminId = (searchParams.get("admin_id") || "").trim();
     const action = (searchParams.get("action") || "").trim();
     const resourceType = (searchParams.get("resource_type") || "").trim();
+    const resourceId = (searchParams.get("resource_id") || "").trim();
     const outcome = (searchParams.get("outcome") || "").trim();
     const start = (searchParams.get("start") || "").trim();
     const end = (searchParams.get("end") || "").trim();
@@ -45,6 +46,7 @@ export async function GET(request: Request) {
     if (adminId) query = query.eq("admin_id", adminId);
     if (action) query = query.eq("action", action);
     if (resourceType) query = query.eq("resource_type", resourceType);
+    if (resourceId) query = query.eq("resource_id", resourceId);
     if (outcome) query = query.eq("outcome", outcome);
     if (start) query = query.gte("created_at", start);
     if (end) query = query.lte("created_at", end);

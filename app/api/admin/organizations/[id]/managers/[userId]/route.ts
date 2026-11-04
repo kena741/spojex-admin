@@ -27,18 +27,8 @@ export async function DELETE(
         },
       );
       const payload = await res.json().catch(() => ({}));
-      if (res.ok) {
-        await logAdminActivity({
-          context: auth.context,
-          request,
-          action: "remove_manager",
-          resource_type: "organization",
-          resource_id: id,
-          summary: `Removed staff ${userId}`,
-          metadata: payload as Record<string, unknown>,
-        });
-        return NextResponse.json({ ...payload, source: "python" });
-      }
+      // ponytail: BE write_audit already logged; skip FE insert to avoid duplicates
+      if (res.ok) return NextResponse.json({ ...payload, source: "python" });
       if (res.status >= 400 && res.status < 500) {
         const detail =
           (payload as { detail?: { message?: string } }).detail?.message ||

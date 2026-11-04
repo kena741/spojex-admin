@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAdminPermission } from "@/lib/admin-auth";
+import { logAdminActivity } from "@/lib/admin-activity-log";
 import { imageExtension, uploadViaSpojexMediaApi } from "@/lib/spojex-media";
 import { requestAccessToken } from "@/lib/spojex/server";
 
@@ -80,6 +81,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       { status: 400 },
     );
   }
+
+  await logAdminActivity({
+    context: auth.context,
+    request,
+    action: "update",
+    resource_type: "organization",
+    resource_id: id,
+    summary: `Updated organization logo`,
+    metadata: { logo_url: logoUrl, previous_logo_url: org.logo_url ?? null },
+  });
 
   return NextResponse.json({ data, logo_url: logoUrl });
 }

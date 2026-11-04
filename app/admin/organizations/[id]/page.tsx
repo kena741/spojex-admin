@@ -296,13 +296,22 @@ export default function OrganizationDetailPage() {
         .from("sport_news")
         .select("id", { count: "exact", head: true })
         .eq("organization_id", orgRow.id),
-      client
-        .from("admin_activity_log")
-        .select("id, action, summary, created_at, admin_email, admin_name")
-        .eq("resource_type", "organization")
-        .eq("resource_id", orgRow.id)
-        .order("created_at", { ascending: false })
-        .limit(30),
+      adminFetch(
+        `/api/admin/activity-logs?${new URLSearchParams({
+          resource_type: "organization",
+          resource_id: orgRow.id,
+          limit: "30",
+        })}`,
+      ).then(async (res) => {
+        const json = (await res.json().catch(() => ({}))) as {
+          data?: AuditRow[];
+          error?: string;
+        };
+        return {
+          data: res.ok ? (json.data ?? []) : [],
+          error: res.ok ? null : { message: json.error || "Failed to load audit" },
+        };
+      }),
     ]);
 
     // Merge table members + managers API so Staff always surfaces.

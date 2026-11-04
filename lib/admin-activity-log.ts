@@ -51,13 +51,11 @@ export async function logAdminActivity(input: LogAdminActivityInput): Promise<vo
       outcome: input.outcome ?? "success",
     });
 
-    if (error && process.env.NODE_ENV === "development") {
+    if (error) {
       console.warn("[activity-log] insert failed:", error.message);
     }
   } catch (error: unknown) {
-    if (process.env.NODE_ENV === "development") {
-      const message = error instanceof Error ? error.message : "unknown error";
-      console.warn("[activity-log] unexpected error:", message);
-    }
+    const message = error instanceof Error ? error.message : "unknown error";
+    console.warn("[activity-log] unexpected error:", message);
   }
 }
