@@ -290,9 +290,7 @@ export default function ContentOverviewPage() {
                 label="Qualified views (period)"
                 value={display(m.news_qualified_views_period)}
                 hint={
-                  m.news_qualified_views_period?.available === false
-                    ? "Not instrumented yet"
-                    : "Feed exposures with a view"
+                  m.news_qualified_views_period?.available === false ? "—" : undefined
                 }
               />
             </div>

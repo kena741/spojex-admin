@@ -138,9 +138,7 @@ export default function NotificationsPage() {
       window.alert("Confirm All users audience before sending.");
       return;
     }
-    const confirmed = window.confirm(
-      "Final review: send this broadcast to All users with an eligible push token? In-app inbox rows are created separately from device delivery confirmation.",
-    );
+    const confirmed = window.confirm("Send this broadcast to all users with a push token?");
     if (!confirmed) return;
 
     setSending(true);
@@ -231,11 +229,6 @@ export default function NotificationsPage() {
           <h3 className="mb-1 font-heading text-sm font-semibold">
             Broadcast composer
           </h3>
-          <p className="mb-4 text-sm text-text-secondary">
-            Creates in-app inbox rows and queues push to devices with FCM
-            tokens. Provider acceptance is not the same as confirmed device
-            delivery.
-          </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="grid gap-1 text-sm">
               <span className="text-text-secondary">Title</span>

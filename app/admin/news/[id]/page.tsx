@@ -517,9 +517,6 @@ export default function NewsDetailPage() {
             ) : null}
           </div>
         </div>
-        <p className="mt-2 text-xs text-text-hint">
-          Saves are explicit - edits are not autosaved. Upload media, then Save to persist.
-        </p>
       </div>
 
       <AdminPageHeader
@@ -851,10 +848,6 @@ export default function NewsDetailPage() {
                   <p className="mt-1 text-2xl font-semibold tabular-nums">{value ?? 0}</p>
                 </div>
               ))}
-              <p className="sm:col-span-2 text-xs text-text-hint">
-                {workspace.insights?.note ||
-                  "Lifetime engagement from the article row. Period analytics need feed instrumentation."}
-              </p>
             </div>
           ) : null}
 

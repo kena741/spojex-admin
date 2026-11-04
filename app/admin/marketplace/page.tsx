@@ -494,10 +494,6 @@ export default function MarketplaceOverviewPage() {
                 ) : null}
               </div>
             </div>
-            <p className="mt-1 text-[11px] text-text-hint">
-              Future window - not filtered by the historical period above. Unscheduled accepted
-              bookings are counted separately.
-            </p>
           </section>
 
           {/* Trends */}

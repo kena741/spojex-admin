@@ -665,8 +665,7 @@ export default function EventDetailPage() {
             ) : null}
             <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-4 text-xs">
               <span className="text-text-secondary">
-                Reserved holds ({sales.reserved}) consume capacity but are not confirmed sold or verified revenue.
-                Complimentary ({sales.complimentary}) also holds capacity. Cancelled ({sales.cancelled}) does not.
+                Reserved {sales.reserved} · Comp {sales.complimentary} · Cancelled {sales.cancelled}
               </span>
               <Link
                 href={`/admin/finance/transactions?module=event&q=${encodeURIComponent(event.id)}`}
@@ -1453,16 +1452,8 @@ export default function EventDetailPage() {
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="font-heading text-sm font-semibold">
-                {event.visibility === "private"
-                  ? "Private event invitations / RSVPs"
-                  : "RSVPs (optional - not a paid ticket)"}
+                {event.visibility === "private" ? "Invitations / RSVPs" : "RSVPs"}
               </h2>
-              <p className="text-xs text-text-secondary">
-                {event.visibility === "private"
-                  ? "Invite Spojex users by email. Private events stay out of public discovery."
-                  : "Optional guest responses. "}
-                An RSVP is not admission - entry requires a confirmed ticket.
-              </p>
             </div>
             {canWrite ? (
               <form onSubmit={inviteRsvp} className="flex flex-wrap items-end gap-2">
@@ -1589,10 +1580,6 @@ export default function EventDetailPage() {
                 <p className="mt-1 text-xs text-text-secondary">Unavailable</p>
               </div>
             </div>
-            <p className="mt-4 text-xs text-text-secondary">
-              Verified collections count confirmed and used tickets only. Pending checkouts are excluded and are never
-              treated as paid. Platform earnings are not reported on this event record.
-            </p>
             <Link
               href={`/admin/finance/transactions?module=event&q=${encodeURIComponent(event.id)}`}
               className="mt-4 inline-flex rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"

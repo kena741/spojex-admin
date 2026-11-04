@@ -109,10 +109,7 @@ function StreamsOverviewCards({ enabled }: { enabled: boolean }) {
               ? `of ${radio.total_stations ?? 0} · listing status, not health`
               : undefined
           }
-          tooltip={
-            radio?.definitions?.enabled ??
-            "Publication status = active (on-air listing). This is not playback health."
-          }
+          tooltip={radio?.definitions?.enabled}
         />
         <SummaryCard
           label="Scheduled broadcasts"

@@ -620,8 +620,7 @@ export default function StreamDetailPage() {
               </p>
             ) : (
               <p className="mt-2 text-xs text-text-secondary">
-                Preview plays in your browser only and stops when you leave this tab or page. A
-                successful preview is not a health check.
+                Browser preview — stops when you leave this page.
               </p>
             )}
             {!stationUrl ? (
@@ -919,7 +918,7 @@ export default function StreamDetailPage() {
                 onChange={(e) => setForm({ ...form, city: e.target.value })}
               />
             </Field>
-            <Field label="Publication status" hint="Configuration only - not playback health.">
+            <Field label="Publication status">
               <select
                 className={fieldClass}
                 disabled={!editing}

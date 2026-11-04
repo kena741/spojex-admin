@@ -1138,8 +1138,8 @@ function OverviewTab({
             value={unavailable ? "Unavailable" : gymMetricLabel(ov?.community_members)}
             hint={
               gymNum(ov?.community_total) !== null
-                ? `of ${gymMetricLabel(ov?.community_total)} on roster · not proof of paid access`
-                : "Active roster entries · not proof of paid access"
+                ? `of ${gymMetricLabel(ov?.community_total)} on roster`
+                : undefined
             }
             muted={unavailable}
           />
@@ -1561,10 +1561,6 @@ function MembersTab({
           </button>
         ))}
         </div>
-        <p className="max-w-xl text-xs text-text-secondary">
-          Community roster is separate from paid membership. An active roster entry is not proof of
-          a paid plan.
-        </p>
       </div>
 
       {view === "members" ? (

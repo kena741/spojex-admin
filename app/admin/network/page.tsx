@@ -394,9 +394,7 @@ function NetworkPageInner() {
                               : "No connections match"
                           }
                           description={
-                            status === "pending"
-                              ? "When users send connection requests to each other, pending rows appear here. These are not admin approval queues."
-                              : "Try another status filter or clear search. Reload to fetch the latest data."
+                            status === "pending" ? undefined : "Try another filter or clear search."
                           }
                         />
                       </td>
@@ -561,11 +559,6 @@ function NetworkPageInner() {
 
       {tab === "blocks" ? (
         <>
-          <p className="mb-3 text-xs text-text-secondary">
-            Personal user blocks (blocker → blocked). These are not platform moderation
-            restrictions. Support unblock requires network write permission and is audited via
-            the remove action.
-          </p>
           <AdminFilterPanel>
             <AdminSearchInput
               value={query}
