@@ -457,13 +457,6 @@ function FeedInsightsPageInner() {
               </button>
             </div>
           ) : null}
-          <p className="text-[11px] text-text-hint max-w-md">
-            {tab === "personalization"
-              ? "Personalization values are current snapshots - not historical state for a date range."
-              : tab === "performance"
-                ? "Metrics count events/exposures in the selected period. Prefetch is not an impression."
-                : "Worker health from outbox and processing delay - events existing ≠ healthy workers."}
-          </p>
         </div>
       </AdminFilterPanel>
 
@@ -472,9 +465,6 @@ function FeedInsightsPageInner() {
 
       {tab === "performance" && perf ? (
         <div className="space-y-4">
-          {perf.period?.note ? (
-            <p className="text-xs text-text-secondary">{perf.period.note}</p>
-          ) : null}
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
             <MetricCard title="Unique feed viewers" metric={perf.metrics?.unique_viewers} unitHint="distinct users" />
             <MetricCard title="Impressions" metric={perf.metrics?.impressions} unitHint="visible exposures" />
@@ -496,25 +486,9 @@ function FeedInsightsPageInner() {
             <MiniTrend rows={perf.trends ?? []} valueKey="watch_ms" label="Watch time (ms)" />
           </div>
 
-          {(perf.gaps?.length ?? 0) > 0 ? (
-            <details className="rounded-xl border border-amber-200/60 bg-amber-50/40 px-4 py-3 text-xs dark:border-amber-900/40 dark:bg-amber-950/20">
-              <summary className="cursor-pointer font-medium">
-                Instrumentation gaps ({perf.gaps!.length})
-              </summary>
-              <ul className="mt-2 list-disc space-y-1 pl-4 text-text-secondary">
-                {perf.gaps!.map((g) => (
-                  <li key={g.code}>{g.message}</li>
-                ))}
-              </ul>
-            </details>
-          ) : null}
-
           <AdminTableShell>
             <div className="border-b border-border px-4 py-3">
               <h2 className="text-sm font-semibold">Content performance</h2>
-              <p className="text-xs text-text-hint">
-                Low-exposure rows are labeled - small sample sizes are not strong evidence.
-              </p>
             </div>
             {(perf.content?.length ?? 0) === 0 ? (
               <AdminEmpty
@@ -914,28 +888,14 @@ function FeedInsightsPageInner() {
 
           <div className="rounded-xl border border-border bg-card px-4 py-3 text-xs text-text-secondary">
             <p className="font-medium text-foreground">Guest vs authenticated</p>
-            <p className="mt-1">{delivery.guest_vs_authenticated?.note}</p>
             <p className="mt-1 text-text-hint">
-              Authenticated instrumented:{" "}
+              Authenticated:{" "}
               {delivery.guest_vs_authenticated?.authenticated_instrumented ? "yes" : "no"}
               {" · "}
-              Guest instrumented:{" "}
+              Guest:{" "}
               {delivery.guest_vs_authenticated?.guest_instrumented ? "yes" : "no"}
             </p>
           </div>
-
-          {(delivery.gaps?.length ?? 0) > 0 ? (
-            <details className="rounded-xl border border-amber-200/60 bg-amber-50/40 px-4 py-3 text-xs dark:border-amber-900/40 dark:bg-amber-950/20">
-              <summary className="cursor-pointer font-medium">
-                Gaps ({delivery.gaps!.length})
-              </summary>
-              <ul className="mt-2 list-disc space-y-1 pl-4">
-                {delivery.gaps!.map((g) => (
-                  <li key={g.code}>{g.message}</li>
-                ))}
-              </ul>
-            </details>
-          ) : null}
         </div>
       ) : null}
     </div>

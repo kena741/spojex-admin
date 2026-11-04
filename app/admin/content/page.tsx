@@ -416,7 +416,6 @@ export default function ContentOverviewPage() {
               title="Media"
               body={`Active sounds ${data?.operational?.sounds?.active ?? "-"} · Hidden ${data?.operational?.sounds?.hidden ?? "-"}`}
               href={data?.operational?.sounds?.href || "/admin/media-library"}
-              note="Ordinary active sounds are not treated as problems."
             />
             <OpCard
               title="Banners"

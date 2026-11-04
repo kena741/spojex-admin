@@ -378,11 +378,6 @@ function OverviewPanel({
               </li>
             ))}
           </ul>
-          {data.meta?.gaps ? (
-            <p className="mt-4 text-[11px] leading-relaxed text-text-hint">
-              Gaps: acquisition, OS split, and content-attributed follows are not tracked yet.
-            </p>
-          ) : null}
         </section>
       </div>
     </div>
@@ -462,7 +457,7 @@ function UsersPanel({ loading, data }: { loading: boolean; data: Record<string, 
             </span>
           </h3>
           {first.status === "not_tracked" ? (
-            <p className="mt-4 text-sm text-text-hint">{first.message || "Not tracked yet"}</p>
+            <p className="mt-4 text-sm text-text-hint">—</p>
           ) : (
             <div className="mt-4 space-y-2 text-sm">
               <div className="flex justify-between">
@@ -483,11 +478,11 @@ function UsersPanel({ loading, data }: { loading: boolean; data: Record<string, 
 
         <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
           <h3 className="mb-3 font-heading text-sm font-semibold">Attribution & platforms</h3>
-          <p className="text-xs text-text-hint">
-            {data.acquisition_sources?.message || "Acquisition sources: Not tracked yet"}
-          </p>
+          {data.acquisition_sources?.status === "not_tracked" ? (
+            <p className="text-xs text-text-hint">Acquisition —</p>
+          ) : null}
           <div className="mt-3">
-            <p className="mb-2 text-xs font-medium text-text-secondary">Signup device (Android vs iOS)</p>
+            <p className="mb-2 text-xs font-medium text-text-secondary">Signup device</p>
             {data.platforms?.status === "ok" && (data.platforms?.series?.length ?? 0) > 0 ? (
               <div className="h-40">
                 <SimpleBarChart
@@ -500,9 +495,7 @@ function UsersPanel({ loading, data }: { loading: boolean; data: Record<string, 
                 />
               </div>
             ) : (
-              <p className="text-xs text-text-hint">
-                {data.platforms?.message || "Android vs iOS: Not tracked yet"}
-              </p>
+              <p className="text-xs text-text-hint">—</p>
             )}
             {data.platforms?.status === "ok" ? (
               <div className="mt-2 flex flex-wrap gap-3 text-xs text-text-secondary">
@@ -526,11 +519,8 @@ function UsersPanel({ loading, data }: { loading: boolean; data: Record<string, 
             <HelpCircle className="h-3.5 w-3.5 text-text-hint" />
           </span>
         </h3>
-        <p className="mb-3 text-xs text-text-secondary">
-          Only cohorts old enough to reach each day are shown with rates.
-        </p>
         {ret.status === "not_tracked" ? (
-          <p className="text-sm text-text-hint">{ret.message}</p>
+          <p className="text-sm text-text-hint">—</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[520px] text-left text-xs">
@@ -646,14 +636,10 @@ function GymsPanel({
             <div>Renewals (proxy): {formatCompact(k.memberships?.renewed_proxy)}</div>
             <div>Refunds: {formatCompact(k.revenue?.refunds)} {k.revenue?.currency}</div>
           </div>
-          {k.conversion?.renewal_note ? (
-            <p className="mt-3 text-[11px] text-text-hint">{k.conversion.renewal_note}</p>
-          ) : null}
         </section>
 
         <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
-          <h3 className="mb-1 font-heading text-sm font-semibold">Onboarding funnel</h3>
-          <p className="mb-3 text-[11px] text-text-hint">{funnel.note}</p>
+          <h3 className="mb-3 font-heading text-sm font-semibold">Onboarding funnel</h3>
           <ol className="space-y-2">
             {steps.map(([label, value], i) => (
               <li key={String(label)} className="flex items-center gap-3">
@@ -777,19 +763,10 @@ function ContentPanel({
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Published (period)" value={data.published?.total} kind="period" />
-        <KpiCard label="News views (period)" value={news.views} tooltip="Separated from gym videos" />
+        <KpiCard label="News views (period)" value={news.views} />
         <KpiCard label="Gym video views" value={videos.views} />
-        <KpiCard
-          label="Avg engagement (news)"
-          value={news.avg_engagement_rate}
-          tooltip="(likes+comments+saves+shares) / views × 100"
-        />
+        <KpiCard label="Avg engagement (news)" value={news.avg_engagement_rate} />
       </div>
-
-      <p className="text-xs text-text-hint">{by.note}</p>
-      {data.creator_follows?.status === "not_tracked" ? (
-        <p className="text-xs text-text-hint">{data.creator_follows.message}</p>
-      ) : null}
 
       <div className="flex flex-wrap gap-1.5">
         {CONTENT_TABS.map((t) => (
@@ -968,12 +945,6 @@ function ContentDrawer({
               <ChartCard title="Performance over time" empty={!detail.performance_over_time?.length}>
                 <SeriesAreaChart data={detail.performance_over_time || []} name="Views" />
               </ChartCard>
-              <div className="rounded-lg border border-border p-3 text-xs text-text-secondary">
-                <p className="mb-1 font-medium text-foreground">Traffic sources</p>
-                {detail.traffic_sources?.status === "not_tracked"
-                  ? detail.traffic_sources.message
-                  : "-"}
-              </div>
               {item.manage_href ? (
                 <Link
                   href={item.manage_href}
