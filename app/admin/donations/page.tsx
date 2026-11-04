@@ -41,7 +41,7 @@ import {
   type DirectoryView,
 } from "@/lib/directory-view";
 import { adminCacheKey } from "@/lib/admin-session-cache";
-import { adminFetch, deleteAdmin, postAdmin } from "@/lib/hooks";
+import { adminFetch, deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { useAdminQuery } from "@/lib/use-admin-query";
 import type { DonationCampaignRow } from "@/lib/types";
@@ -99,6 +99,16 @@ export default function DonationsPage() {
   const [createAsset, setCreateAsset] = useState<"coin" | "etb">("coin");
   const [beneficiaryId, setBeneficiaryId] = useState("");
   const [createStatus, setCreateStatus] = useState("draft");
+
+  const [editRow, setEditRow] = useState<DirectoryRow | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editGoal, setEditGoal] = useState("");
+  const [editAsset, setEditAsset] = useState<"coin" | "etb">("coin");
+  const [editBeneficiaryId, setEditBeneficiaryId] = useState("");
+  const [editStatus, setEditStatus] = useState("draft");
+  const [editReason, setEditReason] = useState("");
+  const [editSummary, setEditSummary] = useState("");
 
   const {
     data: listData,
@@ -199,6 +209,73 @@ export default function DonationsPage() {
       setError(err instanceof Error ? err.message : "Create failed");
     } finally {
       setCreating(false);
+    }
+  };
+
+  const openEdit = (row: DirectoryRow) => {
+    const coin = campaignIsCoin(row);
+    setEditRow(row);
+    setEditTitle(row.title || "");
+    setEditSummary(row.summary || "");
+    setEditGoal(
+      String(coin ? row.goal_coins || row.goal_amount || 0 : row.goal_amount || 0),
+    );
+    setEditAsset(coin ? "coin" : "etb");
+    setEditBeneficiaryId(row.beneficiary_user_id || "");
+    setEditStatus(row.status || "draft");
+    setEditReason("");
+    setError(null);
+  };
+
+  const closeEdit = () => {
+    if (editing) return;
+    setEditRow(null);
+  };
+
+  const saveEdit = async () => {
+    if (!canWrite || !editRow || !editTitle.trim()) return;
+    const goalNum = Number(editGoal) || 0;
+    if (goalNum <= 0) {
+      setError("Goal must be greater than 0");
+      return;
+    }
+    const beneficiaryChanged =
+      (editBeneficiaryId.trim() || "") !== (editRow.beneficiary_user_id || "");
+    const statusChanged = editStatus !== (editRow.status || "draft");
+    const needsReason =
+      beneficiaryChanged ||
+      (statusChanged && ["paused", "closed"].includes(editStatus));
+    if (needsReason && !editReason.trim()) {
+      setError("Reason required for beneficiary or pause/close changes");
+      return;
+    }
+    const isCoin = editAsset === "coin";
+    const prevCoin = campaignIsCoin(editRow);
+    const raised = Number(campaignDisplayRaised(editRow) || 0);
+    if (isCoin !== prevCoin && raised > 0) {
+      setError("Cannot change campaign asset after contributions exist.");
+      return;
+    }
+    setEditing(true);
+    setError(null);
+    try {
+      await patchAdmin(`/api/admin/donations/${editRow.id}`, {
+        title: editTitle.trim(),
+        summary: editSummary.trim(),
+        goal_amount: goalNum,
+        goal_coins: isCoin ? goalNum : 0,
+        currency: isCoin ? "COIN" : "ETB",
+        status: editStatus || "draft",
+        beneficiary_user_id: editBeneficiaryId.trim() || null,
+        expected_updated_at: editRow.updated_at,
+        ...(editReason.trim() ? { reason: editReason.trim() } : {}),
+      });
+      setEditRow(null);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Update failed");
+    } finally {
+      setEditing(false);
     }
   };
 
@@ -533,10 +610,16 @@ export default function DonationsPage() {
                             ...(canWrite
                               ? [
                                   {
+                                    id: "edit",
+                                    label: "Edit",
+                                    onClick: () => openEdit(row),
+                                  },
+                                  {
                                     id: "delete",
                                     label: "Close / delete",
                                     onClick: () => void remove(row),
                                     tone: "danger" as const,
+                                    separatorBefore: true,
                                   },
                                 ]
                               : []),
@@ -641,6 +724,108 @@ export default function DonationsPage() {
             ))}
           </AdminSelect>
         </form>
+      </AdminModal>
+
+      <AdminModal
+        open={Boolean(editRow)}
+        title={editRow ? `Edit “${editRow.title}”` : "Edit campaign"}
+        onClose={closeEdit}
+        sheet
+        footer={
+          <AdminModalFooter
+            onCancel={closeEdit}
+            onSave={() => void saveEdit()}
+            saving={editing}
+            saveLabel="Save changes"
+          />
+        }
+      >
+        {editRow ? (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void saveEdit();
+            }}
+            className="grid gap-3"
+          >
+            <input
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              placeholder="Campaign title"
+              required
+              disabled={editing}
+              className="h-10 rounded-lg border border-border px-3 text-sm"
+            />
+            <input
+              value={editSummary}
+              onChange={(e) => setEditSummary(e.target.value)}
+              placeholder="Short summary (optional)"
+              disabled={editing}
+              className="h-10 rounded-lg border border-border px-3 text-sm"
+            />
+            <AdminSelect
+              value={editAsset}
+              onChange={(v) => setEditAsset(v === "etb" ? "etb" : "coin")}
+              disabled={editing || campaignDisplayRaised(editRow) > 0}
+            >
+              <option value="coin">Coins (wallet gifts)</option>
+              <option value="etb">ETB (Chapa payments)</option>
+            </AdminSelect>
+            {campaignDisplayRaised(editRow) > 0 ? (
+              <p className="text-[11px] text-text-hint">
+                Asset locked after contributions exist.
+              </p>
+            ) : null}
+            <input
+              value={editGoal}
+              onChange={(e) => setEditGoal(e.target.value)}
+              placeholder={editAsset === "coin" ? "Goal (coins)" : "Goal (ETB)"}
+              type="number"
+              min={1}
+              required
+              disabled={editing}
+              className="h-10 rounded-lg border border-border px-3 text-sm"
+            />
+            <div>
+              <p className="mb-1 text-xs font-medium text-text-secondary">Public beneficiary</p>
+              <BeneficiarySelect
+                value={editBeneficiaryId}
+                onChange={setEditBeneficiaryId}
+                disabled={!canWrite || editing}
+              />
+            </div>
+            <AdminSelect
+              value={editStatus}
+              onChange={setEditStatus}
+              disabled={editing}
+            >
+              {donationStatuses.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </AdminSelect>
+            <input
+              value={editReason}
+              onChange={(e) => setEditReason(e.target.value)}
+              placeholder="Reason (required for beneficiary / pause / close)"
+              disabled={editing}
+              className="h-10 rounded-lg border border-border px-3 text-sm"
+            />
+            <button
+              type="button"
+              disabled={editing}
+              onClick={() => {
+                const href = editRow.href || `/admin/donations/${editRow.id}`;
+                setEditRow(null);
+                router.push(`${href}?edit=1`);
+              }}
+              className="justify-self-start text-xs font-medium text-primary hover:underline"
+            >
+              Open full settings (images, description)…
+            </button>
+          </form>
+        ) : null}
       </AdminModal>
     </>
   );

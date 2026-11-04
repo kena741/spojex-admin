@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AdminPageHeader from "@/components/admin-header";
 import {
@@ -245,6 +245,8 @@ function formFromCampaign(c: DonationCampaignRow): SettingsForm {
 export default function DonationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { can } = useAdminPermissions();
   const canWrite = can("donations:write");
   const canExport = can("donations:write") || can("finance:read");
@@ -268,6 +270,26 @@ export default function DonationDetailPage() {
   const [contribStatus, setContribStatus] = useState("all");
   const dirtyRef = useRef(false);
   dirtyRef.current = dirty;
+
+  const startEdit = () => {
+    if (!canWrite) return;
+    setTab("settings");
+    setEditing(true);
+    setFieldErrors({});
+    setError(null);
+  };
+
+  // /admin/donations/:id?edit=1 opens Settings in edit mode (list "Edit" deep-link).
+  useEffect(() => {
+    if (!canWrite) return;
+    if (searchParams.get("edit") !== "1") return;
+    setTab("settings");
+    setEditing(true);
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("edit");
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [canWrite, pathname, router, searchParams, setTab]);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -294,9 +316,9 @@ export default function DonationDetailPage() {
 
   useApplyAdminSnapshot(snapshot, (payload) => {
     setWorkspace(payload);
+    // Keep edit mode if the user opened Settings via Edit / ?edit=1; only refresh the form when clean.
     if (!dirtyRef.current) {
       setForm(formFromCampaign(payload.campaign));
-      setEditing(false);
     }
   });
 
@@ -543,6 +565,13 @@ export default function DonationDetailPage() {
         actions={
           canWrite ? (
             <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={startEdit}
+                className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+              >
+                Edit campaign
+              </button>
               {campaign.status !== "active" ? (
                 <button
                   type="button"
@@ -977,7 +1006,7 @@ export default function DonationDetailPage() {
                 {!editing ? (
                   <button
                     type="button"
-                    onClick={() => setEditing(true)}
+                    onClick={startEdit}
                     className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
                   >
                     Edit campaign
