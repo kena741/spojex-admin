@@ -1465,7 +1465,7 @@ export default function EventDetailPage() {
                     type="email"
                     required
                     placeholder="fan@example.com"
-                    className={`${fieldClass} min-w-[220px]`}
+                    className={`${fieldClass} min-w-55`}
                   />
                 </label>
                 <button

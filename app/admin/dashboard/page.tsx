@@ -523,7 +523,7 @@ function UsersPanel({ loading, data }: { loading: boolean; data: Record<string, 
           <p className="text-sm text-text-hint">—</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] text-left text-xs">
+            <table className="w-full min-w-130 text-left text-xs">
               <thead className="border-b border-border text-text-hint">
                 <tr>
                   <th className="py-2 pr-3 font-medium">Cohort</th>
@@ -679,7 +679,7 @@ function GymsPanel({
           </form>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-xs">
+          <table className="w-full min-w-180 text-left text-xs">
             <thead className="border-b border-border text-text-hint">
               <tr>
                 {[
@@ -795,7 +795,7 @@ function ContentPanel({
 
       <section className="rounded-xl border border-border bg-card shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[880px] text-left text-xs">
+          <table className="w-full min-w-220 text-left text-xs">
             <thead className="border-b border-border bg-muted/40 text-text-hint">
               <tr>
                 <th className="px-4 py-2.5 font-medium">Content</th>
@@ -885,7 +885,7 @@ function ContentMiniTable({
               className="cursor-pointer border-b border-border/50 hover:bg-muted/30"
               onClick={() => onOpen(row)}
             >
-              <td className="max-w-[220px] truncate py-2 pr-2 font-medium">{row.title}</td>
+              <td className="max-w-55 truncate py-2 pr-2 font-medium">{row.title}</td>
               <td className="py-2 pr-2 tabular-nums">{formatCompact(row.views)}</td>
               <td className="py-2 tabular-nums">{row.trending_score ?? "-"}</td>
             </tr>

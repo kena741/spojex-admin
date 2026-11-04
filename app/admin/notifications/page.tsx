@@ -341,7 +341,7 @@ export default function NotificationsPage() {
               ))}
             </AdminSelect>
           </div>
-          <div className="min-w-[220px] flex-1">
+          <div className="min-w-55 flex-1">
             <label className="mb-1 block text-[11px] text-text-hint">
               Search
             </label>

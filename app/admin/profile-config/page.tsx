@@ -1160,7 +1160,7 @@ function FieldTable({
   };
   return (
     <div className="max-w-full overflow-x-auto overscroll-x-contain rounded-xl border border-border bg-card [-webkit-overflow-scrolling:touch]">
-      <table className="w-full min-w-[820px] border-collapse text-sm">
+      <table className="w-full min-w-205 border-collapse text-sm">
         <thead className="bg-muted/40 text-left text-xs text-text-secondary">
           <tr>
             <th className="whitespace-nowrap px-3 py-2">Order</th>
@@ -1192,7 +1192,7 @@ function FieldTable({
                   ))}
                 </div>
               </td>
-              <td className="min-w-[12rem] px-3 py-2">
+              <td className="min-w-48 px-3 py-2">
                 <p className="font-medium">{f.label || "(no label)"}</p>
                 <p className="text-xs text-text-hint">
                   {f.key}
@@ -1693,7 +1693,7 @@ function SectionsTab({
         </div>
       ) : null}
     <div className="max-w-full overflow-x-auto overscroll-x-contain rounded-xl border border-border bg-card [-webkit-overflow-scrolling:touch]">
-      <ul className="min-w-[1100px] divide-y divide-border">
+      <ul className="min-w-275 divide-y divide-border">
         {rows.map((s) => (
           <li
             key={s.id}

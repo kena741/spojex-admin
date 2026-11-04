@@ -429,7 +429,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex justify-between gap-4 text-sm">
       <dt className="shrink-0 text-text-secondary">{label}</dt>
-      <dd className="min-w-0 break-words text-right font-medium text-text-primary">
+      <dd className="min-w-0 wrap-break-word text-right font-medium text-text-primary">
         {children}
       </dd>
     </div>
@@ -1681,7 +1681,7 @@ function MembersTab({
                             {plan.label}
                           </p>
                           {plan.rosterOnly ? (
-                            <p className="mt-0.5 max-w-[14rem] text-xs text-text-hint">
+                            <p className="mt-0.5 max-w-56 text-xs text-text-hint">
                               {row.source_note ||
                                 "Roster entry without a purchased plan - not a missing paid plan."}
                             </p>

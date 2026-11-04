@@ -439,8 +439,8 @@ function FeedInsightsPageInner() {
             </>
           ) : null}
           {tab === "personalization" ? (
-            <div className="flex min-w-[220px] flex-1 flex-wrap items-end gap-2">
-              <div className="min-w-[200px] flex-1">
+            <div className="flex min-w-55 flex-1 flex-wrap items-end gap-2">
+              <div className="min-w-50 flex-1">
                 <label className="mb-1 block text-[11px] text-text-hint">Search users</label>
                 <AdminSearchInput
                   value={searchDraft}
