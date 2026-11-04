@@ -96,7 +96,6 @@ export default function DonationsPage() {
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState("");
   const [goal, setGoal] = useState("");
-  const [createAsset, setCreateAsset] = useState<"coin" | "etb">("coin");
   const [beneficiaryId, setBeneficiaryId] = useState("");
   const [createStatus, setCreateStatus] = useState("draft");
 
@@ -186,15 +185,14 @@ export default function DonationsPage() {
     setCreating(true);
     setError(null);
     try {
-      const isCoin = createAsset === "coin";
       await postAdmin("/api/admin/donations", {
         title: title.trim(),
         slug: slugifyDonation(title),
         summary: "",
         description: "",
         goal_amount: goalNum,
-        goal_coins: isCoin ? goalNum : 0,
-        currency: isCoin ? "COIN" : "ETB",
+        goal_coins: goalNum,
+        currency: "COIN",
         status: createStatus || "draft",
         ...(beneficiaryId.trim() ? { beneficiary_user_id: beneficiaryId.trim() } : {}),
       });
@@ -202,7 +200,6 @@ export default function DonationsPage() {
       setGoal("");
       setBeneficiaryId("");
       setCreateStatus("draft");
-      setCreateAsset("coin");
       setCreateOpen(false);
       await refresh();
     } catch (err) {
@@ -691,17 +688,10 @@ export default function DonationsPage() {
             required
             className="h-10 rounded-lg border border-border px-3 text-sm"
           />
-          <AdminSelect
-            value={createAsset}
-            onChange={(v) => setCreateAsset(v === "etb" ? "etb" : "coin")}
-          >
-            <option value="coin">Coins (wallet gifts)</option>
-            <option value="etb">ETB (Chapa payments)</option>
-          </AdminSelect>
           <input
             value={goal}
             onChange={(e) => setGoal(e.target.value)}
-            placeholder={createAsset === "coin" ? "Goal (coins)" : "Goal (ETB)"}
+            placeholder="Goal (coins)"
             type="number"
             min={1}
             required
@@ -762,19 +752,9 @@ export default function DonationsPage() {
               disabled={editing}
               className="h-10 rounded-lg border border-border px-3 text-sm"
             />
-            <AdminSelect
-              value={editAsset}
-              onChange={(v) => setEditAsset(v === "etb" ? "etb" : "coin")}
-              disabled={editing || campaignDisplayRaised(editRow) > 0}
-            >
-              <option value="coin">Coins (wallet gifts)</option>
-              <option value="etb">ETB (Chapa payments)</option>
-            </AdminSelect>
-            {campaignDisplayRaised(editRow) > 0 ? (
-              <p className="text-[11px] text-text-hint">
-                Asset locked after contributions exist.
-              </p>
-            ) : null}
+            <p className="text-xs text-text-secondary">
+              Asset: {editAsset === "coin" ? "Coins" : "ETB (legacy)"}
+            </p>
             <input
               value={editGoal}
               onChange={(e) => setEditGoal(e.target.value)}

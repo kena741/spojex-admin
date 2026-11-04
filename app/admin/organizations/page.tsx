@@ -13,6 +13,7 @@ import {
   AdminModal,
   AdminSearchInput,
   AdminSelect,
+  AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge, verifiedTone } from "@/components/status-badge";
 import { organizationTypeLabel, organizationTypes } from "@/lib/catalog";
@@ -600,7 +601,7 @@ export default function OrganizationsPage() {
 
       {error ? <AdminErrorAlert message={error} /> : null}
 
-      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <AdminTableShell>
           {loading ? (
             <AdminLoadingRow label="Loading organizations…" compact className="py-10" />
           ) : rows.length === 0 ? (
@@ -615,124 +616,147 @@ export default function OrganizationsPage() {
               }
             />
           ) : (
-          <ul className="divide-y divide-border">
-            {rows.map((row) => {
-              const liveGifts = liveGiftTotals[row.id] ?? row.live_gifts_received ?? 0;
-              const members = memberCounts[row.id] ?? row.active_people_count ?? 1;
-              return (
-                <li key={row.id}>
-                  <Link
-                    href={`/admin/organizations/${row.id}`}
-                    className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/40"
-                  >
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-muted text-sm font-semibold text-text-secondary">
-                      {row.logo_url?.trim() ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={row.logo_url} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        (row.name || "O").slice(0, 1).toUpperCase()
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate font-medium text-foreground">{row.name || "Unnamed"}</p>
-                        <span className="rounded bg-secondary px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Organization</th>
+                    <th className="px-3 py-3 font-medium">Type</th>
+                    <th className="px-3 py-3 font-medium">Location</th>
+                    <th className="px-3 py-3 font-medium">Owner</th>
+                    <th className="px-3 py-3 font-medium">Status</th>
+                    <th className="px-3 py-3 font-medium text-right">People</th>
+                    <th className="px-3 py-3 font-medium text-right">Live gifts</th>
+                    <th className="px-3 py-3 font-medium">
+                      {trash === "yes" ? "Deleted" : "Updated"}
+                    </th>
+                    {canWrite ? <th className="px-3 py-3 font-medium text-right">Actions</th> : null}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {rows.map((row) => {
+                    const liveGifts = liveGiftTotals[row.id] ?? row.live_gifts_received ?? 0;
+                    const members = memberCounts[row.id] ?? row.active_people_count ?? 1;
+                    return (
+                      <tr key={row.id} className="hover:bg-muted/30">
+                        <td className="px-4 py-3">
+                          <Link
+                            href={`/admin/organizations/${row.id}`}
+                            className="flex min-w-0 items-center gap-3"
+                          >
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted text-xs font-semibold text-text-secondary">
+                              {row.logo_url?.trim() ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={row.logo_url} alt="" className="h-full w-full object-cover" />
+                              ) : (
+                                (row.name || "O").slice(0, 1).toUpperCase()
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate font-medium text-foreground hover:text-primary">
+                                {row.name || "Unnamed"}
+                                {row.is_platform ? (
+                                  <span className="ml-1.5 text-[10px] font-medium text-primary">
+                                    Platform
+                                  </span>
+                                ) : null}
+                              </p>
+                              <button
+                                type="button"
+                                title="Copy public ID"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  void navigator.clipboard.writeText(row.public_id);
+                                }}
+                                className="truncate font-mono text-[10px] text-text-hint hover:text-text-secondary"
+                              >
+                                {row.public_id}
+                              </button>
+                            </div>
+                          </Link>
+                        </td>
+                        <td className="px-3 py-3 text-text-secondary">
                           {organizationTypeLabel(row.organization_type)}
-                        </span>
-                        {row.is_platform ? (
-                          <span className="text-[10px] font-medium text-primary">Platform</span>
+                        </td>
+                        <td className="px-3 py-3 text-text-secondary">
+                          {trash === "yes"
+                            ? [
+                                row.deleted_at ? formatDate(row.deleted_at) : null,
+                                row.deleted_by_user?.display_name
+                                  ? `by ${row.deleted_by_user.display_name}`
+                                  : null,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ") || "—"
+                            : locationLabel(row.city, row.country) || "—"}
+                        </td>
+                        <td className="px-3 py-3">
+                          {row.users?.id ? (
+                            <button
+                              type="button"
+                              className="truncate text-left text-primary hover:underline"
+                              onClick={() => router.push(`/admin/people/${row.users!.id}`)}
+                            >
+                              {row.users.display_name}
+                            </button>
+                          ) : (
+                            <span className="text-text-hint">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3">
+                          {row.deleted_at ? (
+                            <StatusBadge tone="danger">Trash</StatusBadge>
+                          ) : (
+                            <StatusBadge tone={verifiedTone(row.verified)}>
+                              {row.verified ? "Verified" : "Unverified"}
+                            </StatusBadge>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 text-right tabular-nums">{members}</td>
+                        <td className="px-3 py-3 text-right tabular-nums">
+                          {liveGifts > 0 ? formatCoins(liveGifts) : "—"}
+                        </td>
+                        <td className="px-3 py-3 text-xs text-text-secondary">
+                          {formatDate(
+                            trash === "yes"
+                              ? row.deleted_at || row.updated_at || row.created_at
+                              : row.updated_at || row.created_at,
+                          )}
+                        </td>
+                        {canWrite ? (
+                          <td className="px-3 py-3 text-right">
+                            {!row.is_platform ? (
+                              <button
+                                type="button"
+                                disabled={rowBusyId === row.id}
+                                className={
+                                  trash === "yes"
+                                    ? "rounded-md border border-border px-2 py-1 text-[11px] font-medium hover:bg-muted disabled:opacity-50"
+                                    : "rounded-md border border-red-200 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                                }
+                                onClick={() => {
+                                  if (trash === "yes") void restoreOrgRow(row);
+                                  else void trashOrg(row);
+                                }}
+                              >
+                                {rowBusyId === row.id
+                                  ? "…"
+                                  : trash === "yes"
+                                    ? "Restore"
+                                    : "Delete"}
+                              </button>
+                            ) : null}
+                          </td>
                         ) : null}
-                        {row.deleted_at ? (
-                          <StatusBadge tone="danger">Trash</StatusBadge>
-                        ) : null}
-                      </div>
-                      <p className="truncate text-xs text-text-secondary">
-                        {trash === "yes"
-                          ? [
-                              row.deleted_at ? `Deleted ${formatDate(row.deleted_at)}` : null,
-                              row.deleted_by_user?.display_name
-                                ? `by ${row.deleted_by_user.display_name}`
-                                : null,
-                            ]
-                              .filter(Boolean)
-                              .join(" · ")
-                          : locationLabel(row.city, row.country)}
-                      </p>
-                      {trash !== "yes" && row.users?.id ? (
-                        <button
-                          type="button"
-                          className="mt-0.5 truncate text-left text-xs text-primary hover:underline"
-                          title="Open owner user"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            router.push(`/admin/people/${row.users!.id}`);
-                          }}
-                        >
-                          Owner (user): {row.users.display_name}
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        title="Copy public ID"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          void navigator.clipboard.writeText(row.public_id);
-                        }}
-                        className="mt-0.5 truncate font-mono text-[10px] text-text-hint hover:text-text-secondary"
-                      >
-                        {row.public_id}
-                      </button>
-                    </div>
-                    <div className="hidden shrink-0 flex-col items-end gap-1 sm:flex">
-                      <StatusBadge tone={verifiedTone(row.verified)}>
-                        {row.verified ? "Verified" : "Unverified"}
-                      </StatusBadge>
-                      <span className="text-[10px] text-text-hint">{members} people</span>
-                    </div>
-                    <div className="hidden w-28 shrink-0 text-right text-xs text-text-secondary lg:block">
-                      <span className="font-medium tabular-nums text-foreground">
-                        {liveGifts > 0 ? formatCoins(liveGifts) : "-"}
-                      </span>
-                      <span className="mt-0.5 block text-[10px] text-text-hint">
-                        Live gifts received
-                      </span>
-                    </div>
-                    <div className="hidden w-28 shrink-0 text-right text-[11px] text-text-hint xl:block">
-                      <span className="block">Updated</span>
-                      {formatDate(row.updated_at || row.created_at)}
-                    </div>
-                    {canWrite && !row.is_platform ? (
-                      <button
-                        type="button"
-                        disabled={rowBusyId === row.id}
-                        className={
-                          trash === "yes"
-                            ? "shrink-0 rounded-md border border-border px-2 py-1 text-[11px] font-medium hover:bg-muted disabled:opacity-50"
-                            : "shrink-0 rounded-md border border-red-200 px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-                        }
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          if (trash === "yes") void restoreOrgRow(row);
-                          else void trashOrg(row);
-                        }}
-                      >
-                        {rowBusyId === row.id
-                          ? "…"
-                          : trash === "yes"
-                            ? "Restore"
-                            : "Delete"}
-                      </button>
-                    ) : null}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
-      </div>
+      </AdminTableShell>
 
       {!loading && totalPages > 1 ? (
         <div className="flex items-center justify-between gap-3 pt-2">

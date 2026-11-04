@@ -3,14 +3,7 @@
 import { useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import {
-  AlertTriangle,
-  Building2,
-  CalendarDays,
-  Dumbbell,
-  HeartHandshake,
-  Radio,
-} from "lucide-react";
+import { Building2, CalendarDays, Dumbbell, HeartHandshake, Radio } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
 import { AdminErrorAlert, AdminLoadingRow, AdminReloadButton } from "@/components/admin-layout";
 import { adminCacheKey } from "@/lib/admin-session-cache";
@@ -212,9 +205,7 @@ export default function NativeAppsOverviewPage() {
   const load = refresh;
 
   const modules = data?.modules ?? {};
-  const attention = data?.attention ?? [];
   const previews = data?.previews ?? {};
-  const trends = data?.trends?.series ?? {};
 
   const canModule = (key: string) => {
     const meta = MODULE_META[key];
@@ -306,36 +297,6 @@ export default function NativeAppsOverviewPage() {
 
       {data && !permsLoading ? (
         <>
-          {/* Needs attention */}
-          <section className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-800" />
-              <h2 className="font-heading text-sm font-semibold text-amber-950">Needs attention</h2>
-            </div>
-            {attention.length === 0 ? (
-              <p className="text-sm text-amber-900/80">Nothing needs attention.</p>
-            ) : (
-              <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {attention.map((item) => (
-                  <li key={item.key}>
-                    <Link
-                      href={item.href}
-                      className="flex items-center justify-between gap-2 rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm hover:border-amber-300"
-                    >
-                      <span>
-                        <span className="font-medium">{item.label}</span>
-                        {item.scope ? (
-                          <span className="mt-0.5 block text-[11px] text-text-hint">{item.scope}</span>
-                        ) : null}
-                      </span>
-                      <span className="font-semibold tabular-nums text-amber-900">{item.count}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
           {/* Module performance */}
           <section>
             <h2 className="mb-3 font-heading text-sm font-semibold">Module performance</h2>
@@ -500,7 +461,6 @@ export default function NativeAppsOverviewPage() {
                 [
                   ["gym_reviews", "Gym / stadium reviews awaiting action"],
                   ["stadium_reviews", "Stadium approvals awaiting action"],
-                  ["events_starting_soon", "Events starting soon"],
                   ["campaigns_closing_soon", "Active campaigns (recent)"],
                 ] as const
               ).map(([key, title]) => {
@@ -550,41 +510,6 @@ export default function NativeAppsOverviewPage() {
             </div>
           </section>
 
-          {/* Trends */}
-          <section>
-            <h2 className="mb-3 font-heading text-sm font-semibold">Trends (period)</h2>
-            <div className="grid gap-4 lg:grid-cols-2">
-              {Object.entries(trends).map(([key, series]) => (
-                <div key={key} className="rounded-xl border border-border bg-card p-4 shadow-sm">
-                  <h3 className="mb-2 text-sm font-semibold">
-                    {series.label || key.replace(/_/g, " ")}
-                  </h3>
-                  {!series.available ? (
-                    <p className="text-sm text-text-hint">{series.error || series.note || "Unavailable"}</p>
-                  ) : !series.points?.length ? (
-                    <p className="text-sm text-text-hint">No activity in this period.</p>
-                  ) : series.low_volume ? (
-                    <div>
-                      <p className="mb-2 text-xs text-text-hint">
-                        Low volume - showing daily counts instead of a chart.
-                      </p>
-                      <ul className="max-h-40 space-y-1 overflow-auto text-xs">
-                        {series.points.map((p) => (
-                          <li key={p.day} className="flex justify-between tabular-nums">
-                            <span>{p.day}</span>
-                            <span>{p.count}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : (
-                    <MiniBars points={series.points} />
-                  )}
-                </div>
-              ))}
-            </div>
-          </section>
-
           {data?.definitions ? (
             <details className="text-xs text-text-hint">
               <summary className="cursor-pointer font-medium">Metric definitions</summary>
@@ -599,22 +524,6 @@ export default function NativeAppsOverviewPage() {
           ) : null}
         </>
       ) : null}
-    </div>
-  );
-}
-
-function MiniBars({ points }: { points: { day: string; count: number }[] }) {
-  const max = Math.max(...points.map((p) => p.count), 1);
-  return (
-    <div className="flex h-28 items-end gap-1">
-      {points.map((p) => (
-        <div key={p.day} className="flex flex-1 flex-col items-center gap-1" title={`${p.day}: ${p.count}`}>
-          <div
-            className="w-full rounded-t bg-primary/80"
-            style={{ height: `${Math.max(8, (p.count / max) * 100)}%` }}
-          />
-        </div>
-      ))}
     </div>
   );
 }

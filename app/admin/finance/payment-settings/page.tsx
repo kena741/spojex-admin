@@ -30,6 +30,7 @@ type ChapaFormValues = {
   isSandbox: boolean;
   publicKey: string;
   secretKey: string;
+  feePercent: number;
 };
 
 function asObject(value: unknown): Record<string, string | boolean | number | undefined> {
@@ -55,6 +56,7 @@ export default function PaymentSettingsPage() {
     isSandbox: Boolean(paymentSettings.chapa?.isSandbox),
     publicKey: String(paymentSettings.chapa?.publicKey || ""),
     secretKey: String(paymentSettings.chapa?.secretKey || ""),
+    feePercent: Number(paymentSettings.chapa?.feePercent ?? 0) || 0,
   };
 
   const {
@@ -95,7 +97,7 @@ export default function PaymentSettingsPage() {
     }));
   };
 
-  const updateChapaField = (key: keyof ChapaFormValues, value: string | boolean) => {
+  const updateChapaField = (key: keyof ChapaFormValues, value: string | boolean | number) => {
     updatePaymentSetting("chapa", key, value);
   };
 
@@ -224,6 +226,22 @@ export default function PaymentSettingsPage() {
                   />
                   <span className="text-sm font-medium text-foreground">Sandbox</span>
                 </label>
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-foreground">
+                  Transaction fee (%)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.1}
+                  value={String(chapaValues.feePercent)}
+                  onChange={(e) =>
+                    updateChapaField("feePercent", Number.parseFloat(e.target.value) || 0)
+                  }
+                  className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                />
               </div>
               <div>
                 <label className="mb-2 block text-sm font-medium text-foreground">Public Key</label>

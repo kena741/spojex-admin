@@ -564,12 +564,16 @@ export default function ProfileConfigPage() {
           inputTypes={overview?.input_types ?? {}}
           onClose={() => setEditingField(null)}
           onSave={(next) => {
-            update((d) => ({
-              ...d,
-              fields: d.fields.some((f) => f.id === next.id)
-                ? d.fields.map((f) => (f.id === next.id ? next : f))
-                : [...d.fields, next],
-            }));
+            const batch = Array.isArray(next) ? next : [next];
+            update((d) => {
+              let fields = d.fields;
+              for (const item of batch) {
+                fields = fields.some((f) => f.id === item.id)
+                  ? fields.map((f) => (f.id === item.id ? item : f))
+                  : [...fields, item];
+              }
+              return { ...d, fields };
+            });
             setEditingField(null);
           }}
         />
@@ -1326,6 +1330,8 @@ function GroupEditor({
   );
 }
 
+const ACCOUNT_ROLES = ["fan", "athlete", "professional"] as const;
+
 function FieldEditor({
   field,
   doc,
@@ -1341,10 +1347,18 @@ function FieldEditor({
   usage: number;
   inputTypes: Record<string, number>;
   onClose: () => void;
-  onSave: (f: CatalogField) => void;
+  onSave: (f: CatalogField | CatalogField[]) => void;
 }) {
   const [f, setF] = useState<CatalogField>(field);
   const [newOption, setNewOption] = useState("");
+  const [applyRoles, setApplyRoles] = useState<string[]>(() => {
+    if (field.scope_kind === "account") return [...ACCOUNT_ROLES];
+    if ((ACCOUNT_ROLES as readonly string[]).includes(field.scope_kind)) return [field.scope_kind];
+    return [];
+  });
+  const [categoryScope, setCategoryScope] = useState(() =>
+    field.scope_kind === "sport" || field.scope_kind === "profession" ? scopeValue(field) : "",
+  );
   const group = f.group ? doc.groups.find((g) => g.key === f.group) ?? null : null;
   const typeLocked = !isNew && usage > 0;
   // Structured storage columns can't change type.
@@ -1356,6 +1370,17 @@ function FieldEditor({
     setF({ ...f, validation: { ...f.validation, [key]: value === "" ? undefined : value } });
   const options = [...f.options].sort(bySort);
   const keyValid = /^[a-z][a-z0-9_]{1,62}$/.test(f.key);
+  const everyone = applyRoles.length === ACCOUNT_ROLES.length;
+  const appliesOk = Boolean(categoryScope) || applyRoles.length > 0;
+
+  const buildScopes = (): { scope_kind: CatalogField["scope_kind"]; scope_ref: string | null }[] => {
+    if (categoryScope) return [parseScope(categoryScope)];
+    if (everyone || applyRoles.length === 0) return [{ scope_kind: "account", scope_ref: null }];
+    return applyRoles.map((role) => ({
+      scope_kind: role as CatalogField["scope_kind"],
+      scope_ref: null,
+    }));
+  };
 
   return (
     <AdminModal
@@ -1373,16 +1398,37 @@ function FieldEditor({
             const placeholder = (f.placeholder ?? "").trim();
             if (placeholder) validation.placeholder = placeholder;
             else delete validation.placeholder;
-            onSave({
+            const base = {
               ...f,
               placeholder,
-              editable_by: "owner",
+              editable_by: "owner" as const,
               // Group fields always sit on their group's tab.
               section: group ? group.section : f.section,
               validation,
-            });
+            };
+            if (!isNew || Boolean(f.storage_column)) {
+              onSave(base);
+              return;
+            }
+            const scopes = buildScopes();
+            onSave(
+              scopes.map((scope, i) => ({
+                ...base,
+                id: i === 0 ? base.id : newId(),
+                ...scope,
+                options: base.options.map((o) => ({
+                  ...o,
+                  id: i === 0 ? o.id : newId(),
+                })),
+              })),
+            );
           }}
-          disabled={!f.label.trim() || !keyValid || (isSelect && options.length === 0 && !v.allow_custom)}
+          disabled={
+            !f.label.trim() ||
+            !keyValid ||
+            (isNew && !appliesOk) ||
+            (isSelect && options.length === 0 && !v.allow_custom)
+          }
           saveLabel="Apply to draft"
         />
       }
@@ -1427,13 +1473,82 @@ function FieldEditor({
             </select>
           </Field>
         )}
-        <Field label="Applies to" tip={isNew ? undefined : "Locked after publishing. Archive and add a new field instead."}>
-          <AudienceSelect
-            doc={doc}
-            value={scopeValue(f)}
-            disabled={!isNew || Boolean(f.storage_column)}
-            onChange={(value) => setF({ ...f, ...parseScope(value) })}
-          />
+        <Field
+          label="Applies to"
+          tip={
+            isNew
+              ? "Pick one or more roles, or a specific sport/profession."
+              : "Locked after publishing. Archive and add a new field instead."
+          }
+        >
+          {!isNew || Boolean(f.storage_column) ? (
+            <AudienceSelect
+              doc={doc}
+              value={scopeValue(f)}
+              disabled
+              onChange={() => undefined}
+            />
+          ) : (
+            <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={everyone && !categoryScope}
+                  disabled={Boolean(categoryScope)}
+                  onChange={(e) => {
+                    setCategoryScope("");
+                    setApplyRoles(e.target.checked ? [...ACCOUNT_ROLES] : []);
+                  }}
+                />
+                Everyone
+              </label>
+              <div className="flex flex-wrap gap-3">
+                {ACCOUNT_ROLES.map((role) => (
+                  <label key={role} className="flex items-center gap-1.5 text-sm capitalize">
+                    <input
+                      type="checkbox"
+                      checked={!categoryScope && applyRoles.includes(role)}
+                      disabled={Boolean(categoryScope)}
+                      onChange={(e) => {
+                        setCategoryScope("");
+                        setApplyRoles((prev) =>
+                          e.target.checked
+                            ? [...new Set([...prev, role])]
+                            : prev.filter((r) => r !== role),
+                        );
+                      }}
+                    />
+                    {role}
+                  </label>
+                ))}
+              </div>
+              <div>
+                <p className="mb-1 text-[11px] text-text-hint">Or narrow to one sport / profession</p>
+                <select
+                  className={inputClass}
+                  value={categoryScope}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setCategoryScope(next);
+                    if (next) setApplyRoles([]);
+                  }}
+                >
+                  <option value="">—</option>
+                  {audienceOptions(doc)
+                    .filter((g) => g.label !== "Roles")
+                    .map((g) => (
+                      <optgroup key={g.label} label={g.label}>
+                        {g.options.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                </select>
+              </div>
+            </div>
+          )}
         </Field>
         <Field
           label="Input type"

@@ -1110,13 +1110,15 @@ export default function DonationDetailPage() {
             <label className="text-sm">
               <span className="mb-1 block text-text-secondary">Asset</span>
               <select
-                value={form.currency}
-                disabled={!editing || !canWrite || assetLocked}
+                value={form.currency.toUpperCase().startsWith("COIN") ? "COIN" : "ETB"}
+                disabled={!editing || !canWrite || assetLocked || !form.currency.toUpperCase().startsWith("COIN")}
                 onChange={(e) => updateForm({ currency: e.target.value })}
                 className={fieldClass}
               >
                 <option value="COIN">Coins</option>
-                <option value="ETB">ETB</option>
+                {!form.currency.toUpperCase().startsWith("COIN") ? (
+                  <option value="ETB">ETB (legacy)</option>
+                ) : null}
               </select>
               {assetLocked ? (
                 <span className="mt-1 block text-[11px] text-text-hint">
