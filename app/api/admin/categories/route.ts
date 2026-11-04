@@ -1,7 +1,32 @@
 import { NextResponse } from "next/server";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
-import { requireAdminPermission } from "@/lib/admin-auth";
+import { requireAdminPermission, requireAnyAdminPermission } from "@/lib/admin-auth";
 import { slugifyCategory } from "@/lib/service-categories";
+
+export async function GET() {
+  const auth = await requireAnyAdminPermission([
+    "catalog:read",
+    "services:read",
+    "catalog:write",
+    "services:write",
+  ]);
+  if (!auth.ok) return auth.error;
+
+  const [categories, subcategories] = await Promise.all([
+    auth.context.client.from("service_categories").select("*").order("sort_order", { ascending: true }),
+    auth.context.client.from("service_subcategories").select("*").order("sort_order", { ascending: true }),
+  ]);
+  if (categories.error) {
+    return NextResponse.json({ error: categories.error.message }, { status: 400 });
+  }
+  if (subcategories.error) {
+    return NextResponse.json({ error: subcategories.error.message }, { status: 400 });
+  }
+  return NextResponse.json({
+    data: categories.data ?? [],
+    subcategories: subcategories.data ?? [],
+  });
+}
 
 export async function POST(request: Request) {
   const auth = await requireAdminPermission("catalog:write");

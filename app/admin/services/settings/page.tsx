@@ -10,10 +10,9 @@ import {
   AdminTableShell,
 } from "@/components/admin-layout";
 import { EmojiPickerField } from "@/components/emoji-picker-field";
-import { adminCacheKey } from "@/lib/admin-session-cache";
-import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
+import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
+import { adminFetch, deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
 import { slugifyCategory } from "@/lib/service-categories";
-import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { useAdminQuery } from "@/lib/use-admin-query";
 import type { ServiceCategory, ServiceSubcategory } from "@/lib/types";
@@ -47,21 +46,19 @@ export default function ServiceSettingsPage() {
     error: loadError,
     refresh,
   } = useAdminQuery<{ rows: ServiceCategory[]; subs: ServiceSubcategory[] }>({
-    key: adminCacheKey(["services", "settings", "categories"]),
+    key: adminCacheKey(["services", "settings", "categories", "v2"]),
+    forceOnMount: true,
     fetcher: async () => {
-      const spojex = getSpojexClient();
-      const { data: categoryRows, error: queryError } = await spojex
-        .from("service_categories")
-        .select("*")
-        .order("sort_order");
-      if (queryError) throw queryError;
-      const { data: subRows, error: subError } = await spojex
-        .from("service_subcategories")
-        .select("*")
-        .order("sort_order");
+      const res = await adminFetch("/api/admin/categories");
+      const json = (await res.json().catch(() => ({}))) as {
+        data?: ServiceCategory[];
+        subcategories?: ServiceSubcategory[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(json.error || "Failed to load categories");
       return {
-        rows: (categoryRows ?? []) as ServiceCategory[],
-        subs: subError ? [] : ((subRows ?? []) as ServiceSubcategory[]),
+        rows: json.data ?? [],
+        subs: json.subcategories ?? [],
       };
     },
   });
@@ -71,10 +68,11 @@ export default function ServiceSettingsPage() {
 
   const selected = rows.find((row) => row.id === selectedId) ?? null;
   const selectedSubs = subs
-    .filter((row) => row.category_id === selectedId)
+    .filter((row) => String(row.category_id) === String(selectedId ?? ""))
     .sort((a, b) => a.sort_order - b.sort_order);
 
   const load = async () => {
+    invalidateAdminCache(adminCacheKey(["services", "settings", "categories", "v2"]));
     await refresh();
   };
 

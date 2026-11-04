@@ -53,8 +53,13 @@ export async function POST(request: Request) {
     message?: string;
   };
   if (!res.ok) {
+    const code = payload.error || "";
+    const message =
+      code === "duplicate_slug" || /duplicate/i.test(String(payload.message || ""))
+        ? "A subcategory with this name already exists for this category. Open Subs to see it, or pick a different name."
+        : payload.message || payload.error || "Could not create subcategory";
     return NextResponse.json(
-      { error: payload.error || payload.message || "Could not create subcategory" },
+      { error: message, code: code || undefined },
       { status: res.status >= 400 ? res.status : 400 },
     );
   }
