@@ -13,8 +13,6 @@ import {
   AdminRowMenu,
   AdminSearchInput,
   AdminSelect,
-  AdminStatCard,
-  AdminTableShell,
   type AdminRowMenuItem,
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
@@ -40,83 +38,54 @@ type BookingsListData = {
   definitions: Record<string, string>;
 };
 
-function PersonChip({
-  label,
-  person,
-  href,
+function Avatar({
+  name,
+  src,
+  id,
 }: {
-  label: string;
-  person?: BookingRow["requester"];
-  href: string;
+  name?: string | null;
+  src?: string | null;
+  id?: string;
 }) {
-  if (!person?.id) {
+  if (src) {
     return (
-      <div className="min-w-0">
-        <p className="text-[10px] font-medium uppercase tracking-wide text-text-hint">
-          {label}
-        </p>
-        <p className="text-sm text-text-hint">—</p>
-      </div>
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={src} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
     );
   }
   return (
-    <div className="min-w-0">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-text-hint">
-        {label}
-      </p>
-      <Link href={href} className="mt-0.5 flex min-w-0 items-center gap-2 hover:opacity-90">
-        {person.avatar_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={person.avatar_url}
-            alt=""
-            className="h-7 w-7 shrink-0 rounded-full object-cover"
-          />
-        ) : (
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-secondary text-[10px] font-semibold text-primary">
-            {initials(person.display_name, person.id)}
-          </span>
-        )}
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-medium text-text-primary">
-            {person.display_name || person.id.slice(0, 8)}
-          </span>
-          {person.role ? (
-            <span className="block truncate text-[11px] text-text-secondary">
-              {formatStatusLabel(person.role)}
-            </span>
-          ) : null}
-        </span>
-      </Link>
-    </div>
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary text-[10px] font-semibold text-primary">
+      {initials(name, id)}
+    </span>
   );
 }
 
-function ServiceThumb({
-  coverUrl,
-  title,
+function PersonCell({
+  person,
+  href,
 }: {
-  coverUrl?: string | null;
-  title?: string | null;
+  person?: BookingRow["requester"];
+  href: string;
 }) {
-  if (coverUrl) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={coverUrl}
-        alt=""
-        className="h-12 w-12 shrink-0 rounded-lg object-cover bg-muted sm:h-14 sm:w-14"
-      />
-    );
-  }
-  const letter = (title || "?").trim().charAt(0).toUpperCase() || "?";
+  if (!person?.id) return <span className="text-text-hint">—</span>;
   return (
-    <div
-      className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-muted text-sm font-semibold text-text-secondary sm:h-14 sm:w-14"
-      aria-hidden
+    <Link
+      href={href}
+      onClick={(e) => e.stopPropagation()}
+      className="flex min-w-0 items-center gap-2 hover:opacity-90"
     >
-      {letter}
-    </div>
+      <Avatar name={person.display_name} src={person.avatar_url} id={person.id} />
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-medium text-text-primary">
+          {person.display_name || person.id.slice(0, 8)}
+        </span>
+        {person.role ? (
+          <span className="block truncate text-[11px] text-text-hint">
+            {formatStatusLabel(person.role)}
+          </span>
+        ) : null}
+      </span>
+    </Link>
   );
 }
 
@@ -128,6 +97,28 @@ function moneyLabel(row: BookingRow) {
     return formatMoney(Number(row.agreed_amount), row.agreed_currency || "ETB");
   }
   return null;
+}
+
+function scheduleLabel(row: BookingRow) {
+  if (
+    row.appointment_label === "Not scheduled" ||
+    (!row.requested_at && !row.requested_on)
+  ) {
+    return { text: "Not scheduled", overdue: false, muted: true };
+  }
+  return {
+    text: formatDateTime(row.requested_at || row.requested_on),
+    overdue: row.schedule_state === "overdue",
+    muted: false,
+  };
+}
+
+function rowActions(row: BookingRow): Array<{ status: string; label: string }> {
+  if (row.allowed_actions?.length) return row.allowed_actions;
+  return (row.allowed_transitions || []).map((s) => ({
+    status: s,
+    label: actionVerb(s),
+  }));
 }
 
 export default function RequestsPage() {
@@ -151,6 +142,9 @@ export default function RequestsPage() {
   const [actionError, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(
+    () => Boolean(dateFrom || dateTo || paymentStatus !== "all" || scheduled !== "all"),
+  );
 
   const writeParams = useCallback(
     (patch: Record<string, string | null | undefined>) => {
@@ -224,9 +218,7 @@ export default function RequestsPage() {
   const total = listData?.total ?? 0;
   const summary = listData?.summary ?? {};
   const summaryHrefs = listData?.summaryHrefs ?? {};
-  const definitions = listData?.definitions ?? {};
   const error = actionError ?? loadError;
-  const ok = listData != null && !loadError;
 
   useEffect(() => {
     if (deepId && /^[0-9a-f-]{36}$/i.test(deepId)) {
@@ -292,57 +284,93 @@ export default function RequestsPage() {
   const pageCount = Math.max(1, Math.ceil(total / 40));
   const g = summary;
 
-  const cards: Array<{
-    key: keyof BookingSummary;
-    title: string;
-    hrefKey: string;
+  const queueViews: Array<{
+    id: string;
+    label: string;
+    count?: number;
+    hrefKey?: string;
+    active: boolean;
+    onClick: () => void;
   }> = [
-    { key: "awaiting_response", title: "Awaiting response", hrefKey: "awaiting_response" },
-    { key: "awaiting_payment", title: "Awaiting payment", hrefKey: "awaiting_payment" },
     {
-      key: "accepted_unscheduled",
-      title: "Accepted, unscheduled",
-      hrefKey: "accepted_unscheduled",
+      id: "all",
+      label: "All",
+      active: status === "all" && !schedule && paymentStatus === "all" && scheduled === "all" && !q,
+      onClick: () =>
+        writeParams({
+          status: null,
+          schedule: null,
+          payment_status: null,
+          scheduled: null,
+          q: null,
+          from: null,
+          to: null,
+          event: null,
+          page: "1",
+        }),
     },
-    { key: "upcoming", title: "Upcoming (14d)", hrefKey: "upcoming" },
-    { key: "completed_period", title: "Completed (period)", hrefKey: "completed_period" },
-    { key: "closed_period", title: "Cancelled/declined", hrefKey: "closed_period" },
+    {
+      id: "awaiting_response",
+      label: "Awaiting response",
+      count: g.awaiting_response,
+      hrefKey: "awaiting_response",
+      active: false,
+      onClick: () => {
+        const href = summaryHrefs.awaiting_response;
+        if (href) router.push(href);
+        else writeParams({ status: "pending", page: "1" });
+      },
+    },
+    {
+      id: "awaiting_payment",
+      label: "Awaiting payment",
+      count: g.awaiting_payment,
+      hrefKey: "awaiting_payment",
+      active: status === "awaiting_payment",
+      onClick: () => {
+        const href = summaryHrefs.awaiting_payment;
+        if (href) router.push(href);
+        else writeParams({ status: "awaiting_payment", page: "1" });
+      },
+    },
+    {
+      id: "unscheduled",
+      label: "Unscheduled",
+      count: g.accepted_unscheduled,
+      active: schedule === "unscheduled",
+      onClick: () => {
+        const href = summaryHrefs.accepted_unscheduled;
+        if (href) router.push(href);
+        else writeParams({ schedule: "unscheduled", page: "1" });
+      },
+    },
+    {
+      id: "upcoming",
+      label: "Upcoming",
+      count: g.upcoming,
+      active: schedule === "upcoming_14d",
+      onClick: () => {
+        const href = summaryHrefs.upcoming;
+        if (href) router.push(href);
+        else writeParams({ schedule: "upcoming_14d", page: "1" });
+      },
+    },
   ];
+
+  // Mark active queue from URL when possible
+  for (const view of queueViews) {
+    if (view.id === "awaiting_response" && status === "pending") view.active = true;
+  }
 
   return (
     <div className="space-y-4">
       <AdminPageHeader
         title="Bookings"
-        description="Service appointments and requests. Booking status and payment status stay separate."
+        description="Service appointments. Booking status and payment stay separate."
         actions={
           <AdminReloadButton loading={loading} refreshing={refreshing} onClick={() => void refresh()} />
         }
       />
-
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        {cards.map((c) => (
-          <button
-            key={c.key}
-            type="button"
-            className="text-left transition-opacity hover:opacity-90"
-            onClick={() => {
-              const href = summaryHrefs[c.hrefKey];
-              if (href) router.push(href);
-            }}
-          >
-            <AdminStatCard
-              title={c.title}
-              value={loading ? "…" : String(g[c.key] ?? "-")}
-            />
-          </button>
-        ))}
-      </div>
-      {g.period_from && g.period_to ? (
-        <p className="text-xs text-text-secondary">
-          Period cards: {g.period_from} → {g.period_to}
-          {definitions.payment_policy ? ` · ${definitions.payment_policy}` : ""}
-        </p>
-      ) : null}
 
       {notice ? (
         <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
@@ -363,256 +391,385 @@ export default function RequestsPage() {
       ) : null}
 
       <AdminFilterPanel>
-        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {queueViews.map((view) => (
+            <button
+              key={view.id}
+              type="button"
+              onClick={view.onClick}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+                view.active
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-card text-text-secondary hover:text-foreground",
+              )}
+            >
+              {view.label}
+              {view.count != null && !loading ? (
+                <span
+                  className={cn(
+                    "tabular-nums",
+                    view.active ? "text-primary-foreground/80" : "text-text-hint",
+                  )}
+                >
+                  {view.count}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid gap-2 md:grid-cols-[1fr_180px_auto]">
           <AdminSearchInput
             value={q}
             onChange={(value) => writeParams({ q: value || null, page: "1" })}
-            placeholder="Search service, customer, provider, id…"
+            placeholder="Search service, customer, provider, booking id…"
           />
           <AdminSelect
             value={status}
             onChange={(value) => writeParams({ status: value, page: "1" })}
           >
-            <option value="all">All booking statuses</option>
-            <option value="pending,awaiting_payment">Pending + awaiting payment</option>
+            <option value="all">All statuses</option>
+            <option value="pending,awaiting_payment">Needs attention</option>
+            <option value="accepted">Accepted</option>
+            <option value="completed">Completed</option>
             <option value="cancelled,declined">Cancelled / declined</option>
-            {["pending", "awaiting_payment", "accepted", "declined", "completed", "cancelled"].map(
-              (s) => (
-                <option key={s} value={s}>
-                  {formatStatusLabel(s)}
-                </option>
-              ),
-            )}
+            {["pending", "awaiting_payment", "declined", "cancelled"].map((s) => (
+              <option key={s} value={s}>
+                {formatStatusLabel(s)}
+              </option>
+            ))}
           </AdminSelect>
-          <AdminSelect
-            value={schedule || "all"}
-            onChange={(value) =>
-              writeParams({ schedule: value === "all" ? null : value, page: "1" })
-            }
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((v) => !v)}
+            className="h-10 rounded-md border border-border bg-card px-3 text-xs font-medium text-text-secondary hover:text-foreground"
           >
-            <option value="all">Any schedule facet</option>
-            <option value="upcoming_14d">Upcoming (14d)</option>
-            <option value="unscheduled">Accepted, not scheduled</option>
-            <option value="overdue">Overdue appointments</option>
-          </AdminSelect>
-          <AdminSelect
-            value={paymentStatus}
-            onChange={(value) => writeParams({ payment_status: value, page: "1" })}
-          >
-            <option value="all">All payment states</option>
-            <option value="verified">Verified</option>
-            <option value="awaiting">Awaiting verification</option>
-            <option value="failed">Failed</option>
-            <option value="none">No payment record</option>
-            <option value="refunded">Refunded</option>
-          </AdminSelect>
-          <AdminSelect
-            value={scheduled}
-            onChange={(value) => writeParams({ scheduled: value, page: "1" })}
-          >
-            <option value="all">Scheduled or not</option>
-            <option value="yes">Has appointment</option>
-            <option value="no">Unscheduled</option>
-          </AdminSelect>
-          <label className="grid gap-1 text-xs text-text-secondary">
-            <span>From date</span>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) =>
-                writeParams({
-                  from: e.target.value || null,
-                  event: e.target.value || dateTo ? event || "created" : null,
-                  page: "1",
-                })
-              }
-              className="h-10 rounded-lg border border-border bg-card px-3 text-sm text-text-primary shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-            />
-          </label>
-          <label className="grid gap-1 text-xs text-text-secondary">
-            <span>To date</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) =>
-                writeParams({
-                  to: e.target.value || null,
-                  event: e.target.value || dateFrom ? event || "created" : null,
-                  page: "1",
-                })
-              }
-              className="h-10 rounded-lg border border-border bg-card px-3 text-sm text-text-primary shadow-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-            />
-          </label>
+            {filtersOpen ? "Hide filters" : "More filters"}
+          </button>
         </div>
-        {(dateFrom || dateTo) && (
-          <p className="mt-2 text-xs text-text-hint">
-            Filtering by {event || "created"} date
-            {dateFrom ? ` from ${dateFrom}` : ""}
-            {dateTo ? ` to ${dateTo}` : ""}
-            <button
-              type="button"
-              className="ml-2 text-primary hover:underline"
-              onClick={() => writeParams({ from: null, to: null, event: null, page: "1" })}
+
+        {filtersOpen ? (
+          <div className="mt-3 grid gap-2 border-t border-border pt-3 md:grid-cols-2 xl:grid-cols-4">
+            <AdminSelect
+              value={schedule || "all"}
+              onChange={(value) =>
+                writeParams({ schedule: value === "all" ? null : value, page: "1" })
+              }
             >
-              Clear dates
-            </button>
-          </p>
-        )}
+              <option value="all">Any schedule</option>
+              <option value="upcoming_14d">Upcoming (14d)</option>
+              <option value="unscheduled">Accepted, not scheduled</option>
+              <option value="overdue">Overdue</option>
+            </AdminSelect>
+            <AdminSelect
+              value={paymentStatus}
+              onChange={(value) => writeParams({ payment_status: value, page: "1" })}
+            >
+              <option value="all">All payments</option>
+              <option value="verified">Verified</option>
+              <option value="awaiting">Awaiting verification</option>
+              <option value="failed">Failed</option>
+              <option value="none">No payment record</option>
+              <option value="refunded">Refunded</option>
+            </AdminSelect>
+            <AdminSelect
+              value={scheduled}
+              onChange={(value) => writeParams({ scheduled: value, page: "1" })}
+            >
+              <option value="all">Scheduled or not</option>
+              <option value="yes">Has appointment</option>
+              <option value="no">Unscheduled</option>
+            </AdminSelect>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="date"
+                value={dateFrom}
+                aria-label="From date"
+                onChange={(e) =>
+                  writeParams({
+                    from: e.target.value || null,
+                    event: e.target.value || dateTo ? event || "created" : null,
+                    page: "1",
+                  })
+                }
+                className="h-10 rounded-lg border border-border bg-card px-2 text-sm"
+              />
+              <input
+                type="date"
+                value={dateTo}
+                aria-label="To date"
+                onChange={(e) =>
+                  writeParams({
+                    to: e.target.value || null,
+                    event: e.target.value || dateFrom ? event || "created" : null,
+                    page: "1",
+                  })
+                }
+                className="h-10 rounded-lg border border-border bg-card px-2 text-sm"
+              />
+            </div>
+          </div>
+        ) : null}
       </AdminFilterPanel>
 
-      {loading ? (
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <AdminLoadingRow label="Loading bookings…" compact className="py-10" />
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <div className="flex items-center justify-between border-b border-border px-4 py-2 text-xs text-text-secondary">
+          <span>{loading ? "Loading…" : `${total} booking${total === 1 ? "" : "s"}`}</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={page <= 1 || loading}
+              onClick={() => writeParams({ page: String(page - 1) })}
+              className="rounded border border-border px-2 py-0.5 disabled:opacity-40"
+            >
+              Prev
+            </button>
+            <span>
+              {page} / {pageCount}
+            </span>
+            <button
+              type="button"
+              disabled={page >= pageCount || loading}
+              onClick={() => writeParams({ page: String(page + 1) })}
+              className="rounded border border-border px-2 py-0.5 disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
         </div>
-      ) : null}
 
-      {!loading && ok && rows.length === 0 && !error ? (
-        <AdminEmpty
-          title="No bookings"
-          description="Nothing matches these filters. Adjust filters and reload."
-        />
-      ) : null}
+        {loading ? (
+          <AdminLoadingRow label="Loading bookings…" compact className="py-12" />
+        ) : rows.length === 0 ? (
+          <AdminEmpty
+            title="No bookings"
+            description="Nothing matches these filters. Try a queue chip or clear search."
+          />
+        ) : (
+          <>
+            {/* Desktop table */}
+            <div className="hidden overflow-x-auto lg:block">
+              <table className="min-w-full text-left text-sm">
+                <thead className="border-b border-border bg-muted/40 text-[11px] uppercase tracking-wide text-text-secondary">
+                  <tr>
+                    <th className="px-4 py-2.5 font-semibold">Service</th>
+                    <th className="px-4 py-2.5 font-semibold">Customer</th>
+                    <th className="px-4 py-2.5 font-semibold">Provider</th>
+                    <th className="px-4 py-2.5 font-semibold">When</th>
+                    <th className="px-4 py-2.5 font-semibold">Payment</th>
+                    <th className="px-4 py-2.5 font-semibold">Status</th>
+                    <th className="px-4 py-2.5 font-semibold">
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {rows.map((row) => {
+                    const ref = row.reference || `BK-${row.id.slice(0, 8).toUpperCase()}`;
+                    const when = scheduleLabel(row);
+                    const money = moneyLabel(row);
+                    const actions = rowActions(row);
+                    const menuItems: AdminRowMenuItem[] = [
+                      {
+                        id: "open",
+                        label: "Open booking",
+                        onClick: () => openBooking(row.id),
+                      },
+                      ...actions.map((a, index) => ({
+                        id: a.status,
+                        label: shortActionLabel(a.status, row.allowed_actions),
+                        tone: actionMenuTone(a.status),
+                        disabled: busyId === row.id || !canWrite,
+                        separatorBefore: index === 0,
+                        onClick: () => void transition(row, a.status),
+                      })),
+                    ];
+                    return (
+                      <tr
+                        key={row.id}
+                        className="cursor-pointer hover:bg-muted/30"
+                        onClick={() => openBooking(row.id)}
+                      >
+                        <td className="px-4 py-3 align-middle">
+                          <div className="flex min-w-0 items-center gap-3">
+                            {row.service?.cover_url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={row.service.cover_url}
+                                alt=""
+                                className="h-10 w-10 shrink-0 rounded-md object-cover bg-muted"
+                              />
+                            ) : (
+                              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-muted text-xs font-semibold text-text-secondary">
+                                {(row.service?.title || "?").charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="truncate font-medium text-text-primary">
+                                {row.service?.title || row.service_id.slice(0, 8)}
+                              </p>
+                              <p className="font-mono text-[11px] text-text-hint">{ref}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                          <PersonCell
+                            person={row.requester}
+                            href={
+                              row.people_customer_href || `/admin/people/${row.requester?.id}`
+                            }
+                          />
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                          <PersonCell
+                            person={row.provider}
+                            href={
+                              row.people_provider_href || `/admin/people/${row.provider?.id}`
+                            }
+                          />
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                          <p
+                            className={cn(
+                              "text-sm",
+                              when.muted ? "text-text-hint" : "text-text-primary",
+                              when.overdue && "font-medium text-red-600",
+                            )}
+                          >
+                            {when.text}
+                            {when.overdue ? " · Overdue" : ""}
+                          </p>
+                          <p className="text-[11px] text-text-hint">
+                            Created {row.created_at ? formatDateTime(row.created_at) : "—"}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                          <p className="text-sm text-text-primary">
+                            {row.payment?.label || "No payment"}
+                          </p>
+                          {money ? (
+                            <p className="tabular-nums text-[11px] text-text-secondary">{money}</p>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                          <StatusBadge tone={requestTone(row.status)}>
+                            {formatStatusLabel(row.status)}
+                          </StatusBadge>
+                        </td>
+                        <td
+                          className="px-4 py-3 align-middle"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <AdminRowMenu
+                            items={menuItems}
+                            disabled={busyId === row.id}
+                            aria-label={`Actions for ${ref}`}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
 
-      {!loading && rows.length > 0 ? (
-        <AdminTableShell>
-          <ul className="divide-y divide-border">
-            {rows.map((row) => {
-              const actions = row.allowed_actions?.length
-                ? row.allowed_actions
-                : (row.allowed_transitions || []).map((s) => ({
-                    status: s,
-                    label: actionVerb(s),
-                  }));
-              const money = moneyLabel(row);
-              const ref = row.reference || `BK-${row.id.slice(0, 8).toUpperCase()}`;
-              const menuItems: AdminRowMenuItem[] = canWrite
-                ? actions.map((a, index) => ({
+            {/* Mobile / tablet list */}
+            <ul className="divide-y divide-border lg:hidden">
+              {rows.map((row) => {
+                const ref = row.reference || `BK-${row.id.slice(0, 8).toUpperCase()}`;
+                const when = scheduleLabel(row);
+                const money = moneyLabel(row);
+                const actions = rowActions(row);
+                const menuItems: AdminRowMenuItem[] = [
+                  {
+                    id: "open",
+                    label: "Open booking",
+                    onClick: () => openBooking(row.id),
+                  },
+                  ...actions.map((a, index) => ({
                     id: a.status,
                     label: shortActionLabel(a.status, row.allowed_actions),
                     tone: actionMenuTone(a.status),
-                    disabled: busyId === row.id,
-                    separatorBefore: index > 0 && actionMenuTone(a.status) === "danger",
+                    disabled: busyId === row.id || !canWrite,
+                    separatorBefore: index === 0,
                     onClick: () => void transition(row, a.status),
-                  }))
-                : [];
-
-              return (
-                <li
-                  key={row.id}
-                  className={cn(
-                    "grid gap-3 p-3 sm:p-4",
-                    "sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_auto]",
-                    "sm:items-center",
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => openBooking(row.id)}
-                    className="flex min-w-0 gap-3 text-left"
-                  >
-                    <ServiceThumb
-                      coverUrl={row.service?.cover_url}
-                      title={row.service?.title}
-                    />
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-sm font-semibold text-text-primary sm:text-[15px]">
-                          {row.service?.title || row.service_id.slice(0, 8)}
-                        </p>
-                        <StatusBadge tone={requestTone(row.status)}>
-                          {formatStatusLabel(row.status)}
-                        </StatusBadge>
-                      </div>
-                      <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-text-secondary">
-                        <span className="font-mono text-text-hint">{ref}</span>
-                        <span aria-hidden className="text-border">
-                          ·
-                        </span>
-                        {row.appointment_label === "Not scheduled" ||
-                        (!row.requested_at && !row.requested_on) ? (
-                          <span className="text-text-hint">Not scheduled</span>
-                        ) : (
-                          <span>{formatDateTime(row.requested_at || row.requested_on)}</span>
-                        )}
-                        {row.schedule_state === "overdue" ? (
-                          <span className="font-medium text-red-600">Overdue</span>
-                        ) : null}
-                      </p>
-                      <p className="text-[11px] text-text-hint">
-                        Created {row.created_at ? formatDateTime(row.created_at) : "—"}
-                      </p>
-                    </div>
-                  </button>
-
-                  <div className="grid min-w-0 grid-cols-2 gap-3 sm:gap-4">
-                    <PersonChip
-                      label="Customer"
-                      person={row.requester}
-                      href={row.people_customer_href || `/admin/people/${row.requester?.id}`}
-                    />
-                    <PersonChip
-                      label="Provider"
-                      person={row.provider}
-                      href={row.people_provider_href || `/admin/people/${row.provider?.id}`}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end sm:justify-center sm:gap-2">
-                    <div className="min-w-0 sm:text-right">
-                      <p className="text-xs font-medium text-text-primary">
-                        {row.payment?.label || "No payment record"}
-                      </p>
-                      {money ? (
-                        <p className="tabular-nums text-[11px] text-text-secondary">{money}</p>
-                      ) : null}
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => openBooking(row.id)}
-                        className="h-8 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90"
-                      >
-                        Open
-                      </button>
-                      {menuItems.length > 0 ? (
-                        <AdminRowMenu
-                          items={menuItems}
-                          disabled={busyId === row.id}
-                          aria-label={`Actions for ${ref}`}
+                  })),
+                ];
+                return (
+                  <li key={row.id}>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openBooking(row.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          openBooking(row.id);
+                        }
+                      }}
+                      className="flex cursor-pointer gap-3 px-4 py-3 hover:bg-muted/30"
+                    >
+                      {row.service?.cover_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={row.service.cover_url}
+                          alt=""
+                          className="h-12 w-12 shrink-0 rounded-md object-cover bg-muted"
                         />
-                      ) : null}
+                      ) : (
+                        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-md bg-muted text-sm font-semibold text-text-secondary">
+                          {(row.service?.title || "?").charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-text-primary">
+                              {row.service?.title || row.service_id.slice(0, 8)}
+                            </p>
+                            <p className="font-mono text-[11px] text-text-hint">{ref}</p>
+                          </div>
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <AdminRowMenu
+                              items={menuItems}
+                              disabled={busyId === row.id}
+                              aria-label={`Actions for ${ref}`}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <StatusBadge tone={requestTone(row.status)}>
+                            {formatStatusLabel(row.status)}
+                          </StatusBadge>
+                          <span
+                            className={cn(
+                              "text-xs",
+                              when.muted ? "text-text-hint" : "text-text-secondary",
+                              when.overdue && "font-medium text-red-600",
+                            )}
+                          >
+                            {when.text}
+                          </span>
+                        </div>
+                        <p className="truncate text-xs text-text-secondary">
+                          {[
+                            row.requester?.display_name,
+                            row.provider?.display_name,
+                            row.payment?.label || money,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-          <div className="flex items-center justify-between border-t border-border px-4 py-2.5 text-xs text-text-secondary">
-            <span>
-              Page {page} of {pageCount} · {total} matching
-            </span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={page <= 1}
-                onClick={() => writeParams({ page: String(page - 1) })}
-                className="rounded-md border border-border px-2.5 py-1 disabled:opacity-40"
-              >
-                Prev
-              </button>
-              <button
-                type="button"
-                disabled={page >= pageCount}
-                onClick={() => writeParams({ page: String(page + 1) })}
-                className="rounded-md border border-border px-2.5 py-1 disabled:opacity-40"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        </AdminTableShell>
-      ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
+      </div>
     </div>
   );
 }
