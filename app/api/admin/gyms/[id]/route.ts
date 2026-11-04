@@ -21,6 +21,7 @@ const PYTHON_ACTIONS = new Set([
   "activate_listing",
   "deactivate_listing",
   "reject_listing",
+  "delete_gym",
   "suspend",
   "reactivate",
   "feature_approve",

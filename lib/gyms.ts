@@ -1,4 +1,4 @@
-export type GymStatus = "pending" | "active" | "inactive" | "rejected";
+export type GymStatus = "pending" | "active" | "inactive" | "rejected" | "deleted";
 
 export type GymVerificationStatus =
   | "pending"
@@ -81,6 +81,7 @@ export const gymStatuses: { id: GymStatus; label: string }[] = [
   { id: "active", label: "Active" },
   { id: "inactive", label: "Inactive" },
   { id: "rejected", label: "Rejected" },
+  { id: "deleted", label: "Deleted" },
 ];
 
 export const gymVerificationStatuses: { id: GymVerificationStatus; label: string }[] = [
