@@ -3,11 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NewsSoundPicker } from "@/components/news-sound-picker";
 import { VideoClipEditor } from "@/components/video-clip-editor";
+import { getBrowserSession } from "@/lib/api/session";
 import {
   isNewsVideoFile,
   newsImageAccept,
   newsLibrarySoundAccept,
+  newsMediaExtension,
   newsVideoAccept,
+  resolveNewsMime,
   resolveNewsStoryMedia,
   validateLibrarySound,
   validateNewsMedia,
@@ -15,7 +18,15 @@ import {
   type NewsUploadKind,
 } from "@/lib/news-media";
 import type { SportNewsSoundRow } from "@/lib/news-sounds";
-import { toBackendMediaUrl } from "@/lib/spojex-media";
+import {
+  extractAudioViaSpojexMediaApi,
+  signUploadComplete,
+  toBackendMediaUrl,
+  uploadViaSpojexMediaApi,
+} from "@/lib/spojex-media";
+
+/** Stay under Cloud Run's ~32MB request body when posting multipart to Spojex. */
+const DIRECT_MULTIPART_SAFE_BYTES = 28 * 1024 * 1024;
 
 const fileInputClass =
   "block w-full text-sm text-text-secondary file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-foreground";
@@ -75,7 +86,11 @@ function parseUploadPayload(text: string): NewsUploadPayload {
   }
 }
 
-/** Upload news media via Spojex API (GCS behind the API), return display URL. */
+/**
+ * Upload news media and return a display URL.
+ * Video/audio go browser → Spojex API (or signed GCS) so they are not capped by
+ * the Next/Vercel proxy body limit. Images stay on the admin media proxy.
+ */
 export async function uploadNewsFile(
   articleId: string | null,
   file: File,
@@ -88,12 +103,66 @@ export async function uploadNewsFile(
       : validateNewsMedia(kind, file.type, file.name, file.size);
   if (invalid) throw new Error(invalid);
 
+  const onProgress = options?.onProgress;
+  const folder = articleId ? `sport-news/${articleId}` : "sport-news/drafts";
+  const token = getBrowserSession()?.access_token;
+
+  // Bypass Next.js body limits for video/audio (prod Vercel ~4.5MB).
+  if ((kind === "video" || kind === "audio") && token) {
+    onProgress?.(5);
+    const mime = resolveNewsMime(kind, file.type, file.name);
+    const ext = newsMediaExtension(kind, mime, file.name);
+    const filename = `${kind}-${Date.now()}.${ext}`;
+    try {
+      let publicUrl: string | null | undefined;
+      if (kind === "audio" && isNewsVideoFile(file.type, file.name)) {
+        if (file.size > DIRECT_MULTIPART_SAFE_BYTES) {
+          throw new Error("Video must be under 28 MB to extract audio. Compress the clip first.");
+        }
+        const uploaded = await extractAudioViaSpojexMediaApi({
+          accessToken: token,
+          file,
+          filename: `video-${Date.now()}.${newsMediaExtension("video", mime, file.name)}`,
+          module: "news",
+          folder,
+        });
+        publicUrl = uploaded.publicUrl;
+      } else if (file.size <= DIRECT_MULTIPART_SAFE_BYTES) {
+        const uploaded = await uploadViaSpojexMediaApi({
+          accessToken: token,
+          file,
+          filename,
+          module: "news",
+          folder,
+          kind,
+        });
+        publicUrl = uploaded.publicUrl;
+      } else {
+        onProgress?.(15);
+        const uploaded = await signUploadComplete({
+          accessToken: token,
+          file,
+          filename,
+          module: "news",
+          mimeType: mime,
+          folder,
+        });
+        publicUrl = uploaded.publicUrl;
+      }
+      onProgress?.(100);
+      if (!publicUrl) throw new Error("Upload failed. No public URL was returned.");
+      return toBackendMediaUrl(publicUrl);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Upload failed";
+      throw new Error(message);
+    }
+  }
+
   const endpoint = articleId ? `/api/admin/news/${articleId}/media` : "/api/admin/news/media";
   const body = new FormData();
   body.set("kind", kind);
   body.set("file", file, file.name);
 
-  const onProgress = options?.onProgress;
   // XHR so we can show circular progress while pasting / uploading images.
   if (onProgress) {
     onProgress(0);

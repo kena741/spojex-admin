@@ -26,12 +26,19 @@ export function NewsOrgPicker({
   useEffect(() => {
     getSpojexClient()
       .from("organizations")
-      .select("id, name, public_id, logo_url, user_id, is_platform, verified")
+      .select(
+        "id, name, public_id, logo_url, user_id, is_platform, verified, archived_at, deleted_at",
+      )
+      .is("deleted_at", null)
+      .is("archived_at", null)
       .order("is_platform", { ascending: false })
       .order("name")
-      .limit(200)
+      .limit(500)
       .then(({ data }) => {
-        setOrgs((data ?? []) as OrganizationRow[]);
+        const rows = ((data ?? []) as OrganizationRow[]).filter(
+          (item) => !item.archived_at && !item.deleted_at,
+        );
+        setOrgs(rows);
       });
   }, []);
 

@@ -35,12 +35,20 @@ export function PostingAs({ value, org, disabled, locked, onChange }: PostingAsP
       try {
         const { data } = await getSpojexClient()
           .from("organizations")
-          .select("id, name, public_id, logo_url, is_platform, verified")
+          .select("id, name, public_id, logo_url, is_platform, verified, archived_at, deleted_at")
+          .is("deleted_at", null)
+          .is("archived_at", null)
           .order("is_platform", { ascending: false })
           .order("name")
-          .limit(300);
-        const rows = (data ?? []) as PostingOrg[];
+          .limit(500);
+        const rows = ((data ?? []) as Array<PostingOrg & { archived_at?: string | null; deleted_at?: string | null }>)
+          .filter((item) => !item.archived_at && !item.deleted_at)
+          .map(({ archived_at: _a, deleted_at: _d, ...rest }) => rest);
         setOrgs(rows);
+        setRecent((prev) => {
+          const activeIds = new Set(rows.map((item) => item.id));
+          return prev.filter((item) => activeIds.has(item.id));
+        });
         if (value && !org) {
           const match = rows.find((item) => item.id === value);
           if (match) onChange(match.id, match);
@@ -141,14 +149,16 @@ export function PostingAs({ value, org, disabled, locked, onChange }: PostingAsP
               </div>
             ) : null}
             {!query.trim()
-              ? recent.map((item) => (
-                  <OrgOption
-                    key={`recent-${item.id}`}
-                    org={item}
-                    selected={item.id === value}
-                    onPick={pick}
-                  />
-                ))
+              ? recent
+                  .filter((item) => orgs.some((org) => org.id === item.id))
+                  .map((item) => (
+                    <OrgOption
+                      key={`recent-${item.id}`}
+                      org={item}
+                      selected={item.id === value}
+                      onPick={pick}
+                    />
+                  ))
               : null}
             <div className="px-3 py-1.5 text-[11px] font-medium uppercase text-text-hint">
               {query.trim() ? "Results" : "All"}

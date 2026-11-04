@@ -58,7 +58,13 @@ export async function GET(request: Request) {
     .order(trash === "yes" ? "deleted_at" : "updated_at", { ascending: false });
 
   if (trash === "yes") query = query.not("deleted_at", "is", null);
-  else query = query.is("deleted_at", null);
+  else {
+    query = query.is("deleted_at", null);
+    // Hide archived from the default directory (Python path already does this).
+    const archived = url.searchParams.get("archived") || "";
+    if (archived === "yes") query = query.not("archived_at", "is", null);
+    else if (archived !== "all") query = query.is("archived_at", null);
+  }
 
   // Gyms have their own admin section — exclude gym-type orgs from this list.
   if (type === "gym") {
