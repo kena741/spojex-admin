@@ -870,7 +870,11 @@ function ContentPanel({
             </tbody>
           </table>
           {!data.table?.rows?.length ? (
-            <p className="py-10 text-center text-sm text-text-hint">No content in this period.</p>
+            <p className="py-10 text-center text-sm text-text-hint">
+              {tab === "most_shared"
+                ? "No posts with recorded shares yet. New shares from the app will appear here."
+                : "No content in this period."}
+            </p>
           ) : null}
         </div>
       </section>
