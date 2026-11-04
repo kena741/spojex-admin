@@ -15,6 +15,8 @@ export async function GET(request: Request) {
     "organizations:write",
     "gyms:write",
     "gyms:read",
+    "stadiums:write",
+    "stadiums:read",
   ]);
   if (!auth.ok) return auth.error;
 

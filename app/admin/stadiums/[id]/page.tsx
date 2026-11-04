@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import AdminPageHeader from "@/components/admin-header";
@@ -11,7 +11,7 @@ import { StatusBadge, requestTone } from "@/components/status-badge";
 import { VisiblePassword } from "@/components/visible-password";
 import { formatStadiumArea } from "@/lib/addis-ababa-locations";
 import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
-import { deleteAdmin, patchAdmin, postAdmin, postAdminResponse } from "@/lib/hooks";
+import { adminFetch, deleteAdmin, patchAdmin, postAdmin, postAdminResponse } from "@/lib/hooks";
 import {
   formatPrice,
   formatStadiumPriceState,
@@ -62,6 +62,15 @@ const tabs = [
 
 type TabId = (typeof tabs)[number]["id"];
 
+type ManagerUserOption = {
+  id: string;
+  display_name: string;
+  email: string | null;
+  username?: string | null;
+  role?: string | null;
+  avatar_url?: string | null;
+};
+
 export default function StadiumDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { can, staff } = useAdminPermissions();
@@ -110,6 +119,10 @@ export default function StadiumDetailPage() {
     password: generateStadiumManagerPassword(),
     manager_role: "manager",
   });
+  const [managerOptions, setManagerOptions] = useState<ManagerUserOption[]>([]);
+  const [managerSelected, setManagerSelected] = useState<ManagerUserOption | null>(null);
+  const [managerSearching, setManagerSearching] = useState(false);
+  const managerSearchSeq = useRef(0);
   const [savingManager, setSavingManager] = useState(false);
   const [managerOpen, setManagerOpen] = useState(false);
   const [createdLogin, setCreatedLogin] = useState<{
@@ -418,6 +431,64 @@ export default function StadiumDetailPage() {
     }
   };
 
+  useEffect(() => {
+    if (!managerOpen || managerMode !== "assign" || managerSelected) {
+      if (!managerOpen) {
+        setManagerOptions([]);
+        setManagerSearching(false);
+      }
+      return;
+    }
+    const raw = managerForm.lookup.trim().replace(/^@+/, "").replace(/[%(),]/g, " ");
+    if (raw.length < 2) {
+      setManagerOptions([]);
+      setManagerSearching(false);
+      return;
+    }
+    const seq = ++managerSearchSeq.current;
+    setManagerSearching(true);
+    const timer = window.setTimeout(() => {
+      void adminFetch(`/api/admin/users?q=${encodeURIComponent(raw)}&limit=12`)
+        .then(async (res) => {
+          const json = (await res.json().catch(() => ({}))) as {
+            data?: ManagerUserOption[];
+            error?: string;
+          };
+          if (seq !== managerSearchSeq.current) return;
+          if (!res.ok) {
+            setManagerOptions([]);
+            setError(json.error || "Search failed");
+            return;
+          }
+          setError(null);
+          setManagerOptions(json.data ?? []);
+        })
+        .catch(() => {
+          if (seq !== managerSearchSeq.current) return;
+          setManagerOptions([]);
+          setError("Search failed");
+        })
+        .finally(() => {
+          if (seq === managerSearchSeq.current) setManagerSearching(false);
+        });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [managerOpen, managerMode, managerForm.lookup, managerSelected]);
+
+  const resetManagerForm = () => {
+    setManagerForm({
+      lookup: "",
+      full_name: "",
+      email: "",
+      phone: "",
+      password: generateStadiumManagerPassword(),
+      manager_role: "manager",
+    });
+    setManagerOptions([]);
+    setManagerSelected(null);
+    setManagerSearching(false);
+  };
+
   const createManager = async (event?: React.FormEvent) => {
     event?.preventDefault();
     if (!canWrite) return;
@@ -426,31 +497,26 @@ export default function StadiumDetailPage() {
     setCreatedLogin(null);
     try {
       if (managerMode === "assign") {
-        const lookup = managerForm.lookup.trim().replace(/^@+/, "");
-        if (!lookup) {
-          throw new Error("Enter a SpoJex username or email.");
+        if (!managerSelected?.id) {
+          throw new Error("Search and select a SpoJex user from the list.");
         }
+        const label =
+          managerSelected.username
+            ? `@${managerSelected.username}`
+            : managerSelected.email || managerSelected.display_name;
         const payload = await postAdminResponse<{ message?: string }>(
           `/api/admin/stadiums/${id}/managers`,
           {
-            lookup,
-            username: lookup.includes("@") ? undefined : lookup.toLowerCase(),
+            user_id: managerSelected.id,
             assign_existing: true,
             manager_role: managerForm.manager_role,
           },
         );
         const message =
           payload.message ||
-          `Manager assigned for ${lookup}. Platform profile role was not changed.`;
-        setCreatedLogin({ email: lookup, password: null, message });
-        setManagerForm({
-          lookup: "",
-          full_name: "",
-          email: "",
-          phone: "",
-          password: generateStadiumManagerPassword(),
-          manager_role: "manager",
-        });
+          `Manager assigned for ${label}. Platform profile role was not changed.`;
+        setCreatedLogin({ email: label, password: null, message });
+        resetManagerForm();
         setManagerMode("assign");
         try {
           await load();
@@ -484,14 +550,7 @@ export default function StadiumDetailPage() {
       const message =
         payload.message || `Manager login created. Email ${email} · Password ${password}`;
       setCreatedLogin({ email, password, message });
-      setManagerForm({
-        lookup: "",
-        full_name: "",
-        email: "",
-        phone: "",
-        password: generateStadiumManagerPassword(),
-        manager_role: "manager",
-      });
+      resetManagerForm();
       try {
         await load();
       } catch (loadErr) {
@@ -1518,6 +1577,7 @@ export default function StadiumDetailPage() {
                     setCreatedLogin(null);
                     setError(null);
                     setManagerMode("assign");
+                    resetManagerForm();
                     setManagerOpen(true);
                   }}
                   className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground"
@@ -1636,7 +1696,9 @@ export default function StadiumDetailPage() {
               <button
                 type="submit"
                 form="create-manager-form"
-                disabled={savingManager}
+                disabled={
+                  savingManager || (managerMode === "assign" && !managerSelected)
+                }
                 className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
               >
                 {savingManager
@@ -1693,7 +1755,13 @@ export default function StadiumDetailPage() {
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => setManagerMode(item.id)}
+                  onClick={() => {
+                    setManagerMode(item.id);
+                    setManagerSelected(null);
+                    setManagerOptions([]);
+                    setManagerForm((prev) => ({ ...prev, lookup: "" }));
+                    setError(null);
+                  }}
                   className={cn(
                     "rounded-md px-3 py-1.5 text-xs font-medium",
                     managerMode === item.id
@@ -1708,21 +1776,125 @@ export default function StadiumDetailPage() {
             {managerMode === "assign" ? (
               <>
                 <p className="text-sm text-text-secondary md:col-span-2">
-                  Looks up an existing Spojex user by @username or email. Their platform profile role is left
-                  unchanged. No password reset.
+                  Search by @username or email, then select a user from the list. Their platform profile role is
+                  left unchanged. No password reset.
                 </p>
-                <label className="text-sm md:col-span-2">
-                  <span className="mb-1 block text-text-secondary">Username or email</span>
-                  <input
-                    type="text"
-                    value={managerForm.lookup}
-                    onChange={(event) => setManagerForm({ ...managerForm, lookup: event.target.value })}
-                    required
-                    placeholder="@username or name@example.com"
-                    autoComplete="off"
-                    className="h-10 w-full rounded-lg border border-border px-3"
-                  />
-                </label>
+                <div className="space-y-2 md:col-span-2">
+                  {managerSelected ? (
+                    <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium">{managerSelected.display_name}</p>
+                          <p className="truncate text-xs text-text-secondary">
+                            {[
+                              managerSelected.username ? `@${managerSelected.username}` : null,
+                              managerSelected.email,
+                              managerSelected.role,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setManagerSelected(null);
+                            setManagerForm({ ...managerForm, lookup: "" });
+                            setManagerOptions([]);
+                          }}
+                          className="shrink-0 text-xs font-medium text-text-secondary hover:text-text-primary"
+                        >
+                          Change
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <label className="text-sm">
+                        <span className="mb-1 block text-text-secondary">Username or email</span>
+                        <input
+                          type="text"
+                          value={managerForm.lookup}
+                          onChange={(event) => {
+                            setManagerForm({ ...managerForm, lookup: event.target.value });
+                            setManagerSelected(null);
+                          }}
+                          placeholder="@username or name@example.com"
+                          autoComplete="off"
+                          className="h-10 w-full rounded-lg border border-border px-3"
+                        />
+                      </label>
+                      {managerSearching ? (
+                        <p className="text-xs text-text-hint">Searching…</p>
+                      ) : null}
+                      {!managerSearching &&
+                      managerForm.lookup.trim().length >= 2 &&
+                      managerOptions.length === 0 ? (
+                        <p className="text-xs text-text-hint">
+                          No users found. Switch to “Create manager login” to make an account.
+                        </p>
+                      ) : null}
+                      {managerOptions.length > 0 ? (
+                        <ul className="max-h-48 overflow-y-auto rounded-lg border border-border">
+                          {managerOptions.map((user) => {
+                            const already = managers.some((row) => row.user_id === user.id && row.is_active);
+                            return (
+                              <li key={user.id}>
+                                <button
+                                  type="button"
+                                  disabled={already}
+                                  onClick={() => {
+                                    setManagerSelected(user);
+                                    setManagerOptions([]);
+                                    setManagerForm({
+                                      ...managerForm,
+                                      lookup:
+                                        user.username ||
+                                        user.email ||
+                                        user.display_name ||
+                                        "",
+                                    });
+                                  }}
+                                  className="flex w-full items-start gap-3 px-3 py-2 text-left text-sm hover:bg-muted disabled:opacity-50"
+                                >
+                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-border bg-muted text-xs font-semibold">
+                                    {user.avatar_url ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img
+                                        src={user.avatar_url}
+                                        alt=""
+                                        className="h-full w-full object-cover"
+                                      />
+                                    ) : (
+                                      (user.display_name || "?").slice(0, 1).toUpperCase()
+                                    )}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="font-medium">{user.display_name}</p>
+                                    <p className="truncate text-xs text-text-secondary">
+                                      {[
+                                        user.username ? `@${user.username}` : null,
+                                        user.email,
+                                        user.role,
+                                      ]
+                                        .filter(Boolean)
+                                        .join(" · ")}
+                                    </p>
+                                    {already ? (
+                                      <p className="mt-0.5 text-[10px] font-semibold uppercase text-text-hint">
+                                        Already assigned
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : null}
+                    </>
+                  )}
+                </div>
                 <label className="text-sm">
                   <span className="mb-1 block text-text-secondary">Role</span>
                   <select
