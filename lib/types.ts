@@ -450,7 +450,7 @@ export type StadiumManagerRow = {
   is_active: boolean;
   login_password: string;
   created_at: string;
-  users?: Pick<UserRow, "id" | "display_name" | "email" | "phone" | "role"> | null;
+  users?: Pick<UserRow, "id" | "display_name" | "email" | "username" | "phone" | "role"> | null;
 };
 
 export type StadiumPlanRow = {

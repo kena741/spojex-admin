@@ -75,7 +75,7 @@ export async function PATCH(
     .update(patch)
     .eq("id", managerId)
     .eq("stadium_id", stadiumId)
-    .select("*, users:user_id(id, display_name, email, phone, role)")
+    .select("*, users:user_id(id, display_name, email, username, phone, role)")
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json({ data, password: nextPassword });

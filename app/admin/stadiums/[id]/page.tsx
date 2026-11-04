@@ -50,7 +50,7 @@ import type {
   StadiumRow,
   StadiumSubscriptionRow,
 } from "@/lib/types";
-import { formatDate, formatMoney } from "@/lib/utils";
+import { cn, formatDate, formatMoney } from "@/lib/utils";
 
 const tabs = [
   { id: "overview", label: "Overview" },
@@ -101,7 +101,9 @@ export default function StadiumDetailPage() {
   const [passQuery, setPassQuery] = useState("");
   const [savingPlan, setSavingPlan] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [managerMode, setManagerMode] = useState<"assign" | "create">("assign");
   const [managerForm, setManagerForm] = useState({
+    lookup: "",
     full_name: "",
     email: "",
     phone: "",
@@ -110,7 +112,11 @@ export default function StadiumDetailPage() {
   });
   const [savingManager, setSavingManager] = useState(false);
   const [managerOpen, setManagerOpen] = useState(false);
-  const [createdLogin, setCreatedLogin] = useState<{ email: string; password: string } | null>(null);
+  const [createdLogin, setCreatedLogin] = useState<{
+    email: string;
+    password: string | null;
+    message: string;
+  } | null>(null);
   const [weekHours, setWeekHours] = useState<StadiumWeekHour[]>(emptyStadiumWeekHours());
   const [selectedWeekDay, setSelectedWeekDay] = useState(1);
   const [slotDraft, setSlotDraft] = useState<StadiumTimeSlot>({ start_time: "09:00", end_time: "11:00" });
@@ -419,6 +425,42 @@ export default function StadiumDetailPage() {
     setError(null);
     setCreatedLogin(null);
     try {
+      if (managerMode === "assign") {
+        const lookup = managerForm.lookup.trim().replace(/^@+/, "");
+        if (!lookup) {
+          throw new Error("Enter a SpoJex username or email.");
+        }
+        const payload = await postAdminResponse<{ message?: string }>(
+          `/api/admin/stadiums/${id}/managers`,
+          {
+            lookup,
+            username: lookup.includes("@") ? undefined : lookup.toLowerCase(),
+            assign_existing: true,
+            manager_role: managerForm.manager_role,
+          },
+        );
+        const message =
+          payload.message ||
+          `Manager assigned for ${lookup}. Platform profile role was not changed.`;
+        setCreatedLogin({ email: lookup, password: null, message });
+        setManagerForm({
+          lookup: "",
+          full_name: "",
+          email: "",
+          phone: "",
+          password: generateStadiumManagerPassword(),
+          manager_role: "manager",
+        });
+        setManagerMode("assign");
+        try {
+          await load();
+        } catch (loadErr) {
+          console.error(loadErr);
+        }
+        setNotice(message);
+        return;
+      }
+
       const email = managerForm.email.trim().toLowerCase();
       const adminEmail = (staff?.email ?? "").trim().toLowerCase();
       if (adminEmail && email === adminEmail) {
@@ -426,15 +468,24 @@ export default function StadiumDetailPage() {
           "Do not use your admin email for a stadium manager. That resets your admin password. Use a different email.",
         );
       }
-      const payload = await postAdminResponse(`/api/admin/stadiums/${id}/managers`, {
-        ...managerForm,
-        full_name: managerForm.full_name.trim(),
-        email,
-        password: managerForm.password.trim(),
-      });
-      const password = payload.password || managerForm.password;
-      setCreatedLogin({ email, password });
+      const payload = await postAdminResponse<{ password?: string; message?: string }>(
+        `/api/admin/stadiums/${id}/managers`,
+        {
+          full_name: managerForm.full_name.trim(),
+          email,
+          phone: managerForm.phone.trim(),
+          password: managerForm.password.trim(),
+          manager_role: managerForm.manager_role,
+          create_if_missing: true,
+        },
+      );
+      const password =
+        typeof payload.password === "string" ? payload.password : managerForm.password;
+      const message =
+        payload.message || `Manager login created. Email ${email} · Password ${password}`;
+      setCreatedLogin({ email, password, message });
       setManagerForm({
+        lookup: "",
         full_name: "",
         email: "",
         phone: "",
@@ -447,7 +498,7 @@ export default function StadiumDetailPage() {
         // Manager was created; don't treat a follow-up refresh failure as create failure.
         console.error(loadErr);
       }
-      setNotice(`Manager login created. Email ${email} · Password ${password}`);
+      setNotice(message);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create manager failed");
     } finally {
@@ -1466,17 +1517,19 @@ export default function StadiumDetailPage() {
                   onClick={() => {
                     setCreatedLogin(null);
                     setError(null);
+                    setManagerMode("assign");
                     setManagerOpen(true);
                   }}
                   className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground"
                 >
-                  Create manager login
+                  Assign / create manager
                 </button>
               ) : null}
             </div>
             {managers.length === 0 ? (
               <p className="text-sm text-text-secondary">
-                No managers assigned yet.{canWrite ? " Use Create manager login to add one." : ""}
+                No managers assigned yet.
+                {canWrite ? " Use Assign / create manager to add one by username, email, or new login." : ""}
               </p>
             ) : (
               <AdminTableShell>
@@ -1499,6 +1552,11 @@ export default function StadiumDetailPage() {
                             {row.users ? (
                               <Link href={`/admin/users/${row.users.id}`} className="font-medium text-primary">
                                 {row.users.display_name}
+                                {row.users.username ? (
+                                  <span className="ml-1 font-normal text-text-secondary">
+                                    @{row.users.username}
+                                  </span>
+                                ) : null}
                               </Link>
                             ) : (
                               "-"
@@ -1542,7 +1600,13 @@ export default function StadiumDetailPage() {
 
       <AdminModal
         open={managerOpen}
-        title={createdLogin ? "Manager login created" : "Create manager login"}
+        title={
+          createdLogin
+            ? createdLogin.password
+              ? "Manager login created"
+              : "Manager assigned"
+            : "Assign / create manager"
+        }
         onClose={() => {
           if (savingManager) return;
           setManagerOpen(false);
@@ -1575,7 +1639,13 @@ export default function StadiumDetailPage() {
                 disabled={savingManager}
                 className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
               >
-                {savingManager ? "Creating…" : "Create manager"}
+                {savingManager
+                  ? managerMode === "assign"
+                    ? "Assigning…"
+                    : "Creating…"
+                  : managerMode === "assign"
+                    ? "Assign manager"
+                    : "Create manager"}
               </button>
             </div>
           )
@@ -1583,13 +1653,19 @@ export default function StadiumDetailPage() {
       >
         {createdLogin ? (
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-            <p className="font-semibold">Share these login details with the manager</p>
+            <p className="font-semibold">
+              {createdLogin.password ? "Share these login details with the manager" : "Manager linked"}
+            </p>
             <p className="mt-2">
-              Email: <span className="font-mono">{createdLogin.email}</span>
+              {createdLogin.password ? "Email" : "User"}:{" "}
+              <span className="font-mono">{createdLogin.email}</span>
             </p>
-            <p className="mt-1">
-              Password: <VisiblePassword value={createdLogin.password} />
-            </p>
+            {createdLogin.password ? (
+              <p className="mt-1">
+                Password: <VisiblePassword value={createdLogin.password} />
+              </p>
+            ) : null}
+            <p className="mt-2 text-xs text-emerald-800">{createdLogin.message}</p>
             <p className="mt-2 text-xs text-emerald-800">
               They sign in to the SpoJex app as a normal user (fan). The Manage tab appears only for this stadium.
             </p>
@@ -1607,73 +1683,133 @@ export default function StadiumDetailPage() {
                 {error}
               </p>
             ) : null}
-            <p className="text-sm text-text-secondary md:col-span-2">
-              Creates a SpoJex app login and assigns it to this stadium. Use a{" "}
-              <span className="font-medium text-text-primary">different email than your admin account</span>
-              . The password stays visible so you can share it. If that email already exists (and is not your admin
-              login), that account is assigned and its app password is updated.
-            </p>
-            <label className="text-sm">
-              <span className="mb-1 block text-text-secondary">Full name</span>
-              <input
-                value={managerForm.full_name}
-                onChange={(event) => setManagerForm({ ...managerForm, full_name: event.target.value })}
-                required
-                className="h-10 w-full rounded-lg border border-border px-3"
-              />
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-text-secondary">Email</span>
-              <input
-                type="email"
-                value={managerForm.email}
-                onChange={(event) => setManagerForm({ ...managerForm, email: event.target.value })}
-                required
-                className="h-10 w-full rounded-lg border border-border px-3"
-              />
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-text-secondary">Phone</span>
-              <input
-                value={managerForm.phone}
-                onChange={(event) => setManagerForm({ ...managerForm, phone: event.target.value })}
-                className="h-10 w-full rounded-lg border border-border px-3"
-              />
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-text-secondary">Password (visible)</span>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={managerForm.password}
-                  onChange={(event) => setManagerForm({ ...managerForm, password: event.target.value })}
-                  required
-                  minLength={6}
-                  autoComplete="off"
-                  className="h-10 w-full rounded-lg border border-border px-3 font-mono"
-                />
+            <div className="flex flex-wrap gap-2 md:col-span-2">
+              {(
+                [
+                  { id: "assign", label: "Assign existing user" },
+                  { id: "create", label: "Create manager login" },
+                ] as const
+              ).map((item) => (
                 <button
+                  key={item.id}
                   type="button"
-                  onClick={() =>
-                    setManagerForm({ ...managerForm, password: generateStadiumManagerPassword() })
-                  }
-                  className="shrink-0 rounded-lg border border-border px-3 text-sm hover:bg-muted"
+                  onClick={() => setManagerMode(item.id)}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-xs font-medium",
+                    managerMode === item.id
+                      ? "bg-primary text-primary-foreground"
+                      : "border border-border",
+                  )}
                 >
-                  Generate
+                  {item.label}
                 </button>
-              </div>
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-text-secondary">Role</span>
-              <select
-                value={managerForm.manager_role}
-                onChange={(event) => setManagerForm({ ...managerForm, manager_role: event.target.value })}
-                className="h-10 w-full rounded-lg border border-border px-3"
-              >
-                <option value="manager">Manager</option>
-                <option value="owner">Owner</option>
-              </select>
-            </label>
+              ))}
+            </div>
+            {managerMode === "assign" ? (
+              <>
+                <p className="text-sm text-text-secondary md:col-span-2">
+                  Looks up an existing Spojex user by @username or email. Their platform profile role is left
+                  unchanged. No password reset.
+                </p>
+                <label className="text-sm md:col-span-2">
+                  <span className="mb-1 block text-text-secondary">Username or email</span>
+                  <input
+                    type="text"
+                    value={managerForm.lookup}
+                    onChange={(event) => setManagerForm({ ...managerForm, lookup: event.target.value })}
+                    required
+                    placeholder="@username or name@example.com"
+                    autoComplete="off"
+                    className="h-10 w-full rounded-lg border border-border px-3"
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-text-secondary">Role</span>
+                  <select
+                    value={managerForm.manager_role}
+                    onChange={(event) =>
+                      setManagerForm({ ...managerForm, manager_role: event.target.value })
+                    }
+                    className="h-10 w-full rounded-lg border border-border px-3"
+                  >
+                    <option value="manager">Manager</option>
+                    <option value="owner">Owner</option>
+                  </select>
+                </label>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-text-secondary md:col-span-2">
+                  Creates a SpoJex app login and assigns it to this stadium. Use a{" "}
+                  <span className="font-medium text-text-primary">different email than your admin account</span>
+                  . The password stays visible so you can share it. If that email already exists (and is not your
+                  admin login), that account is assigned and its app password is updated.
+                </p>
+                <label className="text-sm">
+                  <span className="mb-1 block text-text-secondary">Full name</span>
+                  <input
+                    value={managerForm.full_name}
+                    onChange={(event) => setManagerForm({ ...managerForm, full_name: event.target.value })}
+                    required
+                    className="h-10 w-full rounded-lg border border-border px-3"
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-text-secondary">Email</span>
+                  <input
+                    type="email"
+                    value={managerForm.email}
+                    onChange={(event) => setManagerForm({ ...managerForm, email: event.target.value })}
+                    required
+                    className="h-10 w-full rounded-lg border border-border px-3"
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-text-secondary">Phone</span>
+                  <input
+                    value={managerForm.phone}
+                    onChange={(event) => setManagerForm({ ...managerForm, phone: event.target.value })}
+                    className="h-10 w-full rounded-lg border border-border px-3"
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-text-secondary">Password (visible)</span>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={managerForm.password}
+                      onChange={(event) => setManagerForm({ ...managerForm, password: event.target.value })}
+                      required
+                      minLength={6}
+                      autoComplete="off"
+                      className="h-10 w-full rounded-lg border border-border px-3 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setManagerForm({ ...managerForm, password: generateStadiumManagerPassword() })
+                      }
+                      className="shrink-0 rounded-lg border border-border px-3 text-sm hover:bg-muted"
+                    >
+                      Generate
+                    </button>
+                  </div>
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-text-secondary">Role</span>
+                  <select
+                    value={managerForm.manager_role}
+                    onChange={(event) =>
+                      setManagerForm({ ...managerForm, manager_role: event.target.value })
+                    }
+                    className="h-10 w-full rounded-lg border border-border px-3"
+                  >
+                    <option value="manager">Manager</option>
+                    <option value="owner">Owner</option>
+                  </select>
+                </label>
+              </>
+            )}
           </form>
         )}
       </AdminModal>

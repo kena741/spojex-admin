@@ -88,6 +88,41 @@ async function ensurePublicUser(
   throw new Error(error?.message || "Failed to create SpoJex user");
 }
 
+async function assignExistingManager(
+  client: SpojexClient,
+  stadiumId: string,
+  publicUserId: string,
+  managerRole: "owner" | "manager",
+) {
+  const { data: manager, error: managerError } = await client
+    .from("stadium_managers")
+    .upsert(
+      {
+        stadium_id: stadiumId,
+        user_id: publicUserId,
+        manager_role: managerRole,
+        is_active: true,
+        login_password: "",
+      },
+      { onConflict: "stadium_id,user_id" },
+    )
+    .select("*, users:user_id(id, display_name, email, username, phone, role)")
+    .single();
+  if (managerError || !manager) {
+    return NextResponse.json(
+      { error: managerError?.message || "Failed to assign manager" },
+      { status: 400 },
+    );
+  }
+  return NextResponse.json({
+    data: manager,
+    password: null,
+    created_new_login: false,
+    message:
+      "Existing user assigned as stadium manager. Platform profile role was not changed. Passwords are not returned.",
+  });
+}
+
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdminPermission("stadiums:read");
   if (!auth.ok) return auth.error;
@@ -95,7 +130,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const client = canUseAdminClient() ? createAdminClient() : auth.context.client;
   const { data, error } = await client
     .from("stadium_managers")
-    .select("*, users:user_id(id, display_name, email, phone, role)")
+    .select("*, users:user_id(id, display_name, email, username, phone, role)")
     .eq("stadium_id", id)
     .order("created_at", { ascending: false });
   if (error) {
@@ -107,6 +142,111 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdminPermission("stadiums:write");
   if (!auth.ok) return auth.error;
+
+  const { id: stadiumId } = await params;
+  const body = (await request.json()) as {
+    full_name?: string;
+    email?: string;
+    phone?: string;
+    password?: string;
+    manager_role?: string;
+    user_id?: string;
+    username?: string;
+    /** Email or @username — preferred for assign-existing. */
+    lookup?: string;
+    /** When true (default if lookup/username/user_id without create), assign only. */
+    assign_existing?: boolean;
+    create_if_missing?: boolean;
+  };
+
+  const managerRole = body.manager_role === "owner" ? "owner" : "manager";
+  const client = canUseAdminClient() ? createAdminClient() : auth.context.client;
+
+  const { data: stadium, error: stadiumError } = await client
+    .from("stadiums")
+    .select("id, name")
+    .eq("id", stadiumId)
+    .maybeSingle();
+  if (stadiumError || !stadium) {
+    return NextResponse.json({ error: stadiumError?.message || "Stadium not found" }, { status: 404 });
+  }
+
+  let publicUserId = body.user_id?.trim() || "";
+  const lookupRaw =
+    body.lookup?.trim() || body.username?.trim() || "";
+  const lookup = lookupRaw.replace(/^@+/, "");
+  const isEmailLookup = lookup.includes("@");
+  const emailFromLookup = isEmailLookup ? lookup.toLowerCase() : "";
+  const usernameLookup = !isEmailLookup && lookup ? lookup.toLowerCase() : "";
+  const wantsAssign =
+    body.assign_existing === true ||
+    Boolean(body.user_id?.trim()) ||
+    Boolean(body.username?.trim()) ||
+    Boolean(body.lookup?.trim());
+
+  // --- Assign existing Spojex user by user_id / username / email ---
+  if (wantsAssign) {
+    if (!publicUserId && usernameLookup) {
+      const { data: user, error: userError } = await client
+        .from("users")
+        .select("id, display_name, email, username")
+        .ilike("username", usernameLookup)
+        .maybeSingle();
+      if (userError) {
+        return NextResponse.json({ error: userError.message }, { status: 400 });
+      }
+      if (!user?.id) {
+        return NextResponse.json(
+          {
+            error:
+              "No SpoJex user found with that username. Check the spelling, or use Create manager login.",
+          },
+          { status: 400 },
+        );
+      }
+      publicUserId = user.id;
+    }
+
+    if (!publicUserId && emailFromLookup) {
+      const { data: user, error: userError } = await client
+        .from("users")
+        .select("id, display_name, email, username")
+        .ilike("email", emailFromLookup)
+        .maybeSingle();
+      if (userError) {
+        return NextResponse.json({ error: userError.message }, { status: 400 });
+      }
+      if (!user?.id) {
+        return NextResponse.json(
+          {
+            error:
+              "No SpoJex user found with that email. Check the spelling, or use Create manager login.",
+          },
+          { status: 400 },
+        );
+      }
+      publicUserId = user.id;
+    }
+
+    if (!publicUserId) {
+      return NextResponse.json(
+        { error: "user_id, username, or email is required" },
+        { status: 400 },
+      );
+    }
+
+    const { data: user } = await client
+      .from("users")
+      .select("id")
+      .eq("id", publicUserId)
+      .maybeSingle();
+    if (!user?.id) {
+      return NextResponse.json({ error: "User not found" }, { status: 400 });
+    }
+    return assignExistingManager(client, stadiumId, publicUserId, managerRole);
+  }
+
+  // --- Create / invite new manager login (existing behavior) ---
   if (!canUseAdminClient()) {
     return NextResponse.json(
       {
@@ -118,20 +258,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
   }
 
-  const { id: stadiumId } = await params;
-  const body = (await request.json()) as {
-    full_name?: string;
-    email?: string;
-    phone?: string;
-    password?: string;
-    manager_role?: string;
-  };
-
   const fullName = (body.full_name ?? "").trim();
   const email = (body.email ?? "").trim().toLowerCase();
   const phone = (body.phone ?? "").trim();
   const password = (body.password ?? "").trim() || generateStadiumManagerPassword();
-  const managerRole = body.manager_role === "owner" ? "owner" : "manager";
 
   if (!fullName) return NextResponse.json({ error: "full_name is required" }, { status: 400 });
   if (!email) return NextResponse.json({ error: "email is required" }, { status: 400 });
@@ -151,19 +281,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   // Always use a dedicated service-role client so auth.admin calls never touch the browser session.
-  const client = createAdminClient();
-  const { data: stadium, error: stadiumError } = await client
-    .from("stadiums")
-    .select("id, name")
-    .eq("id", stadiumId)
-    .maybeSingle();
-  if (stadiumError || !stadium) {
-    return NextResponse.json({ error: stadiumError?.message || "Stadium not found" }, { status: 404 });
-  }
-
+  const adminClient = createAdminClient();
   let authUserId: string | null = null;
   let createdNewLogin = false;
-  const { data: created, error: createError } = await client.auth.admin.createUser({
+  const { data: created, error: createError } = await adminClient.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
@@ -179,7 +300,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     authUserId = created.user.id;
     createdNewLogin = true;
   } else if (createError && /already|registered|exists/i.test(createError.message)) {
-    const existingAuthId = await findAuthUserIdByEmail(client, email);
+    const existingAuthId = await findAuthUserIdByEmail(adminClient, email);
     if (!existingAuthId) {
       return NextResponse.json(
         { error: `${createError.message}. Could not find the existing auth user.` },
@@ -196,7 +317,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       );
     }
     authUserId = existingAuthId;
-    const { error: updateError } = await client.auth.admin.updateUserById(authUserId, {
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(authUserId, {
       password,
       email_confirm: true,
       user_metadata: { display_name: fullName, full_name: fullName, role: "fan", phone },
@@ -217,20 +338,20 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   try {
-    const publicUserId = await ensurePublicUser(client, authUserId, { email, fullName, phone });
-    const { data: manager, error: managerError } = await client
+    const ensuredUserId = await ensurePublicUser(adminClient, authUserId, { email, fullName, phone });
+    const { data: manager, error: managerError } = await adminClient
       .from("stadium_managers")
       .upsert(
         {
           stadium_id: stadiumId,
-          user_id: publicUserId,
+          user_id: ensuredUserId,
           manager_role: managerRole,
           is_active: true,
           login_password: password,
         },
         { onConflict: "stadium_id,user_id" },
       )
-      .select("*, users:user_id(id, display_name, email, phone, role)")
+      .select("*, users:user_id(id, display_name, email, username, phone, role)")
       .single();
     if (managerError || !manager) {
       return NextResponse.json(
