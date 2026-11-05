@@ -30,21 +30,18 @@ type ChapaFormValues = {
   isSandbox: boolean;
   publicKey: string;
   secretKey: string;
-  feePercent: number;
+  feePercent: string;
 };
-
-/** Default Chapa gateway fee when unset in app_settings.payment.chapa. */
-const DEFAULT_CHAPA_FEE_PERCENT = 2.5;
 
 function asObject(value: unknown): Record<string, string | boolean | number | undefined> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return value as Record<string, string | boolean | number | undefined>;
 }
 
-function chapaFeePercent(value: unknown): number {
-  if (value == null || value === "") return DEFAULT_CHAPA_FEE_PERCENT;
+function feePercentInput(value: unknown): string {
+  if (value == null || value === "") return "";
   const n = Number(value);
-  return Number.isFinite(n) ? n : DEFAULT_CHAPA_FEE_PERCENT;
+  return Number.isFinite(n) ? String(n) : "";
 }
 
 export default function PaymentSettingsPage() {
@@ -65,7 +62,7 @@ export default function PaymentSettingsPage() {
     isSandbox: Boolean(paymentSettings.chapa?.isSandbox),
     publicKey: String(paymentSettings.chapa?.publicKey || ""),
     secretKey: String(paymentSettings.chapa?.secretKey || ""),
-    feePercent: chapaFeePercent(paymentSettings.chapa?.feePercent),
+    feePercent: feePercentInput(paymentSettings.chapa?.feePercent),
   };
 
   const {
@@ -115,8 +112,19 @@ export default function PaymentSettingsPage() {
     setSaving(true);
     setActionError(null);
     try {
+      const feeRaw = String(paymentSettings.chapa?.feePercent ?? "").trim();
+      const feeParsed = feeRaw === "" ? null : Number(feeRaw);
+      if (feeRaw !== "" && !Number.isFinite(feeParsed)) {
+        throw new Error("Chapa transaction fee must be a number.");
+      }
       await postAdminResponse("/api/admin/settings", {
-        paymentSettings,
+        paymentSettings: {
+          ...paymentSettings,
+          chapa: {
+            ...paymentSettings.chapa,
+            feePercent: feeParsed,
+          },
+        },
       });
       setToast({ message: "Payment settings saved successfully.", variant: "success" });
       await refresh();
@@ -245,13 +253,9 @@ export default function PaymentSettingsPage() {
                   min={0}
                   max={100}
                   step={0.1}
-                  value={String(chapaValues.feePercent)}
-                  onChange={(e) =>
-                    updateChapaField(
-                      "feePercent",
-                      Number.parseFloat(e.target.value) || 0,
-                    )
-                  }
+                  placeholder="e.g. 2.5"
+                  value={chapaValues.feePercent}
+                  onChange={(e) => updateChapaField("feePercent", e.target.value)}
                   className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                 />
               </div>

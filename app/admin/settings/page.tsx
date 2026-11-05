@@ -137,7 +137,7 @@ export default function GlobalSettingsPage() {
       isSandbox: true,
       publicKey: "",
       secretKey: "",
-      feePercent: 2.5,
+      feePercent: "",
     },
     wallet: { name: "Wallet", enable: true },
   });
@@ -249,7 +249,7 @@ export default function GlobalSettingsPage() {
         isSandbox: true,
         publicKey: "",
         secretKey: "",
-        feePercent: 2.5,
+        feePercent: "",
         ...asObject(pay.chapa),
       },
       wallet: {
@@ -297,6 +297,12 @@ export default function GlobalSettingsPage() {
       if (tab === "payment" && (!Number.isFinite(rate) || rate <= 0)) {
         throw new Error("Coins per 1 Birr must be greater than 0.");
       }
+      const chapaPay = asObject(payment.chapa);
+      const feeRaw = String(chapaPay.feePercent ?? "").trim();
+      const feeParsed = feeRaw === "" ? null : Number(feeRaw);
+      if (feeRaw !== "" && !Number.isFinite(feeParsed)) {
+        throw new Error("Chapa transaction fee must be a number.");
+      }
       await postAdminResponse("/api/admin/settings", {
         appSettings,
         generalSettings,
@@ -305,7 +311,10 @@ export default function GlobalSettingsPage() {
         adminCommission,
         statusOptions: statusOptions.filter((s) => s.flag.trim()),
         constants: { ...constants, service_posting_tiers: tiers },
-        paymentSettings: payment,
+        paymentSettings: {
+          ...payment,
+          chapa: { ...chapaPay, feePercent: feeParsed },
+        },
         // Only touch coin_settings from the Payment tab (int PK path needs BE coerce).
         ...(tab === "payment" && Number.isFinite(rate) && rate > 0
           ? { coins_per_birr: rate }
@@ -945,18 +954,19 @@ export default function GlobalSettingsPage() {
                           min={0}
                           max={100}
                           step={0.1}
-                          value={String(
+                          placeholder="e.g. 2.5"
+                          value={
                             chapa.feePercent == null || chapa.feePercent === ""
-                              ? 2.5
-                              : chapa.feePercent,
-                          )}
+                              ? ""
+                              : String(chapa.feePercent)
+                          }
                           disabled={!canWrite}
                           onChange={(e) =>
                             setPayment({
                               ...payment,
                               chapa: {
                                 ...chapa,
-                                feePercent: Number.parseFloat(e.target.value) || 0,
+                                feePercent: e.target.value,
                               },
                             })
                           }
