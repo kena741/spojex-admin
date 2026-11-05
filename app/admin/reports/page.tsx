@@ -48,6 +48,12 @@ type ReportItem = {
   service?: { id: string; title?: string | null } | null;
   organization?: { id: string; name?: string | null } | null;
   news?: { id: string; title?: string | null } | null;
+  gym?: {
+    id: string;
+    name?: string | null;
+    status?: string | null;
+    logo_url?: string | null;
+  } | null;
   gym_content?: {
     id: string;
     title?: string | null;
@@ -89,6 +95,14 @@ type DetailPayload = ReportItem & {
   allowed_actions?: string[];
   resolution_note?: string;
   updated_at?: string | null;
+  active_ban?: {
+    id: string;
+    target_kind?: string;
+    permanent?: boolean;
+    banned_until?: string | null;
+    reason?: string;
+  } | null;
+  ban_target?: { kind: string; id: string } | null;
   error?: string;
 };
 
@@ -105,6 +119,7 @@ function targetTypeLabel(type: string) {
     service: "Service",
     organization: "Organization",
     news: "News",
+    gym: "Gym",
     gym_post: "Gym post",
     gym_video: "Gym video",
     message: "Message",
@@ -115,6 +130,7 @@ function targetTypeLabel(type: string) {
 
 function targetLabel(row: ReportItem) {
   if (row.service?.title) return row.service.title;
+  if (row.gym?.name) return row.gym.name;
   if (row.organization?.name) return row.organization.name;
   if (row.news?.title) return row.news.title;
   if (row.gym_content?.title) {
@@ -364,6 +380,7 @@ function ReportsPageInner() {
               <option value="all">All types</option>
               <option value="user">People</option>
               <option value="service">Services</option>
+              <option value="gym">Gyms</option>
               <option value="organization">Organizations</option>
               <option value="gym_post">Gym posts</option>
               <option value="gym_video">Gym videos</option>
@@ -638,8 +655,62 @@ function ReportsPageInner() {
                         </button>
                       ))}
                     </div>
+                    {detail.ban_target ? (
+                      <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+                        <h4 className="text-xs font-semibold uppercase text-text-secondary">
+                          Ban / block {detail.ban_target.kind}
+                        </h4>
+                        {detail.active_ban ? (
+                          <p className="text-[11px] text-amber-800 dark:text-amber-200">
+                            Active{" "}
+                            {detail.active_ban.permanent
+                              ? "permanent ban"
+                              : `ban until ${
+                                  detail.active_ban.banned_until
+                                    ? formatDateTime(detail.active_ban.banned_until)
+                                    : "unknown"
+                                }`}
+                            {detail.active_ban.reason
+                              ? ` · ${detail.active_ban.reason}`
+                              : ""}
+                          </p>
+                        ) : (
+                          <p className="text-[11px] text-text-hint">
+                            Enter a reason above, then ban for a few days or permanently.
+                          </p>
+                        )}
+                        <div className="flex flex-wrap gap-2">
+                          {[
+                            ["ban_3_days", "Ban 3 days"],
+                            ["ban_7_days", "Ban 7 days"],
+                            ["ban_30_days", "Ban 30 days"],
+                            ["ban_permanent", "Ban permanent"],
+                            ["unban", "Lift ban"],
+                          ].map(([action, label]) => (
+                            <button
+                              key={action}
+                              type="button"
+                              disabled={
+                                busy ||
+                                (action === "unban" && !detail.active_ban) ||
+                                (action !== "unban" && !decisionNote.trim())
+                              }
+                              onClick={() => void runDecision(action)}
+                              className={cn(
+                                "rounded-lg border px-2.5 py-1.5 text-[11px] font-medium disabled:opacity-40",
+                                action === "ban_permanent"
+                                  ? "border-red-300 text-red-800 dark:border-red-900 dark:text-red-200"
+                                  : "border-border",
+                              )}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                     <p className="text-[11px] text-text-hint">
-                      Hide/restore require a reason. Failed enforcement is not shown as success.
+                      Hide/restore and bans require a reason. Failed enforcement is not shown as success.
                     </p>
                   </div>
                 ) : null}
