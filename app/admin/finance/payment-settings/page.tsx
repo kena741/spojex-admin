@@ -258,6 +258,11 @@ export default function PaymentSettingsPage() {
                   onChange={(e) => updateChapaField("feePercent", e.target.value)}
                   className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                 />
+                <p className="mt-1 text-xs text-text-hint">
+                  Added on top of every Chapa checkout (services, events, gym, stadium, coins,
+                  top-ups, donations, and more). Wallet pay is unchanged. Product payouts still
+                  use the base amount.
+                </p>
               </div>
               <div>
                 <label className="mb-2 block text-sm font-medium text-foreground">Public Key</label>
