@@ -137,6 +137,7 @@ export default function GlobalSettingsPage() {
       isSandbox: true,
       publicKey: "",
       secretKey: "",
+      feePercent: 2.5,
     },
     wallet: { name: "Wallet", enable: true },
   });
@@ -248,6 +249,7 @@ export default function GlobalSettingsPage() {
         isSandbox: true,
         publicKey: "",
         secretKey: "",
+        feePercent: 2.5,
         ...asObject(pay.chapa),
       },
       wallet: {
@@ -933,6 +935,33 @@ export default function GlobalSettingsPage() {
                           />
                           <span className="text-sm font-medium">Sandbox</span>
                         </label>
+                      </div>
+                      <div>
+                        <label className="mb-2 block text-sm font-medium text-foreground">
+                          Transaction fee (%)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={0.1}
+                          value={String(
+                            chapa.feePercent == null || chapa.feePercent === ""
+                              ? 2.5
+                              : chapa.feePercent,
+                          )}
+                          disabled={!canWrite}
+                          onChange={(e) =>
+                            setPayment({
+                              ...payment,
+                              chapa: {
+                                ...chapa,
+                                feePercent: Number.parseFloat(e.target.value) || 0,
+                              },
+                            })
+                          }
+                          className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                        />
                       </div>
                       <div>
                         <label className="mb-2 block text-sm font-medium text-foreground">
