@@ -21,6 +21,11 @@ import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { adminFetch, deleteAdmin, patchAdmin, postAdmin, uploadAdmin } from "@/lib/hooks";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { useAdminQuery } from "@/lib/use-admin-query";
+import {
+  type BannerLinks,
+  normalizeBannerLinks,
+  validateBannerLinks,
+} from "@/lib/banner-links";
 
 const fieldClass = "h-10 w-full rounded-lg border border-border px-3 text-sm";
 
@@ -29,14 +34,78 @@ type BannerRow = {
   title: string;
   image_url: string;
   link_url: string;
+  ios_url?: string;
+  android_url?: string;
   is_active: boolean;
   sort_order: number;
   created_at?: string;
 };
 
+const emptyLinks: BannerLinks = { link_url: "", ios_url: "", android_url: "" };
+
+/** Website link OR per-platform store links — filling one side disables the other. */
+function BannerLinkFields({
+  value,
+  onChange,
+}: {
+  value: BannerLinks;
+  onChange: (next: BannerLinks) => void;
+}) {
+  const hasWebsite = value.link_url.trim() !== "";
+  const hasStore = value.ios_url.trim() !== "" || value.android_url.trim() !== "";
+  return (
+    <div className="space-y-3">
+      <label className="block space-y-1">
+        <span className="text-xs font-medium text-text-secondary">Website or in-app link</span>
+        <input
+          value={value.link_url}
+          onChange={(e) => onChange({ ...value, link_url: e.target.value })}
+          placeholder="https://… or /services"
+          disabled={hasStore}
+          className={`${fieldClass} disabled:bg-muted disabled:opacity-60`}
+        />
+      </label>
+      <div className="grid gap-3 md:grid-cols-2">
+        <label className="block space-y-1">
+          <span className="text-xs font-medium text-text-secondary">iOS (App Store) link</span>
+          <input
+            value={value.ios_url}
+            onChange={(e) => onChange({ ...value, ios_url: e.target.value })}
+            placeholder="https://apps.apple.com/…"
+            disabled={hasWebsite}
+            className={`${fieldClass} disabled:bg-muted disabled:opacity-60`}
+          />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-xs font-medium text-text-secondary">Android (Play Store) link</span>
+          <input
+            value={value.android_url}
+            onChange={(e) => onChange({ ...value, android_url: e.target.value })}
+            placeholder="https://play.google.com/store/apps/…"
+            disabled={hasWebsite}
+            className={`${fieldClass} disabled:bg-muted disabled:opacity-60`}
+          />
+        </label>
+      </div>
+      <p className="text-xs text-text-secondary">
+        Use a website link <em>or</em> store links, not both. Each device opens only its own
+        store; a device with no store link for it can&apos;t tap the banner.
+      </p>
+    </div>
+  );
+}
+
+function linkSummary(row: BannerRow) {
+  const parts: string[] = [];
+  if (row.link_url?.trim()) parts.push(row.link_url.trim());
+  if (row.ios_url?.trim()) parts.push(`iOS: ${row.ios_url.trim()}`);
+  if (row.android_url?.trim()) parts.push(`Android: ${row.android_url.trim()}`);
+  return parts;
+}
+
 type BannerDraft = {
   title: string;
-  link_url: string;
+  links: BannerLinks;
   is_active: boolean;
   sort_order: number;
 };
@@ -65,7 +134,7 @@ export default function BannersPage() {
   };
 
   const [title, setTitle] = useState("");
-  const [linkUrl, setLinkUrl] = useState("");
+  const [links, setLinks] = useState<BannerLinks>(emptyLinks);
   const [createFile, setCreateFile] = useState<File | null>(null);
   const [createActive, setCreateActive] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -106,32 +175,16 @@ export default function BannersPage() {
       if ((status === "hidden" || status === "inactive") && row.is_active) return false;
       if (missingImage && (row.image_url || "").trim()) return false;
       if (!q) return true;
-      return [row.title, row.link_url, row.image_url]
+      return [row.title, row.link_url, row.ios_url, row.android_url, row.image_url]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q));
     });
   }, [missingImage, query, rows, status]);
 
-  const validateLink = (value: string) => {
-    const v = value.trim();
-    if (!v) return null;
-    if (v.startsWith("/")) return null; // internal route
-    try {
-      const u = new URL(v);
-      if (!["https:", "http:"].includes(u.protocol)) {
-        return "Only http(s) or internal /routes are allowed";
-      }
-      if (/^(javascript|data|vbscript):/i.test(v)) return "Executable URL schemes are rejected";
-    } catch {
-      return "Invalid URL";
-    }
-    return null;
-  };
-
   const create = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!canWrite) return;
-    const linkErr = validateLink(linkUrl);
+    const linkErr = validateBannerLinks(normalizeBannerLinks(links));
     if (linkErr) {
       setError(linkErr);
       return;
@@ -145,7 +198,7 @@ export default function BannersPage() {
     try {
       const created = (await postAdmin("/api/admin/banners", {
         title: title.trim() || "Banner",
-        link_url: linkUrl.trim(),
+        ...normalizeBannerLinks(links),
         is_active: createActive,
         sort_order: rows.length,
       })) as BannerRow | undefined;
@@ -153,7 +206,7 @@ export default function BannersPage() {
       if (!id) throw new Error("Banner created but no id returned");
       await uploadAdmin(`/api/admin/banners/${id}/image`, createFile);
       setTitle("");
-      setLinkUrl("");
+      setLinks(emptyLinks);
       setCreateFile(null);
       setCreateActive(true);
       if (createImageRef.current) createImageRef.current.value = "";
@@ -170,7 +223,7 @@ export default function BannersPage() {
     setEditingImage((row.image_url ?? "").trim());
     setDraft({
       title: row.title ?? "",
-      link_url: row.link_url ?? "",
+      links: normalizeBannerLinks(row),
       is_active: row.is_active,
       sort_order: row.sort_order ?? 0,
     });
@@ -229,12 +282,17 @@ export default function BannersPage() {
 
   const saveEdit = async () => {
     if (!editingId || !draft) return;
+    const linkErr = validateBannerLinks(normalizeBannerLinks(draft.links));
+    if (linkErr) {
+      setError(linkErr);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
       await patchAdmin(`/api/admin/banners/${editingId}`, {
         title: draft.title.trim(),
-        link_url: draft.link_url.trim(),
+        ...normalizeBannerLinks(draft.links),
         is_active: draft.is_active,
         sort_order: draft.sort_order,
       });
@@ -289,20 +347,13 @@ export default function BannersPage() {
           onSubmit={create}
           className="mb-6 space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm"
         >
-          <div className="grid gap-3 md:grid-cols-2">
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Title"
-              className={fieldClass}
-            />
-            <input
-              value={linkUrl}
-              onChange={(e) => setLinkUrl(e.target.value)}
-              placeholder="Destination: /route, https://…, or store listing"
-              className={fieldClass}
-            />
-          </div>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Title"
+            className={fieldClass}
+          />
+          <BannerLinkFields value={links} onChange={setLinks} />
           <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
             <input
               ref={createImageRef}
@@ -329,8 +380,7 @@ export default function BannersPage() {
             </button>
           </div>
           <p className="text-xs text-text-secondary">
-            Prefer https:// landing pages for cross-platform store links. Internal destinations must
-            start with /. Image is required at create time.
+            Image is required at create time.
           </p>
         </form>
       ) : null}
@@ -413,8 +463,14 @@ export default function BannersPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-text-secondary">
-                        {row.link_url?.trim() ? (
-                          <span className="break-all">{row.link_url}</span>
+                        {linkSummary(row).length ? (
+                          <div className="space-y-0.5">
+                            {linkSummary(row).map((line) => (
+                              <p key={line} className="break-all">
+                                {line}
+                              </p>
+                            ))}
+                          </div>
                         ) : (
                           "-"
                         )}
@@ -513,15 +569,10 @@ export default function BannersPage() {
                 className={fieldClass}
               />
             </label>
-            <label className="block space-y-1">
-              <span className="text-xs font-medium text-text-secondary">Link URL</span>
-              <input
-                value={draft.link_url}
-                onChange={(e) => setDraft({ ...draft, link_url: e.target.value })}
-                placeholder="https://… or /services"
-                className={fieldClass}
-              />
-            </label>
+            <BannerLinkFields
+              value={draft.links}
+              onChange={(next) => setDraft({ ...draft, links: next })}
+            />
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block space-y-1">
                 <span className="text-xs font-medium text-text-secondary">Sort order</span>

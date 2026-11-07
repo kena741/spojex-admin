@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAnyAdminPermission } from "@/lib/admin-auth";
+import { normalizeBannerLinks, validateBannerLinks } from "@/lib/banner-links";
 
 export async function GET() {
   const auth = await requireAnyAdminPermission([
@@ -35,16 +36,22 @@ export async function POST(request: Request) {
     title?: string;
     image_url?: string;
     link_url?: string;
+    ios_url?: string;
+    android_url?: string;
     is_active?: boolean;
     sort_order?: number;
   };
+
+  const links = normalizeBannerLinks(body);
+  const linkError = validateBannerLinks(links);
+  if (linkError) return NextResponse.json({ error: linkError }, { status: 400 });
 
   const { data, error } = await auth.context.client
     .from("banners")
     .insert({
       title: (body.title ?? "").trim(),
       image_url: (body.image_url ?? "").trim(),
-      link_url: (body.link_url ?? "").trim(),
+      ...links,
       is_active: body.is_active !== false,
       sort_order: Number(body.sort_order) || 0,
     })
