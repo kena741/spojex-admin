@@ -64,7 +64,7 @@ export default function MiniAppsPage() {
   const [query, setQuery] = useAdminUiState("miniapps:query", "");
   const [status, setStatus] = useState(searchParams.get("status") || "all");
   const [name, setName] = useState("");
-  const [url, setUrl] = useState("https://www.zemenservice.com/");
+  const [url, setUrl] = useState("https://example.com/miniapp/");
   const [creating, setCreating] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -261,7 +261,7 @@ export default function MiniAppsPage() {
             <input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://www.zemenservice.com/"
+              placeholder="https://example.com/miniapp/"
               required
               className={fieldClass}
             />
@@ -455,7 +455,7 @@ export default function MiniAppsPage() {
               <input
                 value={draft.url}
                 onChange={(e) => setDraft({ ...draft, url: e.target.value })}
-                placeholder="https://www.zemenservice.com/"
+                placeholder="https://example.com/miniapp/"
                 className={fieldClass}
               />
             </label>
