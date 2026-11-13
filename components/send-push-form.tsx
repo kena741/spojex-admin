@@ -71,13 +71,24 @@ export default function SendPushForm({ userId }: Props) {
         error?: string;
         ok?: boolean;
         clearedToken?: boolean;
+        skipped?: string | boolean;
+        messageId?: string;
       };
-      if (!response.ok) {
-        setFeedback({ type: "error", text: data.error ?? "Could not send notification" });
+      // A cleared or skipped send delivered nothing, even if the request succeeded.
+      if (!response.ok || data.clearedToken || data.skipped) {
+        const fallback = data.clearedToken
+          ? "Firebase rejected the device token, so it was cleared. Ask the user to open the app again."
+          : typeof data.skipped === "string"
+            ? `Not sent: ${data.skipped}`
+            : "Could not send notification";
+        setFeedback({ type: "error", text: data.error ?? fallback });
         if (data.clearedToken) await loadStatus();
         return;
       }
-      setFeedback({ type: "success", text: "Notification sent to the device." });
+      setFeedback({
+        type: "success",
+        text: "Firebase accepted the notification. It should reach the device shortly.",
+      });
       setTitle("");
       setBody("");
     } catch {
