@@ -63,6 +63,23 @@ type BroadcastResult = {
   errors?: string[];
 };
 
+function people(count: number) {
+  return `${count} ${count === 1 ? "person" : "people"}`;
+}
+
+/** Plain-language result of a broadcast; technical details go to the console. */
+function broadcastSummary(result: BroadcastResult): string {
+  if (!result.ok && result.attempted === 0 && result.sent === 0) {
+    return result.error || "The broadcast couldn't be sent. Please try again.";
+  }
+  const parts = [`Sent to ${people(result.sent)}.`];
+  const missed = result.skipped + result.failed;
+  if (missed > 0) {
+    parts.push(`${people(missed)} couldn't be reached right now.`);
+  }
+  return parts.join(" ");
+}
+
 function recipientLabel(row: NotificationRow): string {
   return (
     row.recipient?.label || row.recipient?.display_name || "Profile unavailable"
@@ -158,15 +175,19 @@ export default function NotificationsPage() {
         error?: string;
       };
       if (!response.ok) {
+        console.warn("Broadcast failed", { status: response.status, ...data });
         setResult({
           ok: false,
           attempted: 0,
           sent: 0,
           skipped: 0,
           failed: 0,
-          error: data.error ?? "Could not send broadcast",
+          error: "The broadcast couldn't be sent. Please try again.",
         });
         return;
+      }
+      if ((data.errors ?? []).length || data.error) {
+        console.warn("Broadcast delivery errors", data.errors ?? data.error);
       }
       setResult(data);
       setTitle("");
@@ -182,7 +203,7 @@ export default function NotificationsPage() {
         sent: 0,
         skipped: 0,
         failed: 0,
-        error: "Network error. Try again.",
+        error: "The broadcast couldn't be sent. Check your connection and try again.",
       });
     } finally {
       setSending(false);
@@ -303,12 +324,7 @@ export default function NotificationsPage() {
                   : "border-red-200 bg-red-50 text-red-700"
               }`}
             >
-              {`Push job: attempted ${result.attempted}, provider accepted ${result.sent}, skipped ${result.skipped}, failed ${result.failed}.`}
-              {result.error ? ` ${result.error}` : ""}
-              {(result.errors ?? [])
-                .slice(0, 2)
-                .map((e) => ` ${e}`)
-                .join("")}
+              {broadcastSummary(result)}
             </div>
           ) : null}
           <button

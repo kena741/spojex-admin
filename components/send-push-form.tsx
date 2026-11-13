@@ -14,6 +14,19 @@ type Props = {
   userId: string;
 };
 
+const NO_DEVICE = "This user hasn't turned on notifications in the Spojex app yet.";
+const DEVICE_CHANGED =
+  "This user's phone is no longer connected. They need to open the Spojex app again.";
+const NOTIFICATIONS_OFF = "This user has turned off notifications.";
+const SEND_FAILED = "The notification couldn't be sent. Please try again.";
+
+/** Plain-language reason for why a user can't get a push right now. */
+function friendlyStatusReason(status: PushStatus): string {
+  if (!status.fcmRegistered) return NO_DEVICE;
+  if (!status.notificationsEnabled) return NOTIFICATIONS_OFF;
+  return SEND_FAILED;
+}
+
 export default function SendPushForm({ userId }: Props) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -35,13 +48,14 @@ export default function SendPushForm({ userId }: Props) {
       });
       const data = (await response.json()) as PushStatus & { error?: string };
       if (!response.ok) {
-        setStatusError(data.error ?? "Could not load push status");
+        console.warn("Push status failed", data.error);
+        setStatusError("Couldn't check this user's notification status.");
         setStatus(null);
         return;
       }
       setStatus(data);
     } catch {
-      setStatusError("Network error while loading push status.");
+      setStatusError("Couldn't check this user's notification status. Check your connection.");
       setStatus(null);
     } finally {
       setLoadingStatus(false);
@@ -76,23 +90,23 @@ export default function SendPushForm({ userId }: Props) {
       };
       // A cleared or skipped send delivered nothing, even if the request succeeded.
       if (!response.ok || data.clearedToken || data.skipped) {
-        const fallback = data.clearedToken
-          ? "Firebase rejected the device token, so it was cleared. Ask the user to open the app again."
-          : typeof data.skipped === "string"
-            ? `Not sent: ${data.skipped}`
-            : "Could not send notification";
-        setFeedback({ type: "error", text: data.error ?? fallback });
-        if (data.clearedToken) await loadStatus();
+        // Keep technical details out of the UI; they stay in the console.
+        console.warn("Push not delivered", { status: response.status, ...data });
+        setFeedback({
+          type: "error",
+          text: data.clearedToken ? DEVICE_CHANGED : SEND_FAILED,
+        });
+        await loadStatus();
         return;
       }
-      setFeedback({
-        type: "success",
-        text: "Firebase accepted the notification. It should reach the device shortly.",
-      });
+      setFeedback({ type: "success", text: "Notification sent." });
       setTitle("");
       setBody("");
     } catch {
-      setFeedback({ type: "error", text: "Network error. Try again." });
+      setFeedback({
+        type: "error",
+        text: "The notification couldn't be sent. Check your connection and try again.",
+      });
     } finally {
       setSending(false);
     }
@@ -105,16 +119,16 @@ export default function SendPushForm({ userId }: Props) {
   let badgeClass = "bg-muted text-text-secondary";
   if (!loadingStatus && status) {
     if (canSend) {
-      badgeLabel = "Ready to send";
+      badgeLabel = "Notifications on";
       badgeClass = "bg-emerald-50 text-emerald-800";
     } else if (!status.fcmRegistered) {
-      badgeLabel = "No device token";
+      badgeLabel = "Not set up";
       badgeClass = "bg-amber-50 text-amber-800";
     } else if (!status.notificationsEnabled) {
       badgeLabel = "Notifications off";
       badgeClass = "bg-amber-50 text-amber-800";
     } else {
-      badgeLabel = "Cannot send";
+      badgeLabel = "Unavailable";
       badgeClass = "bg-amber-50 text-amber-800";
     }
   }
@@ -129,8 +143,8 @@ export default function SendPushForm({ userId }: Props) {
       </div>
 
       {statusError ? <p className="mb-3 text-sm text-red-600">{statusError}</p> : null}
-      {!loadingStatus && status && !canSend && status.reason ? (
-        <p className="mb-3 text-sm text-text-secondary">{status.reason}</p>
+      {!loadingStatus && status && !canSend ? (
+        <p className="mb-3 text-sm text-text-secondary">{friendlyStatusReason(status)}</p>
       ) : null}
 
       <form onSubmit={handleSubmit} className="grid gap-3">
@@ -147,7 +161,7 @@ export default function SendPushForm({ userId }: Props) {
           />
         </label>
         <label className="grid gap-1 text-sm">
-          <span className="text-text-secondary">Deep link route (optional)</span>
+          <span className="text-text-secondary">Screen to open (optional)</span>
           <input
             value={route}
             onChange={(event) => setRoute(event.target.value)}
@@ -162,7 +176,7 @@ export default function SendPushForm({ userId }: Props) {
           <textarea
             value={body}
             onChange={(event) => setBody(event.target.value)}
-            placeholder="Write the notification body"
+            placeholder="Write your message"
             rows={3}
             maxLength={500}
             disabled={disabled}
@@ -188,14 +202,14 @@ export default function SendPushForm({ userId }: Props) {
             disabled={loadingStatus || sending}
             className="rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
           >
-            Refresh status
+            Check again
           </button>
           <button
             type="submit"
             disabled={disabled || !title.trim() || !body.trim()}
             className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
           >
-            {sending ? "Sending…" : "Send push"}
+            {sending ? "Sending…" : "Send notification"}
           </button>
         </div>
       </form>

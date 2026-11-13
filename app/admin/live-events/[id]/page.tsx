@@ -651,15 +651,22 @@ function LiveEventDetail() {
         skipped?: number;
         failed?: number;
       };
-      if (!response.ok) throw new Error(payload.error || "Notify failed");
+      if (!response.ok) {
+        console.warn("Live event notify failed", { status: response.status, ...payload });
+        throw new Error("The notification couldn't be sent. Please try again.");
+      }
+      const sent = payload.sent ?? 0;
+      const missed = (payload.skipped ?? 0) + (payload.failed ?? 0);
       setNotice(
-        `Notification sent to ${payload.sent ?? 0} devices` +
-          (payload.skipped ? ` · ${payload.skipped} skipped` : "") +
-          (payload.failed ? ` · ${payload.failed} failed` : "") +
-          ".",
+        `Notification sent to ${sent} ${sent === 1 ? "person" : "people"}.` +
+          (missed ? ` ${missed} couldn't be reached right now.` : ""),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Notify failed");
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : "The notification couldn't be sent. Check your connection and try again.",
+      );
     } finally {
       setNotifying(false);
     }
