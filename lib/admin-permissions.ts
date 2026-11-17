@@ -558,6 +558,7 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
   if (pathname.startsWith("/admin/admins")) return can("admins:read");
   if (pathname.startsWith("/admin/roles")) return can("roles:read");
   if (pathname.startsWith("/admin/settings")) return can("settings:read");
+  if (pathname.startsWith("/admin/app-updates")) return can("settings:read");
   if (pathname === "/admin/finance" || pathname.startsWith("/admin/finance/overview")) {
     return (
       can("finance:read") || can("wallets:read") || can("payments:read") || can("withdrawals:read")
@@ -619,6 +620,7 @@ export function writePermissionForPatch(path: string) {
   if (path.includes("/profile-media/")) return "users:write";
   if (path.includes("/reports/")) return "reports:write";
   if (path.includes("/network")) return "network:write";
+  if (path.includes("/app-updates")) return "settings:write";
   if (path.includes("/settings")) return "settings:write";
   if (path.includes("/payment-settings")) return "payments:write";
   return null;

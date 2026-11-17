@@ -38,6 +38,7 @@ import {
   Receipt,
   Scale,
   Settings,
+  Smartphone,
   ScrollText,
   Dumbbell,
   Images,
@@ -273,6 +274,12 @@ const systemItems: NavItem[] = [
     href: "/admin/settings",
     label: "Global settings",
     icon: Settings,
+    visible: (can) => can("settings:read"),
+  },
+  {
+    href: "/admin/app-updates",
+    label: "App Updates",
+    icon: Smartphone,
     visible: (can) => can("settings:read"),
   },
   {
