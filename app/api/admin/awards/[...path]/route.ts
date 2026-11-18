@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAnyAdminPermission } from "@/lib/admin-auth";
-import { awardsPermissionFor, proxyAwards } from "@/lib/awards";
+import { awardsPermissionFor } from "@/lib/awards";
+import { proxyAwards } from "@/lib/awards-server";
 
 type Ctx = { params: Promise<{ path: string[] }> };
 

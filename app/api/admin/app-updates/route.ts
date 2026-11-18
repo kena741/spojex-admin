@@ -1,5 +1,5 @@
 import { requireAnyAdminPermission } from "@/lib/admin-auth";
-import { proxyAppUpdates } from "@/lib/app-updates";
+import { proxyAppUpdates } from "@/lib/app-updates-server";
 
 /** Android + iOS update settings (store info refreshes when stale or ?refresh=1). */
 export async function GET(request: Request) {

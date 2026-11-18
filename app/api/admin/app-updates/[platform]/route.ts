@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
-import { isAppPlatform, proxyAppUpdates } from "@/lib/app-updates";
+import { isAppPlatform } from "@/lib/app-updates";
+import { proxyAppUpdates } from "@/lib/app-updates-server";
 
 const FIELDS = [
   "target_version",
