@@ -689,6 +689,83 @@ export function ParticipantsPanel({
   );
 }
 
+type PickedUser = { id: string; display_name?: string; email?: string; username?: string; avatar_url?: string };
+
+/** Search Spojex users by email (or name / @username) and pick one. */
+function UserSearch({ onPick }: { onPick: (u: PickedUser) => void }) {
+  const [q, setQ] = useState("");
+  const [rows, setRows] = useState<PickedUser[]>([]);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2) {
+      setRows([]);
+      return;
+    }
+    let live = true;
+    setLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await adminFetch(`/api/admin/users?limit=8&q=${encodeURIComponent(term)}`);
+        const json = (await res.json().catch(() => ({}))) as { data?: PickedUser[] };
+        if (live) setRows(Array.isArray(json.data) ? json.data : []);
+      } finally {
+        if (live) setLoading(false);
+      }
+    }, 250);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [q]);
+  return (
+    <div className="space-y-2">
+      <input
+        className={fieldClass}
+        type="search"
+        autoFocus
+        autoComplete="off"
+        placeholder="Search by email"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+      />
+      {q.trim().length >= 2 ? (
+        <div className="max-h-64 overflow-y-auto rounded-lg border border-border">
+          {rows.length === 0 ? (
+            <p className="p-3 text-xs text-text-secondary">{loading ? "Searching…" : "No Spojex user found."}</p>
+          ) : (
+            rows.map((u) => (
+              <button
+                key={u.id}
+                type="button"
+                className="flex w-full items-center gap-3 border-b border-border p-2 text-left last:border-0 hover:bg-muted"
+                onClick={() => onPick(u)}
+              >
+                <UserAvatar url={u.avatar_url} name={u.display_name || u.email || "?"} />
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium">{u.display_name || u.username || u.email}</span>
+                  <span className="block truncate text-xs text-text-secondary">{u.email || `@${u.username}`}</span>
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function UserAvatar({ url, name }: { url?: string; name: string }) {
+  return url ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={url} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
+  ) : (
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted font-semibold">
+      {name.slice(0, 1).toUpperCase()}
+    </div>
+  );
+}
+
 function ParticipantModal({
   detail,
   participant,
@@ -701,27 +778,32 @@ function ParticipantModal({
   onSaved: () => void;
 }) {
   const existing = new Set((participant?.nominations ?? []).map((n) => n.category_id));
-  const [f, setF] = useState({
-    name: participant?.name ?? "",
-    photo_url: participant?.photo_url ?? "",
-    bio: participant?.bio ?? "",
-    organization: participant?.organization ?? "",
-    email: participant?.user_email || (participant?.user_username ? `@${participant.user_username}` : ""),
-    categories: new Set<string>(existing),
-  });
+  const [user, setUser] = useState<PickedUser | null>(
+    participant && (participant.user_email || participant.user_username)
+      ? {
+          id: participant.id,
+          display_name: participant.name,
+          email: participant.user_email || undefined,
+          username: participant.user_username || undefined,
+          avatar_url: participant.photo_url || undefined,
+        }
+      : null,
+  );
+  const [changedUser, setChangedUser] = useState(false);
+  const [bio, setBio] = useState(participant?.bio ?? "");
+  const [categories, setCategories] = useState(new Set<string>(existing));
   const { busy, error, run } = useAction();
-  const canSave = Boolean(f.name.trim() || f.email.trim());
+  const lookup = user?.email || (user?.username ? `@${user.username}` : "");
+  const canSave = Boolean(lookup) && (participant ? true : categories.size > 0);
   const save = () =>
     run(async () => {
-      const body = {
-        name: f.name.trim() || undefined,
-        photo_url: f.photo_url,
-        bio: f.bio,
-        organization: f.organization,
-        email: f.email.trim() || null,
+      const body: Record<string, unknown> = {
+        bio,
         // Adding a category nominates; removing is done by withdrawing the nomination.
-        category_ids: [...f.categories].filter((id) => !existing.has(id)),
+        category_ids: [...categories].filter((id) => !existing.has(id)),
       };
+      // Name and photo are refreshed from the Spojex account.
+      if (!participant || changedUser) body.email = lookup;
       if (participant) await patchAdmin(`${API}/participants/${participant.id}`, body);
       else await postAdmin(`${API}/events/${detail.event.id}/participants`, body);
       onSaved();
@@ -729,55 +811,58 @@ function ParticipantModal({
   return (
     <AdminModal
       open
-      title={participant ? "Edit nominee" : "New nominee"}
+      title={participant ? "Edit nominee" : "Add nominee"}
       onClose={onClose}
-      className="max-w-2xl"
+      className="max-w-xl"
       footer={<AdminModalFooter onCancel={onClose} onSave={save} saving={busy} disabled={!canSave} />}
     >
-      <div className="grid gap-4 sm:grid-cols-2">
-        {error ? (
-          <div className="sm:col-span-2">
-            <AdminErrorAlert message={error} />
-          </div>
-        ) : null}
-        <Field label="Spojex email or username" hint="Optional. Fills name and photo, and notifies them.">
-          <input
-            className={fieldClass}
-            type="text"
-            autoComplete="off"
-            placeholder="name@example.com or @username"
-            value={f.email}
-            onChange={(e) => setF({ ...f, email: e.target.value })}
+      <div className="space-y-4">
+        {error ? <AdminErrorAlert message={error} /> : null}
+        <div>
+          <p className={labelClass}>Spojex user</p>
+          {user ? (
+            <div className="flex items-center gap-3 rounded-lg border border-border p-2">
+              <UserAvatar url={user.avatar_url} name={user.display_name || lookup} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium">{user.display_name || user.username || user.email}</span>
+                <span className="block truncate text-xs text-text-secondary">{lookup}</span>
+              </span>
+              <button type="button" className={btn} onClick={() => setUser(null)}>
+                Change
+              </button>
+            </div>
+          ) : (
+            <UserSearch
+              onPick={(u) => {
+                setUser(u);
+                setChangedUser(true);
+              }}
+            />
+          )}
+          <p className="mt-1 text-xs text-text-secondary">Name and photo come from their Spojex profile.</p>
+        </div>
+        <Field label="Short bio">
+          <textarea
+            className={`${fieldClass} h-20 py-2`}
+            maxLength={300}
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
           />
         </Field>
-        <Field label="Name">
-          <input className={fieldClass} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
-        </Field>
-        <Field label="Team / club">
-          <input className={fieldClass} value={f.organization} onChange={(e) => setF({ ...f, organization: e.target.value })} />
-        </Field>
-        <Field label="Photo URL">
-          <input className={fieldClass} value={f.photo_url} onChange={(e) => setF({ ...f, photo_url: e.target.value })} />
-        </Field>
-        <div className="sm:col-span-2">
-          <Field label="Short bio">
-            <textarea className={`${fieldClass} h-20 py-2`} value={f.bio} onChange={(e) => setF({ ...f, bio: e.target.value })} />
-          </Field>
-        </div>
-        <div className="sm:col-span-2">
+        <div>
           <p className={labelClass}>Categories</p>
           <div className="flex flex-wrap gap-3">
             {detail.categories.map((c) => (
               <Check
                 key={c.id}
                 label={c.name}
-                checked={f.categories.has(c.id)}
+                checked={categories.has(c.id)}
                 disabled={existing.has(c.id)}
                 onChange={(v) => {
-                  const next = new Set(f.categories);
+                  const next = new Set(categories);
                   if (v) next.add(c.id);
                   else next.delete(c.id);
-                  setF({ ...f, categories: next });
+                  setCategories(next);
                 }}
               />
             ))}
@@ -789,7 +874,7 @@ function ParticipantModal({
 }
 
 function BulkImportModal({ eventId, onClose, onDone }: { eventId: string; onClose: () => void; onDone: () => void }) {
-  const [csv, setCsv] = useState("name,email,organization,photo_url,categories\n");
+  const [csv, setCsv] = useState("email,categories,bio\n");
   const { busy, error, run } = useAction();
   const save = () =>
     run(async () => {
@@ -807,7 +892,8 @@ function BulkImportModal({ eventId, onClose, onDone }: { eventId: string; onClos
       <div className="space-y-3">
         {error ? <AdminErrorAlert message={error} /> : null}
         <p className="text-xs text-text-secondary">
-          One nominee per row. Separate several categories with <code>|</code>.
+          One nominee per row, by Spojex email. Name and photo come from their profile. Separate several
+          categories with <code>|</code>.
         </p>
         <input
           type="file"
