@@ -559,6 +559,9 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
   if (pathname.startsWith("/admin/roles")) return can("roles:read");
   if (pathname.startsWith("/admin/settings")) return can("settings:read");
   if (pathname.startsWith("/admin/app-updates")) return can("settings:read");
+  if (pathname.startsWith("/admin/awards")) {
+    return can("awards:read") || can("awards:write") || can("awards:results");
+  }
   if (pathname === "/admin/finance" || pathname.startsWith("/admin/finance/overview")) {
     return (
       can("finance:read") || can("wallets:read") || can("payments:read") || can("withdrawals:read")
@@ -592,6 +595,7 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
 }
 
 export function writePermissionForPatch(path: string) {
+  if (path.includes("/awards")) return path.includes("/results") ? "awards:results" : "awards:write";
   if (path.includes("/users/")) return "users:write";
   if (path.includes("/verifications/")) return "users:verify";
   if (path.includes("/verification-docs")) return "profiles:write";

@@ -38,6 +38,7 @@ import {
   Receipt,
   Scale,
   Settings,
+  Trophy,
   Smartphone,
   ScrollText,
   Dumbbell,
@@ -154,6 +155,12 @@ const nativeAppItems: NavItem[] = [
   { href: "/admin/gyms", label: "Gyms", icon: Dumbbell, visible: (can) => can("gyms:read") },
   { href: "/admin/events", label: "Events", icon: Calendar, visible: (can) => can("events:read") },
   { href: "/admin/donations", label: "Donations", icon: Heart, visible: (can) => can("donations:read") },
+  {
+    href: "/admin/awards",
+    label: "Awards & Voting",
+    icon: Trophy,
+    visible: (can) => can("awards:read") || can("awards:write") || can("awards:results"),
+  },
   {
     href: "/admin/streams",
     label: "Streams",
