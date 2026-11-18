@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { ArrowDown, ArrowUp, CheckCircle2, Minus, Pencil, Plus, ShieldAlert, Trash2, Upload } from "lucide-react";
 import {
   AdminEmpty,
@@ -90,6 +90,80 @@ function useAction() {
 
 // ── Settings ────────────────────────────────────────────────────────────────
 
+function AwardImagePicker({
+  label,
+  hint,
+  previewUrl,
+  inputRef,
+  disabled,
+  uploading,
+  onPick,
+  onRemoveRemote,
+}: {
+  label: string;
+  hint?: string;
+  previewUrl: string;
+  inputRef: RefObject<HTMLInputElement | null>;
+  disabled?: boolean;
+  uploading?: boolean;
+  onPick: (file: File) => void;
+  onRemoveRemote?: () => void;
+}) {
+  return (
+    <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+      <div className="flex items-start gap-3">
+        <div className="h-20 w-28 shrink-0 overflow-hidden rounded-xl border border-border bg-muted">
+          {previewUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={previewUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-[10px] text-text-secondary">
+              No {label.toLowerCase()}
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 flex-1 space-y-2">
+          <p className="text-sm font-medium text-text-primary">{label}</p>
+          <p className="text-xs text-text-secondary">{hint || "JPG, PNG, WebP, or GIF · up to 5 MB"}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
+              className="hidden"
+              disabled={disabled || uploading}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) onPick(file);
+                event.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              disabled={disabled || uploading}
+              onClick={() => inputRef.current?.click()}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-muted disabled:opacity-60"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              {uploading ? "Uploading…" : previewUrl ? `Replace ${label.toLowerCase()}` : `Upload ${label.toLowerCase()}`}
+            </button>
+            {previewUrl && onRemoveRemote ? (
+              <button
+                type="button"
+                disabled={disabled || uploading}
+                onClick={() => void onRemoveRemote()}
+                className="text-xs text-text-secondary underline disabled:opacity-60"
+              >
+                Remove
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function EventSettingsPanel({
   event,
   canWrite,
@@ -100,7 +174,10 @@ export function EventSettingsPanel({
   onSaved: () => void;
 }) {
   const [form, setForm] = useState(() => toForm(event));
-  const { busy, error, run } = useAction();
+  const [uploadingKind, setUploadingKind] = useState<"cover" | "banner" | null>(null);
+  const coverInputRef = useRef<HTMLInputElement | null>(null);
+  const bannerInputRef = useRef<HTMLInputElement | null>(null);
+  const { busy, error, run, setError } = useAction();
   useEffect(() => setForm(toForm(event)), [event]);
   const set = (patch: Partial<ReturnType<typeof toForm>>) => setForm((f) => ({ ...f, ...patch }));
 
@@ -130,6 +207,56 @@ export function EventSettingsPanel({
       onSaved();
     });
 
+  const uploadImage = async (kind: "cover" | "banner", file: File) => {
+    if (!canWrite) return;
+    setUploadingKind(kind);
+    setError(null);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      body.append("kind", kind);
+      const response = await adminFetch(`${API}/events/${event.id}/image`, {
+        method: "POST",
+        body,
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        cover_url?: string;
+        banner_url?: string;
+        image_url?: string;
+      };
+      if (!response.ok) throw new Error(payload.error || "Upload failed");
+      const nextUrl = payload.image_url || (kind === "cover" ? payload.cover_url : payload.banner_url) || "";
+      if (kind === "cover") set({ cover_url: nextUrl || form.cover_url });
+      else set({ banner_url: nextUrl || form.banner_url });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploadingKind(null);
+    }
+  };
+
+  const clearImage = async (kind: "cover" | "banner") => {
+    if (!canWrite) return;
+    setUploadingKind(kind);
+    setError(null);
+    try {
+      const response = await adminFetch(`${API}/events/${event.id}/image?kind=${kind}`, {
+        method: "DELETE",
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(payload.error || "Remove failed");
+      if (kind === "cover") set({ cover_url: "" });
+      else set({ banner_url: "" });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Remove failed");
+    } finally {
+      setUploadingKind(null);
+    }
+  };
+
   const d = !canWrite;
   return (
     <div className="space-y-5 rounded-xl border border-border bg-card p-5">
@@ -141,7 +268,7 @@ export function EventSettingsPanel({
         </StatusBadge>
         {event.results_published ? <StatusBadge tone="success">Results published</StatusBadge> : null}
         {canWrite ? (
-          <button type="button" className={cn(btn, "ml-auto")} disabled={busy} onClick={togglePublish}>
+          <button type="button" className={cn(btn, "ml-auto")} disabled={busy || Boolean(uploadingKind)} onClick={togglePublish}>
             {event.is_published ? "Unpublish" : "Publish"}
           </button>
         ) : null}
@@ -169,12 +296,26 @@ export function EventSettingsPanel({
             />
           </Field>
         </div>
-        <Field label="Cover image URL">
-          <input className={fieldClass} disabled={d} value={form.cover_url} onChange={(e) => set({ cover_url: e.target.value })} />
-        </Field>
-        <Field label="Banner image URL">
-          <input className={fieldClass} disabled={d} value={form.banner_url} onChange={(e) => set({ banner_url: e.target.value })} />
-        </Field>
+        <AwardImagePicker
+          label="Cover image"
+          hint="Card / list thumbnail in the app. JPG/PNG/WebP/GIF · 5 MB."
+          previewUrl={form.cover_url.trim()}
+          inputRef={coverInputRef}
+          disabled={d}
+          uploading={uploadingKind === "cover"}
+          onPick={(file) => void uploadImage("cover", file)}
+          onRemoveRemote={canWrite && form.cover_url.trim() ? () => clearImage("cover") : undefined}
+        />
+        <AwardImagePicker
+          label="Banner image"
+          hint="Wide hero for the event detail screen. JPG/PNG/WebP/GIF · 5 MB."
+          previewUrl={form.banner_url.trim()}
+          inputRef={bannerInputRef}
+          disabled={d}
+          uploading={uploadingKind === "banner"}
+          onPick={(file) => void uploadImage("banner", file)}
+          onRemoveRemote={canWrite && form.banner_url.trim() ? () => clearImage("banner") : undefined}
+        />
         <Field label="Event starts">
           <input type="datetime-local" className={fieldClass} disabled={d} value={form.starts_at} onChange={(e) => set({ starts_at: e.target.value })} />
         </Field>

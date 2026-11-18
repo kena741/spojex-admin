@@ -5,6 +5,7 @@ export type SpojexMediaModule =
   | "profiles"
   | "news"
   | "events"
+  | "awards"
   | "marketplace"
   | "organizations"
   | "stadiums"
