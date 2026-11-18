@@ -16,8 +16,8 @@ import {
 import { StatusBadge } from "@/components/status-badge";
 import { adminCacheKey } from "@/lib/admin-session-cache";
 import {
+  eventStatusLabel,
   formatNumber,
-  formatWhen,
   fromLocalInput,
   statusTone,
   type AwardEventRow,
@@ -54,7 +54,7 @@ export default function AwardsPage() {
     <div>
       <AdminPageHeader
         title="Awards & Voting"
-        description="Award events, categories, nominees, vote packages and winners. Votes are counted on the server only."
+        description="Run award voting: add nominees, open voting, publish winners."
         actions={
           <>
             <Link
@@ -100,22 +100,13 @@ export default function AwardsPage() {
             </div>
             <div className="space-y-2 p-4">
               <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge tone={statusTone(e.status)}>{e.status}</StatusBadge>
-                <StatusBadge tone={e.is_published ? "success" : "neutral"}>
-                  {e.is_published ? "Published" : "Unpublished"}
-                </StatusBadge>
-                {e.is_featured ? <StatusBadge tone="info">Featured</StatusBadge> : null}
+                <StatusBadge tone={statusTone(e.status)}>{eventStatusLabel(e)}</StatusBadge>
+                {!e.is_published && e.status !== "draft" ? <StatusBadge tone="neutral">Hidden</StatusBadge> : null}
               </div>
               <h3 className="truncate font-heading text-base font-semibold text-text-primary group-hover:text-primary">
                 {e.title}
               </h3>
-              <p className="text-xs text-text-secondary">
-                Voting {formatWhen(e.voting_starts_at)} → {formatWhen(e.voting_ends_at)}
-              </p>
-              <p className="text-xs text-text-secondary">
-                {formatNumber(e.category_count)} categories · {formatNumber(e.participant_count)} participants ·{" "}
-                {formatNumber(e.total_votes)} votes
-              </p>
+              <p className="text-xs text-text-secondary">{formatNumber(e.total_votes)} votes</p>
             </div>
           </Link>
         ))}
@@ -157,6 +148,8 @@ function CreateEventModal({
       onClose();
       setTitle("");
       setDescription("");
+      setVotingStart("");
+      setVotingEnd("");
       if (row?.id) router.push(`/admin/awards/${row.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not create event");
@@ -198,7 +191,7 @@ function CreateEventModal({
             <input type="datetime-local" className={fieldClass} value={votingEnd} onChange={(e) => setVotingEnd(e.target.value)} />
           </div>
         </div>
-        <p className="text-xs text-text-secondary">The event starts as a draft. Add categories, nominees and packages, then publish.</p>
+        <p className="text-xs text-text-secondary">Saved as a draft. Add categories and nominees, then publish.</p>
       </div>
     </AdminModal>
   );

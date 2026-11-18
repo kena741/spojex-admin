@@ -164,6 +164,64 @@ export function statusTone(status: string | undefined) {
   }
 }
 
+/** One plain-language label for where an event is in its life. */
+export function eventStatusLabel(e: Pick<AwardEventRow, "status" | "results_published">) {
+  switch (e.status) {
+    case "draft":
+      return "Draft";
+    case "upcoming":
+      return "Not started";
+    case "active":
+      return "Voting open";
+    case "completed":
+      return e.results_published ? "Winners announced" : "Voting closed";
+    case "cancelled":
+      return "Cancelled";
+    default:
+      return String(e.status ?? "—");
+  }
+}
+
+/** Category voting state (server codes) → label + badge tone. */
+export function votingStateLabel(state: string | undefined) {
+  switch (state) {
+    case "open":
+      return { label: "Open", tone: "success" as const };
+    case "not_started":
+      return { label: "Not started", tone: "info" as const };
+    case "closed":
+      return { label: "Closed", tone: "neutral" as const };
+    default:
+      return { label: "Off", tone: "warning" as const };
+  }
+}
+
+export const NOMINATION_LABELS: Record<string, string> = {
+  approved: "Approved",
+  nominated: "Pending",
+  withdrawn: "Withdrawn",
+  disqualified: "Disqualified",
+};
+
+export const RESULT_STATUS_LABELS: Record<string, string> = {
+  computed: "Draft",
+  approved: "Approved",
+  published: "Published",
+};
+
+/** PATCH body that opens voting now, fixing dates that would keep it shut. */
+export function openVotingPatch(
+  e: Pick<AwardEventRow, "voting_starts_at" | "voting_ends_at">,
+  now: Date = new Date(),
+) {
+  const patch: Record<string, unknown> = { status: "active" };
+  const start = e.voting_starts_at ? new Date(e.voting_starts_at) : null;
+  const end = e.voting_ends_at ? new Date(e.voting_ends_at) : null;
+  if (start && start > now) patch.voting_starts_at = now.toISOString();
+  if (end && end <= now) patch.voting_ends_at = null;
+  return patch;
+}
+
 /** ISO → value for <input type="datetime-local"> (local time). */
 export function toLocalInput(iso: string | null | undefined) {
   if (!iso) return "";

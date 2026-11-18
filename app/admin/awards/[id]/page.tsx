@@ -6,7 +6,6 @@ import AdminPageHeader from "@/components/admin-header";
 import { AdminErrorAlert, AdminLoadingRow, AdminReloadButton } from "@/components/admin-layout";
 import {
   CategoriesPanel,
-  EngagePanel,
   EventSettingsPanel,
   LeaderboardPanel,
   PackagesPanel,
@@ -23,11 +22,10 @@ import { cn } from "@/lib/utils";
 const TABS = [
   { id: "settings", label: "Event" },
   { id: "categories", label: "Categories" },
-  { id: "participants", label: "Participants" },
+  { id: "participants", label: "Nominees" },
   { id: "packages", label: "Vote packages" },
-  { id: "leaderboard", label: "Leaderboard" },
+  { id: "leaderboard", label: "Votes" },
   { id: "results", label: "Winners" },
-  { id: "engage", label: "Announce & flags" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -54,7 +52,6 @@ export default function AwardEventPage() {
     <div>
       <AdminPageHeader
         title={data?.event.title ?? "Award event"}
-        description="Categories, nominees, vote packages, live leaderboard and winners."
         backHref="/admin/awards"
         breadcrumbs={[{ label: "Awards & Voting", href: "/admin/awards" }, { label: data?.event.title ?? "Event" }]}
         actions={<AdminReloadButton onClick={refresh} refreshing={refreshing} />}
@@ -86,7 +83,6 @@ export default function AwardEventPage() {
           {tab === "packages" ? <PackagesPanel detail={data} canWrite={canWrite} onChanged={refresh} /> : null}
           {tab === "leaderboard" ? <LeaderboardPanel detail={data} /> : null}
           {tab === "results" ? <ResultsPanel detail={data} canResults={canResults} /> : null}
-          {tab === "engage" ? <EngagePanel detail={data} canWrite={canWrite} /> : null}
         </>
       ) : null}
     </div>
