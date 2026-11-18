@@ -660,6 +660,11 @@ export function ParticipantsPanel({
                   {p.is_featured ? <StatusBadge tone="info">Featured</StatusBadge> : null}
                 </div>
                 <p className="truncate text-xs text-text-secondary">{p.organization || "—"}</p>
+                {p.user_email || p.user_username ? (
+                  <p className="truncate text-xs text-text-secondary">
+                    Linked · {p.user_email || `@${p.user_username}`}
+                  </p>
+                ) : null}
                 <p className="text-xs text-text-secondary">{formatNumber(p.total_votes)} votes</p>
               </div>
               {canWrite ? (
@@ -742,7 +747,7 @@ function ParticipantModal({
     photo_url: participant?.photo_url ?? "",
     bio: participant?.bio ?? "",
     organization: participant?.organization ?? "",
-    user_id: participant?.user_id ?? "",
+    email: participant?.user_email || (participant?.user_username ? `@${participant.user_username}` : ""),
     is_featured: participant?.is_featured ?? false,
     social: Object.entries(participant?.social_links ?? {})
       .map(([k, v]) => `${k}: ${v}`)
@@ -750,6 +755,7 @@ function ParticipantModal({
     categories: new Set<string>(existing),
   });
   const { busy, error, run } = useAction();
+  const canSave = Boolean(f.name.trim() || f.email.trim());
   const save = () =>
     run(async () => {
       const social: Record<string, string> = {};
@@ -758,13 +764,13 @@ function ParticipantModal({
         if (idx > 0) social[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
       }
       const body = {
-        name: f.name,
+        name: f.name.trim() || undefined,
         photo_url: f.photo_url,
         bio: f.bio,
         organization: f.organization,
         is_featured: f.is_featured,
         social_links: social,
-        user_id: f.user_id.trim() || null,
+        email: f.email.trim() || null,
         // Adding a category nominates; removing is done by withdrawing the nomination.
         category_ids: [...f.categories].filter((id) => !existing.has(id)),
       };
@@ -778,7 +784,7 @@ function ParticipantModal({
       title={participant ? "Edit participant" : "New participant"}
       onClose={onClose}
       className="max-w-2xl"
-      footer={<AdminModalFooter onCancel={onClose} onSave={save} saving={busy} disabled={!f.name.trim()} />}
+      footer={<AdminModalFooter onCancel={onClose} onSave={save} saving={busy} disabled={!canSave} />}
     >
       <div className="grid gap-4 sm:grid-cols-2">
         {error ? (
@@ -786,12 +792,24 @@ function ParticipantModal({
             <AdminErrorAlert message={error} />
           </div>
         ) : null}
-        <Field label="Name">
+        <Field label="Name" hint="Optional if you link a Spojex email — filled from their profile.">
           <input className={fieldClass} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
         </Field>
         <Field label="Organization / team">
           <input className={fieldClass} value={f.organization} onChange={(e) => setF({ ...f, organization: e.target.value })} />
         </Field>
+        <div className="sm:col-span-2">
+          <Field label="Spojex email or username" hint="Links the nominee to their Spojex account for notifications.">
+            <input
+              className={fieldClass}
+              type="text"
+              autoComplete="email"
+              placeholder="name@example.com or @username"
+              value={f.email}
+              onChange={(e) => setF({ ...f, email: e.target.value })}
+            />
+          </Field>
+        </div>
         <div className="sm:col-span-2">
           <Field label="Photo URL">
             <input className={fieldClass} value={f.photo_url} onChange={(e) => setF({ ...f, photo_url: e.target.value })} />
@@ -804,9 +822,6 @@ function ParticipantModal({
         </div>
         <Field label="Social links" hint="One per line, e.g. instagram: https://…">
           <textarea className={`${fieldClass} h-20 py-2`} value={f.social} onChange={(e) => setF({ ...f, social: e.target.value })} />
-        </Field>
-        <Field label="Spojex user id (optional)" hint="Linked users get nomination and winner notifications.">
-          <input className={fieldClass} value={f.user_id} onChange={(e) => setF({ ...f, user_id: e.target.value })} />
         </Field>
         <div className="sm:col-span-2">
           <p className={labelClass}>Categories</p>
@@ -834,7 +849,7 @@ function ParticipantModal({
 }
 
 function BulkImportModal({ eventId, onClose, onDone }: { eventId: string; onClose: () => void; onDone: () => void }) {
-  const [csv, setCsv] = useState("name,organization,photo_url,bio,categories,social_instagram\n");
+  const [csv, setCsv] = useState("name,email,organization,photo_url,bio,categories,social_instagram\n");
   const [result, setResult] = useState<string | null>(null);
   const { busy, error, run } = useAction();
   const save = () =>

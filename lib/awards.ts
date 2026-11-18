@@ -54,6 +54,8 @@ export type AwardParticipantRow = {
   id: string;
   event_id: string;
   user_id: string | null;
+  user_email?: string | null;
+  user_username?: string | null;
   name: string;
   photo_url: string;
   bio: string;
