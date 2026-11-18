@@ -149,6 +149,8 @@ const nativeAppItems: NavItem[] = [
       can("events:read") ||
       can("donations:read") ||
       can("streams:read") ||
+      can("awards:read") ||
+      can("settings:read") ||
       canManageLiveEvents(can),
   },
   { href: "/admin/stadiums", label: "Stadiums", icon: Landmark, visible: (can) => can("stadiums:read") },

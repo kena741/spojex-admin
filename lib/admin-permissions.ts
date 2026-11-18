@@ -508,7 +508,8 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
       can("events:read") ||
       can("donations:read") ||
       can("streams:read") ||
-      can("events:read")
+      can("awards:read") ||
+      can("settings:read")
     );
   }
   if (pathname.startsWith("/admin/stadiums")) return can("stadiums:read");

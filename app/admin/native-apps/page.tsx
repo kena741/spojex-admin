@@ -3,9 +3,10 @@
 import { useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Building2, CalendarDays, Dumbbell, HeartHandshake, Radio } from "lucide-react";
+import { Building2, CalendarDays, Dumbbell, HeartHandshake, Radio, Trophy } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
 import { AdminErrorAlert, AdminLoadingRow, AdminReloadButton } from "@/components/admin-layout";
+import { NativeAppsVisibility } from "@/components/native-apps-visibility";
 import { adminCacheKey } from "@/lib/admin-session-cache";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { useAdminQuery } from "@/lib/use-admin-query";
@@ -128,6 +129,7 @@ const MODULE_META: Record<
   events: { title: "Events", icon: CalendarDays, permission: "events:read" },
   donations: { title: "Donations", icon: HeartHandshake, permission: "donations:read" },
   streams: { title: "Streams", icon: Radio, permission: ["streams:read", "events:read"] },
+  awards: { title: "Awards", icon: Trophy, permission: ["awards:read", "awards:write", "awards:results"] },
 };
 
 const SECONDARY_KEYS: Record<string, string[]> = {
@@ -136,6 +138,7 @@ const SECONDARY_KEYS: Record<string, string[]> = {
   events: ["sales_open", "verified_tickets_sold", "checkins"],
   donations: ["contributions_period", "closing_soon", "progress_to_targets"],
   streams: ["video_live_confirmed", "video_scheduled", "radio_playback_health"],
+  awards: ["votes_period", "voters_period", "award_upcoming"],
 };
 
 const SECONDARY_LABELS: Record<string, string> = {
@@ -155,6 +158,9 @@ const SECONDARY_LABELS: Record<string, string> = {
   video_scheduled: "Scheduled streams",
   radio_playback_health: "Playback health",
   radio_enabled: "Enabled stations",
+  votes_period: "Votes (period)",
+  voters_period: "Voters (period)",
+  award_upcoming: "Voting starts later",
 };
 
 export default function NativeAppsOverviewPage() {
@@ -227,6 +233,8 @@ export default function NativeAppsOverviewPage() {
           />
         }
       />
+
+      <NativeAppsVisibility canEdit={can("settings:write")} />
 
       <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-3">
         <label className="grid gap-1 text-xs">

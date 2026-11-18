@@ -12,6 +12,8 @@ export async function GET(request: Request) {
     "events:read",
     "donations:read",
     "streams:read",
+    "awards:read",
+    "settings:read",
     "analytics:read",
   ]);
   if (!auth.ok) return auth.error;
