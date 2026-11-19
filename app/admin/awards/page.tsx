@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { BarChart3, Plus, Trophy } from "lucide-react";
+import { BarChart3, Banknote, Plus, Trophy } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -62,6 +62,12 @@ export default function AwardsPage() {
               className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium hover:bg-muted"
             >
               <BarChart3 className="h-4 w-4" /> Analytics
+            </Link>
+            <Link
+              href="/admin/awards/revenue"
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-medium hover:bg-muted"
+            >
+              <Banknote className="h-4 w-4" /> Revenue
             </Link>
             <AdminReloadButton onClick={refresh} refreshing={refreshing} />
             {canWrite ? (

@@ -463,6 +463,11 @@ export function ParticipantsPanel({
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{p.name}</p>
                 {p.organization ? <p className="truncate text-xs text-text-secondary">{p.organization}</p> : null}
+                {p.follower_count != null ? (
+                  <p className="truncate text-xs text-text-secondary">
+                    {formatNumber(p.follower_count)} TikTok followers
+                  </p>
+                ) : null}
                 {p.user_email || p.user_username ? (
                   <p className="truncate text-xs text-text-secondary">{p.user_email || `@${p.user_username}`}</p>
                 ) : null}
@@ -630,15 +635,21 @@ function ParticipantModal({
       : null,
   );
   const [changedUser, setChangedUser] = useState(false);
+  const [followers, setFollowers] = useState(
+    participant?.follower_count != null ? String(participant.follower_count) : "",
+  );
+  const followerCount = followers.trim() === "" ? null : Number(followers.replace(/[,\s]/g, ""));
+  const followersValid = followerCount === null || (Number.isInteger(followerCount) && followerCount >= 0);
   const { busy, error, run } = useAction();
   const lookup = user?.email || (user?.username ? `@${user.username}` : "");
-  const canSave = Boolean(lookup);
+  const canSave = Boolean(lookup) && followersValid;
   const save = () =>
     run(async () => {
       // Every nominee of an event is in its one award.
       const body: Record<string, unknown> = {};
       // Name, photo and bio come from the Spojex account.
       if (!participant || changedUser) body.email = lookup;
+      if (followerCount !== (participant?.follower_count ?? null)) body.follower_count = followerCount;
       if (participant) await patchAdmin(`${API}/participants/${participant.id}`, body);
       else await postAdmin(`${API}/events/${detail.event.id}/participants`, body);
       onSaved();
@@ -675,6 +686,24 @@ function ParticipantModal({
             />
           )}
           <p className="mt-1 text-xs text-text-secondary">Name, photo and bio come from their Spojex profile.</p>
+        </div>
+        <div>
+          <label className={labelClass} htmlFor="nominee-followers">
+            TikTok followers
+          </label>
+          <input
+            id="nominee-followers"
+            inputMode="numeric"
+            className={fieldClass}
+            placeholder="e.g. 91100"
+            value={followers}
+            onChange={(e) => setFollowers(e.target.value)}
+          />
+          <p className={`mt-1 text-xs ${followersValid ? "text-text-secondary" : "text-red-600"}`}>
+            {followersValid
+              ? "Shown on the nominee in the app as a follower count (e.g. 91.1k). Leave empty to hide it."
+              : "Enter a whole number, e.g. 91100."}
+          </p>
         </div>
       </div>
     </AdminModal>

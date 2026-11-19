@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import { AdminErrorAlert, AdminLoadingRow, AdminReloadButton } from "@/components/admin-layout";
@@ -11,6 +11,7 @@ import {
   ParticipantsPanel,
   ResultsPanel,
 } from "@/components/awards/panels";
+import { EventRevenuePanel } from "@/components/awards/revenue";
 import { adminCacheKey } from "@/lib/admin-session-cache";
 import { type AwardEventDetail } from "@/lib/awards";
 import { adminFetch } from "@/lib/hooks";
@@ -23,6 +24,7 @@ const TABS = [
   { id: "participants", label: "Nominees" },
   { id: "packages", label: "Vote packages" },
   { id: "leaderboard", label: "Votes" },
+  { id: "revenue", label: "Revenue" },
   { id: "results", label: "Winners" },
 ] as const;
 
@@ -41,6 +43,12 @@ export default function AwardEventPage() {
   const canWrite = can("awards:write");
   const canResults = can("awards:results");
   const [tab, setTab] = useState<TabId>("settings");
+  // Open a tab from the link (e.g. ?tab=revenue from the revenue page).
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("tab");
+    const match = TABS.find((t) => t.id === wanted);
+    if (match) setTab(match.id);
+  }, []);
   const { data, loading, refreshing, error, refresh } = useAdminQuery<AwardEventDetail>({
     key: adminCacheKey(["awards", "event", id]),
     fetcher: () => loadDetail(id),
@@ -79,6 +87,7 @@ export default function AwardEventPage() {
           {tab === "participants" ? <ParticipantsPanel detail={data} canWrite={canWrite} onChanged={refresh} /> : null}
           {tab === "packages" ? <PackagesPanel detail={data} canWrite={canWrite} onChanged={refresh} /> : null}
           {tab === "leaderboard" ? <LeaderboardPanel detail={data} /> : null}
+          {tab === "revenue" ? <EventRevenuePanel eventId={data.event.id} /> : null}
           {tab === "results" ? <ResultsPanel detail={data} canResults={canResults} /> : null}
         </>
       ) : null}

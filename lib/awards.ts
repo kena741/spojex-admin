@@ -66,6 +66,8 @@ export type AwardParticipantRow = {
   organization: string;
   social_links: Record<string, string>;
   is_featured: boolean;
+  /** Admin-entered TikTok followers; shown on nominee cards in the app. */
+  follower_count?: number | null;
   total_votes: number;
   nominations: AwardNominationRef[];
 };
