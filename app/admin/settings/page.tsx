@@ -297,6 +297,12 @@ export default function GlobalSettingsPage() {
       if (tab === "payment" && (!Number.isFinite(rate) || rate <= 0)) {
         throw new Error("Coins per 1 Birr must be greater than 0.");
       }
+      const walletPay = asObject(payment.wallet);
+      const minRaw = String(walletPay.minWithdrawal ?? "").trim();
+      const minParsed = minRaw === "" ? null : Number(minRaw);
+      if (minParsed != null && (!Number.isFinite(minParsed) || minParsed <= 0)) {
+        throw new Error("Minimum withdrawal must be a number above 0.");
+      }
       const chapaPay = asObject(payment.chapa);
       const feeRaw = String(chapaPay.feePercent ?? "").trim();
       const feeParsed = feeRaw === "" ? null : Number(feeRaw);
@@ -314,6 +320,7 @@ export default function GlobalSettingsPage() {
         paymentSettings: {
           ...payment,
           chapa: { ...chapaPay, feePercent: feeParsed },
+          wallet: { ...walletPay, minWithdrawal: minParsed },
         },
         // Only touch coin_settings from the Payment tab (int PK path needs BE coerce).
         ...(tab === "payment" && Number.isFinite(rate) && rate > 0
@@ -722,11 +729,20 @@ export default function GlobalSettingsPage() {
               {tab === "constants" && (
                 <Section title="Constants">
                   <div className="grid gap-4 md:grid-cols-2">
+                    {/* Enforced by the backend on every withdrawal request
+                        (payment.wallet.minWithdrawal). Empty means ETB 10. */}
                     <Field
-                      label="Minimum wallet balance to keep"
-                      value={String(constants.minimum_wallet_balance_to_keep ?? "")}
+                      label="Minimum withdrawal (ETB)"
+                      value={
+                        asObject(payment.wallet).minWithdrawal == null
+                          ? ""
+                          : String(asObject(payment.wallet).minWithdrawal)
+                      }
                       onChange={(v) =>
-                        setConstants({ ...constants, minimum_wallet_balance_to_keep: v })
+                        setPayment({
+                          ...payment,
+                          wallet: { ...asObject(payment.wallet), minWithdrawal: v },
+                        })
                       }
                       disabled={!canWrite}
                     />

@@ -15,7 +15,7 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
-import { patchAdmin } from "@/lib/hooks";
+import { adminFetch, patchAdmin } from "@/lib/hooks";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { useAdminQuery } from "@/lib/use-admin-query";
@@ -28,14 +28,55 @@ type PayoutRow = {
   amount: number;
   coins?: number;
   etb_per_coin?: number;
+  /** Withdrawals: admin Transaction fee taken off, and what the bank gets. */
+  fee_percent?: number;
+  fee_amount?: number;
+  payout_amount?: number;
   currency: string;
   status: string;
   created_at: string;
   updated_at: string;
   bank_name?: string;
+  account_name?: string;
   account_number?: string;
   admin_note?: string;
   users?: { id: string; display_name: string; email?: string | null } | null;
+  /** Withdrawals only: who asked (gym owner or provider) and their contacts. */
+  owner?: {
+    email?: string;
+    phone?: string;
+    gyms?: string;
+  } | null;
+  /** Withdrawals only: the requester's wallet right now. */
+  wallet?: {
+    available: number;
+    withdrawable: number;
+    held: number;
+    lifetime_earned: number;
+  } | null;
+};
+
+type WithdrawalApiRow = {
+  id: string;
+  user_id: string;
+  amount: number;
+  fee_percent?: number;
+  fee_amount?: number;
+  payout_amount?: number;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  bank_name?: string;
+  account_name?: string;
+  account_number?: string;
+  admin_note?: string;
+  owner?: {
+    display_name?: string;
+    email?: string;
+    phone?: string;
+    gyms?: string;
+  };
+  wallet?: PayoutRow["wallet"];
 };
 
 function money(amount: number, currency = "ETB") {
@@ -64,7 +105,18 @@ export default function FinancePayoutsPage() {
   const searchParams = useSearchParams();
   const { can } = useAdminPermissions();
   const canResolveWithdrawals =
-    can("withdrawals:write") || can("requests:write");
+    can("withdrawals:write") ||
+    can("withdrawals:approve") ||
+    can("withdrawals:execute") ||
+    can("requests:write");
+  const canApproveWithdrawals =
+    can("withdrawals:write") ||
+    can("withdrawals:approve") ||
+    can("requests:write");
+  const canPayWithdrawals =
+    can("withdrawals:write") ||
+    can("withdrawals:execute") ||
+    can("requests:write");
   const canResolveCoins = can("coins:write");
 
   const typeFilter = searchParams.get("type") || "all";
@@ -98,42 +150,51 @@ export default function FinancePayoutsPage() {
     fetcher: async () => {
       const client = getSpojexClient();
       const [wRes, cRes] = await Promise.all([
-        client
-          .from("withdrawal_requests")
-          .select("*, users:user_id(id, display_name, email)")
-          .order("created_at", { ascending: false })
-          .limit(300),
+        // Enriched by the API: owner contacts, owned gyms, live wallet balance.
+        adminFetch("/api/admin/withdrawals?limit=300").then(async (res) => {
+          const body = (await res.json().catch(() => ({}))) as {
+            data?: WithdrawalApiRow[];
+            error?: string;
+          };
+          if (!res.ok) throw new Error(body.error || "Failed to load withdrawals");
+          return body.data ?? [];
+        }),
         client
           .from("coin_redemptions")
           .select("*, users:user_id(id, display_name, email)")
           .order("created_at", { ascending: false })
           .limit(300),
       ]);
-      if (wRes.error) throw wRes.error;
       if (
         cRes.error &&
         !/does not exist|schema cache/i.test(cRes.error.message)
       )
         throw cRes.error;
 
-      const withdrawals: PayoutRow[] = (wRes.data ?? []).map(
-        (r: Record<string, unknown>) => ({
-          id: String(r.id),
-          type: "withdrawal" as const,
-          user_id: String(r.user_id),
-          amount: Number(r.amount || 0),
-          currency: "ETB",
-          status: String(r.status),
-          created_at: String(r.created_at),
-          updated_at: String(r.updated_at),
-          bank_name: r.bank_name ? String(r.bank_name) : undefined,
-          account_number: r.account_number
-            ? String(r.account_number)
-            : undefined,
-          admin_note: r.admin_note ? String(r.admin_note) : undefined,
-          users: (r.users as PayoutRow["users"]) ?? null,
-        }),
-      );
+      const withdrawals: PayoutRow[] = wRes.map((r) => ({
+        id: String(r.id),
+        type: "withdrawal" as const,
+        user_id: String(r.user_id),
+        amount: Number(r.amount || 0),
+        fee_percent: Number(r.fee_percent || 0),
+        fee_amount: Number(r.fee_amount || 0),
+        payout_amount: Number(r.payout_amount ?? r.amount ?? 0),
+        currency: "ETB",
+        status: String(r.status),
+        created_at: String(r.created_at),
+        updated_at: String(r.updated_at),
+        bank_name: r.bank_name || undefined,
+        account_name: r.account_name || undefined,
+        account_number: r.account_number || undefined,
+        admin_note: r.admin_note || undefined,
+        users: {
+          id: String(r.user_id),
+          display_name: r.owner?.display_name || "",
+          email: r.owner?.email || null,
+        },
+        owner: r.owner ?? null,
+        wallet: r.wallet ?? null,
+      }));
       const redemptions: PayoutRow[] = (cRes.data ?? []).map(
         (r: Record<string, unknown>) => ({
           id: String(r.id),
@@ -185,8 +246,12 @@ export default function FinancePayoutsPage() {
     const canAct =
       row.type === "withdrawal" ? canResolveWithdrawals : canResolveCoins;
     if (!canAct) return;
+    const send =
+      row.type === "withdrawal" && row.payout_amount != null
+        ? `Send ${money(row.payout_amount)} to the bank (after the ${money(row.fee_amount ?? 0)} fee). `
+        : "";
     const ref = window.prompt(
-      "Transfer reference (required). Marking paid records an external transfer - it does not send money.",
+      `${send}Transfer reference (required). Marking paid records an external transfer - it does not send money.`,
     );
     if (!ref?.trim()) return;
     setBusyId(row.id);
@@ -194,12 +259,12 @@ export default function FinancePayoutsPage() {
     try {
       if (row.type === "withdrawal") {
         await patchAdmin(`/api/admin/withdrawals/${row.id}`, {
-          status: "paid",
+          action: "paid",
           admin_note: `Transfer ref: ${ref.trim()}`,
         });
       } else {
         await patchAdmin(`/api/admin/coin-redemptions/${row.id}`, {
-          status: "paid",
+          action: "paid",
           admin_note: `Transfer ref: ${ref.trim()}`,
         });
       }
@@ -224,15 +289,40 @@ export default function FinancePayoutsPage() {
     try {
       if (row.type === "withdrawal") {
         await patchAdmin(`/api/admin/withdrawals/${row.id}`, {
-          status: "rejected",
+          action: "reject",
           admin_note: reason.trim(),
         });
       } else {
         await patchAdmin(`/api/admin/coin-redemptions/${row.id}`, {
-          status: "rejected",
+          action: "rejected",
           admin_note: reason.trim(),
         });
       }
+      invalidateAdminCache("finance");
+      await load();
+      setSelected(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Update failed");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  /** Withdrawals only: review step before the bank transfer. */
+  const approve = async (row: PayoutRow) => {
+    if (row.type !== "withdrawal" || !canApproveWithdrawals) return;
+    if (
+      !window.confirm(
+        `Approve ${money(row.amount)} for ${row.users?.display_name || "this user"}? The amount stays held until you mark it paid.`,
+      )
+    )
+      return;
+    setBusyId(row.id);
+    setError(null);
+    try {
+      await patchAdmin(`/api/admin/withdrawals/${row.id}`, {
+        action: "approve",
+      });
       invalidateAdminCache("finance");
       await load();
       setSelected(null);
@@ -258,8 +348,9 @@ export default function FinancePayoutsPage() {
       />
 
       <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-text-secondary">
-        “Mark paid” confirms you already transferred funds outside Spojex. It
-        does not execute a bank transfer.
+        Withdrawals: approve the request, transfer the money, then “Record as
+        paid” with the transfer reference. Recording does not send money. The
+        amount stays held from the wallet until paid; rejecting returns it.
       </p>
 
       {error ? (
@@ -300,6 +391,7 @@ export default function FinancePayoutsPage() {
           >
             <option value="all">All statuses</option>
             <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
             <option value="paid">Paid</option>
             <option value="rejected">Rejected</option>
           </AdminSelect>
@@ -345,6 +437,11 @@ export default function FinancePayoutsPage() {
                             ? "Withdrawal"
                             : "Coin redemption"}
                         </span>
+                        {row.owner?.gyms ? (
+                          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase text-text-secondary">
+                            Gym owner
+                          </span>
+                        ) : null}
                       </div>
                       <p className="truncate text-xs text-text-secondary">
                         {row.bank_name || "Bank"} ·{" "}
@@ -356,6 +453,11 @@ export default function FinancePayoutsPage() {
                       <p className="text-sm font-semibold tabular-nums">
                         {money(row.amount)}
                       </p>
+                      {row.fee_amount ? (
+                        <p className="text-[10px] text-text-hint">
+                          Send {money(row.payout_amount ?? row.amount)}
+                        </p>
+                      ) : null}
                       {row.coins != null ? (
                         <p className="text-[10px] text-text-hint">
                           {row.coins} coins @ {row.etb_per_coin}/coin
@@ -401,6 +503,34 @@ export default function FinancePayoutsPage() {
                   </Link>
                 </dd>
               </div>
+              {selected.owner?.email ? (
+                <div className="flex justify-between gap-2">
+                  <dt className="text-text-hint">Email</dt>
+                  <dd className="break-all text-right">
+                    {selected.owner.email}
+                  </dd>
+                </div>
+              ) : null}
+              {selected.owner?.phone ? (
+                <div className="flex justify-between gap-2">
+                  <dt className="text-text-hint">Phone</dt>
+                  <dd>{selected.owner.phone}</dd>
+                </div>
+              ) : null}
+              {selected.owner?.gyms ? (
+                <div className="flex justify-between gap-2">
+                  <dt className="text-text-hint">Gyms owned</dt>
+                  <dd className="text-right">{selected.owner.gyms}</dd>
+                </div>
+              ) : null}
+              <div className="flex justify-between gap-2">
+                <dt className="text-text-hint">Status</dt>
+                <dd>
+                  <StatusBadge tone={requestTone(selected.status)}>
+                    {selected.status}
+                  </StatusBadge>
+                </dd>
+              </div>
               <div className="flex justify-between gap-2">
                 <dt className="text-text-hint">Type</dt>
                 <dd>
@@ -413,6 +543,22 @@ export default function FinancePayoutsPage() {
                 <dt className="text-text-hint">Amount</dt>
                 <dd className="font-semibold">{money(selected.amount)}</dd>
               </div>
+              {selected.type === "withdrawal" ? (
+                <>
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-text-hint">
+                      Chapa fee ({Number(selected.fee_percent || 0)}%)
+                    </dt>
+                    <dd>− {money(selected.fee_amount ?? 0)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-text-hint">Send to bank</dt>
+                    <dd className="font-semibold">
+                      {money(selected.payout_amount ?? selected.amount)}
+                    </dd>
+                  </div>
+                </>
+              ) : null}
               {selected.coins != null ? (
                 <div className="flex justify-between gap-2">
                   <dt className="text-text-hint">Conversion snapshot</dt>
@@ -427,6 +573,32 @@ export default function FinancePayoutsPage() {
                   {selected.bank_name} {maskAccount(selected.account_number)}
                 </dd>
               </div>
+              {selected.account_name ? (
+                <div className="flex justify-between gap-2">
+                  <dt className="text-text-hint">Account name</dt>
+                  <dd>{selected.account_name}</dd>
+                </div>
+              ) : null}
+              {selected.wallet ? (
+                <>
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-text-hint">Wallet balance</dt>
+                    <dd>{money(selected.wallet.available)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-text-hint">Withdrawable now</dt>
+                    <dd>{money(selected.wallet.withdrawable)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-text-hint">Held for payouts</dt>
+                    <dd>{money(selected.wallet.held)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <dt className="text-text-hint">Lifetime earned</dt>
+                    <dd>{money(selected.wallet.lifetime_earned)}</dd>
+                  </div>
+                </>
+              ) : null}
               <div className="flex justify-between gap-2">
                 <dt className="text-text-hint">Requested</dt>
                 <dd>{formatDateTime(selected.created_at)}</dd>
@@ -443,26 +615,57 @@ export default function FinancePayoutsPage() {
               ) : null}
             </dl>
 
-            {selected.status === "pending" ? (
-              <div className="mt-5 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={busyId === selected.id}
-                  onClick={() => void markPaid(selected)}
-                  className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-50"
-                >
-                  Record as paid
-                </button>
-                <button
-                  type="button"
-                  disabled={busyId === selected.id}
-                  onClick={() => void reject(selected)}
-                  className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 disabled:opacity-50"
-                >
-                  Reject
-                </button>
-              </div>
-            ) : null}
+            {(() => {
+              const isWithdrawal = selected.type === "withdrawal";
+              // Withdrawals: pending → approved → paid. Coins: pending → paid.
+              const showApprove =
+                isWithdrawal &&
+                selected.status === "pending" &&
+                canApproveWithdrawals;
+              const showPaid = isWithdrawal
+                ? selected.status === "approved" && canPayWithdrawals
+                : selected.status === "pending" && canResolveCoins;
+              const showReject = isWithdrawal
+                ? (selected.status === "pending" ||
+                    selected.status === "approved") &&
+                  canApproveWithdrawals
+                : selected.status === "pending" && canResolveCoins;
+              if (!showApprove && !showPaid && !showReject) return null;
+              return (
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {showApprove ? (
+                    <button
+                      type="button"
+                      disabled={busyId === selected.id}
+                      onClick={() => void approve(selected)}
+                      className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                    >
+                      Approve
+                    </button>
+                  ) : null}
+                  {showPaid ? (
+                    <button
+                      type="button"
+                      disabled={busyId === selected.id}
+                      onClick={() => void markPaid(selected)}
+                      className="rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                    >
+                      Record as paid
+                    </button>
+                  ) : null}
+                  {showReject ? (
+                    <button
+                      type="button"
+                      disabled={busyId === selected.id}
+                      onClick={() => void reject(selected)}
+                      className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 disabled:opacity-50"
+                    >
+                      Reject
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })()}
 
             <Link
               href={`/admin/finance/transactions?q=${encodeURIComponent(selected.id)}`}

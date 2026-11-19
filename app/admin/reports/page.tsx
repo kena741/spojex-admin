@@ -144,6 +144,28 @@ function targetLabel(row: ReportItem) {
   return "-";
 }
 
+/** Admin page for the reported person, service or gym, when there is one. */
+function targetHref(row: ReportItem): string | null {
+  const id = row.target_id;
+  if (row.target_type === "user") {
+    const uid = id || row.target_user_id;
+    return uid ? `/admin/people/${uid}` : null;
+  }
+  if (row.target_type === "service") {
+    const sid = id || row.target_service_id;
+    return sid ? `/admin/services/${sid}` : null;
+  }
+  if (row.target_type === "gym") return id ? `/admin/gyms/${id}` : null;
+  return null;
+}
+
+/** The person behind a reported service (provider) or gym (owner). */
+function ownerLabel(type: string) {
+  if (type === "service") return "Provider";
+  if (type === "gym") return "Owner";
+  return null;
+}
+
 function statusTone(status: string) {
   if (status === "open") return "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200";
   if (status === "in_review") return "bg-sky-100 text-sky-900 dark:bg-sky-950/40 dark:text-sky-200";
@@ -455,7 +477,7 @@ function ReportsPageInner() {
                           writeParams({ id: selected ? null : row.id })
                         }
                       >
-                        <td className="px-4 py-3 font-medium capitalize">{row.target_type}</td>
+                        <td className="px-4 py-3 font-medium">{targetTypeLabel(row.target_type)}</td>
                         <td className="px-4 py-3">
                           <div className="font-medium">{row.reason || row.reason_code || "-"}</div>
                           {row.details ? (
@@ -465,7 +487,17 @@ function ReportsPageInner() {
                           ) : null}
                         </td>
                         <td className="px-4 py-3">
-                          <span className="font-medium">{targetLabel(row)}</span>
+                          {targetHref(row) ? (
+                            <Link
+                              href={targetHref(row)!}
+                              onClick={(e) => e.stopPropagation()}
+                              className="font-medium text-primary hover:underline"
+                            >
+                              {targetLabel(row)}
+                            </Link>
+                          ) : (
+                            <span className="font-medium">{targetLabel(row)}</span>
+                          )}
                           {row.target_removed ? (
                             <p className="text-[11px] text-amber-700">Target removed</p>
                           ) : null}
@@ -555,13 +587,36 @@ function ReportsPageInner() {
               <div className="space-y-3 text-sm">
                 <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
                   <dt className="text-text-secondary">Type</dt>
-                  <dd className="capitalize">{detail.target_type}</dd>
+                  <dd>{targetTypeLabel(detail.target_type)}</dd>
                   <dt className="text-text-secondary">Reason</dt>
                   <dd>{detail.reason || detail.reason_code || "-"}</dd>
                   <dt className="text-text-secondary">Status</dt>
                   <dd className="capitalize">{detail.status?.replace(/_/g, " ")}</dd>
+                  <dt className="text-text-secondary">Reported</dt>
+                  <dd>{detail.created_at ? formatDateTime(detail.created_at) : "-"}</dd>
                   <dt className="text-text-secondary">Target</dt>
-                  <dd>{targetLabel(detail)}</dd>
+                  <dd>
+                    {targetHref(detail) ? (
+                      <Link href={targetHref(detail)!} className="text-primary hover:underline">
+                        {targetLabel(detail)}
+                      </Link>
+                    ) : (
+                      targetLabel(detail)
+                    )}
+                  </dd>
+                  {ownerLabel(detail.target_type) && detail.target_user_id ? (
+                    <>
+                      <dt className="text-text-secondary">{ownerLabel(detail.target_type)}</dt>
+                      <dd>
+                        <Link
+                          href={`/admin/people/${detail.target_user_id}`}
+                          className="text-primary hover:underline"
+                        >
+                          {userLabel(detail.target, detail.target_user_id)}
+                        </Link>
+                      </dd>
+                    </>
+                  ) : null}
                 </dl>
                 <div>
                   <h4 className="text-xs font-semibold uppercase text-text-secondary">Details</h4>

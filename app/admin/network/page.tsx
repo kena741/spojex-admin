@@ -394,7 +394,7 @@ function NetworkPageInner() {
                               : "No connections match"
                           }
                           description={
-                            status === "pending" ? undefined : "Try another filter or clear search."
+                            status === "pending" ? "" : "Try another filter or clear search."
                           }
                         />
                       </td>
