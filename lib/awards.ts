@@ -58,7 +58,6 @@ export type AwardParticipantRow = {
   user_username?: string | null;
   name: string;
   photo_url: string;
-  bio: string;
   organization: string;
   social_links: Record<string, string>;
   is_featured: boolean;

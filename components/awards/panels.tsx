@@ -790,7 +790,6 @@ function ParticipantModal({
       : null,
   );
   const [changedUser, setChangedUser] = useState(false);
-  const [bio, setBio] = useState(participant?.bio ?? "");
   const [categories, setCategories] = useState(new Set<string>(existing));
   const { busy, error, run } = useAction();
   const lookup = user?.email || (user?.username ? `@${user.username}` : "");
@@ -798,11 +797,10 @@ function ParticipantModal({
   const save = () =>
     run(async () => {
       const body: Record<string, unknown> = {
-        bio,
         // Adding a category nominates; removing is done by withdrawing the nomination.
         category_ids: [...categories].filter((id) => !existing.has(id)),
       };
-      // Name and photo are refreshed from the Spojex account.
+      // Name, photo and bio come from the Spojex account.
       if (!participant || changedUser) body.email = lookup;
       if (participant) await patchAdmin(`${API}/participants/${participant.id}`, body);
       else await postAdmin(`${API}/events/${detail.event.id}/participants`, body);
@@ -839,16 +837,8 @@ function ParticipantModal({
               }}
             />
           )}
-          <p className="mt-1 text-xs text-text-secondary">Name and photo come from their Spojex profile.</p>
+          <p className="mt-1 text-xs text-text-secondary">Name, photo and bio come from their Spojex profile.</p>
         </div>
-        <Field label="Short bio">
-          <textarea
-            className={`${fieldClass} h-20 py-2`}
-            maxLength={300}
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
-          />
-        </Field>
         <div>
           <p className={labelClass}>Categories</p>
           <div className="flex flex-wrap gap-3">
@@ -874,7 +864,7 @@ function ParticipantModal({
 }
 
 function BulkImportModal({ eventId, onClose, onDone }: { eventId: string; onClose: () => void; onDone: () => void }) {
-  const [csv, setCsv] = useState("email,categories,bio\n");
+  const [csv, setCsv] = useState("email,categories\n");
   const { busy, error, run } = useAction();
   const save = () =>
     run(async () => {
@@ -892,7 +882,7 @@ function BulkImportModal({ eventId, onClose, onDone }: { eventId: string; onClos
       <div className="space-y-3">
         {error ? <AdminErrorAlert message={error} /> : null}
         <p className="text-xs text-text-secondary">
-          One nominee per row, by Spojex email. Name and photo come from their profile. Separate several
+          One nominee per row, by Spojex email. Name, photo and bio come from their profile. Separate several
           categories with <code>|</code>.
         </p>
         <input
