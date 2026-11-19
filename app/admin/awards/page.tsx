@@ -79,7 +79,7 @@ export default function AwardsPage() {
       {error ? <AdminErrorAlert message={error} /> : null}
       {loading && !data ? <AdminLoadingRow label="Loading award events…" /> : null}
       {!loading && events.length === 0 && !error ? (
-        <AdminEmpty title="No award events yet" description="Create an event, add categories and nominees, then publish it." />
+        <AdminEmpty title="No award events yet" description="Create an event, add nominees, then publish it. Each event is one award." />
       ) : null}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {events.map((e) => (
@@ -191,7 +191,7 @@ function CreateEventModal({
             <input type="datetime-local" className={fieldClass} value={votingEnd} onChange={(e) => setVotingEnd(e.target.value)} />
           </div>
         </div>
-        <p className="text-xs text-text-secondary">Saved as a draft. Add categories and nominees, then publish.</p>
+        <p className="text-xs text-text-secondary">Saved as a draft. Add nominees, then publish. Each event is one award.</p>
       </div>
     </AdminModal>
   );

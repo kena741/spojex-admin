@@ -20,8 +20,6 @@ import {
   openVotingPatch,
   statusTone,
   toLocalInput,
-  votingStateLabel,
-  type AwardCategoryRow,
   type AwardEventDetail,
   type AwardEventRow,
   type AwardIntegrity,
@@ -156,6 +154,9 @@ function toForm(e: AwardEventRow) {
     voting_starts_at: toLocalInput(e.voting_starts_at),
     voting_ends_at: toLocalInput(e.voting_ends_at),
     leaderboard_public: e.leaderboard_public !== false,
+    free_votes_per_period: String(e.free_votes_per_period ?? 1),
+    free_vote_period: e.free_vote_period ?? "daily",
+    paid_votes_enabled: e.paid_votes_enabled ?? true,
   };
 }
 
@@ -188,6 +189,9 @@ export function EventSettingsPanel({
         voting_starts_at: fromLocalInput(form.voting_starts_at),
         voting_ends_at: fromLocalInput(form.voting_ends_at),
         leaderboard_public: form.leaderboard_public,
+        free_votes_per_period: Math.max(0, Number(form.free_votes_per_period) || 0),
+        free_vote_period: form.free_vote_period,
+        paid_votes_enabled: form.paid_votes_enabled,
       });
       onSaved();
     });
@@ -262,7 +266,7 @@ export function EventSettingsPanel({
       </div>
       {!event.is_published && canWrite ? (
         <p className="text-xs text-text-secondary">
-          Add categories and nominees, then publish. Voting opens on the start date, or when you press Open voting.
+          Add nominees, then publish. Voting opens on the start date, or when you press Open voting.
         </p>
       ) : null}
       <div className="grid gap-4 md:grid-cols-2">
@@ -311,13 +315,43 @@ export function EventSettingsPanel({
             onChange={(e) => set({ voting_ends_at: e.target.value })}
           />
         </Field>
+        <Field label="Free votes per voter" hint="0 turns free voting off.">
+          <input
+            type="number"
+            min={0}
+            className={fieldClass}
+            disabled={d}
+            value={form.free_votes_per_period}
+            onChange={(e) => set({ free_votes_per_period: e.target.value })}
+          />
+        </Field>
+        <Field label="Free votes reset">
+          <select
+            className={fieldClass}
+            disabled={d}
+            value={form.free_vote_period}
+            onChange={(e) => set({ free_vote_period: e.target.value as "daily" | "weekly" | "event" })}
+          >
+            <option value="daily">Every day</option>
+            <option value="weekly">Every week</option>
+            <option value="event">Never (once per event)</option>
+          </select>
+        </Field>
       </div>
-      <Check
-        label="Show vote counts while voting is open"
-        checked={form.leaderboard_public}
-        disabled={d}
-        onChange={(v) => set({ leaderboard_public: v })}
-      />
+      <div className="flex flex-wrap gap-6">
+        <Check
+          label="Show vote counts while voting is open"
+          checked={form.leaderboard_public}
+          disabled={d}
+          onChange={(v) => set({ leaderboard_public: v })}
+        />
+        <Check
+          label="Allow paid votes"
+          checked={form.paid_votes_enabled}
+          disabled={d}
+          onChange={(v) => set({ paid_votes_enabled: v })}
+        />
+      </div>
       {canWrite ? (
         <div className="flex justify-end">
           <button type="button" className={primaryBtn} disabled={busy} onClick={save}>
@@ -368,197 +402,6 @@ function AnnounceBox({ eventId, canWrite }: { eventId: string; canWrite: boolean
   );
 }
 
-// ── Categories ──────────────────────────────────────────────────────────────
-
-type CategoryForm = {
-  name: string;
-  description: string;
-  free_votes_per_period: string;
-  free_vote_period: string;
-  paid_votes_enabled: boolean;
-  is_active: boolean;
-};
-
-function categoryForm(c?: AwardCategoryRow): CategoryForm {
-  return {
-    name: c?.name ?? "",
-    description: c?.description ?? "",
-    free_votes_per_period: String(c?.free_votes_per_period ?? 1),
-    free_vote_period: c?.free_vote_period ?? "daily",
-    paid_votes_enabled: c?.paid_votes_enabled ?? true,
-    is_active: c?.is_active ?? true,
-  };
-}
-
-const PERIOD_SHORT: Record<string, string> = { daily: "day", weekly: "week", event: "event" };
-
-export function CategoriesPanel({
-  detail,
-  canWrite,
-  onChanged,
-}: {
-  detail: AwardEventDetail;
-  canWrite: boolean;
-  onChanged: () => void;
-}) {
-  const [editing, setEditing] = useState<AwardCategoryRow | "new" | null>(null);
-  const { error, run } = useAction();
-  const remove = (c: AwardCategoryRow) => {
-    if (!window.confirm(`Delete “${c.name}”? A category with votes can only be turned off.`)) return;
-    void run(async () => {
-      await deleteAdmin(`${API}/categories/${c.id}`);
-      onChanged();
-    });
-  };
-  return (
-    <div className="space-y-3">
-      {error ? <AdminErrorAlert message={error} /> : null}
-      {canWrite ? (
-        <button type="button" className={primaryBtn} onClick={() => setEditing("new")}>
-          <Plus className="h-4 w-4" /> Add category
-        </button>
-      ) : null}
-      {detail.categories.length === 0 ? (
-        <AdminEmpty title="No categories" description="Add categories like Best Player or Goal of the Season." />
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-card">
-          <table className="w-full min-w-[560px] text-sm">
-            <thead className="bg-muted text-left text-xs text-text-secondary">
-              <tr>
-                <th className="px-4 py-2">Category</th>
-                <th className="px-4 py-2">Voting</th>
-                <th className="px-4 py-2">Free votes</th>
-                <th className="px-4 py-2">Nominees</th>
-                <th className="px-4 py-2">Votes</th>
-                <th className="px-4 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {detail.categories.map((c) => {
-                const state = c.is_active ? votingStateLabel(c.voting_state) : { label: "Off", tone: "warning" as const };
-                return (
-                  <tr key={c.id} className="border-t border-border">
-                    <td className="px-4 py-2 font-medium">{c.name}</td>
-                    <td className="px-4 py-2">
-                      <StatusBadge tone={state.tone}>{state.label}</StatusBadge>
-                    </td>
-                    <td className="px-4 py-2">
-                      {c.free_votes_per_period > 0
-                        ? `${c.free_votes_per_period} per ${PERIOD_SHORT[c.free_vote_period] ?? c.free_vote_period}`
-                        : "Off"}
-                    </td>
-                    <td className="px-4 py-2">{formatNumber(c.nominee_count)}</td>
-                    <td className="px-4 py-2">{formatNumber(c.total_votes)}</td>
-                    <td className="px-4 py-2 text-right">
-                      {canWrite ? (
-                        <div className="flex justify-end gap-1">
-                          <button type="button" className={btn} onClick={() => setEditing(c)} aria-label="Edit">
-                            <Pencil className="h-4 w-4" />
-                          </button>
-                          <button type="button" className={btn} onClick={() => remove(c)} aria-label="Delete">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ) : null}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {editing ? (
-        <CategoryModal
-          eventId={detail.event.id}
-          category={editing === "new" ? undefined : editing}
-          onClose={() => setEditing(null)}
-          onSaved={() => {
-            setEditing(null);
-            onChanged();
-          }}
-        />
-      ) : null}
-    </div>
-  );
-}
-
-function CategoryModal({
-  eventId,
-  category,
-  onClose,
-  onSaved,
-}: {
-  eventId: string;
-  category?: AwardCategoryRow;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [f, setF] = useState(() => categoryForm(category));
-  const { busy, error, run } = useAction();
-  const set = (patch: Partial<CategoryForm>) => setF((cur) => ({ ...cur, ...patch }));
-  const save = () =>
-    run(async () => {
-      const body = {
-        name: f.name,
-        description: f.description,
-        free_votes_per_period: Number(f.free_votes_per_period) || 0,
-        free_vote_period: f.free_vote_period,
-        paid_votes_enabled: f.paid_votes_enabled,
-        is_active: f.is_active,
-      };
-      if (category) await patchAdmin(`${API}/categories/${category.id}`, body);
-      else await postAdmin(`${API}/events/${eventId}/categories`, body);
-      onSaved();
-    });
-  return (
-    <AdminModal
-      open
-      title={category ? "Edit category" : "New category"}
-      onClose={onClose}
-      footer={<AdminModalFooter onCancel={onClose} onSave={save} saving={busy} disabled={!f.name.trim()} />}
-    >
-      <div className="grid gap-4 sm:grid-cols-2">
-        {error ? (
-          <div className="sm:col-span-2">
-            <AdminErrorAlert message={error} />
-          </div>
-        ) : null}
-        <div className="sm:col-span-2">
-          <Field label="Name">
-            <input className={fieldClass} value={f.name} onChange={(e) => set({ name: e.target.value })} />
-          </Field>
-        </div>
-        <div className="sm:col-span-2">
-          <Field label="Description">
-            <textarea className={`${fieldClass} h-20 py-2`} value={f.description} onChange={(e) => set({ description: e.target.value })} />
-          </Field>
-        </div>
-        <Field label="Free votes per voter" hint="0 turns free voting off.">
-          <input
-            type="number"
-            min={0}
-            className={fieldClass}
-            value={f.free_votes_per_period}
-            onChange={(e) => set({ free_votes_per_period: e.target.value })}
-          />
-        </Field>
-        <Field label="Resets">
-          <select className={fieldClass} value={f.free_vote_period} onChange={(e) => set({ free_vote_period: e.target.value })}>
-            <option value="daily">Every day</option>
-            <option value="weekly">Every week</option>
-            <option value="event">Never (once per event)</option>
-          </select>
-        </Field>
-        <div className="flex flex-wrap gap-6 sm:col-span-2">
-          <Check label="Allow paid votes" checked={f.paid_votes_enabled} onChange={(v) => set({ paid_votes_enabled: v })} />
-          <Check label="Active" checked={f.is_active} onChange={(v) => set({ is_active: v })} />
-        </div>
-      </div>
-    </AdminModal>
-  );
-}
-
 // ── Nominees ────────────────────────────────────────────────────────────────
 
 export function ParticipantsPanel({
@@ -573,8 +416,6 @@ export function ParticipantsPanel({
   const [editing, setEditing] = useState<AwardParticipantRow | "new" | null>(null);
   const [importing, setImporting] = useState(false);
   const { error, run } = useAction();
-  const catName = (id: string) => detail.categories.find((c) => c.id === id)?.name ?? "—";
-
   const setNomination = (nominationId: string, status: string) =>
     run(async () => {
       await patchAdmin(`${API}/nominations/${nominationId}`, { status });
@@ -593,10 +434,10 @@ export function ParticipantsPanel({
       {error ? <AdminErrorAlert message={error} /> : null}
       {canWrite ? (
         <div className="flex flex-wrap gap-2">
-          <button type="button" className={primaryBtn} onClick={() => setEditing("new")} disabled={!detail.categories.length}>
+          <button type="button" className={primaryBtn} onClick={() => setEditing("new")}>
             <Plus className="h-4 w-4" /> Add nominee
           </button>
-          <button type="button" className={btn} onClick={() => setImporting(true)} disabled={!detail.categories.length}>
+          <button type="button" className={btn} onClick={() => setImporting(true)}>
             <Upload className="h-4 w-4" /> Import CSV
           </button>
         </div>
@@ -604,7 +445,7 @@ export function ParticipantsPanel({
       {detail.participants.length === 0 ? (
         <AdminEmpty
           title="No nominees"
-          description={detail.categories.length ? "Add nominees one by one or import a CSV." : "Add a category first."}
+          description="Add nominees one by one or import a CSV."
         />
       ) : null}
       <div className="grid gap-3 md:grid-cols-2">
@@ -641,7 +482,7 @@ export function ParticipantsPanel({
               {(p.nominations ?? []).map((n) => (
                 <div key={n.nomination_id} className="flex items-center justify-between gap-2 text-xs">
                   <span className="truncate">
-                    {catName(n.category_id)} · {formatNumber(n.total_votes)} votes
+                    {formatNumber(n.total_votes)} votes
                   </span>
                   {canWrite ? (
                     <select
@@ -777,7 +618,6 @@ function ParticipantModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const existing = new Set((participant?.nominations ?? []).map((n) => n.category_id));
   const [user, setUser] = useState<PickedUser | null>(
     participant && (participant.user_email || participant.user_username)
       ? {
@@ -790,16 +630,13 @@ function ParticipantModal({
       : null,
   );
   const [changedUser, setChangedUser] = useState(false);
-  const [categories, setCategories] = useState(new Set<string>(existing));
   const { busy, error, run } = useAction();
   const lookup = user?.email || (user?.username ? `@${user.username}` : "");
-  const canSave = Boolean(lookup) && (participant ? true : categories.size > 0);
+  const canSave = Boolean(lookup);
   const save = () =>
     run(async () => {
-      const body: Record<string, unknown> = {
-        // Adding a category nominates; removing is done by withdrawing the nomination.
-        category_ids: [...categories].filter((id) => !existing.has(id)),
-      };
+      // Every nominee of an event is in its one award.
+      const body: Record<string, unknown> = {};
       // Name, photo and bio come from the Spojex account.
       if (!participant || changedUser) body.email = lookup;
       if (participant) await patchAdmin(`${API}/participants/${participant.id}`, body);
@@ -839,32 +676,13 @@ function ParticipantModal({
           )}
           <p className="mt-1 text-xs text-text-secondary">Name, photo and bio come from their Spojex profile.</p>
         </div>
-        <div>
-          <p className={labelClass}>Categories</p>
-          <div className="flex flex-wrap gap-3">
-            {detail.categories.map((c) => (
-              <Check
-                key={c.id}
-                label={c.name}
-                checked={categories.has(c.id)}
-                disabled={existing.has(c.id)}
-                onChange={(v) => {
-                  const next = new Set(categories);
-                  if (v) next.add(c.id);
-                  else next.delete(c.id);
-                  setCategories(next);
-                }}
-              />
-            ))}
-          </div>
-        </div>
       </div>
     </AdminModal>
   );
 }
 
 function BulkImportModal({ eventId, onClose, onDone }: { eventId: string; onClose: () => void; onDone: () => void }) {
-  const [csv, setCsv] = useState("email,categories\n");
+  const [csv, setCsv] = useState("email\n");
   const { busy, error, run } = useAction();
   const save = () =>
     run(async () => {
@@ -882,8 +700,7 @@ function BulkImportModal({ eventId, onClose, onDone }: { eventId: string; onClos
       <div className="space-y-3">
         {error ? <AdminErrorAlert message={error} /> : null}
         <p className="text-xs text-text-secondary">
-          One nominee per row, by Spojex email. Name, photo and bio come from their profile. Separate several
-          categories with <code>|</code>.
+          One nominee per row, by Spojex email. Name, photo and bio come from their profile.
         </p>
         <input
           type="file"
@@ -930,7 +747,6 @@ export function PackagesPanel({
       }
       onChanged();
     });
-  const catName = (id: string | null) => (id ? detail.categories.find((c) => c.id === id)?.name : null);
   return (
     <div className="space-y-3">
       {error ? <AdminErrorAlert message={error} /> : null}
@@ -964,9 +780,6 @@ export function PackagesPanel({
                 <tr key={p.id} className={cn("border-t border-border", !p.is_active && "text-text-secondary")}>
                   <td className="px-4 py-2 font-medium">
                     {p.name}
-                    {catName(p.category_id) ? (
-                      <span className="ml-2 text-xs text-text-secondary">only {catName(p.category_id)}</span>
-                    ) : null}
                   </td>
                   <td className="px-4 py-2">{formatNumber(p.votes)}</td>
                   <td className="px-4 py-2">{Number(p.price_etb) > 0 ? Number(p.price_etb).toFixed(2) : "Free"}</td>
@@ -1066,7 +879,8 @@ function PackageModal({
 // ── Votes (live counts) ─────────────────────────────────────────────────────
 
 export function LeaderboardPanel({ detail }: { detail: AwardEventDetail }) {
-  const [categoryId, setCategoryId] = useState(detail.categories[0]?.id ?? "");
+  // The event's one award.
+  const categoryId = detail.event.award_id ?? detail.categories[0]?.id ?? "";
   const [rows, setRows] = useState<AwardLeaderboardRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -1085,25 +899,15 @@ export function LeaderboardPanel({ detail }: { detail: AwardEventDetail }) {
       cancelled = true;
     };
   }, [categoryId]);
-  if (!detail.categories.length) {
-    return <AdminEmpty title="No categories" description="Votes appear here once categories have nominees." />;
-  }
   const total = (rows ?? []).reduce((sum, r) => sum + Number(r.total_votes || 0), 0);
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        <select className={cn(fieldClass, "sm:w-72")} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-          {detail.categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
         {rows ? <span className="text-sm text-text-secondary">{formatNumber(total)} votes</span> : null}
       </div>
       {error ? <AdminErrorAlert message={error} /> : null}
       {!rows && !error ? <AdminLoadingRow label="Loading votes…" /> : null}
-      {rows && rows.length === 0 ? <AdminEmpty title="No nominees" description="Add nominees to this category." /> : null}
+      {rows && rows.length === 0 ? <AdminEmpty title="No nominees" description="Add nominees to this event." /> : null}
       {rows && rows.length > 0 ? (
         <div className="overflow-x-auto rounded-xl border border-border bg-card">
           <table className="w-full min-w-[420px] text-sm">
@@ -1164,7 +968,7 @@ export function ResultsPanel({ detail, canResults }: { detail: AwardEventDetail;
       setNotice(null);
       const out = (await postAdmin(`${API}/events/${eventId}/results/${path}`, body)) as Partial<ComputeSummary>;
       if (path === "compute") {
-        const parts = [`Counted ${out.computed ?? 0} ${out.computed === 1 ? "category" : "categories"}.`];
+        const parts = [out.computed ? "Counted the votes." : "Nothing to count yet."];
         if (out.skipped_open) parts.push(`${out.skipped_open} still open — close voting first.`);
         if (out.frozen) parts.push(`${out.frozen} already approved.`);
         setNotice(parts.join(" "));
@@ -1181,7 +985,7 @@ export function ResultsPanel({ detail, canResults }: { detail: AwardEventDetail;
       {error ? <AdminErrorAlert message={error} /> : null}
       {canResults && !detail.event.results_published ? (
         <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4">
-          <Field label="Winners per category">
+          <Field label="Number of winners">
             <input
               type="number"
               min={1}

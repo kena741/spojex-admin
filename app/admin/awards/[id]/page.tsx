@@ -5,7 +5,6 @@ import { useParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
 import { AdminErrorAlert, AdminLoadingRow, AdminReloadButton } from "@/components/admin-layout";
 import {
-  CategoriesPanel,
   EventSettingsPanel,
   LeaderboardPanel,
   PackagesPanel,
@@ -21,7 +20,6 @@ import { cn } from "@/lib/utils";
 
 const TABS = [
   { id: "settings", label: "Event" },
-  { id: "categories", label: "Categories" },
   { id: "participants", label: "Nominees" },
   { id: "packages", label: "Vote packages" },
   { id: "leaderboard", label: "Votes" },
@@ -78,7 +76,6 @@ export default function AwardEventPage() {
             ))}
           </div>
           {tab === "settings" ? <EventSettingsPanel event={data.event} canWrite={canWrite} onSaved={refresh} /> : null}
-          {tab === "categories" ? <CategoriesPanel detail={data} canWrite={canWrite} onChanged={refresh} /> : null}
           {tab === "participants" ? <ParticipantsPanel detail={data} canWrite={canWrite} onChanged={refresh} /> : null}
           {tab === "packages" ? <PackagesPanel detail={data} canWrite={canWrite} onChanged={refresh} /> : null}
           {tab === "leaderboard" ? <LeaderboardPanel detail={data} /> : null}

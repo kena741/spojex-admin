@@ -21,6 +21,11 @@ export type AwardEventRow = {
   rate_limit_per_minute?: number;
   category_count?: number;
   participant_count?: number;
+  /** The event is a single award; these are its voting rules. */
+  award_id?: string;
+  free_votes_per_period?: number;
+  free_vote_period?: "daily" | "weekly" | "event";
+  paid_votes_enabled?: boolean;
   total_votes?: number;
 };
 

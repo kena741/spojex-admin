@@ -16,6 +16,7 @@ type Analytics = {
     participant_id: string;
     name: string;
     category_name: string;
+    event_title?: string;
     total_votes: number;
     free_votes: number;
     paid_votes: number;
@@ -48,7 +49,6 @@ export default function AwardsAnalyticsPage() {
   const [events, setEvents] = useState<AwardEventRow[]>([]);
   const [detail, setDetail] = useState<AwardEventDetail | null>(null);
   const [eventId, setEventId] = useState("");
-  const [categoryId, setCategoryId] = useState("");
   const [participantId, setParticipantId] = useState("");
   const [from, setFrom] = useState(isoDay(-30));
   const [to, setTo] = useState(isoDay(0));
@@ -66,7 +66,6 @@ export default function AwardsAnalyticsPage() {
   }, []);
 
   useEffect(() => {
-    setCategoryId("");
     setParticipantId("");
     setDetail(null);
     if (!eventId) return;
@@ -80,12 +79,11 @@ export default function AwardsAnalyticsPage() {
   const query = useMemo(() => {
     const q = new URLSearchParams();
     if (eventId) q.set("event_id", eventId);
-    if (categoryId) q.set("category_id", categoryId);
     if (participantId) q.set("participant_id", participantId);
     if (from) q.set("date_from", new Date(`${from}T00:00:00`).toISOString());
     if (to) q.set("date_to", new Date(`${to}T23:59:59`).toISOString());
     return q.toString();
-  }, [eventId, categoryId, participantId, from, to]);
+  }, [eventId, participantId, from, to]);
 
   useEffect(() => {
     let cancelled = false;
@@ -119,14 +117,6 @@ export default function AwardsAnalyticsPage() {
           {events.map((e) => (
             <option key={e.id} value={e.id}>
               {e.title}
-            </option>
-          ))}
-        </select>
-        <select className={fieldClass} value={categoryId} disabled={!detail} onChange={(e) => setCategoryId(e.target.value)}>
-          <option value="">All categories</option>
-          {detail?.categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
             </option>
           ))}
         </select>
@@ -165,8 +155,8 @@ export default function AwardsAnalyticsPage() {
             <ChartCard title="Weekly votes" empty={!data.weekly.length}>
               <SimpleBarChart data={data.weekly.map((w) => ({ label: String(w.week).slice(5, 10), value: Number(w.votes) }))} />
             </ChartCard>
-            <ChartCard title="Votes per category" empty={!data.per_category.length}>
-              <SimpleBarChart data={data.per_category.slice(0, 12).map((c) => ({ label: c.category_name, value: Number(c.votes) }))} />
+            <ChartCard title="Votes per event" empty={!data.per_category.length}>
+              <SimpleBarChart data={data.per_category.slice(0, 12).map((c) => ({ label: c.event_title || c.category_name, value: Number(c.votes) }))} />
             </ChartCard>
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
@@ -179,7 +169,7 @@ export default function AwardsAnalyticsPage() {
                       <td className="w-8 px-4 py-2 font-semibold">{i + 1}</td>
                       <td className="px-4 py-2">
                         {p.name}
-                        <div className="text-xs text-text-secondary">{p.category_name}</div>
+                        <div className="text-xs text-text-secondary">{p.event_title ?? p.category_name}</div>
                       </td>
                       <td className="px-4 py-2 text-right">
                         {formatNumber(p.total_votes)}
