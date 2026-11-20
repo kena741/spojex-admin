@@ -138,6 +138,19 @@ const marketplaceItems: NavItem[] = [
   },
 ];
 
+/** Sports Marketplace (buy & sell sports gear) — its own group so every page is one click away. */
+const smAny = (can: (p: string) => boolean) =>
+  can("sports_market:read") || can("sports_market:sellers") || can("sports_market:write") || can("sports_market:finance");
+
+const sportsMarketItems: NavItem[] = [
+  { href: "/admin/sports-market", label: "Overview", icon: LayoutDashboard, visible: smAny },
+  { href: "/admin/sports-market/sellers", label: "Sellers", icon: Store, visible: smAny },
+  { href: "/admin/sports-market/listings", label: "Listings", icon: ShoppingBag, visible: smAny },
+  { href: "/admin/sports-market/orders", label: "Orders", icon: ClipboardList, visible: smAny },
+  { href: "/admin/sports-market/finance", label: "Payments & commission", icon: CreditCard, visible: smAny },
+  { href: "/admin/sports-market/categories", label: "Categories", icon: FolderTree, visible: smAny },
+];
+
 const nativeAppItems: NavItem[] = [
   {
     href: "/admin/native-apps",
@@ -169,16 +182,6 @@ const nativeAppItems: NavItem[] = [
     label: "Streams",
     icon: Radio,
     visible: (can) => can("streams:read") || canManageLiveEvents(can),
-  },
-  {
-    href: "/admin/sports-market",
-    label: "Sports Marketplace",
-    icon: Store,
-    visible: (can) =>
-      can("sports_market:read") ||
-      can("sports_market:sellers") ||
-      can("sports_market:write") ||
-      can("sports_market:finance"),
   },
 ];
 
@@ -303,6 +306,7 @@ const NAV_SECTIONS: NavSection[] = [
   { id: "identity", label: "Identity", items: identityItems },
   { id: "marketplace", label: "Service marketplace", items: marketplaceItems },
   { id: "native-apps", label: "Native apps", items: nativeAppItems },
+  { id: "sports-market", label: "Sports Marketplace", items: sportsMarketItems },
   { id: "finance", label: "Finance", items: financeItems },
   { id: "content", label: "Content", items: contentItems },
   { id: "network", label: "Network", items: networkItems },
@@ -359,6 +363,7 @@ function rankFrequentNav(entries: FrequentNavEntry[]) {
 }
 
 function itemIsActive(pathname: string, href: string) {
+  if (href === "/admin/sports-market") return pathname === href;
   if (href === "/admin/streams") {
     return (
       pathname === "/admin/streams" ||
