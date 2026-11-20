@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import AdminPageHeader from "@/components/admin-header";
 import { AdminErrorAlert, AdminLoadingRow, AdminReloadButton, AdminStatCard } from "@/components/admin-layout";
 import { SmTabs, fieldClass, labelClass, primaryButtonClass, smGet } from "@/components/sports-market/shared";
 import { adminCacheKey } from "@/lib/admin-session-cache";
 import { patchAdmin } from "@/lib/hooks";
-import { SM_API, etb, type SmOverview, type SmSettings } from "@/lib/sports-market";
+import { SM_API, etb, type SmOverview, type SmSettings, type SmTopSeller } from "@/lib/sports-market";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { useAdminQuery } from "@/lib/use-admin-query";
 
@@ -21,8 +22,8 @@ export default function SportsMarketOverviewPage() {
   return (
     <div>
       <AdminPageHeader
-        title="Sports Marketplace"
-        description="Sellers you approve list sports products; buyers order and pay in the app."
+        title="Marketplace"
+        description="Buy & sell sports gear — revenue, commission, and order health."
         actions={<AdminReloadButton onClick={refresh} refreshing={refreshing} />}
       />
       <SmTabs />
@@ -30,24 +31,100 @@ export default function SportsMarketOverviewPage() {
       {loading && !o ? <AdminLoadingRow label="Loading marketplace…" /> : null}
       {o ? (
         <>
-          <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <AdminStatCard title="Active sellers" value={String(o.active_sellers)} />
-            <AdminStatCard title="Listings" value={String(o.products)} />
-            <AdminStatCard title="Waiting for review" value={String(o.pending_listings)} />
-            <AdminStatCard title="Open orders" value={String(o.open_orders)} />
-            <AdminStatCard title="Sales (completed)" value={etb(o.gmv)} />
-            <AdminStatCard title="Commission collected" value={etb(o.commission_collected)} />
-            <AdminStatCard title="Commission held (paid, not completed)" value={etb(o.commission_held)} />
-            <AdminStatCard title="Cash commission pending" value={etb(o.commission_cod_pending)} />
-            <AdminStatCard title="All orders" value={String(o.orders)} />
-            <AdminStatCard title="Cancelled / rejected" value={String(o.cancelled_orders)} />
-            <AdminStatCard title="Returned" value={String(o.returned_orders)} />
-            <AdminStatCard title="Open payments" value={String(o.open_payments)} />
-          </div>
+          <Section title="Revenue">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <AdminStatCard title="Gross sales (GMV)" value={etb(o.gmv)} />
+              <AdminStatCard title="Seller earnings" value={etb(o.seller_earnings ?? 0)} />
+              <AdminStatCard title="Order volume (paid out)" value={etb(o.order_volume ?? 0)} />
+              <AdminStatCard title="Refunded volume" value={etb(o.refunded_volume ?? 0)} />
+              <AdminStatCard title="Commission collected" value={etb(o.commission_collected)} />
+              <AdminStatCard title="Commission held" value={etb(o.commission_held)} />
+              <AdminStatCard title="Cash commission pending" value={etb(o.commission_cod_pending)} />
+              <AdminStatCard
+                title="Platform take (collected + held)"
+                value={etb(o.commission_collected + o.commission_held + o.commission_cod_pending)}
+              />
+            </div>
+          </Section>
+
+          <Section title="Transaction status">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <AdminStatCard title="All orders" value={String(o.orders)} />
+              <AdminStatCard title="Open" value={String(o.open_orders)} />
+              <AdminStatCard title="Delivered (awaiting confirm)" value={String(o.delivered_orders ?? 0)} />
+              <AdminStatCard title="Completed" value={String(o.completed_orders ?? 0)} />
+              <AdminStatCard title="Cancelled / rejected" value={String(o.cancelled_orders)} />
+              <AdminStatCard title="Returned" value={String(o.returned_orders)} />
+              <AdminStatCard title="Paid payments" value={String(o.paid_payments)} />
+              <AdminStatCard title="Open payments" value={String(o.open_payments)} />
+              <AdminStatCard title="Refunded payments" value={String(o.refunded_payments ?? 0)} />
+            </div>
+          </Section>
+
+          <Section title="Catalog">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <AdminStatCard title="Active sellers" value={String(o.active_sellers)} />
+              <AdminStatCard title="Revoked sellers" value={String(o.revoked_sellers)} />
+              <AdminStatCard title="Listings" value={String(o.products)} />
+              <AdminStatCard title="Waiting for review" value={String(o.pending_listings)} />
+            </div>
+          </Section>
+
+          <TopSellers sellers={o.top_sellers ?? []} />
+
           <SettingsCard initial={o.settings} canWrite={can("sports_market:write")} onSaved={refresh} />
         </>
       ) : null}
     </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mb-6">
+      <h2 className="mb-3 font-heading text-sm font-semibold uppercase tracking-wide text-text-secondary">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function TopSellers({ sellers }: { sellers: SmTopSeller[] }) {
+  if (!sellers.length) return null;
+  return (
+    <Section title="Seller earnings">
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <table className="w-full min-w-[720px] text-sm">
+          <thead className="border-b border-border bg-muted/40 text-left text-xs uppercase text-text-secondary">
+            <tr>
+              <th className="px-4 py-3">Seller</th>
+              <th className="px-4 py-3 text-right">Completed</th>
+              <th className="px-4 py-3 text-right">Gross sales</th>
+              <th className="px-4 py-3 text-right">Commission</th>
+              <th className="px-4 py-3 text-right">They earned</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sellers.map((s) => (
+              <tr key={s.user_id} className="border-b border-border last:border-0">
+                <td className="px-4 py-3">
+                  <p className="font-medium text-text-primary">{s.name}</p>
+                  {s.username ? <p className="text-xs text-text-hint">@{s.username}</p> : null}
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums">{s.completed_count}</td>
+                <td className="px-4 py-3 text-right tabular-nums">{etb(s.gross_sales)}</td>
+                <td className="px-4 py-3 text-right tabular-nums">{etb(s.commission_total)}</td>
+                <td className="px-4 py-3 text-right font-medium tabular-nums text-text-primary">{etb(s.net_earnings)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="border-t border-border px-4 py-2 text-right text-xs text-text-secondary">
+          <Link href="/admin/sports-market/sellers" className="text-primary hover:underline">
+            All sellers →
+          </Link>
+        </div>
+      </div>
+    </Section>
   );
 }
 

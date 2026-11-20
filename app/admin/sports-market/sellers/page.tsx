@@ -95,8 +95,9 @@ export default function SportsMarketSellersPage() {
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3 text-right">Listings</th>
                 <th className="px-4 py-3 text-right">Orders</th>
-                <th className="px-4 py-3 text-right">Sales</th>
+                <th className="px-4 py-3 text-right">Gross sales</th>
                 <th className="px-4 py-3 text-right">Commission</th>
+                <th className="px-4 py-3 text-right">They earned</th>
                 <th className="px-4 py-3 text-right">Completion</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -125,6 +126,7 @@ export default function SportsMarketSellersPage() {
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">{etb(s.gross_sales)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{etb(s.commission_total)}</td>
+                  <td className="px-4 py-3 text-right font-medium tabular-nums text-text-primary">{etb(s.net_earnings)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {s.completion_rate == null ? "—" : `${Math.round(s.completion_rate * 100)}%`}
                     {s.cancellation_rate ? (

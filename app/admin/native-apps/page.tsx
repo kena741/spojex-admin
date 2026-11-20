@@ -3,7 +3,7 @@
 import { useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Building2, CalendarDays, Dumbbell, HeartHandshake, Radio, Trophy } from "lucide-react";
+import { Building2, CalendarDays, Dumbbell, HeartHandshake, Radio, Store, Trophy } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
 import { AdminErrorAlert, AdminLoadingRow, AdminReloadButton } from "@/components/admin-layout";
 import { NativeAppsVisibility } from "@/components/native-apps-visibility";
@@ -130,6 +130,11 @@ const MODULE_META: Record<
   donations: { title: "Donations", icon: HeartHandshake, permission: "donations:read" },
   streams: { title: "Streams", icon: Radio, permission: ["streams:read", "events:read"] },
   awards: { title: "Awards", icon: Trophy, permission: ["awards:read", "awards:write", "awards:results"] },
+  shop: {
+    title: "Marketplace",
+    icon: Store,
+    permission: ["sports_market:read", "sports_market:sellers", "sports_market:write", "sports_market:finance"],
+  },
 };
 
 const SECONDARY_KEYS: Record<string, string[]> = {
@@ -139,6 +144,7 @@ const SECONDARY_KEYS: Record<string, string[]> = {
   donations: ["contributions_period", "closing_soon", "progress_to_targets"],
   streams: ["video_live_confirmed", "video_scheduled", "radio_playback_health"],
   awards: ["votes_period", "voters_period", "award_upcoming"],
+  shop: ["gmv_period", "commission_period", "seller_earnings_period", "pending_listings"],
 };
 
 const SECONDARY_LABELS: Record<string, string> = {
@@ -161,6 +167,10 @@ const SECONDARY_LABELS: Record<string, string> = {
   votes_period: "Votes (period)",
   voters_period: "Voters (period)",
   award_upcoming: "Voting starts later",
+  gmv_period: "GMV (period)",
+  commission_period: "Commission (period)",
+  seller_earnings_period: "Seller earnings (period)",
+  pending_listings: "Listings to review",
 };
 
 export default function NativeAppsOverviewPage() {
@@ -350,7 +360,10 @@ export default function NativeAppsOverviewPage() {
                         <h3 className="font-heading text-sm font-semibold">{meta.title}</h3>
                       </div>
                       <Link
-                        href={block.href || `/admin/${key === "streams" ? "streams" : key}`}
+                        href={
+                          block.href ||
+                          `/admin/${key === "streams" ? "streams" : key === "shop" ? "sports-market" : key}`
+                        }
                         className="text-xs font-medium text-primary hover:underline"
                       >
                         View module
@@ -388,7 +401,9 @@ export default function NativeAppsOverviewPage() {
                                 className="text-sm font-semibold tabular-nums text-primary hover:underline"
                                 title={metric.definition || metric.note || undefined}
                               >
-                                {new Intl.NumberFormat("en-US").format(metric.value)}
+                                {metric.amount
+                                  ? `${Number(metric.amount).toLocaleString(undefined, { maximumFractionDigits: 2 })} ETB`
+                                  : new Intl.NumberFormat("en-US").format(metric.value)}
                               </Link>
                             ) : (
                               <span
@@ -397,9 +412,11 @@ export default function NativeAppsOverviewPage() {
                               >
                                 {metric?.available === false
                                   ? "Unavailable"
-                                  : metric?.value != null
-                                    ? new Intl.NumberFormat("en-US").format(metric.value)
-                                    : "-"}
+                                  : metric?.amount
+                                    ? `${Number(metric.amount).toLocaleString(undefined, { maximumFractionDigits: 2 })} ETB`
+                                    : metric?.value != null
+                                      ? new Intl.NumberFormat("en-US").format(metric.value)
+                                      : "-"}
                               </span>
                             )}
                             <div>

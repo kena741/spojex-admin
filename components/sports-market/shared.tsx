@@ -44,7 +44,7 @@ const TABS = [
   { href: "/admin/sports-market/listings", label: "Listings" },
   { href: "/admin/sports-market/reports", label: "Reports" },
   { href: "/admin/sports-market/orders", label: "Orders" },
-  { href: "/admin/sports-market/finance", label: "Payments & commission" },
+  { href: "/admin/sports-market/finance", label: "Finance" },
   { href: "/admin/sports-market/categories", label: "Categories" },
 ];
 

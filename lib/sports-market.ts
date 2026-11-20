@@ -32,8 +32,21 @@ export type SmSeller = {
   returned_count?: number;
   gross_sales?: number;
   commission_total?: number;
+  /** Seller take-home on completed orders (net + delivery). */
+  net_earnings?: number;
   completion_rate?: number | null;
   cancellation_rate?: number | null;
+};
+
+export type SmTopSeller = {
+  user_id: string;
+  name: string;
+  username?: string | null;
+  gross_sales: number;
+  commission_total: number;
+  net_earnings: number;
+  completed_count: number;
+  order_count: number;
 };
 
 export type SmCategory = {
@@ -163,14 +176,23 @@ export type SmOverview = {
   pending_listings: number;
   orders: number;
   open_orders: number;
+  completed_orders?: number;
+  delivered_orders?: number;
   cancelled_orders: number;
   returned_orders: number;
   gmv: number;
+  /** Total paid out to sellers on completed orders (net + delivery). */
+  seller_earnings?: number;
+  /** Completed order totals (subtotal + delivery). */
+  order_volume?: number;
   commission_collected: number;
   commission_held: number;
   commission_cod_pending: number;
+  refunded_volume?: number;
   paid_payments: number;
   open_payments: number;
+  refunded_payments?: number;
+  top_sellers?: SmTopSeller[];
   settings: SmSettings;
 };
 

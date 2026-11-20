@@ -138,18 +138,8 @@ const marketplaceItems: NavItem[] = [
   },
 ];
 
-/** Sports Marketplace (buy & sell sports gear) — its own group so every page is one click away. */
 const smAny = (can: (p: string) => boolean) =>
   can("sports_market:read") || can("sports_market:sellers") || can("sports_market:write") || can("sports_market:finance");
-
-const sportsMarketItems: NavItem[] = [
-  { href: "/admin/sports-market", label: "Overview", icon: LayoutDashboard, visible: smAny },
-  { href: "/admin/sports-market/sellers", label: "Sellers", icon: Store, visible: smAny },
-  { href: "/admin/sports-market/listings", label: "Listings", icon: ShoppingBag, visible: smAny },
-  { href: "/admin/sports-market/orders", label: "Orders", icon: ClipboardList, visible: smAny },
-  { href: "/admin/sports-market/finance", label: "Payments & commission", icon: CreditCard, visible: smAny },
-  { href: "/admin/sports-market/categories", label: "Categories", icon: FolderTree, visible: smAny },
-];
 
 const nativeAppItems: NavItem[] = [
   {
@@ -163,7 +153,7 @@ const nativeAppItems: NavItem[] = [
       can("donations:read") ||
       can("streams:read") ||
       can("awards:read") ||
-      can("sports_market:read") ||
+      smAny(can) ||
       can("settings:read") ||
       canManageLiveEvents(can),
   },
@@ -183,6 +173,8 @@ const nativeAppItems: NavItem[] = [
     icon: Radio,
     visible: (can) => can("streams:read") || canManageLiveEvents(can),
   },
+  /** Single entry — sub-pages use in-page SmTabs. */
+  { href: "/admin/sports-market", label: "Marketplace", icon: Store, visible: smAny },
 ];
 
 /** Wallet + coin + payment surfaces in one Finance group. */
@@ -306,7 +298,6 @@ const NAV_SECTIONS: NavSection[] = [
   { id: "identity", label: "Identity", items: identityItems },
   { id: "marketplace", label: "Service marketplace", items: marketplaceItems },
   { id: "native-apps", label: "Native apps", items: nativeAppItems },
-  { id: "sports-market", label: "Sports Marketplace", items: sportsMarketItems },
   { id: "finance", label: "Finance", items: financeItems },
   { id: "content", label: "Content", items: contentItems },
   { id: "network", label: "Network", items: networkItems },
@@ -363,7 +354,10 @@ function rankFrequentNav(entries: FrequentNavEntry[]) {
 }
 
 function itemIsActive(pathname: string, href: string) {
-  if (href === "/admin/sports-market") return pathname === href;
+  // One Marketplace nav item covers overview + sellers/listings/orders/…
+  if (href === "/admin/sports-market") {
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }
   if (href === "/admin/streams") {
     return (
       pathname === "/admin/streams" ||
