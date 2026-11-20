@@ -69,6 +69,9 @@ export type SmProduct = {
   moderation_status?: "pending" | "approved" | "rejected" | "removed";
   moderation_note?: string;
   deleted?: boolean;
+  /** Shown in the app's Featured row; lower rank shows first. */
+  featured?: boolean;
+  featured_rank?: number | null;
   created_at: string;
 };
 

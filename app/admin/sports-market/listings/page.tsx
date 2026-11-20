@@ -50,6 +50,8 @@ export default function SportsMarketListingsPage() {
   const [moderation, setModeration] = useState("");
   const [category, setCategory] = useState("");
   const [deleted, setDeleted] = useState(false);
+  const [featuredOnly, setFeaturedOnly] = useState(false);
+  const [featureError, setFeatureError] = useState<string | null>(null);
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q.trim()), 300);
     return () => clearTimeout(t);
@@ -64,8 +66,9 @@ export default function SportsMarketListingsPage() {
   if (moderation) params.set("moderation_status", moderation);
   if (category) params.set("category_id", category);
   if (deleted) params.set("include_deleted", "true");
+  if (featuredOnly) params.set("featured", "true");
   const { data, loading, refreshing, error, refresh } = useAdminQuery<SmProduct[]>({
-    key: adminCacheKey(["sports-market", "products", debounced, moderation, category, String(deleted)]),
+    key: adminCacheKey(["sports-market", "products", debounced, moderation, category, String(deleted), String(featuredOnly)]),
     fetcher: async () => (await smGet<{ products: SmProduct[] }>(`/products?${params}`)).products,
   });
   const products = data ?? [];
@@ -76,6 +79,16 @@ export default function SportsMarketListingsPage() {
     await smPost(`/products/${product.id}/moderate`, { action, note });
     setViewing(null);
     refresh();
+  };
+
+  const setFeatured = async (product: SmProduct, featured: boolean, rank?: number) => {
+    setFeatureError(null);
+    try {
+      await smPost(`/products/${product.id}/featured`, { featured, ...(rank ? { rank } : {}) });
+      refresh();
+    } catch (e) {
+      setFeatureError(e instanceof Error ? e.message : "Could not update featured listing");
+    }
   };
 
   return (
@@ -110,9 +123,14 @@ export default function SportsMarketListingsPage() {
             <input type="checkbox" checked={deleted} onChange={(e) => setDeleted(e.target.checked)} />
             Include deleted
           </label>
+          <label className="flex items-center gap-2 text-sm text-text-secondary">
+            <input type="checkbox" checked={featuredOnly} onChange={(e) => setFeaturedOnly(e.target.checked)} />
+            Featured only
+          </label>
         </div>
       </AdminFilterPanel>
       {error ? <AdminErrorAlert message={error} /> : null}
+      {featureError ? <AdminErrorAlert message={featureError} /> : null}
       <AdminTableShell>
         {loading && !data ? <AdminLoadingRow label="Loading listings…" /> : null}
         {!loading && products.length === 0 && !error ? (
@@ -128,6 +146,7 @@ export default function SportsMarketListingsPage() {
                 <th className="px-4 py-3 text-right">Price</th>
                 <th className="px-4 py-3 text-right">Stock</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Featured</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -161,6 +180,9 @@ export default function SportsMarketListingsPage() {
                       <StatusBadge tone={p.available ? "success" : "neutral"}>{labelize(p.availability)}</StatusBadge>
                       {p.deleted ? <StatusBadge tone="danger">Deleted</StatusBadge> : null}
                     </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <FeaturedCell product={p} canWrite={canWrite} onChange={(on, rank) => setFeatured(p, on, rank)} />
                   </td>
                   <td className="px-4 py-3 text-right">
                     {canWrite && !p.deleted ? (
@@ -200,6 +222,83 @@ export default function SportsMarketListingsPage() {
           if (acting) await moderate(acting.product, acting.action, note);
         }}
       />
+    </div>
+  );
+}
+
+/** Can this listing show in the app's Featured row? Mirrors the backend rule. */
+function featureEligible(p: SmProduct) {
+  return !p.deleted && p.moderation_status === "approved" && p.is_active !== false && p.seller.active;
+}
+
+function FeaturedCell({
+  product: p,
+  canWrite,
+  onChange,
+}: {
+  product: SmProduct;
+  canWrite: boolean;
+  onChange: (featured: boolean, rank?: number) => Promise<void>;
+}) {
+  const [rank, setRank] = useState(String(p.featured_rank ?? ""));
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setRank(String(p.featured_rank ?? "")), [p.featured_rank]);
+  const run = async (featured: boolean, next?: number) => {
+    setBusy(true);
+    try {
+      await onChange(featured, next);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!p.featured) {
+    if (!canWrite) return <span className="text-text-hint">—</span>;
+    const ok = featureEligible(p);
+    return (
+      <button
+        type="button"
+        className={buttonClass}
+        disabled={busy || !ok}
+        title={ok ? "Show in the app's Featured row" : "Only approved, active listings from active sellers"}
+        onClick={() => run(true)}
+      >
+        ★ Feature
+      </button>
+    );
+  }
+  const live = featureEligible(p) && p.available;
+  return (
+    <div className="flex items-center gap-2">
+      <StatusBadge tone={live ? "success" : "warning"}>{live ? "Featured" : "Featured · hidden"}</StatusBadge>
+      {canWrite ? (
+        <>
+          <label className="flex items-center gap-1 text-xs text-text-secondary">
+            Order
+            <input
+              type="number"
+              min={1}
+              max={999}
+              value={rank}
+              disabled={busy}
+              onChange={(e) => setRank(e.target.value)}
+              onBlur={() => {
+                const n = Number(rank);
+                if (Number.isInteger(n) && n >= 1 && n <= 999 && n !== p.featured_rank) void run(true, n);
+                else setRank(String(p.featured_rank ?? ""));
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              }}
+              className="h-8 w-14 rounded-md border border-border bg-background px-2 text-sm tabular-nums"
+            />
+          </label>
+          <button type="button" className={buttonClass} disabled={busy} onClick={() => run(false)}>
+            Unfeature
+          </button>
+        </>
+      ) : (
+        <span className="text-xs text-text-secondary">#{p.featured_rank}</span>
+      )}
     </div>
   );
 }
