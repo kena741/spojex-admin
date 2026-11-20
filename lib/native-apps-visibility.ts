@@ -9,7 +9,7 @@ export const NATIVE_APPS = [
   { key: "stadiums", label: "Stadiums" },
   { key: "gyms", label: "Gyms" },
   { key: "awards", label: "Awards" },
-  { key: "shop", label: "Shop" },
+  { key: "shop", label: "Marketplace" },
   { key: "events", label: "Events" },
   { key: "stream", label: "Stream" },
   { key: "donations", label: "Donations" },

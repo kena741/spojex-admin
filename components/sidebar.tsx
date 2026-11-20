@@ -150,6 +150,7 @@ const nativeAppItems: NavItem[] = [
       can("donations:read") ||
       can("streams:read") ||
       can("awards:read") ||
+      can("sports_market:read") ||
       can("settings:read") ||
       canManageLiveEvents(can),
   },
@@ -170,17 +171,14 @@ const nativeAppItems: NavItem[] = [
     visible: (can) => can("streams:read") || canManageLiveEvents(can),
   },
   {
-    href: "/admin/shops",
-    label: "Shops",
+    href: "/admin/sports-market",
+    label: "Sports Marketplace",
     icon: Store,
-    comingSoon: true,
     visible: (can) =>
-      can("stadiums:read") ||
-      can("gyms:read") ||
-      can("events:read") ||
-      can("donations:read") ||
-      can("streams:read") ||
-      canManageLiveEvents(can),
+      can("sports_market:read") ||
+      can("sports_market:sellers") ||
+      can("sports_market:write") ||
+      can("sports_market:finance"),
   },
 ];
 

@@ -509,6 +509,7 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
       can("donations:read") ||
       can("streams:read") ||
       can("awards:read") ||
+      can("sports_market:read") ||
       can("settings:read")
     );
   }
@@ -563,6 +564,14 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
   if (pathname.startsWith("/admin/awards")) {
     return can("awards:read") || can("awards:write") || can("awards:results");
   }
+  if (pathname.startsWith("/admin/sports-market")) {
+    return (
+      can("sports_market:read") ||
+      can("sports_market:sellers") ||
+      can("sports_market:write") ||
+      can("sports_market:finance")
+    );
+  }
   if (pathname === "/admin/finance" || pathname.startsWith("/admin/finance/overview")) {
     return (
       can("finance:read") || can("wallets:read") || can("payments:read") || can("withdrawals:read")
@@ -597,6 +606,11 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
 
 export function writePermissionForPatch(path: string) {
   if (path.includes("/awards")) return path.includes("/results") ? "awards:results" : "awards:write";
+  if (path.includes("/sports-market")) {
+    if (path.includes("/sellers")) return "sports_market:sellers";
+    if (path.includes("settle-commission")) return "sports_market:finance";
+    return "sports_market:write";
+  }
   if (path.includes("/users/")) return "users:write";
   if (path.includes("/verifications/")) return "users:verify";
   if (path.includes("/verification-docs")) return "profiles:write";
