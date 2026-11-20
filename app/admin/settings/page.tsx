@@ -26,7 +26,8 @@ import {
   fetchAdminSettingsPayload,
   type AdminSettingsPayload,
 } from "@/lib/admin-settings-query";
-import { postAdminResponse } from "@/lib/hooks";
+import { patchAdmin, postAdminResponse } from "@/lib/hooks";
+import { SM_API } from "@/lib/sports-market";
 import { useAdminQuery } from "@/lib/use-admin-query";
 import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
@@ -123,6 +124,9 @@ export default function GlobalSettingsPage() {
     isFix: false,
     active: true,
   });
+  /** Sports Marketplace (e-commerce) commission %, kept apart from the service commission. */
+  const [ecomCommission, setEcomCommission] = useState("10");
+  const [ecomCommissionSaved, setEcomCommissionSaved] = useState("10");
   const [statusOptions, setStatusOptions] = useState<StatusOption[]>([
     { flag: "pending", name: "Pending" },
   ]);
@@ -188,6 +192,10 @@ export default function GlobalSettingsPage() {
     const policy = asObject(byId.get("policy"));
     const contact = asObject(byId.get("contact_us"));
     const commission = asObject(byId.get("admin_commission"));
+    const market = asObject(byId.get("sports_market"));
+    const ecom = String(market.commission_percent ?? "10");
+    setEcomCommission(ecom);
+    setEcomCommissionSaved(ecom);
     const constant = asObject(byId.get("constant"));
     const pay = asObject(byId.get("payment"));
     const statusRaw = byId.get("status");
@@ -303,6 +311,12 @@ export default function GlobalSettingsPage() {
       if (minParsed != null && (!Number.isFinite(minParsed) || minParsed <= 0)) {
         throw new Error("Minimum withdrawal must be a number above 0.");
       }
+      const ecomRaw = ecomCommission.trim();
+      const ecomParsed = Number(ecomRaw);
+      const ecomChanged = tab === "commission" && ecomRaw !== ecomCommissionSaved.trim();
+      if (ecomChanged && (ecomRaw === "" || !Number.isFinite(ecomParsed) || ecomParsed < 0 || ecomParsed > 100)) {
+        throw new Error("E-commerce commission must be a percent between 0 and 100.");
+      }
       const chapaPay = asObject(payment.chapa);
       const feeRaw = String(chapaPay.feePercent ?? "").trim();
       const feeParsed = feeRaw === "" ? null : Number(feeRaw);
@@ -329,6 +343,9 @@ export default function GlobalSettingsPage() {
         languageSettings: languages,
         languageDeletedIds,
       });
+      if (ecomChanged) {
+        await patchAdmin(`${SM_API}/settings`, { commission_percent: ecomParsed });
+      }
       if (tab === "country_tax") {
         await postAdminResponse("/api/admin/settings/tax", {
           rows: taxes,
@@ -647,7 +664,11 @@ export default function GlobalSettingsPage() {
               )}
 
               {tab === "commission" && (
-                <Section title="Admin commission">
+                <div className="space-y-8">
+                <Section title="Service commission">
+                  <p className="-mt-2 mb-4 text-sm text-text-secondary">
+                    Taken from service bookings and requests paid in the app.
+                  </p>
                   <div className="grid gap-4 md:grid-cols-3">
                     <Field
                       label="Value"
@@ -679,6 +700,21 @@ export default function GlobalSettingsPage() {
                     </label>
                   </div>
                 </Section>
+                <Section title="E-commerce commission">
+                  <p className="-mt-2 mb-4 text-sm text-text-secondary">
+                    Sports Marketplace only. A percent of the product subtotal on each order; the
+                    delivery fee always goes to the seller. Changes apply to new orders.
+                  </p>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <Field
+                      label="Commission (%)"
+                      value={ecomCommission}
+                      onChange={setEcomCommission}
+                      disabled={!canWrite}
+                    />
+                  </div>
+                </Section>
+                </div>
               )}
 
               {tab === "status" && (
