@@ -325,7 +325,16 @@ function ProductDetail({ product: p }: { product: SmProduct }) {
       ) : null}
       <p className="whitespace-pre-wrap text-text-primary">{p.description}</p>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
-        <Item label="Price" value={etb(p.price, p.currency)} />
+        <Item
+          label="Price"
+          value={
+            p.compare_at_price ? `${etb(p.price, p.currency)} (was ${etb(p.compare_at_price, p.currency)})` : etb(p.price, p.currency)
+          }
+        />
+        <Item
+          label="Rating"
+          value={p.rating?.count ? `${p.rating.average?.toFixed(1)} ★ · ${p.rating.count} reviews` : "No reviews yet"}
+        />
         <Item label="Delivery fee" value={etb(p.delivery_fee, p.currency)} />
         <Item label="Stock" value={String(p.quantity)} />
         <Item label="Condition" value={labelize(p.condition)} />

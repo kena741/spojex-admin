@@ -72,7 +72,26 @@ export type SmProduct = {
   /** Shown in the app's Featured row; lower rank shows first. */
   featured?: boolean;
   featured_rank?: number | null;
+  /** Old price shown struck through while on sale. */
+  compare_at_price?: number | null;
+  rating?: { average: number | null; count: number };
   created_at: string;
+};
+
+/** A listing someone flagged from the app. */
+export type SmReport = {
+  id: string;
+  product: { id: string; name: string; image: string; status?: string | null; seller_id?: string | null };
+  reporter: { id: string; name?: string | null; username?: string | null };
+  reason: string;
+  reason_label: string;
+  details: string;
+  status: "open" | "dismissed" | "actioned";
+  admin_note: string;
+  /** Open reports on the same listing. */
+  open_count: number;
+  created_at: string;
+  resolved_at?: string | null;
 };
 
 export type SmTimelineStep = { stage: string; label: string; state: "done" | "current" | "upcoming" | "skipped"; at?: string | null };

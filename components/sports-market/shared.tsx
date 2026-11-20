@@ -42,6 +42,7 @@ const TABS = [
   { href: "/admin/sports-market", label: "Overview" },
   { href: "/admin/sports-market/sellers", label: "Sellers" },
   { href: "/admin/sports-market/listings", label: "Listings" },
+  { href: "/admin/sports-market/reports", label: "Reports" },
   { href: "/admin/sports-market/orders", label: "Orders" },
   { href: "/admin/sports-market/finance", label: "Payments & commission" },
   { href: "/admin/sports-market/categories", label: "Categories" },
