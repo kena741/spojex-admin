@@ -26,6 +26,12 @@ export type UserRow = {
   verified: boolean;
   created_at: string;
   updated_at: string;
+  active_roles?: Array<{
+    account_role?: string | null;
+    category_kind?: string | null;
+    category_slug?: string | null;
+    is_primary?: boolean;
+  }> | null;
   athlete_profiles?: AthleteProfile | AthleteProfile[] | null;
   professional_profiles?: ProfessionalProfile | ProfessionalProfile[] | null;
   media_profiles?: MediaProfile | MediaProfile[] | null;
@@ -240,7 +246,10 @@ export type ServiceRow = {
   feature_request_paid_at?: string | null;
   created_at: string;
   updated_at: string;
-  users?: Pick<UserRow, "id" | "display_name" | "verified" | "avatar_url" | "role"> | null;
+  users?: Pick<
+    UserRow,
+    "id" | "display_name" | "verified" | "avatar_url" | "role" | "active_roles"
+  > | null;
   category?: Pick<ServiceCategory, "id" | "label" | "emoji"> | null;
   subcategory?: Pick<ServiceSubcategory, "id" | "label" | "emoji"> | null;
 };
