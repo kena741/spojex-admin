@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AdminPageHeader from "@/components/admin-header";
 import {
@@ -15,6 +16,7 @@ import {
   fetchIdentityCatalog,
   type IdentityCatalog,
   type IdentityRole,
+  type IdentityRoleKind,
 } from "@/lib/identity-catalog";
 import { slugifyIdentity } from "@/lib/identity-catalog-seeds";
 import { deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
@@ -28,7 +30,26 @@ type RoleDraft = {
   blurb: string;
   sort_order: number;
   is_active: boolean;
+  kind: IdentityRoleKind | string;
+  profile_title: string;
+  description: string;
+  license_label: string;
+  default_service_category_slug: string;
+  icon: string;
 };
+
+const inputClass = "h-10 rounded-lg border border-border px-3 text-sm";
+const KIND_OPTIONS: { value: IdentityRoleKind; label: string }[] = [
+  { value: "account_role", label: "Account role (fan / athlete / professional)" },
+  { value: "profession", label: "Profession (coach, journalist, …)" },
+  { value: "legacy", label: "Legacy (hidden from new signups)" },
+];
+
+function kindTone(kind: string | undefined) {
+  if (kind === "account_role") return "success" as const;
+  if (kind === "profession") return "info" as const;
+  return "neutral" as const;
+}
 
 export default function CategoriesPage() {
   const { can } = useAdminPermissions();
@@ -38,6 +59,9 @@ export default function CategoriesPage() {
   const [label, setLabel] = useState("");
   const [slug, setSlug] = useState("");
   const [blurb, setBlurb] = useState("");
+  const [icon, setIcon] = useState("");
+  const [profileTitle, setProfileTitle] = useState("");
+  const [licenseLabel, setLicenseLabel] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<RoleDraft | null>(null);
   const [saving, setSaving] = useState(false);
@@ -68,7 +92,10 @@ export default function CategoriesPage() {
     if (!catalog) return [];
     return catalog.groups.map((group) => ({
       group,
-      roles: catalog.roles.filter((role) => role.group_id === group.id),
+      roles: catalog.roles
+        .filter((role) => role.group_id === group.id)
+        .slice()
+        .sort((a, b) => a.sort_order - b.sort_order),
     }));
   }, [catalog]);
 
@@ -82,11 +109,17 @@ export default function CategoriesPage() {
         label: label.trim(),
         slug: slug.trim() || slugifyIdentity(label),
         blurb: blurb.trim(),
+        profile_title: profileTitle.trim() || label.trim(),
+        license_label: licenseLabel.trim(),
+        icon: icon.trim(),
         sort_order: (catalog?.roles.length ?? 0) + 1,
       });
       setLabel("");
       setSlug("");
       setBlurb("");
+      setIcon("");
+      setProfileTitle("");
+      setLicenseLabel("");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed");
@@ -101,6 +134,12 @@ export default function CategoriesPage() {
       blurb: role.blurb,
       sort_order: role.sort_order,
       is_active: role.is_active,
+      kind: role.kind || "profession",
+      profile_title: role.profile_title || role.label,
+      description: role.description || "",
+      license_label: role.license_label || "",
+      default_service_category_slug: role.default_service_category_slug || "",
+      icon: role.icon || "",
     });
     setError(null);
   };
@@ -122,6 +161,12 @@ export default function CategoriesPage() {
         blurb: draft.blurb.trim(),
         sort_order: draft.sort_order,
         is_active: draft.is_active,
+        kind: draft.kind,
+        profile_title: draft.profile_title.trim(),
+        description: draft.description.trim(),
+        license_label: draft.license_label.trim(),
+        default_service_category_slug: draft.default_service_category_slug.trim(),
+        icon: draft.icon.trim(),
       });
       cancelEdit();
       await load();
@@ -135,7 +180,7 @@ export default function CategoriesPage() {
   const remove = async (role: IdentityRole) => {
     const warning = role.is_system
       ? `"${role.label}" is a core signup role. Delete only if no users have it. Continue?`
-      : `Delete "${role.label}"? This cannot be undone.`;
+      : `Delete "${role.label}"? This cannot be undone. Prefer Hide (inactive) when users may still hold it.`;
     if (!window.confirm(warning)) return;
     setError(null);
     try {
@@ -150,23 +195,36 @@ export default function CategoriesPage() {
   return (
     <>
       <AdminPageHeader
-        title="Profile settings"
+        title="Identity roles"
         backHref="/admin/people"
         breadcrumbs={[
           { label: "People", href: "/admin/people" },
-          { label: "Profile settings" },
+          { label: "Identity roles" },
         ]}
         actions={
-          <AdminReloadButton
-            loading={loading}
-            refreshing={refreshing}
-            onClick={() => {
-              setError(null);
-              void load();
-            }}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/admin/profile-config"
+              className="inline-flex h-9 items-center rounded-lg border border-border bg-card px-3 text-sm font-medium hover:bg-muted"
+            >
+              Profile fields
+            </Link>
+            <AdminReloadButton
+              loading={loading}
+              refreshing={refreshing}
+              onClick={() => {
+                setError(null);
+                void load();
+              }}
+            />
+          </div>
         }
       />
+      <p className="mb-4 max-w-3xl text-sm text-text-secondary">
+        Manage who a person <span className="font-medium text-text-primary">is</span> (identity roles).
+        Profile tabs and fields are configured separately. Role assignments never grant Admin RBAC.
+        Users may hold multiple roles; Flutter currently surfaces a single primary role.
+      </p>
       {error ? <AdminErrorAlert message={error} /> : null}
 
       {canWrite && catalog?.fromDatabase ? (
@@ -174,11 +232,12 @@ export default function CategoriesPage() {
           onSubmit={create}
           className="mb-6 space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm"
         >
+          <p className="text-xs font-medium uppercase tracking-wide text-text-secondary">Add role</p>
           <div className="grid gap-3 md:grid-cols-[180px_1fr_160px]">
             <select
               value={groupId}
               onChange={(event) => setGroupId(event.target.value)}
-              className="h-10 rounded-lg border border-border px-3 text-sm"
+              className={inputClass}
               required
             >
               {catalog.groups.map((group) => (
@@ -194,22 +253,44 @@ export default function CategoriesPage() {
                 if (!slug) setSlug(slugifyIdentity(event.target.value));
               }}
               placeholder="Role label (Coach)"
-              className="h-10 rounded-lg border border-border px-3 text-sm"
+              className={inputClass}
               required
             />
             <input
               value={slug}
               onChange={(event) => setSlug(event.target.value)}
               placeholder="slug (coach)"
-              className="h-10 rounded-lg border border-border px-3 font-mono text-sm"
+              className={`${inputClass} font-mono`}
             />
           </div>
-          <input
-            value={blurb}
-            onChange={(event) => setBlurb(event.target.value)}
-            placeholder="Short description shown during signup"
-            className="h-10 w-full rounded-lg border border-border px-3 text-sm"
-          />
+          <div className="grid gap-3 md:grid-cols-2">
+            <input
+              value={profileTitle}
+              onChange={(event) => setProfileTitle(event.target.value)}
+              placeholder="Profile title (optional — defaults to label)"
+              className={inputClass}
+            />
+            <input
+              value={icon}
+              onChange={(event) => setIcon(event.target.value)}
+              placeholder="Icon name (e.g. sports, badge, camera)"
+              className={inputClass}
+            />
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <input
+              value={blurb}
+              onChange={(event) => setBlurb(event.target.value)}
+              placeholder="Short blurb shown during signup / picker"
+              className={inputClass}
+            />
+            <input
+              value={licenseLabel}
+              onChange={(event) => setLicenseLabel(event.target.value)}
+              placeholder="License label (professions)"
+              className={inputClass}
+            />
+          </div>
           <button type="submit" className="h-10 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">
             Add role
           </button>
@@ -218,11 +299,11 @@ export default function CategoriesPage() {
 
       <AdminTableShell>
         {loading && !catalog ? (
-          <AdminLoadingRow label="Loading account roles…" compact className="py-10" />
+          <AdminLoadingRow label="Loading identity roles…" compact className="py-10" />
         ) : !catalog || groupedRoles.every((item) => item.roles.length === 0) ? (
           <AdminEmpty
-            title="No account roles"
-            description="Add roles to define what users can select when signing up."
+            title="No identity roles"
+            description="Add roles so users can select who they are. Then configure fields under Profile fields."
           />
         ) : (
           <div className="divide-y divide-border">
@@ -234,8 +315,9 @@ export default function CategoriesPage() {
                     <thead className="border-b border-border bg-muted/50 text-xs uppercase text-text-secondary">
                       <tr>
                         <th className="px-4 py-3 font-semibold">Role</th>
-                        <th className="px-4 py-3 font-semibold">Slug</th>
-                        <th className="px-4 py-3 font-semibold">Signup blurb</th>
+                        <th className="px-4 py-3 font-semibold">Kind</th>
+                        <th className="px-4 py-3 font-semibold">Icon</th>
+                        <th className="px-4 py-3 font-semibold">Blurb</th>
                         <th className="px-4 py-3 font-semibold">Order</th>
                         <th className="px-4 py-3 font-semibold">Status</th>
                         {canWrite && catalog.fromDatabase ? (
@@ -247,23 +329,31 @@ export default function CategoriesPage() {
                       {roles.map((role) => {
                         const isEditing = editingId === role.id && draft;
                         return (
-                          <tr key={role.id} className="border-b border-border last:border-0">
+                          <tr key={role.id} className="border-b border-border last:border-0 align-top">
                             <td className="px-4 py-3">
                               {isEditing ? (
-                                <div className="space-y-2">
+                                <div className="space-y-2 min-w-[200px]">
                                   <input
                                     value={draft.label}
                                     onChange={(event) =>
                                       setDraft({ ...draft, label: event.target.value })
                                     }
-                                    className="h-9 w-full min-w-[140px] rounded-lg border border-border px-2 text-sm"
+                                    className="h-9 w-full rounded-lg border border-border px-2 text-sm"
+                                  />
+                                  <input
+                                    value={draft.profile_title}
+                                    onChange={(event) =>
+                                      setDraft({ ...draft, profile_title: event.target.value })
+                                    }
+                                    placeholder="Profile title"
+                                    className="h-9 w-full rounded-lg border border-border px-2 text-sm"
                                   />
                                   <select
                                     value={draft.group_id}
                                     onChange={(event) =>
                                       setDraft({ ...draft, group_id: event.target.value })
                                     }
-                                    className="h-9 w-full min-w-[140px] rounded-lg border border-border px-2 text-sm"
+                                    className="h-9 w-full rounded-lg border border-border px-2 text-sm"
                                   >
                                     {catalog.groups.map((item) => (
                                       <option key={item.id} value={item.id}>
@@ -271,13 +361,81 @@ export default function CategoriesPage() {
                                       </option>
                                     ))}
                                   </select>
+                                  <select
+                                    value={draft.kind}
+                                    onChange={(event) =>
+                                      setDraft({ ...draft, kind: event.target.value })
+                                    }
+                                    className="h-9 w-full rounded-lg border border-border px-2 text-sm"
+                                  >
+                                    {KIND_OPTIONS.map((opt) => (
+                                      <option key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <input
+                                    value={draft.license_label}
+                                    onChange={(event) =>
+                                      setDraft({ ...draft, license_label: event.target.value })
+                                    }
+                                    placeholder="License label"
+                                    className="h-9 w-full rounded-lg border border-border px-2 text-sm"
+                                  />
+                                  <input
+                                    value={draft.default_service_category_slug}
+                                    onChange={(event) =>
+                                      setDraft({
+                                        ...draft,
+                                        default_service_category_slug: event.target.value,
+                                      })
+                                    }
+                                    placeholder="Default service category slug"
+                                    className="h-9 w-full rounded-lg border border-border px-2 font-mono text-sm"
+                                  />
+                                  <textarea
+                                    value={draft.description}
+                                    onChange={(event) =>
+                                      setDraft({ ...draft, description: event.target.value })
+                                    }
+                                    rows={2}
+                                    placeholder="Longer description"
+                                    className="w-full rounded-lg border border-border px-2 py-1 text-sm"
+                                  />
                                 </div>
                               ) : (
-                                <span className="font-medium">{role.label}</span>
+                                <div>
+                                  <div className="font-medium">
+                                    {role.label}
+                                    {role.is_system ? (
+                                      <span className="ml-2 text-xs font-normal text-text-hint">system</span>
+                                    ) : null}
+                                  </div>
+                                  <div className="font-mono text-xs text-text-secondary">{role.slug}</div>
+                                  {role.profile_title && role.profile_title !== role.label ? (
+                                    <div className="text-xs text-text-hint">{role.profile_title}</div>
+                                  ) : null}
+                                </div>
                               )}
                             </td>
+                            <td className="px-4 py-3">
+                              <StatusBadge tone={kindTone(role.kind)}>
+                                {role.kind || "unset"}
+                              </StatusBadge>
+                            </td>
                             <td className="px-4 py-3 font-mono text-xs text-text-secondary">
-                              {role.slug}
+                              {isEditing ? (
+                                <input
+                                  value={draft.icon}
+                                  onChange={(event) =>
+                                    setDraft({ ...draft, icon: event.target.value })
+                                  }
+                                  placeholder="icon"
+                                  className="h-9 w-28 rounded-lg border border-border px-2 font-mono text-sm"
+                                />
+                              ) : (
+                                role.icon || "—"
+                              )}
                             </td>
                             <td className="max-w-sm px-4 py-3 text-text-secondary">
                               {isEditing ? (

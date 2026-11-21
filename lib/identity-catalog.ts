@@ -11,6 +11,8 @@ export type IdentityRoleGroup = IdentityRoleGroupSeed & {
   updated_at?: string;
 };
 
+export type IdentityRoleKind = "account_role" | "profession" | "legacy";
+
 export type IdentityRole = {
   id: string;
   group_id: string;
@@ -20,10 +22,32 @@ export type IdentityRole = {
   sort_order: number;
   is_active: boolean;
   is_system: boolean;
+  /** account_role | profession | legacy */
+  kind?: IdentityRoleKind | string;
+  profile_title?: string;
+  description?: string;
+  license_label?: string;
+  default_service_category_slug?: string;
+  /** Lucide / Material icon name; empty uses client default. */
+  icon?: string;
   created_at?: string;
   updated_at?: string;
   identity_role_groups?: Pick<IdentityRoleGroup, "slug" | "label"> | null;
 };
+
+/** Infer catalog kind from group slug + role slug when Admin creates a role. */
+export function inferIdentityRoleKind(groupSlug: string, roleSlug: string): IdentityRoleKind {
+  if (roleSlug === "fan" || roleSlug === "athlete" || roleSlug === "professional") {
+    return "account_role";
+  }
+  if (groupSlug === "professional" || groupSlug === "media") {
+    return "profession";
+  }
+  if (groupSlug === "athlete" || groupSlug === "community") {
+    return "account_role";
+  }
+  return "profession";
+}
 
 export type IdentityCatalog = {
   groups: IdentityRoleGroup[];
