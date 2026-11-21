@@ -833,7 +833,7 @@ export default function DonationDetailPage() {
                             {row.is_anonymous ? (
                               "Anonymous"
                             ) : row.user_id ? (
-                              <Link href={`/admin/users/${row.user_id}`} className="text-primary">
+                              <Link href={`/admin/people/${row.user_id}`} className="text-primary">
                                 {row.donor_display_name || "Donor"}
                               </Link>
                             ) : (
