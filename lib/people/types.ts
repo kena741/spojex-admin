@@ -1,3 +1,4 @@
+import type { CatalogProfileDocument } from "@/lib/people/catalog-profile";
 import type {
   CoinWalletRow,
   OrganizationRow,
@@ -47,6 +48,8 @@ export type FeedInterestDetail = {
 /** Everything the person detail page needs, fetched as one payload. */
 export type PersonSnapshot = {
   user: UserRow | null;
+  /** Catalog profile body (GET /api/v1/profiles/{id}); replaces *_profiles embeds. */
+  catalogProfile: CatalogProfileDocument | null;
   orgs: OrganizationRow[];
   mediaItems: ProfileMediaRow[];
   verificationId: string | null;

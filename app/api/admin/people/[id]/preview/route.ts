@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAnyAdminPermission } from "@/lib/admin-auth";
+import { categoryFor } from "@/lib/catalog";
 import { createAdminClient } from "@/lib/spojex/admin";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -23,14 +24,7 @@ export async function GET(_request: Request, ctx: Ctx) {
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   if (!user) return NextResponse.json({ error: "Person not found" }, { status: 404 });
 
-  const [athlete, professional, media, orgs, members, ver] = await Promise.all([
-    client.from("athlete_profiles").select("id, position, team").eq("user_id", id).maybeSingle(),
-    client
-      .from("professional_profiles")
-      .select("id, organization, specializations")
-      .eq("user_id", id)
-      .maybeSingle(),
-    client.from("media_profiles").select("id, outlet, media_type").eq("user_id", id).maybeSingle(),
+  const [orgs, members, ver] = await Promise.all([
     client.from("organizations").select("id, name, organization_type, verified").eq("user_id", id),
     client
       .from("organization_members")
@@ -45,19 +39,21 @@ export async function GET(_request: Request, ctx: Ctx) {
       .limit(5),
   ]);
 
+  // Profile type badges from users.role category (catalog SoT; no *_profiles reads).
   const profile_types: string[] = [];
-  if (athlete.data) profile_types.push("athlete");
-  if (professional.data) profile_types.push("professional");
-  if (media.data) profile_types.push("media");
+  const cat = categoryFor(user.role);
+  if (cat === "athlete" || cat === "professional" || cat === "media") {
+    profile_types.push(cat);
+  }
 
   return NextResponse.json({
     data: {
       user,
       profile_types,
       profiles: {
-        athlete: athlete.data,
-        professional: professional.data,
-        media: media.data,
+        athlete: null,
+        professional: null,
+        media: null,
       },
       owned_organizations: orgs.data ?? [],
       memberships: members.data ?? [],

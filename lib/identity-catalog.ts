@@ -169,17 +169,9 @@ export function categoryForSlug(catalog: IdentityCatalog, slug?: string | null) 
   return "none";
 }
 
-export function extraProfileTableForSlug(catalog: IdentityCatalog, slug?: string | null) {
-  switch (categoryForSlug(catalog, slug)) {
-    case "athlete":
-      return "athlete_profiles";
-    case "professional":
-      return "professional_profiles";
-    case "media":
-      return "media_profiles";
-    default:
-      return "";
-  }
+/** @deprecated Role extras use the profile catalog; always empty after M5 Phase 2. */
+export function extraProfileTableForSlug(_catalog: IdentityCatalog, _slug?: string | null) {
+  return "";
 }
 
 export function hasMobileIdentitySeeds(catalog: IdentityCatalog) {

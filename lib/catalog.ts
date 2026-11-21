@@ -85,17 +85,9 @@ export function categoryFor(role?: string | null): RoleCategory {
   return "none";
 }
 
-export function extraProfileTable(role?: string | null) {
-  switch (categoryFor(role)) {
-    case "athlete":
-      return "athlete_profiles";
-    case "professional":
-      return "professional_profiles";
-    case "media":
-      return "media_profiles";
-    default:
-      return "";
-  }
+/** @deprecated Role extras use the profile catalog; always empty after M5 Phase 2. */
+export function extraProfileTable(_role?: string | null) {
+  return "";
 }
 
 function formatFallback(value: string) {

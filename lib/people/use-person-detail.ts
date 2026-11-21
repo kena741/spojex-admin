@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { deleteAdmin, patchAdmin, postAdmin, postAdminResponse } from "@/lib/hooks";
+import type { CatalogProfileDocument } from "@/lib/people/catalog-profile";
 import { fetchPersonSnapshot } from "@/lib/people/fetch-person";
 import type { FeedInterestDetail, PersonSnapshot } from "@/lib/people/types";
 import { useAdminQuery } from "@/lib/use-admin-query";
@@ -21,6 +22,7 @@ import type {
 
 export interface PersonDetail {
   user: UserRow | null;
+  catalogProfile: CatalogProfileDocument | null;
   orgs: OrganizationRow[];
   services: ServiceRow[];
   wallet: WalletRow | null;
@@ -57,6 +59,7 @@ export interface PersonDetail {
 export function usePersonDetail(id: string): PersonDetail {
   const router = useRouter();
   const [user, setUser] = useState<UserRow | null>(null);
+  const [catalogProfile, setCatalogProfile] = useState<CatalogProfileDocument | null>(null);
   const [orgs, setOrgs] = useState<OrganizationRow[]>([]);
   const [services, setServices] = useState<ServiceRow[]>([]);
   const [wallet, setWallet] = useState<WalletRow | null>(null);
@@ -85,6 +88,7 @@ export function usePersonDetail(id: string): PersonDetail {
 
   useApplyAdminSnapshot(snapshot, (next) => {
     setUser(next.user);
+    setCatalogProfile(next.catalogProfile);
     setOrgs(next.orgs);
     setMediaItems(next.mediaItems);
     setVerificationId(next.verificationId);
@@ -202,6 +206,7 @@ export function usePersonDetail(id: string): PersonDetail {
 
   return {
     user,
+    catalogProfile,
     orgs,
     services,
     wallet,

@@ -53,7 +53,9 @@ export default function UserDetailPage() {
     { id: "about", label: "About" },
     { id: "identity", label: "Identity" },
     { id: "highlights", label: "Media" },
-    ...(hasPersonRoleProfile(user) ? [{ id: "profile", label: "Profile" }] : []),
+    ...(hasPersonRoleProfile(user, detail.catalogProfile)
+      ? [{ id: "profile", label: "Profile" }]
+      : []),
     { id: "marketplace", label: "Marketplace" },
     { id: "engagement", label: "Engagement" },
     { id: "organizations", label: "Organizations" },
@@ -203,7 +205,9 @@ export default function UserDetailPage() {
 
           <PersonMediaSection items={detail.mediaItems} />
 
-          {hasPersonRoleProfile(user) ? <PersonProfileSection user={user} /> : null}
+          {hasPersonRoleProfile(user, detail.catalogProfile) ? (
+            <PersonProfileSection catalogProfile={detail.catalogProfile} />
+          ) : null}
 
           <PersonMarketplaceSection
             userId={user.id}

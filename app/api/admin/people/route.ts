@@ -1,15 +1,27 @@
 import { NextResponse } from "next/server";
 import { requireAnyAdminPermission } from "@/lib/admin-auth";
+import {
+  athleteRoles,
+  categoryFor,
+  mediaRoles,
+  professionalRoles,
+} from "@/lib/catalog";
 import { createAdminClient } from "@/lib/spojex/admin";
 
 export const dynamic = "force-dynamic";
 
 type ProfileKind = "athlete" | "professional" | "media" | "fan" | "all";
 
+const ATHLETE_ROLE_SLUGS = ["athlete", "player", ...athleteRoles.map((r) => r.id)];
+const PROFESSIONAL_ROLE_SLUGS = [
+  "professional",
+  ...professionalRoles.map((r) => r.id),
+];
+const MEDIA_ROLE_SLUGS = ["media", ...mediaRoles.map((r) => r.id)];
+
 /**
  * Paginated People directory with summary KPIs.
- * Profile-type filter uses both users.role group and presence of profile table rows
- * (supports multi-profile identities without merging tables).
+ * Profile-type filter/badges use users.role category (catalog SoT), not *_profiles.
  */
 export async function GET(request: Request) {
   const auth = await requireAnyAdminPermission(["users:read", "profiles:read"]);
@@ -89,31 +101,6 @@ export async function GET(request: Request) {
     }
   }
 
-  // Profile-type: collect user ids from profile tables when filtering
-  let profileUserIds: string[] | null = null;
-  if (profile === "athlete" || profile === "professional" || profile === "media") {
-    const table =
-      profile === "athlete"
-        ? "athlete_profiles"
-        : profile === "professional"
-          ? "professional_profiles"
-          : "media_profiles";
-    const { data: prows } = await client.from(table).select("user_id").limit(5000);
-    const idsFromProfiles = (prows ?? [])
-      .map((r: { user_id?: string | null }) => String(r.user_id ?? ""))
-      .filter(Boolean);
-    profileUserIds = idsFromProfiles;
-    if (!idsFromProfiles.length) {
-      return NextResponse.json({
-        summary,
-        data: [],
-        total: 0,
-        page,
-        page_size: pageSize,
-      });
-    }
-  }
-
   let query = client
     .from("users")
     .select(
@@ -131,11 +118,12 @@ export async function GET(request: Request) {
   if (registeredTo) query = query.lte("created_at", registeredTo);
 
   if (orgUserIds) query = query.in("id", orgUserIds);
-  if (profileUserIds) query = query.in("id", profileUserIds);
 
-  if (profile === "fan") {
-    // Primary role fans / community without extra profile tables - soft filter by role
-    query = query.in("role", ["fan", "supporter", "community", "parent", "guardian"]);
+  if (profile === "athlete") query = query.in("role", ATHLETE_ROLE_SLUGS);
+  else if (profile === "professional") query = query.in("role", PROFESSIONAL_ROLE_SLUGS);
+  else if (profile === "media") query = query.in("role", MEDIA_ROLE_SLUGS);
+  else if (profile === "fan") {
+    query = query.in("role", ["fan", "supporter", "community", "parent", "guardian", "parent_guardian"]);
   }
 
   if (q.length >= 1) {
@@ -156,32 +144,6 @@ export async function GET(request: Request) {
 
   const rows = (data ?? []) as Array<Record<string, unknown>>;
   const ids = rows.map((r) => String(r.id));
-
-  // Multi-profile badges: presence in each profile table (do not merge records)
-  const profileMap: Record<string, string[]> = {};
-  for (const id of ids) profileMap[id] = [];
-
-  if (ids.length) {
-    const [athletes, pros, media] = await Promise.all([
-      client.from("athlete_profiles").select("user_id").in("user_id", ids),
-      client.from("professional_profiles").select("user_id").in("user_id", ids),
-      client.from("media_profiles").select("user_id").in("user_id", ids),
-    ]);
-    for (const r of athletes.data ?? []) {
-      const uid = String(r.user_id);
-      if (profileMap[uid] && !profileMap[uid].includes("athlete")) profileMap[uid].push("athlete");
-    }
-    for (const r of pros.data ?? []) {
-      const uid = String(r.user_id);
-      if (profileMap[uid] && !profileMap[uid].includes("professional")) {
-        profileMap[uid].push("professional");
-      }
-    }
-    for (const r of media.data ?? []) {
-      const uid = String(r.user_id);
-      if (profileMap[uid] && !profileMap[uid].includes("media")) profileMap[uid].push("media");
-    }
-  }
 
   // Owned org names (compact)
   const orgByOwner: Record<string, { id: string; name: string }[]> = {};
@@ -215,19 +177,10 @@ export async function GET(request: Request) {
 
   const enriched = rows.map((r) => {
     const id = String(r.id);
-    const badges = profileMap[id] ?? [];
-    // Always surface primary role category as badge if no extra profile rows
-    if (!badges.length && r.role) {
-      const role = String(r.role);
-      // Roles are fan / athlete / professional; legacy slugs remain on un-migrated rows only.
-      if (["athlete", "player"].includes(role)) badges.push("athlete");
-      else if (role === "professional") badges.push("professional");
-      else if (["photographer", "sports_journalist", "media"].includes(role)) badges.push("media");
-      else if (
-        ["coach", "agent", "scout", "physiotherapist", "administrator", "referee"].includes(role)
-      ) {
-        badges.push("professional");
-      }
+    const badges: string[] = [];
+    const cat = categoryFor(r.role == null ? null : String(r.role));
+    if (cat === "athlete" || cat === "professional" || cat === "media") {
+      badges.push(cat);
     }
     return {
       ...r,
