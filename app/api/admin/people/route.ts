@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { requireAnyAdminPermission } from "@/lib/admin-auth";
 import { athleteRoles, mediaRoles, professionalRoles } from "@/lib/catalog";
+import { getSpojexApiBaseUrl } from "@/lib/env";
 import {
-  MEDIA_CATEGORY_SLUGS,
   collectProfileBadges,
+  listAssignmentUserIds,
   profileTypeBadges,
   type AssignmentLike,
 } from "@/lib/people/assignment-badges";
 import { createAdminClient } from "@/lib/spojex/admin";
+import { requestAccessToken } from "@/lib/spojex/server";
 
 export const dynamic = "force-dynamic";
 
@@ -121,58 +123,48 @@ export async function GET(request: Request) {
 
   if (orgUserIds) query = query.in("id", orgUserIds);
 
-  // Assignment-backed profile filter (includes secondary roles).
+  // Profile filter: assignment SoT ∪ users.role mirror (backfill gaps + secondary roles).
   if (profile !== "all") {
-    let assignQuery = client
-      .from("user_role_assignments")
-      .select("user_id")
-      .eq("status", "active");
-    if (profile === "athlete") {
-      assignQuery = assignQuery.eq("account_role", "athlete");
-    } else if (profile === "fan") {
-      assignQuery = assignQuery.eq("account_role", "fan");
-    } else if (profile === "media") {
-      assignQuery = assignQuery
-        .eq("account_role", "professional")
-        .in("category_slug", MEDIA_CATEGORY_SLUGS);
-    } else if (profile === "professional") {
-      // Professionals excluding media categories (those have their own filter).
-      assignQuery = assignQuery.eq("account_role", "professional");
-      if (MEDIA_CATEGORY_SLUGS.length) {
-        // PostgREST: not.in when possible; fall back to all professional then exclude in JS if needed.
-        assignQuery = assignQuery.not(
-          "category_slug",
-          "in",
-          `(${MEDIA_CATEGORY_SLUGS.join(",")})`,
-        );
-      }
-    }
+    const token = await requestAccessToken();
+    const assignIds = token
+      ? await listAssignmentUserIds({
+          baseUrl: getSpojexApiBaseUrl(),
+          token,
+          profile,
+        })
+      : null;
 
-    const { data: assigns, error: assignError } = await assignQuery.limit(5000);
-    if (assignError) {
-      // Fallback to legacy users.role mirror when assignments table is unavailable.
-      if (profile === "athlete") query = query.in("role", ATHLETE_ROLE_SLUGS);
-      else if (profile === "professional") query = query.in("role", PROFESSIONAL_ROLE_SLUGS);
-      else if (profile === "media") query = query.in("role", MEDIA_ROLE_SLUGS);
-      else if (profile === "fan") {
-        query = query.in("role", [
-          "fan",
-          "supporter",
-          "community",
-          "parent",
-          "guardian",
-          "parent_guardian",
-        ]);
-      }
+    const mirrorSlugs =
+      profile === "athlete"
+        ? ATHLETE_ROLE_SLUGS
+        : profile === "professional"
+          ? PROFESSIONAL_ROLE_SLUGS
+          : profile === "media"
+            ? MEDIA_ROLE_SLUGS
+            : [
+                "fan",
+                "supporter",
+                "community",
+                "parent",
+                "guardian",
+                "parent_guardian",
+              ];
+
+    if (assignIds == null) {
+      query = query.in("role", mirrorSlugs);
     } else {
-      const ids = [
-        ...new Set(
-          (assigns ?? [])
-            .map((row) => String((row as { user_id?: string }).user_id ?? "").trim())
-            .filter(Boolean),
-        ),
-      ];
-      if (!ids.length) {
+      const { data: mirrorRows } = await client
+        .from("users")
+        .select("id, role")
+        .in("role", mirrorSlugs)
+        .limit(500);
+      const ids = new Set<string>(assignIds);
+      for (const row of mirrorRows ?? []) {
+        const id = String((row as { id?: string }).id ?? "").trim();
+        if (id) ids.add(id);
+      }
+      // Media via assignments only when mirror has no legacy media roles — still keep assign hits.
+      if (!ids.size) {
         return NextResponse.json({
           summary,
           data: [],
@@ -181,7 +173,7 @@ export async function GET(request: Request) {
           page_size: pageSize,
         });
       }
-      query = query.in("id", ids);
+      query = query.in("id", [...ids]);
     }
   }
 
@@ -234,27 +226,10 @@ export async function GET(request: Request) {
     }
   }
 
-  // Active assignment badges (multi-role) — prefer SoT over users.role mirror.
-  const assignsByUser: Record<string, AssignmentLike[]> = {};
-  if (ids.length) {
-    const { data: activeAssigns } = await client
-      .from("user_role_assignments")
-      .select("user_id, account_role, category_slug, is_primary")
-      .in("user_id", ids)
-      .eq("status", "active")
-      .limit(ids.length * 5);
-    for (const row of activeAssigns ?? []) {
-      const uid = String((row as { user_id?: string }).user_id ?? "");
-      if (!uid) continue;
-      if (!assignsByUser[uid]) assignsByUser[uid] = [];
-      assignsByUser[uid].push(row as AssignmentLike);
-    }
-  }
-
+  // Badges from backend active_roles embed (assignment SoT), then users.role mirror.
   const enriched = rows.map((r) => {
     const id = String(r.id);
     const badges = collectProfileBadges({
-      assignments: assignsByUser[id],
       activeRoles: Array.isArray(r.active_roles) ? (r.active_roles as AssignmentLike[]) : null,
       role: r.role == null ? null : String(r.role),
     });

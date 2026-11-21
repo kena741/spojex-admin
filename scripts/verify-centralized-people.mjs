@@ -25,13 +25,16 @@ function read(rel) {
 // --- Source contracts (Admin M7) ---
 const people = read("app/api/admin/people/route.ts");
 ok(
-  "People filter uses user_role_assignments",
-  people.includes('from("user_role_assignments")') &&
-    people.includes('eq("status", "active")'),
+  "People filter uses paginated assignment SoT",
+  people.includes("listAssignmentUserIds") && people.includes("assignIds"),
 );
 ok(
-  "People badges prefer assignments over users.role",
-  people.includes("collectProfileBadges") && people.includes("user_role_assignments"),
+  "People badges prefer active_roles over users.role",
+  people.includes("collectProfileBadges") && people.includes("active_roles"),
+);
+ok(
+  "listAssignmentUserIds hits /data/user_role_assignments",
+  read("lib/people/assignment-badges.ts").includes("/api/v1/data/user_role_assignments"),
 );
 ok(
   "categoryFor maps account roles",
@@ -39,8 +42,10 @@ ok(
     read("lib/catalog.ts").includes('if (id === "professional") return "professional"'),
 );
 ok(
-  "People keeps users.role fallback",
-  people.includes("ATHLETE_ROLE_SLUGS") && people.includes("assignError"),
+  "People unions assignments with users.role mirror",
+  people.includes("ATHLETE_ROLE_SLUGS") &&
+    people.includes("assignIds") &&
+    people.includes("mirrorRows"),
 );
 
 const usersRoute = read("app/api/admin/users/route.ts");
