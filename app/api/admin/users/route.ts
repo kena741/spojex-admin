@@ -166,8 +166,11 @@ export async function POST(request: Request) {
   if (!email || !email.includes("@")) {
     return NextResponse.json({ error: "A valid email is required" }, { status: 400 });
   }
-  if (!/^[a-z0-9_]+$/.test(role)) {
-    return NextResponse.json({ error: "Role is required" }, { status: 400 });
+  if (!["fan", "athlete", "professional"].includes(role)) {
+    return NextResponse.json(
+      { error: "Account role must be fan, athlete, or professional." },
+      { status: 422 },
+    );
   }
   if (password.length < 6) {
     return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 });

@@ -139,17 +139,25 @@ export async function fetchIdentityCatalog(): Promise<IdentityCatalog> {
   return identityCatalogInflight;
 }
 
+/** Account roles only — `users.role` is the primary-assignment mirror (M7). */
+const ACCOUNT_ROLE_SLUGS = new Set(["fan", "athlete", "professional"]);
+
 export function roleOptionsFromCatalog(catalog: IdentityCatalog) {
-  return [
-    { id: "", label: "No role", group: "" },
-    ...catalog.roles
-      .filter((role) => role.is_active)
-      .map((role) => ({
-        id: role.slug,
-        label: role.label,
-        group: role.identity_role_groups?.label ?? "",
-      })),
+  const account = catalog.roles
+    .filter((role) => role.is_active && ACCOUNT_ROLE_SLUGS.has(role.slug))
+    .map((role) => ({
+      id: role.slug,
+      label: role.label,
+      group: role.identity_role_groups?.label ?? "Account",
+    }));
+  // Stable fallback if catalog has not seeded account rows yet.
+  const fallback = [
+    { id: "fan", label: "Fan", group: "Account" },
+    { id: "athlete", label: "Athlete", group: "Account" },
+    { id: "professional", label: "Professional", group: "Account" },
   ];
+  const rows = account.length ? account : fallback;
+  return [{ id: "", label: "No role", group: "" }, ...rows];
 }
 
 export function roleLabelFromCatalog(catalog: IdentityCatalog, slug?: string | null) {
