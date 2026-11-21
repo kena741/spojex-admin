@@ -2,8 +2,32 @@ import { NextResponse } from "next/server";
 import type { SpojexClient } from "@/lib/api/client";
 import { requireAnyAdminPermission } from "@/lib/admin-auth";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
+import { getSpojexApiBaseUrl } from "@/lib/env";
 import { canUseAdminClient, createAdminClient } from "@/lib/spojex/admin";
+import { requestAccessToken } from "@/lib/spojex/server";
 import { generateStadiumManagerPassword } from "@/lib/stadiums";
+
+/** Force primary assignment + users.role mirror via backend apply_role_resolution. */
+async function ensureRoleAssignment(userId: string, role: string): Promise<string | null> {
+  const token = await requestAccessToken();
+  if (!token) return "Unauthorized";
+  const base = getSpojexApiBaseUrl();
+  const res = await fetch(`${base}/api/v1/data/users/${userId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ role }),
+  });
+  if (res.ok) return null;
+  const payload = (await res.json().catch(() => ({}))) as {
+    message?: string;
+    detail?: string;
+    error?: string;
+  };
+  return payload.message || payload.detail || payload.error || "Failed to sync role assignment";
+}
 
 const userSelect = "id, display_name, email, username, role, phone, city, avatar_url";
 
@@ -208,6 +232,11 @@ export async function POST(request: Request) {
   const existingProfile = existingMatches?.[0];
 
   if (existingProfile?.id) {
+    // Attach path: still ensure an active primary assignment exists.
+    const ensureError = await ensureRoleAssignment(String(existingProfile.id), role);
+    if (ensureError) {
+      return NextResponse.json({ error: ensureError }, { status: 400 });
+    }
     return NextResponse.json({
       data: existingProfile,
       attached_existing: true,
@@ -271,6 +300,13 @@ export async function POST(request: Request) {
       city,
       country,
     });
+    const profileId = String((profile as { id?: string })?.id ?? "");
+    if (profileId) {
+      const ensureError = await ensureRoleAssignment(profileId, role);
+      if (ensureError) {
+        return NextResponse.json({ error: ensureError }, { status: 400 });
+      }
+    }
     return NextResponse.json({
       data: profile,
       password: createdNewLogin ? password : undefined,
