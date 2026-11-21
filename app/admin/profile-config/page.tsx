@@ -485,7 +485,7 @@ export default function ProfileConfigPage() {
         title="Profile Configuration"
         description={
           overview
-            ? `v${overview.live.version}${draft ? ` · draft` : ""} · fields & tabs (identity roles managed under People)`
+            ? `v${overview.live.version}${draft ? ` · draft` : ""} · sports, professions, fields & tabs`
             : undefined
         }
         actions={headerActions}
