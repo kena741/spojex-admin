@@ -232,14 +232,13 @@ export async function POST(request: Request) {
   const existingProfile = existingMatches?.[0];
 
   if (existingProfile?.id) {
-    // Attach path: still ensure an active primary assignment exists.
+    // Attach path: ensure assignment; soft-fail so the profile remains usable.
     const ensureError = await ensureRoleAssignment(String(existingProfile.id), role);
-    if (ensureError) {
-      return NextResponse.json({ error: ensureError }, { status: 400 });
-    }
     return NextResponse.json({
       data: existingProfile,
       attached_existing: true,
+      assignment_pending: Boolean(ensureError),
+      assignment_error: ensureError || undefined,
     });
   }
 
@@ -301,16 +300,17 @@ export async function POST(request: Request) {
       country,
     });
     const profileId = String((profile as { id?: string })?.id ?? "");
+    let assignmentError: string | null = null;
     if (profileId) {
-      const ensureError = await ensureRoleAssignment(profileId, role);
-      if (ensureError) {
-        return NextResponse.json({ error: ensureError }, { status: 400 });
-      }
+      assignmentError = await ensureRoleAssignment(profileId, role);
     }
+    // Profile exists even if assignment sync failed — client can retry ensure-role.
     return NextResponse.json({
       data: profile,
       password: createdNewLogin ? password : undefined,
       attached_existing: !createdNewLogin,
+      assignment_pending: Boolean(assignmentError),
+      assignment_error: assignmentError || undefined,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to save user profile";
