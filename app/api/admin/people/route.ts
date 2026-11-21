@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireAnyAdminPermission } from "@/lib/admin-auth";
+import { athleteRoles, mediaRoles, professionalRoles } from "@/lib/catalog";
 import {
-  athleteRoles,
-  categoryFor,
-  mediaRoles,
-  professionalRoles,
-} from "@/lib/catalog";
+  MEDIA_CATEGORY_SLUGS,
+  collectProfileBadges,
+  profileTypeBadges,
+  type AssignmentLike,
+} from "@/lib/people/assignment-badges";
 import { createAdminClient } from "@/lib/spojex/admin";
 
 export const dynamic = "force-dynamic";
@@ -18,9 +19,6 @@ const PROFESSIONAL_ROLE_SLUGS = [
   ...professionalRoles.map((r) => r.id),
 ];
 const MEDIA_ROLE_SLUGS = ["media", ...mediaRoles.map((r) => r.id)];
-
-const MEDIA_CATEGORY_SLUGS = mediaRoles.map((r) => r.id);
-const PROFESSIONAL_CATEGORY_SLUGS = professionalRoles.map((r) => r.id);
 
 /**
  * Paginated People directory with summary KPIs.
@@ -108,7 +106,7 @@ export async function GET(request: Request) {
   let query = client
     .from("users")
     .select(
-      "id, user_id, display_name, full_name, username, email, phone, role, avatar_url, verified, city, country, created_at, updated_at, deleted_at",
+      "id, user_id, display_name, full_name, username, email, phone, role, avatar_url, verified, city, country, created_at, updated_at, deleted_at, active_roles",
       { count: "exact" },
     );
 
@@ -237,49 +235,32 @@ export async function GET(request: Request) {
   }
 
   // Active assignment badges (multi-role) — prefer SoT over users.role mirror.
-  const roleByUser: Record<string, string[]> = {};
+  const assignsByUser: Record<string, AssignmentLike[]> = {};
   if (ids.length) {
-    const { data: activeRoles } = await client
+    const { data: activeAssigns } = await client
       .from("user_role_assignments")
       .select("user_id, account_role, category_slug, is_primary")
       .in("user_id", ids)
       .eq("status", "active")
       .limit(ids.length * 5);
-    for (const row of activeRoles ?? []) {
+    for (const row of activeAssigns ?? []) {
       const uid = String((row as { user_id?: string }).user_id ?? "");
       if (!uid) continue;
-      const account = String((row as { account_role?: string }).account_role ?? "");
-      const category = String((row as { category_slug?: string }).category_slug ?? "");
-      let badge = account;
-      if (account === "professional" && MEDIA_CATEGORY_SLUGS.includes(category)) {
-        badge = "media";
-      } else if (
-        account === "professional" &&
-        (PROFESSIONAL_CATEGORY_SLUGS.includes(category) || !category)
-      ) {
-        badge = "professional";
-      } else if (account === "athlete") {
-        badge = "athlete";
-      } else if (account === "fan") {
-        badge = "fan";
-      }
-      if (!roleByUser[uid]) roleByUser[uid] = [];
-      if (badge && !roleByUser[uid].includes(badge)) roleByUser[uid].push(badge);
+      if (!assignsByUser[uid]) assignsByUser[uid] = [];
+      assignsByUser[uid].push(row as AssignmentLike);
     }
   }
 
   const enriched = rows.map((r) => {
     const id = String(r.id);
-    const badges = roleByUser[id] ?? [];
-    if (!badges.length) {
-      const cat = categoryFor(r.role == null ? null : String(r.role));
-      if (cat === "athlete" || cat === "professional" || cat === "media") {
-        badges.push(cat);
-      }
-    }
+    const badges = collectProfileBadges({
+      assignments: assignsByUser[id],
+      activeRoles: Array.isArray(r.active_roles) ? (r.active_roles as AssignmentLike[]) : null,
+      role: r.role == null ? null : String(r.role),
+    });
     return {
       ...r,
-      profile_types: badges.filter((b) => b === "athlete" || b === "professional" || b === "media"),
+      profile_types: profileTypeBadges(badges),
       organizations: orgByOwner[id] ?? [],
       verification_request_status: verByUser[id] ?? null,
       account_status: r.deleted_at ? "restricted" : "active",

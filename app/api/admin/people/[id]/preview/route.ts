@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAnyAdminPermission } from "@/lib/admin-auth";
-import { categoryFor } from "@/lib/catalog";
+import {
+  collectProfileBadges,
+  profileTypeBadges,
+  type AssignmentLike,
+} from "@/lib/people/assignment-badges";
 import { createAdminClient } from "@/lib/spojex/admin";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -16,7 +20,7 @@ export async function GET(_request: Request, ctx: Ctx) {
   const { data: user, error } = await client
     .from("users")
     .select(
-      "id, display_name, full_name, username, email, phone, role, avatar_url, verified, city, country, headline, bio, created_at, updated_at, deleted_at",
+      "id, display_name, full_name, username, email, phone, role, avatar_url, verified, city, country, headline, bio, created_at, updated_at, deleted_at, active_roles",
     )
     .eq("id", id)
     .maybeSingle();
@@ -24,7 +28,7 @@ export async function GET(_request: Request, ctx: Ctx) {
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   if (!user) return NextResponse.json({ error: "Person not found" }, { status: 404 });
 
-  const [orgs, members, ver] = await Promise.all([
+  const [orgs, members, ver, assignsRes] = await Promise.all([
     client.from("organizations").select("id, name, organization_type, verified").eq("user_id", id),
     client
       .from("organization_members")
@@ -37,37 +41,24 @@ export async function GET(_request: Request, ctx: Ctx) {
       .eq("user_id", id)
       .order("created_at", { ascending: false })
       .limit(5),
+    client
+      .from("user_role_assignments")
+      .select("account_role, category_slug, is_primary")
+      .eq("user_id", id)
+      .eq("status", "active")
+      .limit(10),
   ]);
 
-  // Profile type badges from active assignments (M7 SoT); fall back to users.role.
-  const profile_types: string[] = [];
-  const { data: assigns } = await client
-    .from("user_role_assignments")
-    .select("account_role, category_slug, is_primary")
-    .eq("user_id", id)
-    .eq("status", "active")
-    .limit(10);
-  for (const row of assigns ?? []) {
-    const account = String((row as { account_role?: string }).account_role ?? "");
-    const category = String((row as { category_slug?: string }).category_slug ?? "");
-    let badge = "";
-    if (account === "athlete") badge = "athlete";
-    else if (account === "professional") {
-      badge =
-        category === "photographer" ||
-        category === "sports_journalist" ||
-        category === "media"
-          ? "media"
-          : "professional";
-    }
-    if (badge && !profile_types.includes(badge)) profile_types.push(badge);
-  }
-  if (!profile_types.length) {
-    const cat = categoryFor(user.role);
-    if (cat === "athlete" || cat === "professional" || cat === "media") {
-      profile_types.push(cat);
-    }
-  }
+  // Profile type badges from active assignments (M7 SoT); fall back to active_roles / users.role.
+  const profile_types = profileTypeBadges(
+    collectProfileBadges({
+      assignments: (assignsRes.data ?? []) as AssignmentLike[],
+      activeRoles: Array.isArray((user as { active_roles?: unknown }).active_roles)
+        ? ((user as { active_roles: AssignmentLike[] }).active_roles)
+        : null,
+      role: user.role,
+    }),
+  );
 
   return NextResponse.json({
     data: {
