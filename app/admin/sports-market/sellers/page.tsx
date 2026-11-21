@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { BadgeCheck, Search, UserPlus } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
 import {
@@ -181,7 +182,14 @@ export default function SportsMarketSellersPage() {
   );
 }
 
-function UserCell({ user }: { user: SmUser }) {
+function UserCell({ user, linkToPeople = true }: { user: SmUser; linkToPeople?: boolean }) {
+  const peopleHref = linkToPeople && user.id ? `/admin/people/${user.id}` : null;
+  const name = (
+    <span className="flex items-center gap-1 truncate font-medium text-text-primary">
+      {user.name}
+      {user.verified ? <BadgeCheck className="h-3.5 w-3.5 text-primary" /> : null}
+    </span>
+  );
   return (
     <div className="flex items-center gap-3">
       {user.avatar_url ? (
@@ -193,10 +201,13 @@ function UserCell({ user }: { user: SmUser }) {
         </div>
       )}
       <div className="min-w-0">
-        <p className="flex items-center gap-1 truncate font-medium text-text-primary">
-          {user.name}
-          {user.verified ? <BadgeCheck className="h-3.5 w-3.5 text-primary" /> : null}
-        </p>
+        {peopleHref ? (
+          <Link href={peopleHref} className="hover:underline" onClick={(e) => e.stopPropagation()}>
+            {name}
+          </Link>
+        ) : (
+          name
+        )}
         <p className="truncate text-xs text-text-secondary">
           {user.username ? `@${user.username}` : ""}
           {user.email ? ` · ${user.email}` : ""}
@@ -301,7 +312,7 @@ function GrantSellerModal({ open, onClose, onGranted }: { open: boolean; onClose
                 picked?.id === u.id ? "border-primary bg-primary/5" : "border-border hover:bg-muted"
               }`}
             >
-              <UserCell user={u} />
+              <UserCell user={u} linkToPeople={false} />
               {u.seller_status === "active" ? (
                 <StatusBadge tone="success">Seller</StatusBadge>
               ) : u.seller_status === "revoked" ? (

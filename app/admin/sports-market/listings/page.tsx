@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -165,7 +166,16 @@ export default function SportsMarketListingsPage() {
                     </button>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-text-primary">{p.seller.name}</p>
+                    {p.seller.id ? (
+                      <Link
+                        href={`/admin/people/${p.seller.id}`}
+                        className="text-primary hover:underline"
+                      >
+                        {p.seller.name}
+                      </Link>
+                    ) : (
+                      <p className="text-text-primary">{p.seller.name}</p>
+                    )}
                     {!p.seller.active ? <p className="text-xs text-danger">Seller access revoked</p> : null}
                   </td>
                   <td className="px-4 py-3 text-text-secondary">{p.category.name}</td>

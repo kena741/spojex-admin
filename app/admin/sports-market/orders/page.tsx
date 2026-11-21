@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -107,7 +108,29 @@ export default function SportsMarketOrdersPage() {
                     <p className="text-xs text-text-secondary">× {o.quantity}</p>
                   </td>
                   <td className="px-4 py-3 text-text-secondary">
-                    {o.buyer.name} → {o.seller.name}
+                    {o.buyer.id ? (
+                      <Link
+                        href={`/admin/people/${o.buyer.id}`}
+                        className="text-primary hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {o.buyer.name}
+                      </Link>
+                    ) : (
+                      o.buyer.name
+                    )}
+                    {" → "}
+                    {o.seller.id ? (
+                      <Link
+                        href={`/admin/people/${o.seller.id}`}
+                        className="text-primary hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {o.seller.name}
+                      </Link>
+                    ) : (
+                      o.seller.name
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">{etb(o.total, o.currency)}</td>
                   <td className="px-4 py-3">

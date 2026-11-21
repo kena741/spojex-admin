@@ -221,8 +221,30 @@ export function OrderDetailModal({
                 {o.color ? ` · ${o.color}` : ""}
               </p>
               <p className="text-text-secondary">
-                Buyer {o.buyer.name} {o.buyer.username ? `(@${o.buyer.username})` : ""} · Seller {o.seller.name}{" "}
-                {o.seller.username ? `(@${o.seller.username})` : ""}
+                Buyer{" "}
+                {o.buyer.id ? (
+                  <Link href={`/admin/people/${o.buyer.id}`} className="text-primary hover:underline">
+                    {o.buyer.name}
+                    {o.buyer.username ? ` (@${o.buyer.username})` : ""}
+                  </Link>
+                ) : (
+                  <>
+                    {o.buyer.name}
+                    {o.buyer.username ? ` (@${o.buyer.username})` : ""}
+                  </>
+                )}
+                {" · Seller "}
+                {o.seller.id ? (
+                  <Link href={`/admin/people/${o.seller.id}`} className="text-primary hover:underline">
+                    {o.seller.name}
+                    {o.seller.username ? ` (@${o.seller.username})` : ""}
+                  </Link>
+                ) : (
+                  <>
+                    {o.seller.name}
+                    {o.seller.username ? ` (@${o.seller.username})` : ""}
+                  </>
+                )}
               </p>
             </div>
           </div>

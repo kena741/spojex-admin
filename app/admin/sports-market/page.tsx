@@ -107,7 +107,12 @@ function TopSellers({ sellers }: { sellers: SmTopSeller[] }) {
             {sellers.map((s) => (
               <tr key={s.user_id} className="border-b border-border last:border-0">
                 <td className="px-4 py-3">
-                  <p className="font-medium text-text-primary">{s.name}</p>
+                  <Link
+                    href={`/admin/people/${s.user_id}`}
+                    className="font-medium text-primary hover:underline"
+                  >
+                    {s.name}
+                  </Link>
                   {s.username ? <p className="text-xs text-text-hint">@{s.username}</p> : null}
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums">{s.completed_count}</td>
