@@ -144,6 +144,7 @@ function SettingsCard({ initial, canWrite, onSaved }: { initial: SmSettings; can
         commission_percent: Number(form.commission_percent),
         cod_enabled: form.cod_enabled,
         require_listing_approval: form.require_listing_approval,
+        seller_terms: form.seller_terms ?? "",
       });
       setSaved(true);
       onSaved();
@@ -203,6 +204,20 @@ function SettingsCard({ initial, canWrite, onSaved }: { initial: SmSettings; can
             <span className="block text-text-secondary">New and edited listings wait in Listings → Waiting for review.</span>
           </span>
         </label>
+        <div>
+          <label className={labelClass}>Seller terms of service</label>
+          <p className="mb-2 text-xs text-text-secondary">
+            Shown on My store → Terms of service. Use blank lines between sections; the first line of each block can be a short heading.
+          </p>
+          <textarea
+            rows={12}
+            disabled={!canWrite}
+            className={`${fieldClass} min-h-[12rem] font-mono text-sm`}
+            value={form.seller_terms ?? ""}
+            onChange={(e) => setForm({ ...form, seller_terms: e.target.value })}
+            placeholder="Rules sellers must follow…"
+          />
+        </div>
         {canWrite ? (
           <div className="flex items-center gap-3">
             <button type="button" className={primaryButtonClass} disabled={saving} onClick={save}>

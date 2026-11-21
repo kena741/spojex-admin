@@ -167,7 +167,13 @@ export type SmPayment = {
   seller_name: string;
 };
 
-export type SmSettings = { commission_percent: number; cod_enabled: boolean; require_listing_approval: boolean };
+export type SmSettings = {
+  commission_percent: number;
+  cod_enabled: boolean;
+  require_listing_approval: boolean;
+  /** Plain-text seller Terms of service shown in My store. */
+  seller_terms?: string;
+};
 
 export type SmOverview = {
   active_sellers: number;
