@@ -39,11 +39,34 @@ export async function GET(_request: Request, ctx: Ctx) {
       .limit(5),
   ]);
 
-  // Profile type badges from users.role category (catalog SoT; no *_profiles reads).
+  // Profile type badges from active assignments (M7 SoT); fall back to users.role.
   const profile_types: string[] = [];
-  const cat = categoryFor(user.role);
-  if (cat === "athlete" || cat === "professional" || cat === "media") {
-    profile_types.push(cat);
+  const { data: assigns } = await client
+    .from("user_role_assignments")
+    .select("account_role, category_slug, is_primary")
+    .eq("user_id", id)
+    .eq("status", "active")
+    .limit(10);
+  for (const row of assigns ?? []) {
+    const account = String((row as { account_role?: string }).account_role ?? "");
+    const category = String((row as { category_slug?: string }).category_slug ?? "");
+    let badge = "";
+    if (account === "athlete") badge = "athlete";
+    else if (account === "professional") {
+      badge =
+        category === "photographer" ||
+        category === "sports_journalist" ||
+        category === "media"
+          ? "media"
+          : "professional";
+    }
+    if (badge && !profile_types.includes(badge)) profile_types.push(badge);
+  }
+  if (!profile_types.length) {
+    const cat = categoryFor(user.role);
+    if (cat === "athlete" || cat === "professional" || cat === "media") {
+      profile_types.push(cat);
+    }
   }
 
   return NextResponse.json({

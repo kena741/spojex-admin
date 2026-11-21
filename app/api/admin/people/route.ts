@@ -19,9 +19,13 @@ const PROFESSIONAL_ROLE_SLUGS = [
 ];
 const MEDIA_ROLE_SLUGS = ["media", ...mediaRoles.map((r) => r.id)];
 
+const MEDIA_CATEGORY_SLUGS = mediaRoles.map((r) => r.id);
+const PROFESSIONAL_CATEGORY_SLUGS = professionalRoles.map((r) => r.id);
+
 /**
  * Paginated People directory with summary KPIs.
- * Profile-type filter/badges use users.role category (catalog SoT), not *_profiles.
+ * Profile-type filter matches active ``user_role_assignments`` (M7 SoT),
+ * not only the ``users.role`` primary mirror.
  */
 export async function GET(request: Request) {
   const auth = await requireAnyAdminPermission(["users:read", "profiles:read"]);
@@ -119,11 +123,68 @@ export async function GET(request: Request) {
 
   if (orgUserIds) query = query.in("id", orgUserIds);
 
-  if (profile === "athlete") query = query.in("role", ATHLETE_ROLE_SLUGS);
-  else if (profile === "professional") query = query.in("role", PROFESSIONAL_ROLE_SLUGS);
-  else if (profile === "media") query = query.in("role", MEDIA_ROLE_SLUGS);
-  else if (profile === "fan") {
-    query = query.in("role", ["fan", "supporter", "community", "parent", "guardian", "parent_guardian"]);
+  // Assignment-backed profile filter (includes secondary roles).
+  if (profile !== "all") {
+    let assignQuery = client
+      .from("user_role_assignments")
+      .select("user_id")
+      .eq("status", "active");
+    if (profile === "athlete") {
+      assignQuery = assignQuery.eq("account_role", "athlete");
+    } else if (profile === "fan") {
+      assignQuery = assignQuery.eq("account_role", "fan");
+    } else if (profile === "media") {
+      assignQuery = assignQuery
+        .eq("account_role", "professional")
+        .in("category_slug", MEDIA_CATEGORY_SLUGS);
+    } else if (profile === "professional") {
+      // Professionals excluding media categories (those have their own filter).
+      assignQuery = assignQuery.eq("account_role", "professional");
+      if (MEDIA_CATEGORY_SLUGS.length) {
+        // PostgREST: not.in when possible; fall back to all professional then exclude in JS if needed.
+        assignQuery = assignQuery.not(
+          "category_slug",
+          "in",
+          `(${MEDIA_CATEGORY_SLUGS.join(",")})`,
+        );
+      }
+    }
+
+    const { data: assigns, error: assignError } = await assignQuery.limit(5000);
+    if (assignError) {
+      // Fallback to legacy users.role mirror when assignments table is unavailable.
+      if (profile === "athlete") query = query.in("role", ATHLETE_ROLE_SLUGS);
+      else if (profile === "professional") query = query.in("role", PROFESSIONAL_ROLE_SLUGS);
+      else if (profile === "media") query = query.in("role", MEDIA_ROLE_SLUGS);
+      else if (profile === "fan") {
+        query = query.in("role", [
+          "fan",
+          "supporter",
+          "community",
+          "parent",
+          "guardian",
+          "parent_guardian",
+        ]);
+      }
+    } else {
+      const ids = [
+        ...new Set(
+          (assigns ?? [])
+            .map((row) => String((row as { user_id?: string }).user_id ?? "").trim())
+            .filter(Boolean),
+        ),
+      ];
+      if (!ids.length) {
+        return NextResponse.json({
+          summary,
+          data: [],
+          total: 0,
+          page,
+          page_size: pageSize,
+        });
+      }
+      query = query.in("id", ids);
+    }
   }
 
   if (q.length >= 1) {
@@ -175,16 +236,50 @@ export async function GET(request: Request) {
     }
   }
 
+  // Active assignment badges (multi-role) — prefer SoT over users.role mirror.
+  const roleByUser: Record<string, string[]> = {};
+  if (ids.length) {
+    const { data: activeRoles } = await client
+      .from("user_role_assignments")
+      .select("user_id, account_role, category_slug, is_primary")
+      .in("user_id", ids)
+      .eq("status", "active")
+      .limit(ids.length * 5);
+    for (const row of activeRoles ?? []) {
+      const uid = String((row as { user_id?: string }).user_id ?? "");
+      if (!uid) continue;
+      const account = String((row as { account_role?: string }).account_role ?? "");
+      const category = String((row as { category_slug?: string }).category_slug ?? "");
+      let badge = account;
+      if (account === "professional" && MEDIA_CATEGORY_SLUGS.includes(category)) {
+        badge = "media";
+      } else if (
+        account === "professional" &&
+        (PROFESSIONAL_CATEGORY_SLUGS.includes(category) || !category)
+      ) {
+        badge = "professional";
+      } else if (account === "athlete") {
+        badge = "athlete";
+      } else if (account === "fan") {
+        badge = "fan";
+      }
+      if (!roleByUser[uid]) roleByUser[uid] = [];
+      if (badge && !roleByUser[uid].includes(badge)) roleByUser[uid].push(badge);
+    }
+  }
+
   const enriched = rows.map((r) => {
     const id = String(r.id);
-    const badges: string[] = [];
-    const cat = categoryFor(r.role == null ? null : String(r.role));
-    if (cat === "athlete" || cat === "professional" || cat === "media") {
-      badges.push(cat);
+    const badges = roleByUser[id] ?? [];
+    if (!badges.length) {
+      const cat = categoryFor(r.role == null ? null : String(r.role));
+      if (cat === "athlete" || cat === "professional" || cat === "media") {
+        badges.push(cat);
+      }
     }
     return {
       ...r,
-      profile_types: badges,
+      profile_types: badges.filter((b) => b === "athlete" || b === "professional" || b === "media"),
       organizations: orgByOwner[id] ?? [],
       verification_request_status: verByUser[id] ?? null,
       account_status: r.deleted_at ? "restricted" : "active",
