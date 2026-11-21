@@ -873,7 +873,8 @@ function GymWorkspaceView() {
 
   const ownerName =
     gym.owner?.display_name || gym.owner_name || gym.users?.display_name || null;
-  const ownerId = gym.owner?.user_id || gym.owner_user_id || null;
+  // Prefer gyms.owner_user_id / users.id (public), never auth login UUID.
+  const ownerId = gym.owner_user_id || gym.users?.id || gym.owner?.user_id || null;
   const orgHref = ws?.organization?.href ?? null;
   const categoryText =
     gym.category_display?.trim() || gymCategoryLabel(gym.category, catalog);
@@ -912,7 +913,7 @@ function GymWorkspaceView() {
     menuItems.push({
       id: "owner",
       label: "View owner profile",
-      href: `/admin/users/${ownerId}`,
+      href: `/admin/people/${ownerId}`,
       separatorBefore: menuItems.length > 0,
     });
   }
@@ -972,7 +973,7 @@ function GymWorkspaceView() {
         </div>
         <div className="flex flex-col gap-1 text-sm sm:items-end">
           {ownerId ? (
-            <Link href={`/admin/users/${ownerId}`} className="font-medium text-primary hover:underline">
+            <Link href={`/admin/people/${ownerId}`} className="font-medium text-primary hover:underline">
               Owner: {ownerName || "View profile"}
             </Link>
           ) : (
@@ -1327,7 +1328,7 @@ function OverviewTab({
                         <>
                           {" · "}
                           <Link
-                            href={`/admin/users/${event.actor_user_id}`}
+                            href={`/admin/people/${event.actor_user_id}`}
                             className="text-primary hover:underline"
                           >
                             Actor
@@ -1644,7 +1645,7 @@ function MembersTab({
                       items.push({
                         id: "profile",
                         label: "Open SpoJex profile",
-                        href: `/admin/users/${row.user_id}`,
+                        href: `/admin/people/${row.user_id}`,
                       });
                     }
                     if (canWrite) {
@@ -1889,7 +1890,7 @@ function MemberDrawer({
                   <Field label="SpoJex profile">
                     {member.user_id ? (
                       <Link
-                        href={`/admin/users/${member.user_id}`}
+                        href={`/admin/people/${member.user_id}`}
                           className="text-primary hover:underline"
                         >
                         {member.user_display_name || "View profile"}
@@ -3666,7 +3667,7 @@ function StaffSection({
                       {row.users ? (
                         <>
                           <Link
-                            href={`/admin/users/${row.users.id}`}
+                            href={`/admin/people/${row.users.id}`}
                             className="font-medium text-primary hover:underline"
                           >
                             {row.users.display_name || "User"}
@@ -3897,7 +3898,7 @@ function OwnershipSection({
   const [busy, setBusy] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
 
-  const ownerId = gym.owner?.user_id || gym.owner_user_id || "";
+  const ownerId = gym.owner_user_id || gym.users?.id || gym.owner?.user_id || "";
   const ownerName =
     gym.owner?.display_name || gym.owner_name || gym.users?.display_name || null;
   const ownerEmail = gym.owner?.email || gym.users?.email || gym.contact_email || null;
@@ -3972,7 +3973,7 @@ function OwnershipSection({
           <Field label="Name">{ownerName || "-"}</Field>
           <Field label="Profile">
             {ownerId ? (
-              <Link href={`/admin/users/${ownerId}`} className="text-primary hover:underline">
+              <Link href={`/admin/people/${ownerId}`} className="text-primary hover:underline">
                 View profile
               </Link>
             ) : (
@@ -4125,7 +4126,7 @@ function HistorySection({ ws }: { ws: GymWorkspace | null }) {
                     <td className="px-4 py-3 text-xs">
                       {event.actor_user_id ? (
                         <Link
-                          href={`/admin/users/${event.actor_user_id}`}
+                          href={`/admin/people/${event.actor_user_id}`}
                           className="text-primary hover:underline"
                         >
                           View actor
