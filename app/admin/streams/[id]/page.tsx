@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import AdminPageHeader from "@/components/admin-header";
+import { RadioStationGifts } from "@/components/radio-station-gifts";
 import { AdminErrorAlert, AdminLoadingRow } from "@/components/admin-layout";
 import { StatusBadge, requestTone } from "@/components/status-badge";
 import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
@@ -231,7 +232,9 @@ export default function StreamDetailPage() {
     workspace !== null &&
     JSON.stringify({ ...form, reason: "" }) !==
       JSON.stringify({ ...formFromStation(workspace.station), reason: "" });
-  dirtyEditRef.current = dirty;
+  useEffect(() => {
+    dirtyEditRef.current = dirty;
+  }, [dirty]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -718,6 +721,9 @@ export default function StreamDetailPage() {
                   {workspace.gifts?.gift_count ?? 0} gifts ·{" "}
                   {workspace.gifts?.coins_sent ?? 0} coins received
                 </p>
+                <a href="#gifts" className="mt-1 mr-3 inline-block text-xs font-medium text-primary hover:underline">
+                  View gift ledger
+                </a>
                 <Link
                   href={`/admin/finance/transactions?module=gifts&q=${encodeURIComponent(id)}`}
                   className="mt-1 inline-block text-xs font-medium text-primary hover:underline"
@@ -730,6 +736,10 @@ export default function StreamDetailPage() {
               </Fact>
             </div>
           </section>
+
+          <div id="gifts">
+            <RadioStationGifts stationId={id} />
+          </div>
 
           <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <h2 className="mb-3 font-heading text-sm font-semibold">Chat & moderation</h2>
