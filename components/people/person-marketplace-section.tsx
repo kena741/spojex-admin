@@ -152,7 +152,7 @@ export function PersonMarketplaceSection({
             title="Coin gifts"
             action={
               <Link
-                href="/admin/coin-catalog"
+                href="/admin/finance/coins?tab=gifts"
                 className="text-xs font-medium text-primary hover:underline"
               >
                 Gift catalog

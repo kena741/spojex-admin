@@ -921,7 +921,7 @@ export default function GlobalSettingsPage() {
                       </div>
                       <div className="flex items-end">
                         <Link
-                          href="/admin/coin-catalog"
+                          href="/admin/finance/coins"
                           className="text-sm font-medium text-primary hover:underline"
                         >
                           Manage coin packs &amp; gifts →
