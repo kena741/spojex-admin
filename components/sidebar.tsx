@@ -48,6 +48,8 @@ import {
   Search,
   X,
   SlidersHorizontal,
+  CircleDollarSign,
+  Crown,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { SpojexLogo } from "@/components/spojex-logo";
@@ -175,6 +177,12 @@ const nativeAppItems: NavItem[] = [
   },
   /** Single entry — sub-pages use in-page SmTabs. */
   { href: "/admin/sports-market", label: "Marketplace", icon: Store, visible: smAny },
+  {
+    href: "/admin/app-memberships",
+    label: "App memberships",
+    icon: Crown,
+    visible: () => true,
+  },
 ];
 
 /** Wallet + coin + payment surfaces in one Finance group. */
@@ -222,6 +230,12 @@ const financeItems: NavItem[] = [
     label: "Payment Settings",
     icon: CreditCard,
     visible: (can) => can("payments:read") || can("settings:read"),
+  },
+  {
+    href: "/admin/expenses",
+    label: "Expenses",
+    icon: CircleDollarSign,
+    visible: () => true,
   },
 ];
 
