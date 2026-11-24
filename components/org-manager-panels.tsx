@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Check, Copy } from "lucide-react";
 import { allRoles } from "@/lib/catalog";
 import { adminFetch } from "@/lib/hooks";
+import { ensureUserRoleAssignment } from "@/lib/users/ensure-role";
 import { cn, formatDate } from "@/lib/utils";
 
 const fieldClass = "h-10 w-full rounded-lg border border-border px-3 text-sm";
@@ -237,6 +238,7 @@ export function StaffAccessModal({
           data?: { id?: string };
           password?: string;
           attached_existing?: boolean;
+          assignment_pending?: boolean;
           error?: string;
         };
         if (!res.ok) throw new Error(payload.error || "Could not create the account.");
@@ -244,6 +246,9 @@ export function StaffAccessModal({
         if (!userId) throw new Error("The account was created but no user id came back.");
         temporaryPassword = payload.password;
         linkedExisting = Boolean(payload.attached_existing);
+        if (payload.assignment_pending) {
+          await ensureUserRoleAssignment(userId, role);
+        }
         accountReady = true;
         setPendingUserId(userId);
         setPendingPassword(temporaryPassword);

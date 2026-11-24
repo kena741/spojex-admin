@@ -24,6 +24,10 @@ import { StatusBadge, requestTone } from "@/components/status-badge";
 import { adminCacheKey } from "@/lib/admin-session-cache";
 import { deleteAdmin, postAdminResponse } from "@/lib/hooks";
 import {
+  collectProfileBadges,
+  profileTypeBadges,
+} from "@/lib/people/assignment-badges";
+import {
   DELIVERY_MODES,
   PRICING_TYPES,
   PROVIDER_VERIFICATION_NOTE,
@@ -39,6 +43,7 @@ import { serviceCoverUrl } from "@/lib/services-media";
 import type { ServiceCategory, ServiceRow, ServiceSubcategory } from "@/lib/types";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { useAdminQuery } from "@/lib/use-admin-query";
+import { formatStatusLabel } from "@/lib/utils";
 
 type ListRow = ServiceRow & {
   href?: string;
@@ -49,6 +54,21 @@ type ListRow = ServiceRow & {
   rating_label?: string;
   booking_count?: number;
 };
+
+function providerRoleLabel(users: NonNullable<ListRow["users"]>) {
+  const badges = profileTypeBadges(
+    collectProfileBadges({
+      activeRoles: users.active_roles,
+      role: users.role,
+    }),
+  );
+  if (badges.length) {
+    return badges
+      .map((b) => (b === "athlete" ? "Athlete" : b === "media" ? "Media" : "Professional"))
+      .join(" · ");
+  }
+  return users.role ? formatStatusLabel(users.role) : null;
+}
 
 type SummaryScope = {
   global?: { services?: number; published?: number; pending?: number; label?: string };
@@ -575,6 +595,11 @@ export default function ServicesPage() {
                         )}
                         <span className="hidden max-w-[8rem] truncate text-sm lg:inline">
                           {row.users.display_name}
+                          {providerRoleLabel(row.users) ? (
+                            <span className="block text-[10px] font-medium text-text-secondary">
+                              {providerRoleLabel(row.users)}
+                            </span>
+                          ) : null}
                           <span className="block text-[10px] text-text-hint">
                             {row.provider_verification_label ||
                               providerVerificationLabel(row.users.verified)}

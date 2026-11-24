@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
 import { requireAdminPermission } from "@/lib/admin-auth";
 import { slugifyIdentity } from "@/lib/identity-catalog-seeds";
+import { inferIdentityRoleKind } from "@/lib/identity-catalog";
 
 export async function GET() {
   const auth = await requireAdminPermission("profiles:read");
@@ -33,6 +34,12 @@ export async function POST(request: Request) {
     slug?: string;
     blurb?: string;
     sort_order?: number;
+    kind?: string;
+    profile_title?: string;
+    description?: string;
+    license_label?: string;
+    default_service_category_slug?: string;
+    icon?: string;
   };
 
   const groupId = body.group_id?.trim();
@@ -40,6 +47,12 @@ export async function POST(request: Request) {
   if (!groupId || !label) {
     return NextResponse.json({ error: "group_id and label are required" }, { status: 400 });
   }
+
+  const { data: group } = await auth.context.client
+    .from("identity_role_groups")
+    .select("slug")
+    .eq("id", groupId)
+    .maybeSingle();
 
   // Prefer a full slugify from the label when the typed slug is empty or too short
   // (admins often leave "t" after typing "Trainer").
@@ -55,6 +68,11 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+
+  const kind =
+    body.kind?.trim() ||
+    inferIdentityRoleKind(group?.slug ?? "", slug);
+
   const { data, error: insertError } = await auth.context.client
     .from("identity_roles")
     .insert({
@@ -65,6 +83,12 @@ export async function POST(request: Request) {
       sort_order: body.sort_order ?? 0,
       is_system: false,
       is_active: true,
+      kind,
+      profile_title: (body.profile_title ?? label).trim(),
+      description: (body.description ?? body.blurb ?? "").trim(),
+      license_label: (body.license_label ?? "").trim(),
+      default_service_category_slug: (body.default_service_category_slug ?? "").trim(),
+      icon: (body.icon ?? "").trim(),
     })
     .select("*, identity_role_groups(slug, label)")
     .single();
@@ -91,6 +115,12 @@ export async function PATCH(request: Request) {
     blurb?: string;
     is_active?: boolean;
     sort_order?: number;
+    kind?: string;
+    profile_title?: string;
+    description?: string;
+    license_label?: string;
+    default_service_category_slug?: string;
+    icon?: string;
   };
 
   if (!body.id) return NextResponse.json({ error: "id is required" }, { status: 400 });
@@ -101,6 +131,14 @@ export async function PATCH(request: Request) {
   if ("blurb" in body) patch.blurb = body.blurb;
   if ("is_active" in body) patch.is_active = body.is_active;
   if ("sort_order" in body) patch.sort_order = body.sort_order;
+  if ("kind" in body && body.kind) patch.kind = body.kind;
+  if ("profile_title" in body) patch.profile_title = body.profile_title;
+  if ("description" in body) patch.description = body.description;
+  if ("license_label" in body) patch.license_label = body.license_label;
+  if ("default_service_category_slug" in body) {
+    patch.default_service_category_slug = body.default_service_category_slug;
+  }
+  if ("icon" in body) patch.icon = body.icon;
 
   const { data, error: updateError } = await auth.context.client
     .from("identity_roles")
@@ -130,18 +168,28 @@ export async function DELETE(request: Request) {
 
   const { data: role } = await auth.context.client
     .from("identity_roles")
-    .select("is_system, slug")
+    .select("is_system, slug, kind")
     .eq("id", id)
     .maybeSingle();
 
   if (!role) return NextResponse.json({ error: "Role not found" }, { status: 404 });
 
-  const { count } = await auth.context.client
+  // Compatibility: users.role still stores account-role / legacy slugs.
+  const { count: usersOnSlug } = await auth.context.client
     .from("users")
     .select("*", { count: "exact", head: true })
     .eq("role", role.slug);
 
-  if ((count ?? 0) > 0) {
+  // Prefer assignment table when present (multi-role foundation).
+  let assignmentCount = 0;
+  const { count: assigned, error: assignErr } = await auth.context.client
+    .from("user_role_assignments")
+    .select("*", { count: "exact", head: true })
+    .eq("identity_role_id", id)
+    .eq("status", "active");
+  if (!assignErr) assignmentCount = assigned ?? 0;
+
+  if ((usersOnSlug ?? 0) > 0 || assignmentCount > 0) {
     return NextResponse.json(
       { error: "Cannot delete a role that is assigned to users. Hide it instead." },
       { status: 400 },

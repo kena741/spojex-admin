@@ -635,9 +635,16 @@ export default function NewsDetailPage() {
                 <div>
                   <dt className="font-medium text-text-primary">Last editor (admin)</dt>
                   <dd>
-                    {workspace.attribution?.last_edited_by_admin_id
-                      ? String(workspace.attribution.last_edited_by_admin_id).slice(0, 8) + "…"
-                      : "-"}
+                    {workspace.attribution?.last_edited_by_admin_id ? (
+                      <Link
+                        href={`/admin/people/${workspace.attribution.last_edited_by_admin_id}`}
+                        className="text-primary hover:underline"
+                      >
+                        {String(workspace.attribution.last_edited_by_admin_id).slice(0, 8) + "…"}
+                      </Link>
+                    ) : (
+                      "-"
+                    )}
                   </dd>
                 </div>
               </dl>
@@ -871,7 +878,16 @@ export default function NewsDetailPage() {
               <div className="rounded-lg border border-border px-3 py-2 sm:col-span-2">
                 <dt className="text-xs text-text-secondary">Last edited by admin</dt>
                 <dd className="mt-1 font-medium">
-                  {workspace.activity?.last_edited_by_admin_id || "-"}
+                  {workspace.activity?.last_edited_by_admin_id ? (
+                    <Link
+                      href={`/admin/people/${workspace.activity.last_edited_by_admin_id}`}
+                      className="text-primary hover:underline"
+                    >
+                      {workspace.activity.last_edited_by_admin_id}
+                    </Link>
+                  ) : (
+                    "-"
+                  )}
                 </dd>
               </div>
             </dl>

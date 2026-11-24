@@ -78,6 +78,11 @@ export function organizationTypeLabel(type?: string | null) {
 export function categoryFor(role?: string | null): RoleCategory {
   const id = (role ?? "").trim();
   if (!id) return "none";
+  // M7 account-role mirror on users.role (primary assignment).
+  if (id === "athlete") return "athlete";
+  if (id === "professional") return "professional";
+  if (id === "media") return "media";
+  if (id === "fan" || id === "supporter" || id === "community") return "community";
   if (communityRoles.some((item) => item.id === id)) return "community";
   if (athleteRoles.some((item) => item.id === id)) return "athlete";
   if (professionalRoles.some((item) => item.id === id)) return "professional";
@@ -85,17 +90,9 @@ export function categoryFor(role?: string | null): RoleCategory {
   return "none";
 }
 
-export function extraProfileTable(role?: string | null) {
-  switch (categoryFor(role)) {
-    case "athlete":
-      return "athlete_profiles";
-    case "professional":
-      return "professional_profiles";
-    case "media":
-      return "media_profiles";
-    default:
-      return "";
-  }
+/** @deprecated Role extras use the profile catalog; always empty after M5 Phase 2. */
+export function extraProfileTable(_role?: string | null) {
+  return "";
 }
 
 function formatFallback(value: string) {

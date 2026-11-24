@@ -15,6 +15,7 @@ import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import {
   catalogRequest,
   INPUT_TYPE_LABELS,
+  TEXT_FORMAT_PRESETS,
   newId,
   optionValue,
   parseScope,
@@ -484,7 +485,7 @@ export default function ProfileConfigPage() {
         title="Profile Configuration"
         description={
           overview
-            ? `v${overview.live.version}${draft ? ` · draft` : ""}`
+            ? `v${overview.live.version}${draft ? ` · draft` : ""} · sports, professions, fields & tabs`
             : undefined
         }
         actions={headerActions}
@@ -1597,9 +1598,28 @@ function FieldEditor({
           </>
         ) : null}
         {f.input_type === "text" || f.input_type === "multiline" ? (
-          <Field label="Max length">
-            <input className={inputClass} type="number" value={String(v.max_length ?? "")} onChange={(e) => setRule("max_length", e.target.value === "" ? "" : Number(e.target.value))} />
-          </Field>
+          <>
+            <Field
+              label="Format"
+              tip="Email / phone use the short-text input type with format validation — no separate schema type."
+            >
+              <select
+                className={inputClass}
+                value={String(v.format ?? "")}
+                disabled={f.input_type !== "text"}
+                onChange={(e) => setRule("format", e.target.value || undefined)}
+              >
+                {TEXT_FORMAT_PRESETS.map((p) => (
+                  <option key={p.value || "plain"} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Max length">
+              <input className={inputClass} type="number" value={String(v.max_length ?? "")} onChange={(e) => setRule("max_length", e.target.value === "" ? "" : Number(e.target.value))} />
+            </Field>
+          </>
         ) : null}
         {f.input_type === "multi_select" ? (
           <label className="flex items-center gap-2 pt-6 text-sm">

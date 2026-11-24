@@ -1,14 +1,11 @@
 import { loadCoinWalletsByUserIds } from "@/lib/coin-wallets";
+import type { CatalogProfileDocument } from "@/lib/people/catalog-profile";
 import type { FeedInterestDetail, PersonSnapshot } from "@/lib/people/types";
-import { userProfileSelect } from "@/lib/query-embeds";
 import { getSpojexClient } from "@/lib/spojex/client";
 import { safeSelect } from "@/lib/table-helpers";
 import {
-  type AthleteProfile,
-  type MediaProfile,
   type OrganizationRow,
   type ProfileMediaRow,
-  type ProfessionalProfile,
   type ServiceRequestRow,
   type ServiceRow,
   type UserRow,
@@ -16,56 +13,50 @@ import {
   type WithdrawalRow,
 } from "@/lib/types";
 
+const userSelect =
+  "id, user_id, display_name, full_name, username, email, phone, role, avatar_url, cover_url, verified, city, country, headline, bio, currency, website, created_at, updated_at, deleted_at";
+
 /**
- * The Spojex API does not expand PostgREST-style embeds, so role profile tables
- * are fetched explicitly instead of relying on `userProfileSelect` alone.
+ * Person detail snapshot. Role extras come from GET /api/v1/profiles/{id}
+ * (catalog), not legacy athlete/professional/media_profiles tables.
  */
 export async function fetchPersonSnapshot(id: string): Promise<PersonSnapshot> {
+  const client = getSpojexClient();
   const [
     { data, error: userError },
     orgRes,
     serviceRes,
     verificationRes,
     mediaRes,
-    athleteRes,
-    professionalRes,
-    mediaProfileRes,
+    catalogProfile,
     marketRes,
     coinMap,
     feedRes,
   ] = await Promise.all([
-    getSpojexClient().from("users").select(userProfileSelect).eq("id", id).maybeSingle(),
-    getSpojexClient().from("organizations").select("*").eq("user_id", id),
+    client.from("users").select(userSelect).eq("id", id).maybeSingle(),
+    client.from("organizations").select("*").eq("user_id", id),
     safeSelect(() =>
-      getSpojexClient()
+      client
         .from("services")
         .select(
           "id, title, published, category_id, created_at, cover_url, city, price_amount, currency, pricing_type",
         )
         .eq("provider_id", id),
     ),
-    getSpojexClient()
+    client
       .from("identity_verification_requests")
       .select("id, status")
       .eq("user_id", id)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
-    getSpojexClient()
+    client
       .from("profile_media")
       .select("*")
       .eq("user_id", id)
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: false }),
-    safeSelect(() =>
-      getSpojexClient().from("athlete_profiles").select("*").eq("user_id", id).maybeSingle(),
-    ),
-    safeSelect(() =>
-      getSpojexClient().from("professional_profiles").select("*").eq("user_id", id).maybeSingle(),
-    ),
-    safeSelect(() =>
-      getSpojexClient().from("media_profiles").select("*").eq("user_id", id).maybeSingle(),
-    ),
+    fetchCatalogProfile(client, id),
     fetch(`/api/admin/users/${id}/marketplace`, { credentials: "same-origin" }),
     loadCoinWalletsByUserIds([id]),
     fetch(`/api/admin/users/${id}/feed-interests`, { credentials: "same-origin" }),
@@ -110,18 +101,9 @@ export async function fetchPersonSnapshot(id: string): Promise<PersonSnapshot> {
     };
   }
 
-  const baseUser = (data as UserRow | null) ?? null;
-  const user = baseUser
-    ? {
-        ...baseUser,
-        athlete_profiles: (athleteRes.data as AthleteProfile | null) ?? null,
-        professional_profiles: (professionalRes.data as ProfessionalProfile | null) ?? null,
-        media_profiles: (mediaProfileRes.data as MediaProfile | null) ?? null,
-      }
-    : null;
-
   return {
-    user,
+    user: (data as UserRow | null) ?? null,
+    catalogProfile,
     orgs: (orgRes.data ?? []) as OrganizationRow[],
     mediaItems: (mediaRes.data ?? []) as ProfileMediaRow[],
     verificationId: verificationRes.data?.id ?? null,
@@ -133,4 +115,17 @@ export async function fetchPersonSnapshot(id: string): Promise<PersonSnapshot> {
     bookings,
     feedInterest,
   };
+}
+
+async function fetchCatalogProfile(
+  client: ReturnType<typeof getSpojexClient>,
+  id: string,
+): Promise<CatalogProfileDocument | null> {
+  try {
+    const raw = await client.http.get(`/api/v1/profiles/${id}`);
+    if (!raw || typeof raw !== "object") return null;
+    return raw as CatalogProfileDocument;
+  } catch {
+    return null;
+  }
 }

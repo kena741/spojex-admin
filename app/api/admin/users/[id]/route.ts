@@ -35,6 +35,47 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: "No valid fields" }, { status: 400 });
   }
+
+  // Role writes must go through backend `/data/users` so `apply_role_resolution`
+  // keeps `user_role_assignments` + `users.role` mirror in sync (M7).
+  if ("role" in patch) {
+    const role = typeof patch.role === "string" ? patch.role.trim().toLowerCase() : "";
+    if (role && !["fan", "athlete", "professional"].includes(role)) {
+      return NextResponse.json(
+        { error: "Account role must be fan, athlete, or professional." },
+        { status: 422 },
+      );
+    }
+    const token = await requestAccessToken();
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const base = getSpojexApiBaseUrl();
+    const res = await fetch(`${base}/api/v1/data/users/${id}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(patch),
+    });
+    const payload = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!res.ok) {
+      return NextResponse.json(
+        {
+          error:
+            (payload.message as string) ||
+            (payload.detail as string) ||
+            (payload.error as string) ||
+            "Update failed",
+          code: payload.code,
+        },
+        { status: res.status },
+      );
+    }
+    return NextResponse.json({ data: payload });
+  }
+
   const { data, error: updateError } = await auth.context.client.from("users").update(patch).eq("id", id).select().maybeSingle();
   if (updateError) {
     const hint = missingServiceRoleMessage();

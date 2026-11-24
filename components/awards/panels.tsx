@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import Link from "next/link";
 import { Pencil, Plus, ShieldAlert, Trash2, Upload } from "lucide-react";
 import {
   AdminEmpty,
@@ -461,7 +462,16 @@ export function ParticipantsPanel({
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{p.name}</p>
+                {p.user_id ? (
+                  <Link
+                    href={`/admin/people/${p.user_id}`}
+                    className="truncate font-medium text-primary hover:underline"
+                  >
+                    {p.name}
+                  </Link>
+                ) : (
+                  <p className="truncate font-medium">{p.name}</p>
+                )}
                 {p.organization ? <p className="truncate text-xs text-text-secondary">{p.organization}</p> : null}
                 {p.follower_count != null ? (
                   <p className="truncate text-xs text-text-secondary">
@@ -624,9 +634,10 @@ function ParticipantModal({
   onSaved: () => void;
 }) {
   const [user, setUser] = useState<PickedUser | null>(
-    participant && (participant.user_email || participant.user_username)
+    participant && participant.user_id
       ? {
-          id: participant.id,
+          // Public users.id — never the award_participants row id.
+          id: participant.user_id,
           display_name: participant.name,
           email: participant.user_email || undefined,
           username: participant.user_username || undefined,

@@ -7,6 +7,7 @@ import AdminPageHeader from "@/components/admin-header";
 import { AdminLoadingRow } from "@/components/admin-layout";
 import LiveEventsPanel from "@/components/live-events-panel";
 import RadioStreamsPanel from "@/components/radio-streams-panel";
+import RadioVisibilityToggle from "@/components/radio-visibility-toggle";
 import { adminCacheKey } from "@/lib/admin-session-cache";
 import { adminFetch } from "@/lib/hooks";
 import { canManageLiveEvents } from "@/lib/live-events";
@@ -200,6 +201,8 @@ function StreamsHub() {
       <AdminPageHeader
         title="Streams"
       />
+
+      {canRadio ? <RadioVisibilityToggle /> : null}
 
       <StreamsOverviewCards enabled={canRadio} />
 

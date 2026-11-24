@@ -48,6 +48,8 @@ import {
   Search,
   X,
   SlidersHorizontal,
+  CircleDollarSign,
+  Crown,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { SpojexLogo } from "@/components/spojex-logo";
@@ -138,6 +140,9 @@ const marketplaceItems: NavItem[] = [
   },
 ];
 
+const smAny = (can: (p: string) => boolean) =>
+  can("sports_market:read") || can("sports_market:sellers") || can("sports_market:write") || can("sports_market:finance");
+
 const nativeAppItems: NavItem[] = [
   {
     href: "/admin/native-apps",
@@ -150,7 +155,7 @@ const nativeAppItems: NavItem[] = [
       can("donations:read") ||
       can("streams:read") ||
       can("awards:read") ||
-      can("sports_market:read") ||
+      smAny(can) ||
       can("settings:read") ||
       canManageLiveEvents(can),
   },
@@ -170,15 +175,13 @@ const nativeAppItems: NavItem[] = [
     icon: Radio,
     visible: (can) => can("streams:read") || canManageLiveEvents(can),
   },
+  /** Single entry — sub-pages use in-page SmTabs. */
+  { href: "/admin/sports-market", label: "Marketplace", icon: Store, visible: smAny },
   {
-    href: "/admin/sports-market",
-    label: "Sports Marketplace",
-    icon: Store,
-    visible: (can) =>
-      can("sports_market:read") ||
-      can("sports_market:sellers") ||
-      can("sports_market:write") ||
-      can("sports_market:finance"),
+    href: "/admin/app-memberships",
+    label: "App memberships",
+    icon: Crown,
+    visible: () => true,
   },
 ];
 
@@ -227,6 +230,12 @@ const financeItems: NavItem[] = [
     label: "Payment Settings",
     icon: CreditCard,
     visible: (can) => can("payments:read") || can("settings:read"),
+  },
+  {
+    href: "/admin/expenses",
+    label: "Expenses",
+    icon: CircleDollarSign,
+    visible: () => true,
   },
 ];
 
@@ -359,6 +368,10 @@ function rankFrequentNav(entries: FrequentNavEntry[]) {
 }
 
 function itemIsActive(pathname: string, href: string) {
+  // One Marketplace nav item covers overview + sellers/listings/orders/…
+  if (href === "/admin/sports-market") {
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }
   if (href === "/admin/streams") {
     return (
       pathname === "/admin/streams" ||

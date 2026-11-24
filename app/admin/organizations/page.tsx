@@ -24,6 +24,7 @@ import { generateStadiumManagerPassword } from "@/lib/stadiums";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { useAdminQuery } from "@/lib/use-admin-query";
 import type { OrganizationRow, UserRow } from "@/lib/types";
+import { ensureUserRoleAssignment } from "@/lib/users/ensure-role";
 import { formatCoins, formatDate, locationLabel } from "@/lib/utils";
 
 const fieldClass = "h-10 w-full rounded-lg border border-border px-3 text-sm";
@@ -302,6 +303,13 @@ export default function OrganizationsPage() {
       });
       const created = payload.data as OwnerOption | undefined;
       if (!created?.id) throw new Error("User was not created");
+      let assignmentPending = Boolean(
+        (payload as { assignment_pending?: boolean }).assignment_pending,
+      );
+      if (assignmentPending) {
+        const retry = await ensureUserRoleAssignment(created.id, ownerDraft.role);
+        assignmentPending = retry.assignment_pending;
+      }
       setForm((prev) => ({
         ...prev,
         owner_user_id: created.id,
@@ -314,9 +322,16 @@ export default function OrganizationsPage() {
         (payload as { attached_existing?: boolean }).attached_existing,
       );
       setOwnerPassword(typeof payload.password === "string" ? payload.password : null);
-      setOwnerNotice(
-        attachedExisting ? "Existing account attached as owner. Their current role was kept." : null,
-      );
+      const notices: string[] = [];
+      if (attachedExisting) {
+        notices.push("Existing account attached as owner. Their current role was kept.");
+      }
+      if (assignmentPending) {
+        notices.push(
+          "Account saved, but role assignment is still pending — open the person and save Account role to retry.",
+        );
+      }
+      setOwnerNotice(notices.length ? notices.join(" ") : null);
       setOwnerCreateOpen(false);
     } catch (err) {
       setOwnerCreateError(err instanceof Error ? err.message : "Failed to create owner");

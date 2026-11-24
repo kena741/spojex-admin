@@ -27,7 +27,7 @@ Open [http://localhost:3000](http://localhost:3000). The **first** successful si
 | Area | Tables |
 | --- | --- |
 | Staff login | `admin`, `admin_role` |
-| Identity | `users`, `athlete_profiles`, `professional_profiles`, `media_profiles` |
+| Identity | `users`, `user_role_assignments`, catalog `profile_*` (legacy `*_profiles` retired M6) |
 | Organizations | `organizations` |
 | Marketplace | `service_categories`, `services`, `service_requests`, `service_reviews` |
 | Network | `connections`, `follows`, `reports`, `messages`, `notifications` |

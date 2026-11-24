@@ -1,5 +1,5 @@
 -- Owner can always read their own listings, including unpublished.
--- Also restores services SELECT so provider_id may be public.users.id, not auth.uid().
+-- provider_id is public.users.id — match current_football_user_id() only.
 -- Safe to re-run.
 
 create or replace function public.my_service_listings()
@@ -11,14 +11,7 @@ set search_path = public
 as $$
   select s.*
   from public.services s
-  where s.provider_id = auth.uid()
-     or s.provider_id = public.current_football_user_id()
-     or exists (
-          select 1
-          from public.users u
-          where u.id = s.provider_id
-            and u.user_id = auth.uid()
-        );
+  where s.provider_id = public.current_football_user_id();
 $$;
 
 grant execute on function public.my_service_listings() to authenticated;

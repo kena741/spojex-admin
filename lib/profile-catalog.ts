@@ -196,19 +196,26 @@ export type CatalogOverview = {
 };
 
 export const INPUT_TYPE_LABELS: Record<string, string> = {
-  text: "Short text",
+  text: "Short text (use Format for email / phone)",
   multiline: "Long text",
   integer: "Whole number",
   decimal: "Decimal number",
-  single_select: "Single choice",
-  multi_select: "Multiple choice",
+  single_select: "Single choice (dropdown / radio)",
+  multi_select: "Multiple choice (checkboxes)",
   date: "Date",
-  boolean: "Yes / no",
+  boolean: "Yes / no (checkbox)",
   url: "Web link",
   file: "File (private document)",
   image: "Image",
   video: "Video",
 };
+
+/** Text-format presets stored in validation.format — no new input_type required. */
+export const TEXT_FORMAT_PRESETS: { value: string; label: string }[] = [
+  { value: "", label: "Plain text" },
+  { value: "email", label: "Email" },
+  { value: "phone", label: "Phone" },
+];
 
 export const SECTION_KINDS = ["attributes", "career", "achievements", "media", "portfolio"] as const;
 

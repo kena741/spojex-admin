@@ -32,8 +32,21 @@ export type SmSeller = {
   returned_count?: number;
   gross_sales?: number;
   commission_total?: number;
+  /** Seller take-home on completed orders (net + delivery). */
+  net_earnings?: number;
   completion_rate?: number | null;
   cancellation_rate?: number | null;
+};
+
+export type SmTopSeller = {
+  user_id: string;
+  name: string;
+  username?: string | null;
+  gross_sales: number;
+  commission_total: number;
+  net_earnings: number;
+  completed_count: number;
+  order_count: number;
 };
 
 export type SmCategory = {
@@ -69,7 +82,29 @@ export type SmProduct = {
   moderation_status?: "pending" | "approved" | "rejected" | "removed";
   moderation_note?: string;
   deleted?: boolean;
+  /** Shown in the app's Featured row; lower rank shows first. */
+  featured?: boolean;
+  featured_rank?: number | null;
+  /** Old price shown struck through while on sale. */
+  compare_at_price?: number | null;
+  rating?: { average: number | null; count: number };
   created_at: string;
+};
+
+/** A listing someone flagged from the app. */
+export type SmReport = {
+  id: string;
+  product: { id: string; name: string; image: string; status?: string | null; seller_id?: string | null };
+  reporter: { id: string; name?: string | null; username?: string | null };
+  reason: string;
+  reason_label: string;
+  details: string;
+  status: "open" | "dismissed" | "actioned";
+  admin_note: string;
+  /** Open reports on the same listing. */
+  open_count: number;
+  created_at: string;
+  resolved_at?: string | null;
 };
 
 export type SmTimelineStep = { stage: string; label: string; state: "done" | "current" | "upcoming" | "skipped"; at?: string | null };
@@ -132,7 +167,13 @@ export type SmPayment = {
   seller_name: string;
 };
 
-export type SmSettings = { commission_percent: number; cod_enabled: boolean; require_listing_approval: boolean };
+export type SmSettings = {
+  commission_percent: number;
+  cod_enabled: boolean;
+  require_listing_approval: boolean;
+  /** Plain-text seller Terms of service shown in My store. */
+  seller_terms?: string;
+};
 
 export type SmOverview = {
   active_sellers: number;
@@ -141,14 +182,23 @@ export type SmOverview = {
   pending_listings: number;
   orders: number;
   open_orders: number;
+  completed_orders?: number;
+  delivered_orders?: number;
   cancelled_orders: number;
   returned_orders: number;
   gmv: number;
+  /** Total paid out to sellers on completed orders (net + delivery). */
+  seller_earnings?: number;
+  /** Completed order totals (subtotal + delivery). */
+  order_volume?: number;
   commission_collected: number;
   commission_held: number;
   commission_cod_pending: number;
+  refunded_volume?: number;
   paid_payments: number;
   open_payments: number;
+  refunded_payments?: number;
+  top_sellers?: SmTopSeller[];
   settings: SmSettings;
 };
 

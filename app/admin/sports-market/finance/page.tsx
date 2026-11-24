@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -119,7 +120,18 @@ function CommissionView() {
                       {o.payment_method === "cod" ? "Cash" : labelize(o.payment_method)} · {shortDate(o.completed_at ?? o.created_at)}
                     </p>
                   </td>
-                  <td className="px-4 py-3 text-text-primary">{o.seller.name}</td>
+                  <td className="px-4 py-3">
+                    {o.seller.id ? (
+                      <Link
+                        href={`/admin/people/${o.seller.id}`}
+                        className="text-primary hover:underline"
+                      >
+                        {o.seller.name}
+                      </Link>
+                    ) : (
+                      <span className="text-text-primary">{o.seller.name}</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-right tabular-nums">{etb(o.subtotal, o.currency)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {etb(o.commission_amount, o.currency)}

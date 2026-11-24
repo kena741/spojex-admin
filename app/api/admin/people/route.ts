@@ -1,15 +1,31 @@
 import { NextResponse } from "next/server";
 import { requireAnyAdminPermission } from "@/lib/admin-auth";
+import { athleteRoles, mediaRoles, professionalRoles } from "@/lib/catalog";
+import { getSpojexApiBaseUrl } from "@/lib/env";
+import {
+  collectProfileBadges,
+  listAssignmentUserIds,
+  profileTypeBadges,
+  type AssignmentLike,
+} from "@/lib/people/assignment-badges";
 import { createAdminClient } from "@/lib/spojex/admin";
+import { requestAccessToken } from "@/lib/spojex/server";
 
 export const dynamic = "force-dynamic";
 
 type ProfileKind = "athlete" | "professional" | "media" | "fan" | "all";
 
+const ATHLETE_ROLE_SLUGS = ["athlete", "player", ...athleteRoles.map((r) => r.id)];
+const PROFESSIONAL_ROLE_SLUGS = [
+  "professional",
+  ...professionalRoles.map((r) => r.id),
+];
+const MEDIA_ROLE_SLUGS = ["media", ...mediaRoles.map((r) => r.id)];
+
 /**
  * Paginated People directory with summary KPIs.
- * Profile-type filter uses both users.role group and presence of profile table rows
- * (supports multi-profile identities without merging tables).
+ * Profile-type filter matches active ``user_role_assignments`` (M7 SoT),
+ * not only the ``users.role`` primary mirror.
  */
 export async function GET(request: Request) {
   const auth = await requireAnyAdminPermission(["users:read", "profiles:read"]);
@@ -89,35 +105,10 @@ export async function GET(request: Request) {
     }
   }
 
-  // Profile-type: collect user ids from profile tables when filtering
-  let profileUserIds: string[] | null = null;
-  if (profile === "athlete" || profile === "professional" || profile === "media") {
-    const table =
-      profile === "athlete"
-        ? "athlete_profiles"
-        : profile === "professional"
-          ? "professional_profiles"
-          : "media_profiles";
-    const { data: prows } = await client.from(table).select("user_id").limit(5000);
-    const idsFromProfiles = (prows ?? [])
-      .map((r: { user_id?: string | null }) => String(r.user_id ?? ""))
-      .filter(Boolean);
-    profileUserIds = idsFromProfiles;
-    if (!idsFromProfiles.length) {
-      return NextResponse.json({
-        summary,
-        data: [],
-        total: 0,
-        page,
-        page_size: pageSize,
-      });
-    }
-  }
-
   let query = client
     .from("users")
     .select(
-      "id, user_id, display_name, full_name, username, email, phone, role, avatar_url, verified, city, country, created_at, updated_at, deleted_at",
+      "id, user_id, display_name, full_name, username, email, phone, role, avatar_url, verified, city, country, created_at, updated_at, deleted_at, active_roles",
       { count: "exact" },
     );
 
@@ -131,11 +122,59 @@ export async function GET(request: Request) {
   if (registeredTo) query = query.lte("created_at", registeredTo);
 
   if (orgUserIds) query = query.in("id", orgUserIds);
-  if (profileUserIds) query = query.in("id", profileUserIds);
 
-  if (profile === "fan") {
-    // Primary role fans / community without extra profile tables - soft filter by role
-    query = query.in("role", ["fan", "supporter", "community", "parent", "guardian"]);
+  // Profile filter: assignment SoT ∪ users.role mirror (backfill gaps + secondary roles).
+  if (profile !== "all") {
+    const token = await requestAccessToken();
+    const assignIds = token
+      ? await listAssignmentUserIds({
+          baseUrl: getSpojexApiBaseUrl(),
+          token,
+          profile,
+        })
+      : null;
+
+    const mirrorSlugs =
+      profile === "athlete"
+        ? ATHLETE_ROLE_SLUGS
+        : profile === "professional"
+          ? PROFESSIONAL_ROLE_SLUGS
+          : profile === "media"
+            ? MEDIA_ROLE_SLUGS
+            : [
+                "fan",
+                "supporter",
+                "community",
+                "parent",
+                "guardian",
+                "parent_guardian",
+              ];
+
+    if (assignIds == null) {
+      query = query.in("role", mirrorSlugs);
+    } else {
+      const { data: mirrorRows } = await client
+        .from("users")
+        .select("id, role")
+        .in("role", mirrorSlugs)
+        .limit(500);
+      const ids = new Set<string>(assignIds);
+      for (const row of mirrorRows ?? []) {
+        const id = String((row as { id?: string }).id ?? "").trim();
+        if (id) ids.add(id);
+      }
+      // Media via assignments only when mirror has no legacy media roles — still keep assign hits.
+      if (!ids.size) {
+        return NextResponse.json({
+          summary,
+          data: [],
+          total: 0,
+          page,
+          page_size: pageSize,
+        });
+      }
+      query = query.in("id", [...ids]);
+    }
   }
 
   if (q.length >= 1) {
@@ -156,32 +195,6 @@ export async function GET(request: Request) {
 
   const rows = (data ?? []) as Array<Record<string, unknown>>;
   const ids = rows.map((r) => String(r.id));
-
-  // Multi-profile badges: presence in each profile table (do not merge records)
-  const profileMap: Record<string, string[]> = {};
-  for (const id of ids) profileMap[id] = [];
-
-  if (ids.length) {
-    const [athletes, pros, media] = await Promise.all([
-      client.from("athlete_profiles").select("user_id").in("user_id", ids),
-      client.from("professional_profiles").select("user_id").in("user_id", ids),
-      client.from("media_profiles").select("user_id").in("user_id", ids),
-    ]);
-    for (const r of athletes.data ?? []) {
-      const uid = String(r.user_id);
-      if (profileMap[uid] && !profileMap[uid].includes("athlete")) profileMap[uid].push("athlete");
-    }
-    for (const r of pros.data ?? []) {
-      const uid = String(r.user_id);
-      if (profileMap[uid] && !profileMap[uid].includes("professional")) {
-        profileMap[uid].push("professional");
-      }
-    }
-    for (const r of media.data ?? []) {
-      const uid = String(r.user_id);
-      if (profileMap[uid] && !profileMap[uid].includes("media")) profileMap[uid].push("media");
-    }
-  }
 
   // Owned org names (compact)
   const orgByOwner: Record<string, { id: string; name: string }[]> = {};
@@ -213,25 +226,16 @@ export async function GET(request: Request) {
     }
   }
 
+  // Badges from backend active_roles embed (assignment SoT), then users.role mirror.
   const enriched = rows.map((r) => {
     const id = String(r.id);
-    const badges = profileMap[id] ?? [];
-    // Always surface primary role category as badge if no extra profile rows
-    if (!badges.length && r.role) {
-      const role = String(r.role);
-      // Roles are fan / athlete / professional; legacy slugs remain on un-migrated rows only.
-      if (["athlete", "player"].includes(role)) badges.push("athlete");
-      else if (role === "professional") badges.push("professional");
-      else if (["photographer", "sports_journalist", "media"].includes(role)) badges.push("media");
-      else if (
-        ["coach", "agent", "scout", "physiotherapist", "administrator", "referee"].includes(role)
-      ) {
-        badges.push("professional");
-      }
-    }
+    const badges = collectProfileBadges({
+      activeRoles: Array.isArray(r.active_roles) ? (r.active_roles as AssignmentLike[]) : null,
+      role: r.role == null ? null : String(r.role),
+    });
     return {
       ...r,
-      profile_types: badges,
+      profile_types: profileTypeBadges(badges),
       organizations: orgByOwner[id] ?? [],
       verification_request_status: verByUser[id] ?? null,
       account_status: r.deleted_at ? "restricted" : "active",

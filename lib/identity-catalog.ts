@@ -11,6 +11,8 @@ export type IdentityRoleGroup = IdentityRoleGroupSeed & {
   updated_at?: string;
 };
 
+export type IdentityRoleKind = "account_role" | "profession" | "legacy";
+
 export type IdentityRole = {
   id: string;
   group_id: string;
@@ -20,10 +22,32 @@ export type IdentityRole = {
   sort_order: number;
   is_active: boolean;
   is_system: boolean;
+  /** account_role | profession | legacy */
+  kind?: IdentityRoleKind | string;
+  profile_title?: string;
+  description?: string;
+  license_label?: string;
+  default_service_category_slug?: string;
+  /** Lucide / Material icon name; empty uses client default. */
+  icon?: string;
   created_at?: string;
   updated_at?: string;
   identity_role_groups?: Pick<IdentityRoleGroup, "slug" | "label"> | null;
 };
+
+/** Infer catalog kind from group slug + role slug when Admin creates a role. */
+export function inferIdentityRoleKind(groupSlug: string, roleSlug: string): IdentityRoleKind {
+  if (roleSlug === "fan" || roleSlug === "athlete" || roleSlug === "professional") {
+    return "account_role";
+  }
+  if (groupSlug === "professional" || groupSlug === "media") {
+    return "profession";
+  }
+  if (groupSlug === "athlete" || groupSlug === "community") {
+    return "account_role";
+  }
+  return "profession";
+}
 
 export type IdentityCatalog = {
   groups: IdentityRoleGroup[];
@@ -115,17 +139,25 @@ export async function fetchIdentityCatalog(): Promise<IdentityCatalog> {
   return identityCatalogInflight;
 }
 
+/** Account roles only — `users.role` is the primary-assignment mirror (M7). */
+const ACCOUNT_ROLE_SLUGS = new Set(["fan", "athlete", "professional"]);
+
 export function roleOptionsFromCatalog(catalog: IdentityCatalog) {
-  return [
-    { id: "", label: "No role", group: "" },
-    ...catalog.roles
-      .filter((role) => role.is_active)
-      .map((role) => ({
-        id: role.slug,
-        label: role.label,
-        group: role.identity_role_groups?.label ?? "",
-      })),
+  const account = catalog.roles
+    .filter((role) => role.is_active && ACCOUNT_ROLE_SLUGS.has(role.slug))
+    .map((role) => ({
+      id: role.slug,
+      label: role.label,
+      group: role.identity_role_groups?.label ?? "Account",
+    }));
+  // Stable fallback if catalog has not seeded account rows yet.
+  const fallback = [
+    { id: "fan", label: "Fan", group: "Account" },
+    { id: "athlete", label: "Athlete", group: "Account" },
+    { id: "professional", label: "Professional", group: "Account" },
   ];
+  const rows = account.length ? account : fallback;
+  return [{ id: "", label: "No role", group: "" }, ...rows];
 }
 
 export function roleLabelFromCatalog(catalog: IdentityCatalog, slug?: string | null) {
@@ -145,17 +177,9 @@ export function categoryForSlug(catalog: IdentityCatalog, slug?: string | null) 
   return "none";
 }
 
-export function extraProfileTableForSlug(catalog: IdentityCatalog, slug?: string | null) {
-  switch (categoryForSlug(catalog, slug)) {
-    case "athlete":
-      return "athlete_profiles";
-    case "professional":
-      return "professional_profiles";
-    case "media":
-      return "media_profiles";
-    default:
-      return "";
-  }
+/** @deprecated Role extras use the profile catalog; always empty after M5 Phase 2. */
+export function extraProfileTableForSlug(_catalog: IdentityCatalog, _slug?: string | null) {
+  return "";
 }
 
 export function hasMobileIdentitySeeds(catalog: IdentityCatalog) {

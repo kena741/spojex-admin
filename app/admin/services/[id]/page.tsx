@@ -15,6 +15,10 @@ import { clipboardImageFile } from "@/lib/clipboard-image";
 import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
 import { adminFetch, deleteAdmin, patchAdmin, postAdminResponse } from "@/lib/hooks";
 import {
+  collectProfileBadges,
+  profileTypeBadges,
+} from "@/lib/people/assignment-badges";
+import {
   DELIVERY_MODES,
   PRICING_TYPES,
   PROVIDER_VERIFICATION_NOTE,
@@ -35,6 +39,23 @@ import { useAdminQuery } from "@/lib/use-admin-query";
 import { useApplyAdminSnapshot } from "@/lib/use-admin-snapshot";
 import { useAdminUiState } from "@/lib/use-admin-ui-state";
 import { cn, formatDate, formatDateTime, formatMoney, formatStatusLabel, locationLabel } from "@/lib/utils";
+
+function providerRoleLabel(
+  users: NonNullable<ServiceRow["users"]>,
+): string | null {
+  const badges = profileTypeBadges(
+    collectProfileBadges({
+      activeRoles: users.active_roles,
+      role: users.role,
+    }),
+  );
+  if (badges.length) {
+    return badges
+      .map((b) => (b === "athlete" ? "Athlete" : b === "media" ? "Media" : "Professional"))
+      .join(" · ");
+  }
+  return users.role ? formatStatusLabel(users.role) : null;
+}
 
 const MAX_PHOTOS = 5;
 const fieldClass =
@@ -655,9 +676,9 @@ export default function ServiceDetailPage() {
                     >
                       {service.users.display_name}
                     </Link>
-                    {service.users.role ? (
+                    {providerRoleLabel(service.users) ? (
                       <p className="text-sm capitalize text-text-secondary">
-                        {formatStatusLabel(service.users.role)}
+                        {providerRoleLabel(service.users)}
                       </p>
                     ) : null}
                     <p

@@ -899,7 +899,7 @@ export default function StadiumDetailPage() {
                   <dt className="shrink-0 text-text-secondary">Owner</dt>
                   <dd className="sm:text-right">
                     {stadium.users ? (
-                      <Link href={`/admin/users/${stadium.users.id}`} className="font-medium text-primary">
+                      <Link href={`/admin/people/${stadium.users.id}`} className="font-medium text-primary">
                         {stadium.users.display_name}
                       </Link>
                     ) : (
@@ -1508,7 +1508,7 @@ export default function StadiumDetailPage() {
                             </td>
                             <td className="px-4 py-3">
                               {row.users ? (
-                                <Link href={`/admin/users/${row.users.id}`} className="font-medium hover:text-primary">
+                                <Link href={`/admin/people/${row.users.id}`} className="font-medium hover:text-primary">
                                   {row.users.display_name}
                                 </Link>
                               ) : (
@@ -1610,7 +1610,7 @@ export default function StadiumDetailPage() {
                         <tr key={row.id} className="border-b border-border last:border-0">
                           <td className="px-4 py-3">
                             {row.users ? (
-                              <Link href={`/admin/users/${row.users.id}`} className="font-medium text-primary">
+                              <Link href={`/admin/people/${row.users.id}`} className="font-medium text-primary">
                                 {row.users.display_name}
                                 {row.users.username ? (
                                   <span className="ml-1 font-normal text-text-secondary">

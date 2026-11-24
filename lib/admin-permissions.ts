@@ -600,6 +600,9 @@ export function canAccessAdminRoute(pathname: string, can: (permission: string) 
   if (pathname.startsWith("/admin/finance/payment-settings")) {
     return can("payments:read") || can("settings:read");
   }
+  // Any logged-in admin (matches sidebar visible: () => true).
+  if (pathname.startsWith("/admin/expenses")) return true;
+  if (pathname.startsWith("/admin/app-memberships")) return true;
   if (pathname.startsWith("/admin/activity-logs")) return can("logs:read");
   return false;
 }

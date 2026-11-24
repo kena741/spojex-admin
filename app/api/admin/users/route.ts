@@ -2,8 +2,32 @@ import { NextResponse } from "next/server";
 import type { SpojexClient } from "@/lib/api/client";
 import { requireAnyAdminPermission } from "@/lib/admin-auth";
 import { missingServiceRoleMessage } from "@/lib/api-auth";
+import { getSpojexApiBaseUrl } from "@/lib/env";
 import { canUseAdminClient, createAdminClient } from "@/lib/spojex/admin";
+import { requestAccessToken } from "@/lib/spojex/server";
 import { generateStadiumManagerPassword } from "@/lib/stadiums";
+
+/** Force primary assignment + users.role mirror via backend apply_role_resolution. */
+async function ensureRoleAssignment(userId: string, role: string): Promise<string | null> {
+  const token = await requestAccessToken();
+  if (!token) return "Unauthorized";
+  const base = getSpojexApiBaseUrl();
+  const res = await fetch(`${base}/api/v1/data/users/${userId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ role }),
+  });
+  if (res.ok) return null;
+  const payload = (await res.json().catch(() => ({}))) as {
+    message?: string;
+    detail?: string;
+    error?: string;
+  };
+  return payload.message || payload.detail || payload.error || "Failed to sync role assignment";
+}
 
 const userSelect = "id, display_name, email, username, role, phone, city, avatar_url";
 
@@ -166,8 +190,11 @@ export async function POST(request: Request) {
   if (!email || !email.includes("@")) {
     return NextResponse.json({ error: "A valid email is required" }, { status: 400 });
   }
-  if (!/^[a-z0-9_]+$/.test(role)) {
-    return NextResponse.json({ error: "Role is required" }, { status: 400 });
+  if (!["fan", "athlete", "professional"].includes(role)) {
+    return NextResponse.json(
+      { error: "Account role must be fan, athlete, or professional." },
+      { status: 422 },
+    );
   }
   if (password.length < 6) {
     return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 });
@@ -205,9 +232,13 @@ export async function POST(request: Request) {
   const existingProfile = existingMatches?.[0];
 
   if (existingProfile?.id) {
+    // Attach path: ensure assignment; soft-fail so the profile remains usable.
+    const ensureError = await ensureRoleAssignment(String(existingProfile.id), role);
     return NextResponse.json({
       data: existingProfile,
       attached_existing: true,
+      assignment_pending: Boolean(ensureError),
+      assignment_error: ensureError || undefined,
     });
   }
 
@@ -268,10 +299,18 @@ export async function POST(request: Request) {
       city,
       country,
     });
+    const profileId = String((profile as { id?: string })?.id ?? "");
+    let assignmentError: string | null = null;
+    if (profileId) {
+      assignmentError = await ensureRoleAssignment(profileId, role);
+    }
+    // Profile exists even if assignment sync failed — client can retry ensure-role.
     return NextResponse.json({
       data: profile,
       password: createdNewLogin ? password : undefined,
       attached_existing: !createdNewLogin,
+      assignment_pending: Boolean(assignmentError),
+      assignment_error: assignmentError || undefined,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to save user profile";
