@@ -1,58 +1,91 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
   AdminErrorAlert,
+  AdminFilterPanel,
   AdminLoadingRow,
   AdminModal,
   AdminModalFooter,
   AdminReloadButton,
+  AdminSelect,
+  AdminTableShell,
 } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
 import { adminCacheKey } from "@/lib/admin-session-cache";
 import { adminFetch, deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
 import { useAdminQuery } from "@/lib/use-admin-query";
+import { formatDate } from "@/lib/utils";
 
 type PlanRow = {
   id: string;
   slug: string;
   name: string;
-  badge: string;
-  price_amount: number;
-  currency: string;
-  billing_period: string;
-  member_limit: number | null;
-  features: string[];
-  sort_order: number;
   is_active: boolean;
+};
+
+type MemberRow = {
+  id: string;
+  name: string;
+  phone: string;
+  plan_id: string | null;
+  plan_name: string;
+  starts_on: string | null;
+  ends_on: string | null;
+  status: "active" | "expired" | string;
+  user_id: string | null;
+  user_name: string;
+  gym_id: string | null;
+  gym_name: string;
+  note: string;
+};
+
+type UserHit = {
+  id: string;
+  display_name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  username?: string | null;
+};
+
+type GymHit = {
+  id: string;
+  name?: string | null;
 };
 
 const fieldClass = "h-10 w-full rounded-lg border border-border px-3 text-sm";
 
 export default function AppMembershipsPage() {
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState("all");
   const [actionError, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<PlanRow | null>(null);
+  const [editing, setEditing] = useState<MemberRow | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
-  const [badge, setBadge] = useState("");
-  const [price, setPrice] = useState("");
-  const [memberLimit, setMemberLimit] = useState("");
-  const [featuresText, setFeaturesText] = useState("");
-  const [sortOrder, setSortOrder] = useState("10");
-  const [isActive, setIsActive] = useState(true);
+  const [phone, setPhone] = useState("");
+  const [planId, setPlanId] = useState("");
+  const [startsOn, setStartsOn] = useState("");
+  const [endsOn, setEndsOn] = useState("");
+  const [memberStatus, setMemberStatus] = useState("active");
+  const [note, setNote] = useState("");
+  const [userId, setUserId] = useState<string | null>(null);
+  const [userLabel, setUserLabel] = useState("");
+  const [userQuery, setUserQuery] = useState("");
+  const [userHits, setUserHits] = useState<UserHit[]>([]);
+  const [gymId, setGymId] = useState<string | null>(null);
+  const [gymLabel, setGymLabel] = useState("");
+  const [gymQuery, setGymQuery] = useState("");
+  const [gymHits, setGymHits] = useState<GymHit[]>([]);
+  const userSeq = useRef(0);
+  const gymSeq = useRef(0);
 
   const {
-    data,
-    loading,
-    refreshing,
-    error: loadError,
-    refresh,
-  } = useAdminQuery<{ data?: PlanRow[]; error?: string }>({
+    data: plansData,
+  } = useAdminQuery<{ data?: PlanRow[] }>({
     key: adminCacheKey(["app-membership-plans"]),
     fetcher: async () => {
       const res = await adminFetch("/api/admin/app-membership-plans");
@@ -62,67 +95,143 @@ export default function AppMembershipsPage() {
     },
   });
 
+  const plans = useMemo(
+    () => (plansData?.data ?? []).filter((p) => p.is_active !== false),
+    [plansData],
+  );
+
+  const {
+    data,
+    loading,
+    refreshing,
+    error: loadError,
+    refresh,
+  } = useAdminQuery<{ data?: MemberRow[]; total?: number; error?: string }>({
+    key: adminCacheKey(["app-members", q, status]),
+    fetcher: async () => {
+      const params = new URLSearchParams();
+      if (q.trim()) params.set("q", q.trim());
+      if (status !== "all") params.set("status", status);
+      const res = await adminFetch(`/api/admin/app-members?${params}`);
+      const payload = (await res.json()) as {
+        data?: MemberRow[];
+        total?: number;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(payload.error || "Failed to load members");
+      return payload;
+    },
+  });
+
   const rows = useMemo(() => data?.data ?? [], [data]);
   const error = actionError ?? loadError;
 
+  useEffect(() => {
+    if (!open) return;
+    const raw = userQuery.trim();
+    if (raw.length < 2 || userId) {
+      setUserHits([]);
+      return;
+    }
+    const seq = ++userSeq.current;
+    const t = window.setTimeout(() => {
+      void adminFetch(`/api/admin/users?q=${encodeURIComponent(raw)}&limit=8`)
+        .then(async (res) => {
+          const json = (await res.json().catch(() => ({}))) as { data?: UserHit[] };
+          if (seq !== userSeq.current) return;
+          setUserHits(json.data ?? []);
+        })
+        .catch(() => {
+          if (seq === userSeq.current) setUserHits([]);
+        });
+    }, 280);
+    return () => window.clearTimeout(t);
+  }, [open, userQuery, userId]);
+
+  useEffect(() => {
+    if (!open) return;
+    const raw = gymQuery.trim();
+    if (raw.length < 2 || gymId) {
+      setGymHits([]);
+      return;
+    }
+    const seq = ++gymSeq.current;
+    const t = window.setTimeout(() => {
+      void adminFetch(`/api/admin/gyms?q=${encodeURIComponent(raw)}&page_size=8`)
+        .then(async (res) => {
+          const json = (await res.json().catch(() => ({}))) as {
+            data?: GymHit[];
+            items?: GymHit[];
+          };
+          if (seq !== gymSeq.current) return;
+          setGymHits(json.data ?? json.items ?? []);
+        })
+        .catch(() => {
+          if (seq === gymSeq.current) setGymHits([]);
+        });
+    }, 280);
+    return () => window.clearTimeout(t);
+  }, [open, gymQuery, gymId]);
+
   const openCreate = () => {
     setEditing(null);
-    setSlug("");
     setName("");
-    setBadge("");
-    setPrice("");
-    setMemberLimit("");
-    setFeaturesText("");
-    setSortOrder(String((rows.at(-1)?.sort_order ?? 0) + 10));
-    setIsActive(true);
+    setPhone("");
+    setPlanId(plans[0]?.id ?? "");
+    setStartsOn(new Date().toISOString().slice(0, 10));
+    setEndsOn("");
+    setMemberStatus("active");
+    setNote("");
+    setUserId(null);
+    setUserLabel("");
+    setUserQuery("");
+    setGymId(null);
+    setGymLabel("");
+    setGymQuery("");
     setError(null);
     setOpen(true);
   };
 
-  const openEdit = (row: PlanRow) => {
+  const openEdit = (row: MemberRow) => {
     setEditing(row);
-    setSlug(row.slug);
     setName(row.name);
-    setBadge(row.badge || "");
-    setPrice(String(row.price_amount));
-    setMemberLimit(row.member_limit != null ? String(row.member_limit) : "");
-    setFeaturesText((row.features || []).join("\n"));
-    setSortOrder(String(row.sort_order ?? 0));
-    setIsActive(row.is_active !== false);
+    setPhone(row.phone);
+    setPlanId(row.plan_id ?? "");
+    setStartsOn(row.starts_on?.slice(0, 10) ?? "");
+    setEndsOn(row.ends_on?.slice(0, 10) ?? "");
+    setMemberStatus(row.status === "expired" ? "expired" : "active");
+    setNote(row.note || "");
+    setUserId(row.user_id);
+    setUserLabel(row.user_name || row.user_id || "");
+    setUserQuery("");
+    setGymId(row.gym_id);
+    setGymLabel(row.gym_name || row.gym_id || "");
+    setGymQuery("");
     setError(null);
     setOpen(true);
   };
 
   const save = async () => {
-    const priceNum = Number(price);
-    if (!slug.trim() || !name.trim()) {
-      setError("Slug and name are required");
-      return;
-    }
-    if (!Number.isFinite(priceNum) || priceNum < 0) {
-      setError("Price must be a non-negative number");
+    if (!name.trim() || !phone.trim()) {
+      setError("Name and phone are required");
       return;
     }
     setSaving(true);
     setError(null);
     try {
       const body = {
-        slug: slug.trim().toLowerCase(),
         name: name.trim(),
-        badge: badge.trim(),
-        price_amount: priceNum,
-        currency: "ETB",
-        billing_period: "month",
-        member_limit: memberLimit.trim() === "" ? null : Number(memberLimit),
-        features: featuresText
-          .split("\n")
-          .map((line) => line.trim())
-          .filter(Boolean),
-        sort_order: Number(sortOrder) || 0,
-        is_active: isActive,
+        phone: phone.trim(),
+        plan_id: planId || null,
+        starts_on: startsOn || null,
+        ends_on: endsOn || null,
+        status: memberStatus,
+        user_id: userId,
+        gym_id: gymId,
+        note: note.trim(),
       };
-      if (editing) await patchAdmin(`/api/admin/app-membership-plans/${editing.id}`, body);
-      else await postAdmin("/api/admin/app-membership-plans", body);
+      if (editing) await patchAdmin(`/api/admin/app-members/${editing.id}`, body);
+      else await postAdmin("/api/admin/app-members", body);
       setOpen(false);
       await refresh();
     } catch (err) {
@@ -132,11 +241,11 @@ export default function AppMembershipsPage() {
     }
   };
 
-  const remove = async (row: PlanRow) => {
-    if (!window.confirm(`Delete plan “${row.name}”?`)) return;
+  const remove = async (row: MemberRow) => {
+    if (!window.confirm(`Delete member “${row.name}”?`)) return;
     setError(null);
     try {
-      await deleteAdmin(`/api/admin/app-membership-plans/${row.id}`);
+      await deleteAdmin(`/api/admin/app-members/${row.id}`);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
@@ -159,7 +268,7 @@ export default function AppMembershipsPage() {
               onClick={openCreate}
               className="h-9 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground"
             >
-              Add plan
+              Add member
             </button>
           </div>
         }
@@ -167,66 +276,99 @@ export default function AppMembershipsPage() {
 
       {error ? <AdminErrorAlert message={error} /> : null}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {loading && !data ? <AdminLoadingRow label="Loading plans…" /> : null}
-        {!loading && rows.length === 0 ? (
-          <AdminEmpty title="No plans" description="Seeded plans appear after migration, or add one." />
-        ) : null}
-        {rows.map((row) => (
-          <article
-            key={row.id}
-            className="flex flex-col rounded-xl border border-border bg-card p-5 shadow-sm"
-          >
-            <div className="mb-2 flex items-start justify-between gap-2">
-              <div>
-                <p className="text-sm text-text-secondary">{row.name}</p>
-                {row.badge ? (
-                  <span className="mt-1 inline-block rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
-                    {row.badge}
-                  </span>
-                ) : null}
-              </div>
-              <StatusBadge tone={row.is_active ? "success" : "neutral"}>
-                {row.is_active ? "Active" : "Hidden"}
-              </StatusBadge>
-            </div>
-            <p className="font-heading text-2xl font-semibold text-emerald-600">
-              {Number(row.price_amount).toLocaleString()} {row.currency}/{row.billing_period}
-            </p>
-            {row.member_limit != null ? (
-              <p className="mt-1 text-xs text-text-hint">Up to {row.member_limit} members</p>
+      <AdminFilterPanel>
+        <input
+          className={fieldClass}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search name, phone, gym…"
+        />
+        <AdminSelect value={status} onChange={setStatus}>
+          <option value="all">All statuses</option>
+          <option value="active">Active</option>
+          <option value="expired">Expired</option>
+        </AdminSelect>
+      </AdminFilterPanel>
+
+      <AdminTableShell>
+        <table className="w-full min-w-[720px] text-left text-sm">
+          <thead className="border-b border-border text-xs uppercase text-text-secondary">
+            <tr>
+              <th className="px-3 py-2 font-medium">Member</th>
+              <th className="px-3 py-2 font-medium">Plan</th>
+              <th className="px-3 py-2 font-medium">Dates</th>
+              <th className="px-3 py-2 font-medium">Link</th>
+              <th className="px-3 py-2 font-medium">Status</th>
+              <th className="px-3 py-2 font-medium" />
+            </tr>
+          </thead>
+          <tbody>
+            {loading && !data ? (
+              <tr>
+                <td colSpan={6} className="px-3 py-6">
+                  <AdminLoadingRow label="Loading members…" />
+                </td>
+              </tr>
             ) : null}
-            <ul className="mt-4 flex-1 space-y-1.5 text-sm text-text-secondary">
-              {(row.features || []).map((f) => (
-                <li key={f} className="flex gap-2">
-                  <span className="text-emerald-600">•</span>
-                  <span>{f}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-4 flex gap-2 border-t border-border pt-3">
-              <button
-                type="button"
-                onClick={() => openEdit(row)}
-                className="text-xs font-medium text-primary hover:underline"
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                onClick={() => void remove(row)}
-                className="text-xs font-medium text-red-700 hover:underline"
-              >
-                Delete
-              </button>
-            </div>
-          </article>
-        ))}
-      </div>
+            {!loading && rows.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-3 py-6">
+                  <AdminEmpty
+                    title="No members"
+                    description="Register someone with name, phone, and a membership plan."
+                  />
+                </td>
+              </tr>
+            ) : null}
+            {rows.map((row) => (
+              <tr key={row.id} className="border-b border-border/70">
+                <td className="px-3 py-3">
+                  <p className="font-medium text-text-primary">{row.name}</p>
+                  <p className="text-xs text-text-secondary">{row.phone}</p>
+                </td>
+                <td className="px-3 py-3 text-text-secondary">
+                  {row.plan_name || "—"}
+                </td>
+                <td className="px-3 py-3 text-xs text-text-secondary">
+                  {row.starts_on ? formatDate(row.starts_on) : "—"}
+                  {" → "}
+                  {row.ends_on ? formatDate(row.ends_on) : "—"}
+                </td>
+                <td className="px-3 py-3 text-xs text-text-secondary">
+                  {row.user_name ? <p>User: {row.user_name}</p> : null}
+                  {row.gym_name ? <p>Gym: {row.gym_name}</p> : null}
+                  {!row.user_name && !row.gym_name ? "—" : null}
+                </td>
+                <td className="px-3 py-3">
+                  <StatusBadge tone={row.status === "active" ? "success" : "neutral"}>
+                    {row.status === "active" ? "Active" : "Expired"}
+                  </StatusBadge>
+                </td>
+                <td className="px-3 py-3 text-right">
+                  <button
+                    type="button"
+                    onClick={() => openEdit(row)}
+                    className="mr-2 text-xs font-medium text-primary hover:underline"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void remove(row)}
+                    className="text-xs font-medium text-red-700 hover:underline"
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </AdminTableShell>
 
       <AdminModal
         open={open}
-        title={editing ? `Edit “${editing.name}”` : "Add plan"}
+        title={editing ? `Edit “${editing.name}”` : "Add member"}
         onClose={() => setOpen(false)}
         className="max-w-lg"
         footer={
@@ -243,58 +385,154 @@ export default function AppMembershipsPage() {
             className={fieldClass}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Name"
+            placeholder="Full name"
           />
           <input
             className={fieldClass}
-            value={slug}
-            onChange={(e) => setSlug(e.target.value)}
-            placeholder="Slug (starter)"
-            disabled={Boolean(editing)}
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="Phone"
           />
-          <input
-            className={fieldClass}
-            value={badge}
-            onChange={(e) => setBadge(e.target.value)}
-            placeholder="Badge (optional)"
-          />
-          <input
-            type="number"
-            min={0}
-            className={fieldClass}
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            placeholder="Price (ETB / month)"
-          />
-          <input
-            type="number"
-            min={0}
-            className={fieldClass}
-            value={memberLimit}
-            onChange={(e) => setMemberLimit(e.target.value)}
-            placeholder="Member limit"
-          />
+          <AdminSelect value={planId} onChange={setPlanId}>
+            <option value="">No plan</option>
+            {plans.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </AdminSelect>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="grid gap-1 text-xs text-text-secondary">
+              Start
+              <input
+                type="date"
+                className={fieldClass}
+                value={startsOn}
+                onChange={(e) => setStartsOn(e.target.value)}
+              />
+            </label>
+            <label className="grid gap-1 text-xs text-text-secondary">
+              End
+              <input
+                type="date"
+                className={fieldClass}
+                value={endsOn}
+                onChange={(e) => setEndsOn(e.target.value)}
+              />
+            </label>
+          </div>
+          <AdminSelect value={memberStatus} onChange={setMemberStatus}>
+            <option value="active">Active</option>
+            <option value="expired">Expired</option>
+          </AdminSelect>
+
+          <div className="grid gap-1">
+            <p className="text-xs text-text-secondary">Link app user (optional)</p>
+            {userId ? (
+              <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+                <span>{userLabel || userId}</span>
+                <button
+                  type="button"
+                  className="text-xs text-red-700"
+                  onClick={() => {
+                    setUserId(null);
+                    setUserLabel("");
+                  }}
+                >
+                  Clear
+                </button>
+              </div>
+            ) : (
+              <>
+                <input
+                  className={fieldClass}
+                  value={userQuery}
+                  onChange={(e) => setUserQuery(e.target.value)}
+                  placeholder="Search user by name / phone"
+                />
+                {userHits.length > 0 ? (
+                  <ul className="max-h-36 overflow-auto rounded-lg border border-border bg-card text-sm">
+                    {userHits.map((u) => (
+                      <li key={u.id}>
+                        <button
+                          type="button"
+                          className="block w-full px-3 py-2 text-left hover:bg-muted/40"
+                          onClick={() => {
+                            setUserId(u.id);
+                            setUserLabel(
+                              u.display_name || u.username || u.phone || u.email || u.id,
+                            );
+                            setUserQuery("");
+                            setUserHits([]);
+                          }}
+                        >
+                          {u.display_name || u.username || "User"}{" "}
+                          <span className="text-text-secondary">
+                            {u.phone || u.email || ""}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </>
+            )}
+          </div>
+
+          <div className="grid gap-1">
+            <p className="text-xs text-text-secondary">Link gym (optional)</p>
+            {gymId ? (
+              <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
+                <span>{gymLabel || gymId}</span>
+                <button
+                  type="button"
+                  className="text-xs text-red-700"
+                  onClick={() => {
+                    setGymId(null);
+                    setGymLabel("");
+                  }}
+                >
+                  Clear
+                </button>
+              </div>
+            ) : (
+              <>
+                <input
+                  className={fieldClass}
+                  value={gymQuery}
+                  onChange={(e) => setGymQuery(e.target.value)}
+                  placeholder="Search gym by name"
+                />
+                {gymHits.length > 0 ? (
+                  <ul className="max-h-36 overflow-auto rounded-lg border border-border bg-card text-sm">
+                    {gymHits.map((g) => (
+                      <li key={g.id}>
+                        <button
+                          type="button"
+                          className="block w-full px-3 py-2 text-left hover:bg-muted/40"
+                          onClick={() => {
+                            setGymId(g.id);
+                            setGymLabel(g.name || g.id);
+                            setGymQuery("");
+                            setGymHits([]);
+                          }}
+                        >
+                          {g.name || g.id}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </>
+            )}
+          </div>
+
           <textarea
-            className="min-h-32 w-full rounded-lg border border-border px-3 py-2 text-sm"
-            value={featuresText}
-            onChange={(e) => setFeaturesText(e.target.value)}
-            placeholder={"One feature per line"}
+            className="min-h-20 w-full rounded-lg border border-border px-3 py-2 text-sm"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Note (optional)"
           />
-          <input
-            type="number"
-            className={fieldClass}
-            value={sortOrder}
-            onChange={(e) => setSortOrder(e.target.value)}
-            placeholder="Sort order"
-          />
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={isActive}
-              onChange={(e) => setIsActive(e.target.checked)}
-            />
-            Active in app
-          </label>
         </div>
       </AdminModal>
     </div>
