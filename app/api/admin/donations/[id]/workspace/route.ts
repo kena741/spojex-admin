@@ -62,10 +62,10 @@ export async function GET(
 
   const { data: contribs } = await auth.context.client
     .from("donation_contributions")
-    .select("*, users:user_id(id, display_name)")
+    .select("*, users:user_id(id, display_name), credited:credited_user_id(id, display_name, email)")
     .eq("campaign_id", id)
     .order("created_at", { ascending: false })
-    .limit(20);
+    .limit(200);
 
   const rows = (contribs ?? []) as Record<string, unknown>[];
   const completed = rows.filter((r) =>
@@ -128,6 +128,55 @@ export async function GET(
     alerts.push("Campaign is paused - new contributions are blocked.");
   }
 
+  const recipientMap = new Map<
+    string,
+    {
+      credited_user_id: string | null;
+      recipient_name: string;
+      currency: string;
+      contribution_count: number;
+      total_amount: number;
+    }
+  >();
+  for (const row of completed) {
+    const credited = row.credited_user_id ? String(row.credited_user_id) : null;
+    const currency = String(row.currency || (coin ? "COIN" : "ETB")).toUpperCase();
+    const key = `${credited || "none"}:${currency}`;
+    const prev = recipientMap.get(key);
+    const amount = Number(row.amount || 0);
+    if (prev) {
+      prev.contribution_count += 1;
+      prev.total_amount += amount;
+    } else {
+      const creditedUser = row.credited as
+        | { display_name?: string; email?: string }
+        | null
+        | undefined;
+      recipientMap.set(key, {
+        credited_user_id: credited,
+        recipient_name: credited
+          ? creditedUser?.display_name || creditedUser?.email || beneficiaryName || credited
+          : "Unassigned",
+        currency,
+        contribution_count: 1,
+        total_amount: amount,
+      });
+    }
+  }
+  const recipients = [...recipientMap.values()]
+    .sort((a, b) => b.total_amount - a.total_amount)
+    .map((r) => ({
+      ...r,
+      total_amount: r.total_amount.toFixed(2),
+      finance_href: `/admin/finance/transactions?module=donations&q=${r.credited_user_id || id}`,
+    }));
+  let totalEtb = 0;
+  let totalCoins = 0;
+  for (const r of recipients) {
+    if (r.currency === "COIN" || r.currency === "COINS") totalCoins += Number(r.total_amount);
+    else totalEtb += Number(r.total_amount);
+  }
+
   return NextResponse.json({
     campaign: {
       ...campaign,
@@ -150,8 +199,7 @@ export async function GET(
       credited_recipient_note:
         "Each contribution stores credited_user_id at completion. Changing the campaign beneficiary does not move historical funds.",
       managing_organization: beneficiaryOrg,
-      redeem_authorized:
-        "Credited user wallet (coin) or platform payout rules (ETB) - see Finance.",
+      redeem_authorized: "Credited user coin wallet — see Finance for ledger detail.",
     },
     aggregates: {
       completed_count: completed.length,
@@ -162,9 +210,19 @@ export async function GET(
     alerts,
     lifecycle_policy: donationLifecyclePolicy,
     disbursements: {
-      supported: false,
+      supported: true,
+      mode: "contribution_credit",
       message:
-        "Campaign disbursement is not implemented. Wallet credit on coin gifts is not a campaign payout. Use Finance for ledger visibility.",
+        "Completed coin gifts credit the recipient wallet immediately. Totals below are those credits; open Finance for ledger line items.",
+      campaign_beneficiary_user_id: campaign.beneficiary_user_id,
+      campaign_beneficiary_name: beneficiaryName,
+      totals: {
+        etb: totalEtb.toFixed(2),
+        coins: totalCoins.toFixed(2),
+        recipient_count: new Set(recipients.map((r) => r.credited_user_id).filter(Boolean)).size,
+      },
+      recipients,
+      finance_href: `/admin/finance/transactions?module=donations&q=${id}`,
     },
     contribution_count: contribCount ?? 0,
     asset_locked: (contribCount ?? 0) > 0,

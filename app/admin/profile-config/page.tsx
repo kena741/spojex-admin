@@ -586,13 +586,22 @@ export default function ProfileConfigPage() {
           isNew={!liveIds.has(editingGroup.id)}
           onClose={() => setEditingGroup(null)}
           onSave={(next) => {
+            const batch = Array.isArray(next) ? next : [next];
             update((d) => {
-              const before = d.groups.find((g) => g.id === next.id);
+              let groups = d.groups;
+              for (const item of batch) {
+                groups = groups.some((g) => g.id === item.id)
+                  ? groups.map((g) => (g.id === item.id ? item : g))
+                  : [...groups, item];
+              }
+              const keys = new Set(batch.map((g) => g.key));
               return {
                 ...d,
-                groups: before ? d.groups.map((g) => (g.id === next.id ? next : g)) : [...d.groups, next],
+                groups,
                 // Fields follow their group to its tab.
-                fields: d.fields.map((f) => (f.group === next.key ? { ...f, section: next.section } : f)),
+                fields: d.fields.map((f) =>
+                  f.group && keys.has(f.group) ? { ...f, section: batch[0]?.section ?? f.section } : f,
+                ),
               };
             });
             setEditingGroup(null);
@@ -1247,6 +1256,8 @@ function FieldTable({
   );
 }
 
+const ACCOUNT_ROLES = ["fan", "athlete", "professional"] as const;
+
 function GroupEditor({
   group,
   doc,
@@ -1258,11 +1269,31 @@ function GroupEditor({
   doc: CatalogDocument;
   isNew: boolean;
   onClose: () => void;
-  onSave: (g: CatalogGroup) => void;
+  onSave: (g: CatalogGroup | CatalogGroup[]) => void;
 }) {
   const [g, setG] = useState<CatalogGroup>(group);
+  const [applyRoles, setApplyRoles] = useState<string[]>(() => {
+    if (group.scope_kind === "account") return [...ACCOUNT_ROLES];
+    if ((ACCOUNT_ROLES as readonly string[]).includes(group.scope_kind)) return [group.scope_kind];
+    return [];
+  });
+  const [categoryScope, setCategoryScope] = useState(() =>
+    group.scope_kind === "sport" || group.scope_kind === "profession" ? scopeValue(group) : "",
+  );
   const keyValid = /^[a-z][a-z0-9_]{1,62}$/.test(g.key);
   const keyTaken = isNew && doc.groups.some((x) => x.key === g.key);
+  const everyone = applyRoles.length === ACCOUNT_ROLES.length;
+  const appliesOk = Boolean(categoryScope) || applyRoles.length > 0;
+
+  const buildScopes = (): { scope_kind: CatalogGroup["scope_kind"]; scope_ref: string | null }[] => {
+    if (categoryScope) return [parseScope(categoryScope)];
+    if (everyone || applyRoles.length === 0) return [{ scope_kind: "account", scope_ref: null }];
+    return applyRoles.map((role) => ({
+      scope_kind: role as CatalogGroup["scope_kind"],
+      scope_ref: null,
+    }));
+  };
+
   return (
     <AdminModal
       open
@@ -1272,8 +1303,22 @@ function GroupEditor({
       footer={
         <AdminModalFooter
           onCancel={onClose}
-          onSave={() => onSave({ ...g, label: g.label.trim(), item_label: g.item_label.trim() })}
-          disabled={!g.label.trim() || !keyValid || keyTaken}
+          onSave={() => {
+            const base = { ...g, label: g.label.trim(), item_label: g.item_label.trim() };
+            if (!isNew) {
+              onSave(base);
+              return;
+            }
+            const scopes = buildScopes();
+            onSave(
+              scopes.map((scope, i) => ({
+                ...base,
+                id: i === 0 ? base.id : newId(),
+                ...scope,
+              })),
+            );
+          }}
+          disabled={!g.label.trim() || !keyValid || keyTaken || (isNew && !appliesOk)}
           saveLabel="Apply to draft"
         />
       }
@@ -1308,13 +1353,79 @@ function GroupEditor({
               ))}
           </select>
         </Field>
-        <Field label="Applies to" tip={isNew ? undefined : "Locked after publishing."}>
-          <AudienceSelect
-            doc={doc}
-            value={scopeValue(g)}
-            disabled={!isNew}
-            onChange={(value) => setG({ ...g, ...parseScope(value) })}
-          />
+        <Field
+          label="Applied for"
+          tip={
+            isNew
+              ? "Pick one or more roles, or a specific sport/profession."
+              : "Locked after publishing. Archive and add a new group instead."
+          }
+        >
+          {!isNew ? (
+            <AudienceSelect
+              doc={doc}
+              value={scopeValue(g)}
+              disabled
+              onChange={() => undefined}
+            />
+          ) : (
+            <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2 sm:col-span-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={everyone && !categoryScope}
+                  disabled={Boolean(categoryScope)}
+                  onChange={(e) => {
+                    setCategoryScope("");
+                    setApplyRoles(e.target.checked ? [...ACCOUNT_ROLES] : []);
+                  }}
+                />
+                Everyone
+              </label>
+              <div className="flex flex-wrap gap-3">
+                {ACCOUNT_ROLES.map((role) => (
+                  <label key={role} className="flex items-center gap-1.5 text-sm capitalize">
+                    <input
+                      type="checkbox"
+                      checked={!categoryScope && applyRoles.includes(role)}
+                      disabled={Boolean(categoryScope)}
+                      onChange={(e) => {
+                        setCategoryScope("");
+                        setApplyRoles((prev) =>
+                          e.target.checked
+                            ? [...new Set([...prev, role])]
+                            : prev.filter((r) => r !== role),
+                        );
+                      }}
+                    />
+                    {role}
+                  </label>
+                ))}
+              </div>
+              <div>
+                <p className="mb-1 text-[11px] text-text-hint">Or narrow to one sport / profession</p>
+                <select
+                  className={inputClass}
+                  value={categoryScope}
+                  onChange={(e) => {
+                    setCategoryScope(e.target.value);
+                    if (e.target.value) setApplyRoles([]);
+                  }}
+                >
+                  <option value="">Roles above</option>
+                  {audienceOptions(doc)
+                    .filter((og) => og.label !== "Roles")
+                    .flatMap((og) =>
+                      og.options.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      )),
+                    )}
+                </select>
+              </div>
+            </div>
+          )}
         </Field>
         <Field label="Max items">
           <input
@@ -1330,8 +1441,6 @@ function GroupEditor({
     </AdminModal>
   );
 }
-
-const ACCOUNT_ROLES = ["fan", "athlete", "professional"] as const;
 
 function FieldEditor({
   field,
@@ -1475,7 +1584,7 @@ function FieldEditor({
           </Field>
         )}
         <Field
-          label="Applies to"
+          label="Applied for"
           tip={
             isNew
               ? "Pick one or more roles, or a specific sport/profession."

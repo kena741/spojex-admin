@@ -423,7 +423,10 @@ export default function DonationDetailPage() {
     setError(null);
     setNotice(null);
     try {
-      const isCoin = form.currency.toUpperCase() === "COIN" || form.currency.toUpperCase() === "COINS";
+      const isCoin =
+        form.currency.toUpperCase() === "COIN" ||
+        form.currency.toUpperCase() === "COINS" ||
+        campaignIsCoin(campaign);
       const goalNum = Number(form.goal) || 0;
       const patch: Record<string, unknown> = {
         title: form.title.trim(),
@@ -1109,22 +1112,14 @@ export default function DonationDetailPage() {
 
             <label className="text-sm">
               <span className="mb-1 block text-text-secondary">Asset</span>
-              <select
-                value={form.currency.toUpperCase().startsWith("COIN") ? "COIN" : "ETB"}
-                disabled={!editing || !canWrite || assetLocked || !form.currency.toUpperCase().startsWith("COIN")}
-                onChange={(e) => updateForm({ currency: e.target.value })}
+              <input
+                value={form.currency.toUpperCase().startsWith("COIN") ? "Coins" : "ETB (legacy)"}
+                disabled
                 className={fieldClass}
-              >
-                <option value="COIN">Coins</option>
-                {!form.currency.toUpperCase().startsWith("COIN") ? (
-                  <option value="ETB">ETB (legacy)</option>
-                ) : null}
-              </select>
-              {assetLocked ? (
-                <span className="mt-1 block text-[11px] text-text-hint">
-                  Locked after contributions - historical coins cannot be relabeled as ETB.
-                </span>
-              ) : null}
+              />
+              <span className="mt-1 block text-[11px] text-text-hint">
+                Donations use coins only. Legacy ETB campaigns stay read-only for asset.
+              </span>
             </label>
             <label className="text-sm">
               <span className="mb-1 block text-text-secondary">

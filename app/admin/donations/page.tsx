@@ -246,13 +246,8 @@ export default function DonationsPage() {
       setError("Reason required for beneficiary or pause/close changes");
       return;
     }
-    const isCoin = editAsset === "coin";
-    const prevCoin = campaignIsCoin(editRow);
-    const raised = Number(campaignDisplayRaised(editRow) || 0);
-    if (isCoin !== prevCoin && raised > 0) {
-      setError("Cannot change campaign asset after contributions exist.");
-      return;
-    }
+    // New edits stay on coins; legacy ETB rows keep their asset locked.
+    const isCoin = editAsset === "coin" || campaignIsCoin(editRow);
     setEditing(true);
     setError(null);
     try {

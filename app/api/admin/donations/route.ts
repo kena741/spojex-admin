@@ -147,7 +147,7 @@ export async function GET(request: Request) {
         coin_raised: coinRaised,
         note: "ETB and coin totals are separate; coins have no implied cash value.",
       },
-      disbursements_supported: false,
+      disbursements_supported: true,
       source: "local",
     });
   } catch (err) {
@@ -173,8 +173,7 @@ export async function POST(request: Request) {
     beneficiary = (await resolvePlatformBeneficiaryUserId(auth.context.client)) || "";
   }
 
-  const currency = String(body.currency || "COIN").toUpperCase();
-  const isCoin = currency === "COIN" || currency === "COINS";
+  // Donations are coin-only — ignore any ETB/Chapa currency from the client.
   const goal = Number(body.goal_coins ?? body.goal_amount ?? 0) || 0;
 
   const { data, error } = await auth.context.client
@@ -186,11 +185,11 @@ export async function POST(request: Request) {
       description: String(body.description ?? ""),
       image_url: String(body.image_url ?? ""),
       cover_url: String(body.cover_url ?? ""),
-      goal_amount: isCoin ? goal : goal,
+      goal_amount: goal,
       raised_amount: 0,
-      goal_coins: isCoin ? goal : 0,
+      goal_coins: goal,
       raised_coins: 0,
-      currency: isCoin ? "COIN" : "ETB",
+      currency: "COIN",
       status: String(body.status || "draft"),
       is_featured: body.is_featured === true,
       sort_order: Number(body.sort_order) || 0,
