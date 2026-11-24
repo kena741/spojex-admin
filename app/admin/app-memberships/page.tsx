@@ -14,6 +14,7 @@ import {
   AdminSelect,
   AdminTableShell,
 } from "@/components/admin-layout";
+import { SearchableSelect } from "@/components/searchable-select";
 import { StatusBadge } from "@/components/status-badge";
 import { adminCacheKey } from "@/lib/admin-session-cache";
 import { adminFetch, deleteAdmin, patchAdmin, postAdmin, uploadAdmin } from "@/lib/hooks";
@@ -119,6 +120,17 @@ export default function AppMembershipsPage() {
   const plans = useMemo(
     () => (plansData?.data ?? []).filter((p) => p.is_active !== false),
     [plansData],
+  );
+  const planOptions = useMemo(
+    () => plans.map((p) => ({ value: p.id, label: p.name })),
+    [plans],
+  );
+  const statusOptions = useMemo(
+    () => [
+      { value: "active", label: "Active" },
+      { value: "expired", label: "Expired" },
+    ],
+    [],
   );
 
   const {
@@ -500,14 +512,14 @@ export default function AppMembershipsPage() {
             <SectionTitle>Membership</SectionTitle>
             <div>
               <FieldLabel>Plan</FieldLabel>
-              <AdminSelect value={planId} onChange={setPlanId}>
-                <option value="">No plan</option>
-                {plans.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </AdminSelect>
+              <SearchableSelect
+                value={planId}
+                onChange={setPlanId}
+                options={planOptions}
+                placeholder="No plan"
+                searchPlaceholder="Search plans…"
+                allowClear
+              />
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <div>
@@ -530,10 +542,14 @@ export default function AppMembershipsPage() {
               </div>
               <div>
                 <FieldLabel>Status</FieldLabel>
-                <AdminSelect value={memberStatus} onChange={setMemberStatus}>
-                  <option value="active">Active</option>
-                  <option value="expired">Expired</option>
-                </AdminSelect>
+                <SearchableSelect
+                  value={memberStatus}
+                  onChange={setMemberStatus}
+                  options={statusOptions}
+                  placeholder="Status"
+                  searchPlaceholder="Search…"
+                  allowClear={false}
+                />
               </div>
             </div>
           </section>
