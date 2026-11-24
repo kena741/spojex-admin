@@ -177,6 +177,44 @@ export async function GET(
     else totalEtb += Number(r.total_amount);
   }
 
+  const supporterMap = new Map<
+    string,
+    {
+      supporter_user_id: string | null;
+      supporter_name: string;
+      currency: string;
+      total_amount: number;
+    }
+  >();
+  for (const row of completed) {
+    const anonymous = Boolean(row.is_anonymous);
+    const userId = anonymous || !row.user_id ? null : String(row.user_id);
+    const currency = String(row.currency || (coin ? "COIN" : "ETB")).toUpperCase();
+    const donor = row.users as { display_name?: string } | null | undefined;
+    const name = anonymous
+      ? "Anonymous"
+      : donor?.display_name || (userId ? userId : "Donor");
+    const key = `${anonymous ? "anon" : userId || "unknown"}:${currency}`;
+    const prev = supporterMap.get(key);
+    const amount = Number(row.amount || 0);
+    if (prev) prev.total_amount += amount;
+    else {
+      supporterMap.set(key, {
+        supporter_user_id: userId,
+        supporter_name: name,
+        currency,
+        total_amount: amount,
+      });
+    }
+  }
+  const supporters = [...supporterMap.values()]
+    .sort((a, b) => b.total_amount - a.total_amount)
+    .map((r) => ({
+      ...r,
+      amount: r.total_amount.toFixed(2),
+      total_amount: r.total_amount.toFixed(2),
+    }));
+
   return NextResponse.json({
     campaign: {
       ...campaign,
@@ -212,16 +250,16 @@ export async function GET(
     disbursements: {
       supported: true,
       mode: "contribution_credit",
-      message:
-        "Completed coin gifts credit the recipient wallet immediately. Totals below are those credits; open Finance for ledger line items.",
       campaign_beneficiary_user_id: campaign.beneficiary_user_id,
       campaign_beneficiary_name: beneficiaryName,
       totals: {
         etb: totalEtb.toFixed(2),
         coins: totalCoins.toFixed(2),
         recipient_count: new Set(recipients.map((r) => r.credited_user_id).filter(Boolean)).size,
+        supporter_count: supporters.length,
       },
       recipients,
+      supporters,
       finance_href: `/admin/finance/transactions?module=donations&q=${id}`,
     },
     contribution_count: contribCount ?? 0,
