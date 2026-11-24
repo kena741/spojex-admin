@@ -15,7 +15,8 @@ export type SpojexMediaModule =
   | "miniapps"
   | "banners"
   | "verification"
-  | "payments";
+  | "payments"
+  | "expenses";
 
 export type SpojexMediaUploadResult = {
   objectId?: string;
