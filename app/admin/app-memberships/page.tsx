@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ImagePlus, Search, X } from "lucide-react";
 import AdminPageHeader from "@/components/admin-header";
 import {
   AdminEmpty,
@@ -15,9 +16,9 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
 import { adminCacheKey } from "@/lib/admin-session-cache";
-import { adminFetch, deleteAdmin, patchAdmin, postAdmin } from "@/lib/hooks";
+import { adminFetch, deleteAdmin, patchAdmin, postAdmin, uploadAdmin } from "@/lib/hooks";
 import { useAdminQuery } from "@/lib/use-admin-query";
-import { formatDate } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 
 type PlanRow = {
   id: string;
@@ -40,6 +41,7 @@ type MemberRow = {
   gym_id: string | null;
   gym_name: string;
   note: string;
+  screenshot_url: string;
 };
 
 type UserHit = {
@@ -55,7 +57,25 @@ type GymHit = {
   name?: string | null;
 };
 
-const fieldClass = "h-10 w-full rounded-lg border border-border px-3 text-sm";
+const fieldClass =
+  "h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-text-primary outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20";
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <label className="mb-1.5 block text-[13px] font-medium text-text-secondary">{children}</label>;
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-hint">{children}</p>
+  );
+}
 
 export default function AppMembershipsPage() {
   const [q, setQ] = useState("");
@@ -64,6 +84,7 @@ export default function AppMembershipsPage() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<MemberRow | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -72,6 +93,7 @@ export default function AppMembershipsPage() {
   const [endsOn, setEndsOn] = useState("");
   const [memberStatus, setMemberStatus] = useState("active");
   const [note, setNote] = useState("");
+  const [screenshot, setScreenshot] = useState("");
   const [userId, setUserId] = useState<string | null>(null);
   const [userLabel, setUserLabel] = useState("");
   const [userQuery, setUserQuery] = useState("");
@@ -82,10 +104,9 @@ export default function AppMembershipsPage() {
   const [gymHits, setGymHits] = useState<GymHit[]>([]);
   const userSeq = useRef(0);
   const gymSeq = useRef(0);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  const {
-    data: plansData,
-  } = useAdminQuery<{ data?: PlanRow[] }>({
+  const { data: plansData } = useAdminQuery<{ data?: PlanRow[] }>({
     key: adminCacheKey(["app-membership-plans"]),
     fetcher: async () => {
       const res = await adminFetch("/api/admin/app-membership-plans");
@@ -124,7 +145,12 @@ export default function AppMembershipsPage() {
   });
 
   const rows = useMemo(() => data?.data ?? [], [data]);
+  const total = data?.total ?? rows.length;
   const error = actionError ?? loadError;
+  const activeCount = useMemo(
+    () => rows.filter((r) => r.status === "active").length,
+    [rows],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -173,8 +199,7 @@ export default function AppMembershipsPage() {
     return () => window.clearTimeout(t);
   }, [open, gymQuery, gymId]);
 
-  const openCreate = () => {
-    setEditing(null);
+  const resetForm = () => {
     setName("");
     setPhone("");
     setPlanId(plans[0]?.id ?? "");
@@ -182,12 +207,18 @@ export default function AppMembershipsPage() {
     setEndsOn("");
     setMemberStatus("active");
     setNote("");
+    setScreenshot("");
     setUserId(null);
     setUserLabel("");
     setUserQuery("");
     setGymId(null);
     setGymLabel("");
     setGymQuery("");
+  };
+
+  const openCreate = () => {
+    setEditing(null);
+    resetForm();
     setError(null);
     setOpen(true);
   };
@@ -201,6 +232,7 @@ export default function AppMembershipsPage() {
     setEndsOn(row.ends_on?.slice(0, 10) ?? "");
     setMemberStatus(row.status === "expired" ? "expired" : "active");
     setNote(row.note || "");
+    setScreenshot(row.screenshot_url || "");
     setUserId(row.user_id);
     setUserLabel(row.user_name || row.user_id || "");
     setUserQuery("");
@@ -209,6 +241,21 @@ export default function AppMembershipsPage() {
     setGymQuery("");
     setError(null);
     setOpen(true);
+  };
+
+  const uploadScreenshot = async (file: File) => {
+    setUploading(true);
+    setError(null);
+    try {
+      const payload = await uploadAdmin("/api/admin/app-members/upload", file);
+      const url = (payload as { url?: string }).url || "";
+      if (!url) throw new Error("Upload failed");
+      setScreenshot(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const save = async () => {
@@ -229,6 +276,7 @@ export default function AppMembershipsPage() {
         user_id: userId,
         gym_id: gymId,
         note: note.trim(),
+        screenshot_url: screenshot.trim(),
       };
       if (editing) await patchAdmin(`/api/admin/app-members/${editing.id}`, body);
       else await postAdmin("/api/admin/app-members", body);
@@ -253,9 +301,14 @@ export default function AppMembershipsPage() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <AdminPageHeader
         title="App memberships"
+        description={
+          loading && !data
+            ? "Loading…"
+            : `${total} member${total === 1 ? "" : "s"}${rows.length ? ` · ${activeCount} active on this page` : ""}`
+        }
         actions={
           <div className="flex flex-wrap gap-2">
             <AdminReloadButton
@@ -266,7 +319,7 @@ export default function AppMembershipsPage() {
             <button
               type="button"
               onClick={openCreate}
-              className="h-9 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground"
+              className="h-9 rounded-md bg-primary px-3.5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
             >
               Add member
             </button>
@@ -277,262 +330,393 @@ export default function AppMembershipsPage() {
       {error ? <AdminErrorAlert message={error} /> : null}
 
       <AdminFilterPanel>
-        <input
-          className={fieldClass}
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search name, phone, gym…"
-        />
-        <AdminSelect value={status} onChange={setStatus}>
-          <option value="all">All statuses</option>
-          <option value="active">Active</option>
-          <option value="expired">Expired</option>
-        </AdminSelect>
+        <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
+          <div className="relative">
+            <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-text-hint" />
+            <input
+              className={cn(fieldClass, "pl-9")}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search name, phone, gym…"
+            />
+          </div>
+          <AdminSelect value={status} onChange={setStatus}>
+            <option value="all">All statuses</option>
+            <option value="active">Active</option>
+            <option value="expired">Expired</option>
+          </AdminSelect>
+        </div>
       </AdminFilterPanel>
 
       <AdminTableShell>
-        <table className="w-full min-w-[720px] text-left text-sm">
-          <thead className="border-b border-border text-xs uppercase text-text-secondary">
-            <tr>
-              <th className="px-3 py-2 font-medium">Member</th>
-              <th className="px-3 py-2 font-medium">Plan</th>
-              <th className="px-3 py-2 font-medium">Dates</th>
-              <th className="px-3 py-2 font-medium">Link</th>
-              <th className="px-3 py-2 font-medium">Status</th>
-              <th className="px-3 py-2 font-medium" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading && !data ? (
-              <tr>
-                <td colSpan={6} className="px-3 py-6">
-                  <AdminLoadingRow label="Loading members…" />
-                </td>
-              </tr>
-            ) : null}
-            {!loading && rows.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-3 py-6">
-                  <AdminEmpty
-                    title="No members"
-                    description="Register someone with name, phone, and a membership plan."
-                  />
-                </td>
-              </tr>
-            ) : null}
-            {rows.map((row) => (
-              <tr key={row.id} className="border-b border-border/70">
-                <td className="px-3 py-3">
-                  <p className="font-medium text-text-primary">{row.name}</p>
-                  <p className="text-xs text-text-secondary">{row.phone}</p>
-                </td>
-                <td className="px-3 py-3 text-text-secondary">
-                  {row.plan_name || "—"}
-                </td>
-                <td className="px-3 py-3 text-xs text-text-secondary">
-                  {row.starts_on ? formatDate(row.starts_on) : "—"}
-                  {" → "}
-                  {row.ends_on ? formatDate(row.ends_on) : "—"}
-                </td>
-                <td className="px-3 py-3 text-xs text-text-secondary">
-                  {row.user_name ? <p>User: {row.user_name}</p> : null}
-                  {row.gym_name ? <p>Gym: {row.gym_name}</p> : null}
-                  {!row.user_name && !row.gym_name ? "—" : null}
-                </td>
-                <td className="px-3 py-3">
-                  <StatusBadge tone={row.status === "active" ? "success" : "neutral"}>
-                    {row.status === "active" ? "Active" : "Expired"}
-                  </StatusBadge>
-                </td>
-                <td className="px-3 py-3 text-right">
-                  <button
-                    type="button"
-                    onClick={() => openEdit(row)}
-                    className="mr-2 text-xs font-medium text-primary hover:underline"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void remove(row)}
-                    className="text-xs font-medium text-red-700 hover:underline"
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {loading && !data ? (
+          <AdminLoadingRow label="Loading members…" />
+        ) : rows.length === 0 ? (
+          <AdminEmpty
+            title="No members yet"
+            description="Register someone with name, phone, plan dates, and an optional payment screenshot."
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="border-b border-border bg-muted/40 text-[11px] uppercase tracking-wide text-text-secondary">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Member</th>
+                  <th className="px-3 py-3 font-medium">Plan</th>
+                  <th className="px-3 py-3 font-medium">Period</th>
+                  <th className="px-3 py-3 font-medium">Linked</th>
+                  <th className="px-3 py-3 font-medium">Proof</th>
+                  <th className="px-3 py-3 font-medium">Status</th>
+                  <th className="px-3 py-3 font-medium text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {rows.map((row) => (
+                  <tr key={row.id} className="transition-colors hover:bg-muted/25">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary/10 text-[12px] font-semibold text-primary">
+                          {initials(row.name)}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-text-primary">{row.name}</p>
+                          <p className="truncate text-xs text-text-secondary">{row.phone}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3">
+                      {row.plan_name ? (
+                        <span className="inline-flex rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-text-primary">
+                          {row.plan_name}
+                        </span>
+                      ) : (
+                        <span className="text-text-hint">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-3 text-xs text-text-secondary">
+                      <div>{row.starts_on ? formatDate(row.starts_on) : "—"}</div>
+                      <div className="text-text-hint">
+                        to {row.ends_on ? formatDate(row.ends_on) : "—"}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 text-xs text-text-secondary">
+                      {row.user_name || row.gym_name ? (
+                        <div className="space-y-0.5">
+                          {row.user_name ? <p>User · {row.user_name}</p> : null}
+                          {row.gym_name ? <p>Gym · {row.gym_name}</p> : null}
+                        </div>
+                      ) : (
+                        <span className="text-text-hint">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-3">
+                      {row.screenshot_url ? (
+                        <a
+                          href={row.screenshot_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block h-11 w-14 overflow-hidden rounded-md border border-border bg-muted transition hover:opacity-90"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={row.screenshot_url}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        </a>
+                      ) : (
+                        <span className="text-xs text-text-hint">None</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-3">
+                      <StatusBadge tone={row.status === "active" ? "success" : "neutral"}>
+                        {row.status === "active" ? "Active" : "Expired"}
+                      </StatusBadge>
+                    </td>
+                    <td className="px-3 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(row)}
+                        className="mr-2 text-xs font-medium text-primary hover:underline"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void remove(row)}
+                        className="text-xs font-medium text-red-700 hover:underline"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </AdminTableShell>
 
       <AdminModal
         open={open}
-        title={editing ? `Edit “${editing.name}”` : "Add member"}
+        title={editing ? `Edit ${editing.name}` : "Add member"}
         onClose={() => setOpen(false)}
-        className="max-w-lg"
+        className="max-w-xl"
         footer={
           <AdminModalFooter
             onCancel={() => setOpen(false)}
             onSave={() => void save()}
-            saving={saving}
-            saveLabel="Save"
+            saving={saving || uploading}
+            saveLabel={editing ? "Save changes" : "Add member"}
           />
         }
       >
-        <div className="grid gap-3">
-          <input
-            className={fieldClass}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Full name"
-          />
-          <input
-            className={fieldClass}
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Phone"
-          />
-          <AdminSelect value={planId} onChange={setPlanId}>
-            <option value="">No plan</option>
-            {plans.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </AdminSelect>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="grid gap-1 text-xs text-text-secondary">
-              Start
-              <input
-                type="date"
-                className={fieldClass}
-                value={startsOn}
-                onChange={(e) => setStartsOn(e.target.value)}
-              />
-            </label>
-            <label className="grid gap-1 text-xs text-text-secondary">
-              End
-              <input
-                type="date"
-                className={fieldClass}
-                value={endsOn}
-                onChange={(e) => setEndsOn(e.target.value)}
-              />
-            </label>
-          </div>
-          <AdminSelect value={memberStatus} onChange={setMemberStatus}>
-            <option value="active">Active</option>
-            <option value="expired">Expired</option>
-          </AdminSelect>
-
-          <div className="grid gap-1">
-            <p className="text-xs text-text-secondary">Link app user (optional)</p>
-            {userId ? (
-              <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
-                <span>{userLabel || userId}</span>
-                <button
-                  type="button"
-                  className="text-xs text-red-700"
-                  onClick={() => {
-                    setUserId(null);
-                    setUserLabel("");
-                  }}
-                >
-                  Clear
-                </button>
-              </div>
-            ) : (
-              <>
+        <div className="grid gap-5">
+          <section className="grid gap-3">
+            <SectionTitle>Member</SectionTitle>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <FieldLabel>Full name</FieldLabel>
                 <input
                   className={fieldClass}
-                  value={userQuery}
-                  onChange={(e) => setUserQuery(e.target.value)}
-                  placeholder="Search user by name / phone"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Abebe Kebede"
                 />
-                {userHits.length > 0 ? (
-                  <ul className="max-h-36 overflow-auto rounded-lg border border-border bg-card text-sm">
-                    {userHits.map((u) => (
-                      <li key={u.id}>
-                        <button
-                          type="button"
-                          className="block w-full px-3 py-2 text-left hover:bg-muted/40"
-                          onClick={() => {
-                            setUserId(u.id);
-                            setUserLabel(
-                              u.display_name || u.username || u.phone || u.email || u.id,
-                            );
-                            setUserQuery("");
-                            setUserHits([]);
-                          }}
-                        >
-                          {u.display_name || u.username || "User"}{" "}
-                          <span className="text-text-secondary">
-                            {u.phone || u.email || ""}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </>
-            )}
-          </div>
-
-          <div className="grid gap-1">
-            <p className="text-xs text-text-secondary">Link gym (optional)</p>
-            {gymId ? (
-              <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm">
-                <span>{gymLabel || gymId}</span>
-                <button
-                  type="button"
-                  className="text-xs text-red-700"
-                  onClick={() => {
-                    setGymId(null);
-                    setGymLabel("");
-                  }}
-                >
-                  Clear
-                </button>
               </div>
-            ) : (
-              <>
+              <div>
+                <FieldLabel>Phone</FieldLabel>
                 <input
                   className={fieldClass}
-                  value={gymQuery}
-                  onChange={(e) => setGymQuery(e.target.value)}
-                  placeholder="Search gym by name"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="09…"
                 />
-                {gymHits.length > 0 ? (
-                  <ul className="max-h-36 overflow-auto rounded-lg border border-border bg-card text-sm">
-                    {gymHits.map((g) => (
-                      <li key={g.id}>
-                        <button
-                          type="button"
-                          className="block w-full px-3 py-2 text-left hover:bg-muted/40"
-                          onClick={() => {
-                            setGymId(g.id);
-                            setGymLabel(g.name || g.id);
-                            setGymQuery("");
-                            setGymHits([]);
-                          }}
-                        >
-                          {g.name || g.id}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </>
-            )}
-          </div>
+              </div>
+            </div>
+          </section>
 
-          <textarea
-            className="min-h-20 w-full rounded-lg border border-border px-3 py-2 text-sm"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Note (optional)"
-          />
+          <section className="grid gap-3">
+            <SectionTitle>Membership</SectionTitle>
+            <div>
+              <FieldLabel>Plan</FieldLabel>
+              <AdminSelect value={planId} onChange={setPlanId}>
+                <option value="">No plan</option>
+                {plans.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </AdminSelect>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div>
+                <FieldLabel>Start</FieldLabel>
+                <input
+                  type="date"
+                  className={fieldClass}
+                  value={startsOn}
+                  onChange={(e) => setStartsOn(e.target.value)}
+                />
+              </div>
+              <div>
+                <FieldLabel>End</FieldLabel>
+                <input
+                  type="date"
+                  className={fieldClass}
+                  value={endsOn}
+                  onChange={(e) => setEndsOn(e.target.value)}
+                />
+              </div>
+              <div>
+                <FieldLabel>Status</FieldLabel>
+                <AdminSelect value={memberStatus} onChange={setMemberStatus}>
+                  <option value="active">Active</option>
+                  <option value="expired">Expired</option>
+                </AdminSelect>
+              </div>
+            </div>
+          </section>
+
+          <section className="grid gap-3">
+            <SectionTitle>Links (optional)</SectionTitle>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <FieldLabel>App user</FieldLabel>
+                {userId ? (
+                  <div className="flex h-10 items-center justify-between rounded-md border border-border bg-muted/30 px-3 text-sm">
+                    <span className="truncate">{userLabel || userId}</span>
+                    <button
+                      type="button"
+                      aria-label="Clear user"
+                      className="rounded p-0.5 text-text-hint hover:bg-muted hover:text-text-primary"
+                      onClick={() => {
+                        setUserId(null);
+                        setUserLabel("");
+                      }}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      className={fieldClass}
+                      value={userQuery}
+                      onChange={(e) => setUserQuery(e.target.value)}
+                      placeholder="Search by name or phone"
+                    />
+                    {userHits.length > 0 ? (
+                      <ul className="mt-1 max-h-32 overflow-auto rounded-md border border-border bg-card text-sm shadow-sm">
+                        {userHits.map((u) => (
+                          <li key={u.id}>
+                            <button
+                              type="button"
+                              className="block w-full px-3 py-2 text-left transition hover:bg-muted/50"
+                              onClick={() => {
+                                setUserId(u.id);
+                                setUserLabel(
+                                  u.display_name || u.username || u.phone || u.email || u.id,
+                                );
+                                setUserQuery("");
+                                setUserHits([]);
+                              }}
+                            >
+                              <span className="font-medium">
+                                {u.display_name || u.username || "User"}
+                              </span>{" "}
+                              <span className="text-text-secondary">
+                                {u.phone || u.email || ""}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </>
+                )}
+              </div>
+              <div>
+                <FieldLabel>Gym</FieldLabel>
+                {gymId ? (
+                  <div className="flex h-10 items-center justify-between rounded-md border border-border bg-muted/30 px-3 text-sm">
+                    <span className="truncate">{gymLabel || gymId}</span>
+                    <button
+                      type="button"
+                      aria-label="Clear gym"
+                      className="rounded p-0.5 text-text-hint hover:bg-muted hover:text-text-primary"
+                      onClick={() => {
+                        setGymId(null);
+                        setGymLabel("");
+                      }}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      className={fieldClass}
+                      value={gymQuery}
+                      onChange={(e) => setGymQuery(e.target.value)}
+                      placeholder="Search gym by name"
+                    />
+                    {gymHits.length > 0 ? (
+                      <ul className="mt-1 max-h-32 overflow-auto rounded-md border border-border bg-card text-sm shadow-sm">
+                        {gymHits.map((g) => (
+                          <li key={g.id}>
+                            <button
+                              type="button"
+                              className="block w-full px-3 py-2 text-left transition hover:bg-muted/50"
+                              onClick={() => {
+                                setGymId(g.id);
+                                setGymLabel(g.name || g.id);
+                                setGymQuery("");
+                                setGymHits([]);
+                              }}
+                            >
+                              {g.name || g.id}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="grid gap-3">
+            <SectionTitle>Proof & notes</SectionTitle>
+            <div>
+              <FieldLabel>Screenshot</FieldLabel>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void uploadScreenshot(file);
+                  e.target.value = "";
+                }}
+              />
+              {screenshot ? (
+                <div className="flex items-start gap-3 rounded-md border border-border bg-muted/20 p-3">
+                  <a
+                    href={screenshot}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block h-20 w-28 shrink-0 overflow-hidden rounded-md border border-border bg-muted"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={screenshot} alt="" className="h-full w-full object-cover" />
+                  </a>
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <p className="truncate text-xs text-text-secondary">{screenshot}</p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={uploading}
+                        onClick={() => fileRef.current?.click()}
+                        className="h-8 rounded-md border border-border px-2.5 text-xs font-medium hover:bg-muted disabled:opacity-50"
+                      >
+                        {uploading ? "Uploading…" : "Replace"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setScreenshot("")}
+                        className="h-8 rounded-md px-2.5 text-xs font-medium text-red-700 hover:bg-red-50"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={uploading}
+                  onClick={() => fileRef.current?.click()}
+                  className="flex h-24 w-full flex-col items-center justify-center gap-1.5 rounded-md border border-dashed border-border bg-muted/15 text-sm text-text-secondary transition hover:border-primary/40 hover:bg-primary/5 disabled:opacity-50"
+                >
+                  <ImagePlus className="h-5 w-5 text-text-hint" />
+                  <span>{uploading ? "Uploading…" : "Upload screenshot"}</span>
+                  <span className="text-[11px] text-text-hint">JPG, PNG, WebP · max 5 MB</span>
+                </button>
+              )}
+            </div>
+            <div>
+              <FieldLabel>Note</FieldLabel>
+              <textarea
+                className="min-h-20 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Optional note"
+              />
+            </div>
+          </section>
         </div>
       </AdminModal>
     </div>
