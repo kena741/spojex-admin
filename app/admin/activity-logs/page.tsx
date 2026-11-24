@@ -72,6 +72,8 @@ export default function ActivityLogsPage() {
       outcomeFilter,
     ]),
     enabled: !permsLoading && canRead,
+    staleTime: 0,
+    forceOnMount: true,
     fetcher: async () => {
       const offset = (currentPage - 1) * PAGE_SIZE;
       const params = new URLSearchParams({

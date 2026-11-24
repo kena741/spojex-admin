@@ -45,10 +45,6 @@ export async function fetchUserPushProfile(
   return { profile: data as UserPushProfile, error: null };
 }
 
-async function clearStaleFcmToken(serviceClient: SpojexClient, userId: string) {
-  await serviceClient.from("users").update({ fcm_token: null }).eq("id", userId);
-}
-
 async function writeInbox(
   serviceClient: SpojexClient,
   userId: string,
@@ -91,13 +87,14 @@ export async function sendUserPush({
     }
     return { ok: true as const, messageId };
   } catch (error) {
+    // ponytail: never wipe users.fcm_token from Next — wrong Firebase project
+    // returns UNREGISTERED/NOT_FOUND and used to clear valid app tokens.
     if (isStaleFcmTokenError(error)) {
-      await clearStaleFcmToken(serviceClient, userId);
       return {
         ok: false as const,
         error:
-          "The device token is no longer valid and was cleared. Ask the user to open the app again.",
-        clearedToken: true,
+          "The device token was rejected by Firebase. If pushes work in the app, check admin Firebase credentials match spojex-4ddef.",
+        clearedToken: false,
       };
     }
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminPermission } from "@/lib/admin-auth";
+import { logAdminActivity } from "@/lib/admin-activity-log";
 import { getSpojexApiBaseUrl } from "@/lib/env";
 import { withServiceMediaUrls } from "@/lib/services-media";
 import { requestAccessToken } from "@/lib/spojex/server";
@@ -88,6 +89,22 @@ export async function POST(
   if (!data) {
     return NextResponse.json({ error: "Service not found" }, { status: 404 });
   }
+  const row = data as { title?: unknown; name?: unknown };
+  const serviceName =
+    typeof row.title === "string"
+      ? row.title
+      : typeof row.name === "string"
+        ? row.name
+        : id;
+  await logAdminActivity({
+    context: auth.context,
+    request,
+    action: `service.${body.action}`,
+    resource_type: "service",
+    resource_id: id,
+    summary: `Action ${body.action} applied · ${serviceName}`,
+    metadata: { reason: body.reason || null, source: "admin_local_fallback" },
+  });
   return NextResponse.json({
     ok: true,
     action: body.action,
