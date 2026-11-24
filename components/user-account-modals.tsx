@@ -168,7 +168,8 @@ export function UserDeleteModal({
       <div className="space-y-3">
         <p className="text-sm text-text-secondary">
           Delete <span className="font-medium text-text-primary">{label}</span>? They will no longer
-          be able to sign in. This cannot be undone from the admin list.
+          be able to sign in, and they will be removed from every gym membership roster. This cannot
+          be undone from the admin list.
         </p>
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
       </div>

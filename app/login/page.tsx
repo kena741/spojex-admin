@@ -30,7 +30,7 @@ function LoginContent() {
       : queryError === "auth"
         ? "Authentication is required. Please sign in."
         : queryError === "forbidden"
-          ? "This account is not an admin. Ask a Super Admin to grant access."
+          ? "Please sign in to continue."
         : queryError === "timeout"
           ? "Session check timed out. Please sign in again."
           : queryError
@@ -110,20 +110,16 @@ function LoginContent() {
 
       if (!staff?.is_active) {
         await getSpojexClient().auth.signOut();
-        throw new Error(
-          "This account is not an admin. Ask a Super Admin to send you an invitation.",
-        );
+        throw new Error("Sign-in failed. Use a valid admin account.");
       }
 
       router.replace(params.get("next") || "/admin/dashboard");
     } catch (err: unknown) {
       const message = errorText(err);
       if (/forbidden|invite_required|writes for this resource require admin/i.test(message)) {
-        setError(
-          "Signed in, but this account is not an admin. Ask a Super Admin for an invitation.",
-        );
+        setError("Sign-in failed. Use a valid admin account.");
       } else if (/could not find the table|schema cache|relation .*admin|Not authenticated|401/i.test(message)) {
-        setError("Admin sign-in failed. Confirm SPOJEX_API_BASE_URL points at the API and this account has an active admin row.");
+        setError("Admin sign-in failed. Check API configuration and try again.");
       } else {
         setError(message);
       }
@@ -140,9 +136,7 @@ function LoginContent() {
             <SpojexLogo size={48} className="h-12 w-12" priority />
           </div>
           <h1 className="font-heading text-lg font-semibold text-text-primary">SpoJex Admin</h1>
-          <p className="mt-1 text-sm text-text-secondary">
-            Sign in with an invited admin account. Access is granted by a Super Admin.
-          </p>
+          <p className="mt-1 text-sm text-text-secondary">Sign in to continue.</p>
         </div>
         <form onSubmit={onSubmit} className="space-y-4">
           {displayError ? (

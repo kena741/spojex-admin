@@ -1386,7 +1386,7 @@ function memberConsequence(kind: MemberConfirm["kind"], member: GymDirectoryMemb
     return "Puts this person back on the active community roster. Membership and payment records are not changed.";
   }
   if (kind === "remove") {
-    return "Unlinks this person from the gym roster. Payment and membership financial history is preserved.";
+    return "This permanently removes them from the gym roster. Payment and membership financial history is kept. This cannot be undone from this screen.";
   }
   if (hasEntitlement) {
     return "Takes this person off the active community roster. Their membership record (plan, dates) and all payment history are kept and nothing is refunded.";
@@ -1751,14 +1751,14 @@ function MembersTab({
         stacked
         title={
           confirm?.kind === "remove"
-            ? "Remove member from gym"
+            ? "Remove member from gym?"
             : confirm?.kind === "activate"
               ? "Activate member"
               : "Deactivate member"
         }
         confirmLabel={
           confirm?.kind === "remove"
-            ? "Remove member"
+            ? "Yes, remove"
             : confirm?.kind === "activate"
               ? "Activate"
               : "Deactivate"
