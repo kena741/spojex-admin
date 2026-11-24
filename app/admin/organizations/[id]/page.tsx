@@ -1151,10 +1151,6 @@ export default function OrganizationDetailPage() {
 
             <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
               <h2 className="font-heading text-sm font-semibold">Org-attributable activity</h2>
-              <p className="mt-1 text-xs text-text-hint">
-                Live gifts for events hosted by this organization. Personal owner wallet totals are
-                not organization balances.
-              </p>
               <p className="mt-3 text-2xl font-semibold tabular-nums">
                 {formatCoins(liveGiftsReceived)}
               </p>
@@ -1171,10 +1167,6 @@ export default function OrganizationDetailPage() {
 
             <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
               <h2 className="font-heading text-sm font-semibold">Linked products</h2>
-              <p className="mt-1 text-xs text-text-hint">
-                Links use explicit foreign keys - not name matching. Gym verification is a separate
-                scope from organization verification.
-              </p>
               <ul className="mt-3 space-y-2 text-sm">
                 <li>
                   <span className="text-text-hint">Gyms: </span>
@@ -1249,10 +1241,6 @@ export default function OrganizationDetailPage() {
                   {formatCoins(ownerCoinWallet?.lifetime_received ?? 0)} · Redeemable:{" "}
                   {formatCoins(ownerCoinWallet?.redeemable_balance ?? 0)}
                 </p>
-                <p className="mt-1">
-                  Live gifts currently credit the owner user account. Do not sum this wallet across
-                  multiple organizations.
-                </p>
                 {org.user_id ? (
                   <Link
                     href={`/admin/people/${org.users?.id || org.user_id}`}
@@ -1318,12 +1306,6 @@ export default function OrganizationDetailPage() {
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <h2 className="font-heading text-sm font-semibold">Staff &amp; access</h2>
-                    <p className="mt-1 text-xs text-text-secondary">
-                      Every organization must have an owner linked to a Spojex user. Staff get the
-                      same day-to-day access as the owner. Link an existing person or create a new
-                      account — chat members are not staff unless added here. Platform profile roles
-                      are never overwritten.
-                    </p>
                   </div>
                   {canWrite && !org.is_platform ? (
                     <button
@@ -1403,10 +1385,6 @@ export default function OrganizationDetailPage() {
                     <h3 className="mb-2 mt-5 text-xs font-semibold uppercase tracking-wide text-text-secondary">
                       Members ({people.members.length})
                     </h3>
-                    <p className="mb-2 text-xs text-text-secondary">
-                      Organization chat members. Promote someone to staff, or leave them as a
-                      regular member.
-                    </p>
                     <ul className="divide-y divide-border">
                       {people.members.map((m) => renderPersonRow(m, "member"))}
                     </ul>
@@ -1420,9 +1398,6 @@ export default function OrganizationDetailPage() {
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <h2 className="font-heading text-sm font-semibold">Profile &amp; location</h2>
-                    <p className="mt-1 text-xs text-text-secondary">
-                      Verification is changed from the header actions so each change is audited.
-                    </p>
                   </div>
                   {canWrite ? (
                     editing ? (
@@ -1573,9 +1548,6 @@ export default function OrganizationDetailPage() {
             {settingsSection === "media" ? (
               <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
                 <h2 className="font-heading text-sm font-semibold">Media</h2>
-                <p className="mt-1 text-xs text-text-secondary">
-                  Organization logo shown on profile, chats, and content attribution.
-                </p>
                 <div className="mt-4 flex flex-wrap items-center gap-4">
                   <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-xl border border-border bg-muted text-lg font-semibold">
                     {org.logo_url ? (

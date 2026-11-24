@@ -977,10 +977,6 @@ function RadioChatPage() {
                   ))}
                 </AdminSelect>
               </div>
-              <p className="mt-2 text-xs text-text-secondary">
-                Badge count = unresolved reports
-                {streamId ? " for this station" : " (global)"}: open, pending, or in review.
-              </p>
             </AdminFilterPanel>
 
             <div className="rounded-xl border border-border bg-card">
@@ -1255,10 +1251,6 @@ function RadioChatPage() {
                         </button>
                       </>
                     ) : null}
-                    <p className="text-xs text-text-secondary">
-                      Hiding a message and resolving a report are separate unless you choose both
-                      on Resolve. App-wide account suspension is under Users.
-                    </p>
                   </div>
                 ) : null}
               </div>

@@ -13,7 +13,6 @@ export function PersonMediaSection({ items }: Props) {
     <PersonSection
       id="highlights"
       title="Media"
-      description="Photos and highlight clips from the app."
       count={items.length}
       action={
         <Link

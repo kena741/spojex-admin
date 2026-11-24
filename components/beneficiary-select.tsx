@@ -41,12 +41,10 @@ export default function BeneficiarySelect({
   value,
   onChange,
   disabled,
-  showAttributionHint = true,
 }: {
   value: string;
   onChange: (userId: string) => void;
   disabled?: boolean;
-  showAttributionHint?: boolean;
 }) {
   const [orgs, setOrgs] = useState<OrgOption[]>([]);
   const [users, setUsers] = useState<UserOption[]>([]);
@@ -207,12 +205,6 @@ export default function BeneficiarySelect({
             </ul>
           </div>
         </>
-      ) : null}
-      {showAttributionHint ? (
-        <p className="text-[11px] text-text-hint">
-          Public beneficiary resolves to a user wallet (org owner or person). Changing this does not
-          rewrite historical contribution recipients.
-        </p>
       ) : null}
     </div>
   );

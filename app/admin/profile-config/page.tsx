@@ -1897,10 +1897,6 @@ function SectionsTab({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-1 text-sm text-text-secondary">
-          Who sees each tab
-          <InfoTip text="Roles decide who sees a tab. Tick sports or professions to narrow it. Kind sets the icon." />
-        </p>
         <button
           type="button"
           className={primaryButtonClass}

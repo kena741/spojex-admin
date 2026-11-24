@@ -32,7 +32,6 @@ export function PersonIdentityForm({
     <PersonSection
       id="identity"
       title="Identity"
-      description="Names and account role are visible across the network. Sport/profession categories live on role assignments."
       action={saving ? <span className="text-xs text-text-hint">Saving…</span> : null}
     >
       <div className="grid gap-4 sm:grid-cols-2">

@@ -564,29 +564,11 @@ function FeedInsightsPageInner() {
 
       {tab === "personalization" && pers ? (
         <div className="space-y-4">
-          <p className="text-xs text-text-secondary">{pers.snapshot_note}</p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {summaryCards.map((c) => (
               <MetricCard key={c.title} title={c.title} metric={c.metric} unitHint={c.unitHint} />
             ))}
           </div>
-
-          <details className="rounded-xl border border-border bg-card px-4 py-3 text-xs text-text-secondary">
-            <summary className="cursor-pointer font-medium text-foreground">Score & taxonomy notes</summary>
-            <ul className="mt-2 list-disc space-y-1 pl-4">
-              <li>
-                Negative affinity reduces ranking weight - it does{" "}
-                <strong>not</strong> hard-exclude content. Hard exclusion uses feedback + exposure windows.
-              </li>
-              <li>
-                Raw scores are uncalibrated weights, not probabilities or percentages.
-              </li>
-              {pers.taxonomy_note?.general ? <li>{pers.taxonomy_note.general}</li> : null}
-              {pers.score_policy?.hard_exclusion ? (
-                <li>Hard exclusion: {pers.score_policy.hard_exclusion}</li>
-              ) : null}
-            </ul>
-          </details>
 
           <div className={cn("grid gap-4", userId ? "lg:grid-cols-[1fr_360px]" : "")}>
             <AdminTableShell>

@@ -33,7 +33,6 @@ export default function SportsMarketFinancePage() {
     <div>
       <AdminPageHeader
         title="Sports Marketplace"
-        description="Payments from buyers and the 10% commission on product subtotals (delivery fees are never charged commission)."
       />
       <SmTabs />
       <div className="mb-4 flex gap-2">

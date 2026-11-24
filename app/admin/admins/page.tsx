@@ -732,10 +732,6 @@ export default function AdminsPage() {
 
             {tab === "attach" ? (
               <div className="grid gap-3">
-                <p className="text-xs text-text-secondary">
-                  Find someone who already has a SpoJex account by email or username, then grant a
-                  staff role. No new password is created.
-                </p>
                 <AdminSearchInput
                   value={attachQuery}
                   onChange={(value) => {
@@ -801,10 +797,6 @@ export default function AdminsPage() {
                 }}
                 className="grid gap-3"
               >
-                <p className="text-xs text-text-secondary">
-                  Optional: send a one-time invite link. Prefer Create new when you need to hand
-                  them a password immediately.
-                </p>
                 <input
                   value={inviteForm.full_name}
                   onChange={(event) =>

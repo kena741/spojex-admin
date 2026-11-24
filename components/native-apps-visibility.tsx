@@ -79,11 +79,7 @@ export function NativeAppsVisibility({ canEdit }: { canEdit: boolean }) {
 
   return (
     <section className="rounded-xl border border-border bg-card p-4">
-      <h2 className="font-heading text-sm font-semibold">Apps in the Spojex app</h2>
-      <p className="mb-3 text-xs text-text-hint">
-        The first {QUICK_ACTION_COUNT} shown apps are home quick actions, next to the Apps button. The rest are on the All
-        apps page. Turned-off apps are hidden everywhere. Phones update within about 10 minutes.
-      </p>
+      <h2 className="mb-3 font-heading text-sm font-semibold">Apps in the Spojex app</h2>
       {error ? <AdminErrorAlert message={error} /> : null}
       {!state && !error ? <p className="text-sm text-text-hint">Loading…</p> : null}
       {state ? (
@@ -150,7 +146,6 @@ export function NativeAppsVisibility({ canEdit }: { canEdit: boolean }) {
         </ol>
       ) : null}
       {!canEdit ? (
-        <p className="mt-2 text-xs text-text-hint">You need the Edit global settings permission to change this.</p>
       ) : null}
     </section>
   );

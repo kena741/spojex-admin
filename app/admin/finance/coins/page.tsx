@@ -427,9 +427,6 @@ export default function FinanceCoinsPage() {
 
       {tab === "packs" ? (
         <section className="space-y-4">
-          <p className="text-sm text-text-secondary">
-            Packs sold in the mobile wallet. Price follows the rate under Rates & rules (bonus coins are free).
-          </p>
           {canWrite ? (
             <form onSubmit={createPackage} className="grid gap-2 rounded-xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-5">
               <input
@@ -542,9 +539,6 @@ export default function FinanceCoinsPage() {
 
       {tab === "gifts" ? (
         <section className="space-y-4">
-          <p className="text-sm text-text-secondary">
-            Emoji gifts fans send in chat, radio, live, and campaigns. Cost is in coins.
-          </p>
           {canWrite ? (
             <form onSubmit={createGift} className="grid gap-2 rounded-xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4">
               <EmojiPickerField value={giftEmoji} onChange={setGiftEmoji} />
@@ -642,9 +636,6 @@ export default function FinanceCoinsPage() {
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-xl border border-border bg-card p-4">
               <h2 className="font-heading text-sm font-semibold">Purchase rate</h2>
-              <p className="mt-1 text-sm text-text-secondary">
-                How many coins 1 Birr buys. Pack prices and custom buys use this rate.
-              </p>
               <div className="mt-4 flex flex-wrap items-end gap-3">
                 <label className="text-sm">
                   <span className="mb-1 block text-text-secondary">Coins per 1 Birr</span>
@@ -674,9 +665,6 @@ export default function FinanceCoinsPage() {
 
             <div className="rounded-xl border border-border bg-card p-4">
               <h2 className="font-heading text-sm font-semibold">Redemption limits</h2>
-              <p className="mt-1 text-sm text-text-secondary">
-                Caps for coin cash-out requests. Payouts are handled under Finance → Payouts.
-              </p>
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 <label className="text-sm">
                   <span className="mb-1 block text-text-secondary">Min / request</span>
@@ -727,9 +715,6 @@ export default function FinanceCoinsPage() {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="font-heading text-sm font-semibold">Chapa checkout</h2>
-                <p className="mt-1 text-sm text-text-secondary">
-                  Coin packs are paid through Chapa. Keys live in Payment Settings.
-                </p>
               </div>
               <Link href="/admin/finance/payment-settings" className={buttonClass}>
                 Payment settings

@@ -48,7 +48,6 @@ export default function SportsMarketOrdersPage() {
     <div>
       <AdminPageHeader
         title="Sports Marketplace"
-        description="Every marketplace order, with its payment, commission and full status history."
         actions={<AdminReloadButton onClick={refresh} refreshing={refreshing} />}
       />
       <SmTabs />

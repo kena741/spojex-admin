@@ -1086,9 +1086,6 @@ function LiveEventDetail() {
 
           {scoreSupported ? (
             <Card title="Scoreboard" id="live-board">
-              <p className="mb-3 text-xs text-text-secondary">
-                Updating the score never changes the lifecycle. Use the Lifecycle card to go live.
-              </p>
               <div className="grid gap-3">
                 <Stepper
                   label={event.home_name || "Home"}
@@ -1154,9 +1151,6 @@ function LiveEventDetail() {
 
           {fightSupported ? (
             <Card title="Fight board" id="live-board">
-              <p className="mb-3 text-xs text-text-secondary">
-                Fight updates never change the lifecycle. Use the Lifecycle card to go live.
-              </p>
               <div className="grid gap-3">
                 <p className="text-sm font-medium">
                   {event.fighter_a || "Fighter A"} vs {event.fighter_b || "Fighter B"}
@@ -1227,10 +1221,7 @@ function LiveEventDetail() {
 
           {!scoreSupported && !fightSupported ? (
             <Card title="Live board">
-              <p className="text-sm text-text-secondary">
-                This kind of event has no score or fight controls. Use the lifecycle actions; if
-                there is no source, the app still shows countdown, status and chat.
-              </p>
+              <p className="text-sm text-text-secondary">No score or fight controls for this event kind.</p>
             </Card>
           ) : null}
         </div>
@@ -1359,10 +1350,6 @@ function LiveEventDetail() {
               <span className="text-xs text-text-secondary">Read-only</span>
             )}
           </div>
-          <p className="mb-4 text-xs text-text-secondary">
-            Lifecycle status is changed on the Broadcast tab, not here.
-          </p>
-
           {conflict ? (
             <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
               Someone else changed this event while you were editing.{" "}

@@ -405,10 +405,6 @@ export default function SoundLibraryPage() {
               />
             </>
           ) : (
-            <p className="text-xs text-text-secondary md:col-span-2">
-              After upload you can trim start/end, then save. Same audio URL
-              will not create a duplicate library row.
-            </p>
           )}
           <div className="md:col-span-2 flex flex-wrap justify-end gap-2 pt-2">
             <button

@@ -11,7 +11,6 @@ export default function AwardsRevenuePage() {
     <div>
       <AdminPageHeader
         title="Awards revenue"
-        description="Money from vote purchases, per event. Open an event for its split per nominee."
         backHref="/admin/awards"
         breadcrumbs={[{ label: "Awards & Voting", href: "/admin/awards" }, { label: "Revenue" }]}
         actions={<AdminReloadButton onClick={() => setReloadKey((k) => k + 1)} refreshing={false} />}

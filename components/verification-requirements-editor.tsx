@@ -501,10 +501,6 @@ export default function VerificationRequirementsEditor({ embedded = false }: Pro
         <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold">Role requirements</h2>
-            <p className="text-sm text-text-secondary">
-              Required and optional document types per identity role. Changes apply to new
-              submissions; approved requests keep their prior policy outcome.
-            </p>
           </div>
           <label className="grid gap-1 text-sm">
             <span className="text-text-secondary">Role</span>

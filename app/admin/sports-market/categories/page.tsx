@@ -45,7 +45,6 @@ export default function SportsMarketCategoriesPage() {
     <div>
       <AdminPageHeader
         title="Sports Marketplace"
-        description="Product categories sellers choose from. Hidden categories stay on existing listings but can't be picked for new ones."
         actions={
           <>
             <AdminReloadButton onClick={refresh} refreshing={refreshing} />

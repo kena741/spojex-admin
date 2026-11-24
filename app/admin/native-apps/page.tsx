@@ -291,11 +291,6 @@ export default function NativeAppsOverviewPage() {
           {data?.generated_at ? ` · Updated ${formatDateTime(data.generated_at)}` : null}
         </p>
       </div>
-      <p className="text-[11px] text-text-hint">
-        {data?.period?.note ||
-          "Snapshot metrics are current state. Period metrics use Africa/Addis_Ababa day boundaries. Upcoming windows are independent of the historical period."}
-      </p>
-
       {error ? (
         <div className="space-y-2">
           <AdminErrorAlert message={error} />

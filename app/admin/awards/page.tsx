@@ -54,7 +54,6 @@ export default function AwardsPage() {
     <div>
       <AdminPageHeader
         title="Awards & Voting"
-        description="Run award voting: add nominees, open voting, publish winners."
         actions={
           <>
             <Link
@@ -197,7 +196,6 @@ function CreateEventModal({
             <input type="datetime-local" className={fieldClass} value={votingEnd} onChange={(e) => setVotingEnd(e.target.value)} />
           </div>
         </div>
-        <p className="text-xs text-text-secondary">Saved as a draft. Add nominees, then publish. Each event is one award.</p>
       </div>
     </AdminModal>
   );

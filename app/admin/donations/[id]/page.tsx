@@ -668,9 +668,6 @@ export default function DonationDetailPage() {
                 ? ` of ${formatDonationAmount(Number(progress?.goal ?? 0), displayCurrency)} (${progress?.label || "0%"})`
                 : ""}
             </p>
-            {progress?.note ? (
-              <p className="mt-1 text-[11px] text-text-hint">{progress.note}</p>
-            ) : null}
           </section>
 
           <section className="space-y-4">
@@ -775,9 +772,6 @@ export default function DonationDetailPage() {
             <p className="text-xs text-text-hint">
               Lifecycle: {String((policy as Record<string, string>).active || donationLifecyclePolicy.active)}{" "}
               Pause: {String((policy as Record<string, string>).paused || donationLifecyclePolicy.paused)}
-            </p>
-            <p className="text-xs text-text-secondary">
-              Edit details and media in Settings. Financial activity stays in Contributions / Finance.
             </p>
           </section>
         </div>
@@ -905,10 +899,6 @@ export default function DonationDetailPage() {
           <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold">Disbursements</h2>
-              <p className="mt-1 text-sm text-text-secondary">
-                {(workspace.disbursements as { message?: string } | undefined)?.message ||
-                  "Completed contributions credit the recipient wallet at payment time."}
-              </p>
             </div>
             <Link
               href={
@@ -1000,9 +990,6 @@ export default function DonationDetailPage() {
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold">Settings</h2>
-              <p className="text-xs text-text-secondary">
-                Explicit save - edits do not autosave.
-              </p>
             </div>
             {canWrite ? (
               <div className="flex flex-wrap gap-2">

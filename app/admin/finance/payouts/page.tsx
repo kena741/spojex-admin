@@ -337,7 +337,6 @@ export default function FinancePayoutsPage() {
     <div className="space-y-4">
       <AdminPageHeader
         title="Payouts"
-        description="Withdrawals & redemptions"
         actions={
           <AdminReloadButton
             loading={loading}
@@ -346,12 +345,6 @@ export default function FinancePayoutsPage() {
           />
         }
       />
-
-      <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-text-secondary">
-        Withdrawals: approve the request, transfer the money, then “Record as
-        paid” with the transfer reference. Recording does not send money. The
-        amount stays held from the wallet until paid; rejecting returns it.
-      </p>
 
       {error ? (
         <div className="space-y-2">

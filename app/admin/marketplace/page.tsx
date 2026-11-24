@@ -153,8 +153,6 @@ export default function MarketplaceOverviewPage() {
   const customStart = searchParams.get("start") || "";
   const customEnd = searchParams.get("end") || "";
 
-  const [defsOpen, setDefsOpen] = useState(false);
-
   const writeRange = useCallback(
     (patch: Record<string, string | null>) => {
       const next = new URLSearchParams(searchParams.toString());
@@ -210,21 +208,12 @@ export default function MarketplaceOverviewPage() {
       <AdminPageHeader
         title="Marketplace"
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setDefsOpen((v) => !v)}
-              className="rounded-md border border-border bg-card px-2.5 py-1.5 text-xs font-medium text-text-secondary"
-            >
-              Metric definitions
-            </button>
-            <AdminReloadButton
-              loading={loading}
-              refreshing={refreshing}
-              onClick={() => void load()}
-              label="Refresh"
-            />
-          </div>
+          <AdminReloadButton
+            loading={loading}
+            refreshing={refreshing}
+            onClick={() => void load()}
+            label="Refresh"
+          />
         }
       />
 
@@ -288,27 +277,6 @@ export default function MarketplaceOverviewPage() {
           </span>
         ) : null}
       </div>
-
-      {data?.period?.label ? (
-        <p className="text-xs text-text-hint">
-          Period activity: {data.period.label}. Snapshot metrics (queues, published counts) are
-          current - not filtered by this range.
-        </p>
-      ) : null}
-
-      {defsOpen && Object.keys(defs).length > 0 ? (
-        <div className="rounded-xl border border-border bg-muted/20 p-4 text-xs text-text-secondary">
-          <p className="mb-2 font-medium text-foreground">Definitions</p>
-          <ul className="grid gap-2 sm:grid-cols-2">
-            {Object.entries(defs).map(([key, value]) => (
-              <li key={key}>
-                <span className="font-medium text-foreground">{key.replace(/_/g, " ")}</span>
-                - {value}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
 
       {error ? (
         <div className="space-y-2">

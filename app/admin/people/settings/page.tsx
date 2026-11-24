@@ -220,11 +220,6 @@ export default function CategoriesPage() {
           </div>
         }
       />
-      <p className="mb-4 max-w-3xl text-sm text-text-secondary">
-        Manage who a person <span className="font-medium text-text-primary">is</span> (identity roles).
-        Profile tabs and fields are configured separately. Role assignments never grant Admin RBAC.
-        Users may hold multiple roles; Flutter currently surfaces a single primary role.
-      </p>
       {error ? <AdminErrorAlert message={error} /> : null}
 
       {canWrite && catalog?.fromDatabase ? (

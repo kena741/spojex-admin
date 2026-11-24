@@ -1349,10 +1349,6 @@ export default function GymsAdminPage() {
                   {selectedOwner.email ? ` · ${selectedOwner.email}` : ""}
                 </p>
               ) : (
-                <p className="text-xs text-text-secondary">
-                  Required. Pick a user from the results - create the account under Users first if
-                  they are not listed.
-                </p>
               )}
               {ownerLoading ? <p className="text-xs text-text-hint">Searching…</p> : null}
               {ownerOptions.length > 0 ? (

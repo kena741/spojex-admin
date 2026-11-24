@@ -47,11 +47,7 @@ export default function SportsMarketReportsPage() {
     <div>
       <AdminPageHeader
         title="Sports Marketplace"
-        description={
-          data
-            ? `${data.open_count} open report${data.open_count === 1 ? "" : "s"}. Removing a listing hides it from the app and closes every open report on it.`
-            : "Listings people flagged from the app."
-        }
+        description={data ? `${data.open_count} open` : undefined}
         actions={<AdminReloadButton onClick={refresh} refreshing={refreshing} />}
       />
       <SmTabs />

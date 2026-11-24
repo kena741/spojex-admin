@@ -696,7 +696,6 @@ function ParticipantModal({
               }}
             />
           )}
-          <p className="mt-1 text-xs text-text-secondary">Name, photo and bio come from their Spojex profile.</p>
         </div>
         <div>
           <label className={labelClass} htmlFor="nominee-followers">

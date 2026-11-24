@@ -64,7 +64,6 @@ export function PersonProfileSection({ catalogProfile }: Props) {
     <PersonSection
       id="profile"
       title="Profile"
-      description="Role-specific details from the identity catalog."
     >
       <div className="space-y-6">
         <ProfileBody title={title}>

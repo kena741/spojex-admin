@@ -746,10 +746,6 @@ export default function OpportunityDetailPage() {
             ) : (
               <p className="mt-3 text-xs text-emerald-800">No scheduling or configuration issues detected.</p>
             )}
-            <p className="mt-3 text-[11px] text-text-hint">
-              {overview?.waitlist_definition ||
-                "Waitlist = interest before applications open. Never auto-converts to applications."}
-            </p>
             {overview?.next_scheduled_transition ? (
               <p className="mt-2 text-xs text-text-secondary">
                 Next transition: {overview.next_scheduled_transition.label}
@@ -774,12 +770,6 @@ export default function OpportunityDetailPage() {
                 No Process schedules audit entry yet (cron or admin button).
               </p>
             )}
-            <p className="mt-1 text-[11px] text-text-hint">
-              {overview?.schedule_timezone_note ||
-                "Timestamps stored in UTC; display uses Africa/Addis_Ababa."}{" "}
-              Terms version: {overview?.terms_version ?? 1}. Closing applications preserves
-              applications and payments (not the same as cancelling the listing).
-            </p>
           </section>
 
           <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
@@ -1058,10 +1048,6 @@ export default function OpportunityDetailPage() {
                     ) : null}
                   </div>
                 ) : null}
-                <p className="text-[11px] text-text-hint">
-                  Decisions require authorized reviewers. Rejection and withdrawal require a reason.
-                  Profile completion is informational - not used to auto-rank or reject.
-                </p>
               </div>
             )}
           </aside>
@@ -1070,10 +1056,6 @@ export default function OpportunityDetailPage() {
 
       {tab === "waitlist" ? (
         <div className="space-y-3">
-          <p className="text-sm text-text-secondary">
-            {overview?.waitlist_definition ||
-              "Interest before applications open. Not a capacity overflow list. Entries never auto-become applications."}
-          </p>
           <AdminTableShell>
             {waitlist.length === 0 ? (
               <AdminEmpty
@@ -1436,12 +1418,6 @@ export default function OpportunityDetailPage() {
 
           <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
             <h2 className="mb-4 font-heading text-sm font-semibold">Eligibility and required information</h2>
-            <p className="mb-3 text-xs text-text-hint">
-              Eligible roles gate who can apply in the app. Empty selection means all roles.
-              Profile-completion % is a soft gate at apply time - it does not auto-rank or reject
-              in admin review. Editing terms here bumps terms_version; already-submitted
-              applications keep their snapshot.
-            </p>
             <Field
               label="Eligible roles"
               hint="Empty = all roles. Profile-completeness % is separate from identity verification."

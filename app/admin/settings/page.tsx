@@ -624,10 +624,6 @@ export default function GlobalSettingsPage() {
                         }
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      These texts, plus the Contact tab and App name/version,
-                      appear in the mobile app under Profile → Settings.
-                    </p>
                   </div>
                 </Section>
               )}
@@ -666,9 +662,6 @@ export default function GlobalSettingsPage() {
               {tab === "commission" && (
                 <div className="space-y-8">
                 <Section title="Service commission">
-                  <p className="-mt-2 mb-4 text-sm text-text-secondary">
-                    Taken from service bookings and requests paid in the app.
-                  </p>
                   <div className="grid gap-4 md:grid-cols-3">
                     <Field
                       label="Value"
@@ -701,10 +694,6 @@ export default function GlobalSettingsPage() {
                   </div>
                 </Section>
                 <Section title="E-commerce commission">
-                  <p className="-mt-2 mb-4 text-sm text-text-secondary">
-                    Sports Marketplace only. A percent of the product subtotal on each order; the
-                    delivery fee always goes to the seller. Changes apply to new orders.
-                  </p>
                   <div className="grid gap-4 md:grid-cols-3">
                     <Field
                       label="Commission (%)"
@@ -893,10 +882,6 @@ export default function GlobalSettingsPage() {
                         Coin ↔ Birr rate
                       </h3>
                     </div>
-                    <p className="mb-4 text-sm text-muted-foreground">
-                      After a successful Chapa coin purchase, credited coins = paid
-                      Birr × this rate (plus any pack bonus).
-                    </p>
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                       <div>
                         <label className="mb-2 block text-sm font-medium text-foreground">

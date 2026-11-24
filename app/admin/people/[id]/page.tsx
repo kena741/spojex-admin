@@ -170,12 +170,7 @@ export default function UserDetailPage() {
           <PersonSection
             id="about"
             title="About"
-            description="How this person presents themselves in the app."
-            action={
-              <span className="text-xs text-text-hint">
-                {saving ? "Saving…" : "Edits save when you click away"}
-              </span>
-            }
+            action={saving ? <span className="text-xs text-text-hint">Saving…</span> : null}
           >
             <div className="grid gap-4">
               <PersonInlineField

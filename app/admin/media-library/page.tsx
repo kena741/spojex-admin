@@ -809,11 +809,6 @@ function MediaLibraryPage() {
         title="Upload to Media Library"
       >
         <form onSubmit={saveSound} className="grid gap-3">
-          <p className="text-xs text-text-secondary">
-            Sounds: upload audio, or a short video to extract the soundtrack. Source video is not
-            retained. Images and videos for articles can also be uploaded from Add News - run Refresh
-            index to catalog them here.
-          </p>
           <label className="grid gap-1 text-sm">
             <span className="text-text-secondary">Name</span>
             <input
