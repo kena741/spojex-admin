@@ -380,7 +380,8 @@ export default function BannersPage() {
             </button>
           </div>
           <p className="text-xs text-text-secondary">
-            Image is required at create time.
+            Image is required at create time. Use <span className="font-medium">2.8:1</span> art
+            (e.g. 1120×400) so it fills the home banner without heavy crop.
           </p>
         </form>
       ) : null}
@@ -520,7 +521,7 @@ export default function BannersPage() {
         {draft ? (
           <div className="space-y-4">
             <div className="overflow-hidden rounded-xl border border-border bg-muted">
-              <div className="aspect-[3.8/1] w-full">
+              <div className="aspect-[2.8/1] w-full">
                 {editingImage ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={editingImage} alt="" className="h-full w-full object-cover" />
