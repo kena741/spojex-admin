@@ -663,9 +663,6 @@ export function OrgContentPanel({ orgId }: { orgId: string }) {
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="font-heading text-sm font-semibold">Content library</h2>
-            <p className="mt-1 text-xs text-text-secondary">
-              Organization-attributed sport news and linked gym videos.
-            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <input
@@ -945,10 +942,6 @@ export function OrgChatsPanel({
         <h2 className="mb-1 font-heading text-sm font-semibold">
           Group chat members ({groupMembers.length})
         </h2>
-        <p className="mb-3 text-xs text-text-secondary">
-          People in the organization group chat. Chat membership is separate from Staff access
-          (managed under Settings).
-        </p>
         {loading ? (
           <p className="text-sm text-text-hint">Loading…</p>
         ) : groupMembers.length === 0 ? (

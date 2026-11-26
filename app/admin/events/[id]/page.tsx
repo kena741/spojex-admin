@@ -1041,9 +1041,6 @@ export default function EventDetailPage() {
                     </select>
                   </label>
                 </div>
-                <p className="text-xs text-text-hint">
-                  Pricing source: active tiers preferred; this legacy ticket_price is fallback only when no active tier.
-                </p>
                 <label className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 px-3 py-3 text-sm">
                   <input
                     name="is_upcoming"
@@ -1148,13 +1145,6 @@ export default function EventDetailPage() {
               </form>
             </section>
           </div>
-          <p className="text-xs text-text-secondary">
-            Event managers are listed below. Ticket tiers are managed in{" "}
-            <button type="button" onClick={() => { setTab("tickets"); setTicketView("tiers"); }} className="font-medium text-primary hover:underline">
-              Tickets &amp; Attendance → Tiers
-            </button>
-            .
-          </p>
         </div>
       ) : null}
 
@@ -1302,9 +1292,6 @@ export default function EventDetailPage() {
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="font-heading text-sm font-semibold">Tickets / Orders</h2>
-                <p className="mt-1 text-sm text-text-secondary">
-                  Search the gate code, then check the buyer in or out. New codes are 6 characters; legacy codes ≥4 are accepted.
-                </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <select
@@ -1596,10 +1583,6 @@ export default function EventDetailPage() {
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="font-heading text-sm font-semibold">Assigned managers</h2>
-                <p className="mt-1 text-sm text-text-secondary">
-                  Assign an existing Spojex user or invite by email. Passwords are never shown here - use Auth
-                  reset. Event-scoped roles: gate, attendance, tickets, configure, finance.
-                </p>
               </div>
               {canWrite ? (
                 <button
@@ -1730,10 +1713,6 @@ export default function EventDetailPage() {
           </div>
         ) : (
           <form id="create-event-manager-form" onSubmit={(formEvent) => void createManager(formEvent)} className="grid gap-3 md:grid-cols-2">
-            <p className="text-sm text-text-secondary md:col-span-2">
-              Prefer an existing Spojex email (assigned without password reset). New emails get an invite - use a{" "}
-              <span className="font-medium text-text-primary">different email than your admin account</span>.
-            </p>
             <label className="text-sm">
               <span className="mb-1 block text-text-secondary">Full name</span>
               <input

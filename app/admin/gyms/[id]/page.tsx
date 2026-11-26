@@ -1386,7 +1386,7 @@ function memberConsequence(kind: MemberConfirm["kind"], member: GymDirectoryMemb
     return "Puts this person back on the active community roster. Membership and payment records are not changed.";
   }
   if (kind === "remove") {
-    return "Unlinks this person from the gym roster. Payment and membership financial history is preserved.";
+    return "This permanently removes them from the gym roster. Payment and membership financial history is kept. This cannot be undone from this screen.";
   }
   if (hasEntitlement) {
     return "Takes this person off the active community roster. Their membership record (plan, dates) and all payment history are kept and nothing is refunded.";
@@ -1751,14 +1751,14 @@ function MembersTab({
         stacked
         title={
           confirm?.kind === "remove"
-            ? "Remove member from gym"
+            ? "Remove member from gym?"
             : confirm?.kind === "activate"
               ? "Activate member"
               : "Deactivate member"
         }
         confirmLabel={
           confirm?.kind === "remove"
-            ? "Remove member"
+            ? "Yes, remove"
             : confirm?.kind === "activate"
               ? "Activate"
               : "Deactivate"
@@ -2177,9 +2177,6 @@ function PlansView({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-text-secondary">
-          Packages members choose in the app. Duration in months sets when a subscription expires.
-        </p>
         {canWrite ? (
           <button type="button" className={btnPrimary} onClick={openCreate}>
             Add plan
@@ -2380,10 +2377,6 @@ function PlansView({
               }
               placeholder="Custom months"
             />
-            <p className="text-xs text-text-hint">
-              Used by the API to set membership end date (calendar months from purchase).
-              Changing a plan does not rewrite existing memberships.
-            </p>
           </div>
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -2700,10 +2693,6 @@ function CommunityTab({
         onConfirm={() => void enableChat()}
       >
         <p className="font-medium">{gym.name}</p>
-        <p className="text-text-secondary">
-          Creates or links the gym&apos;s organization and its group chat room. No messages are
-          sent or read, and nobody is added automatically.
-        </p>
       </ConfirmDialog>
                               </div>
   );
@@ -2752,10 +2741,6 @@ function FinanceTab({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="max-w-2xl text-xs text-text-secondary">
-          Customer membership payments (recorded at payment time) are separate from the
-          Gym → Spojex monthly platform fee. Figures are never calculated as plan price × members.
-        </p>
         <div className="flex items-center gap-2">
           <label htmlFor="gym-finance-range" className="text-sm text-text-secondary">
             Period
@@ -3366,10 +3351,6 @@ function ProfileSection({
               onChange={(event) => set("website")(event.target.value)}
                   />
                 </label>
-          <p className="text-xs text-text-hint sm:col-span-2">
-            Commission is read-only. Listing and verification are changed from the header Actions
-            menu.
-          </p>
         </div>
       )}
     </Card>

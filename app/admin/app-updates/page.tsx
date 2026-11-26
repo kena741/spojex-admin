@@ -71,7 +71,6 @@ export default function AppUpdatesPage() {
     <div>
       <AdminPageHeader
         title="App Updates"
-        description="Update prompts for the Spojex app. Changes reach phones on their next launch — no new release needed."
         actions={
           <>
             <button
@@ -112,7 +111,6 @@ export default function AppUpdatesPage() {
           })}
         </div>
       ) : null}
-      <HowItWorks />
     </div>
   );
 }
@@ -503,20 +501,3 @@ function Notice({ tone, children }: { tone: "warn" | "ok" | "error"; children: R
   );
 }
 
-function HowItWorks() {
-  return (
-    <div className="mt-6 rounded-xl border border-border bg-card p-4 text-xs leading-relaxed text-text-secondary sm:p-5">
-      <p className="mb-1 font-medium text-foreground">How phones decide</p>
-      <ul className="list-disc space-y-1 pl-4">
-        <li>On every launch the app reads these settings and compares its installed version and build.</li>
-        <li>Optional: a dismissible popup that comes back after the repeat interval.</li>
-        <li>Mandatory: a popup that can&apos;t be closed until the user updates.</li>
-        <li>
-          A mandatory update is only enforced once the store shows that version (staged rollouts
-          and store delays never lock users out). Until then it&apos;s shown as optional.
-        </li>
-        <li>&quot;Update now&quot; opens the Google Play or App Store page.</li>
-      </ul>
-    </div>
-  );
-}

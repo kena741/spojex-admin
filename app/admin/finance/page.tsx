@@ -260,12 +260,6 @@ export default function FinanceOverviewPage() {
         </div>
       ) : null}
 
-      {summary?.source === "admin_local_fallback" && ok ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          Overview is using local aggregation while the Python finance API catches up.
-        </p>
-      ) : null}
-
       {loading ? <AdminLoadingRow label="Loading finance overview…" /> : null}
 
       {!loading && ok ? (
@@ -274,21 +268,18 @@ export default function FinanceOverviewPage() {
             <Kpi
               label="Verified customer collections"
               value={primary ? money(primary.verified_customer_payments, primary.currency) : "Unavailable"}
-              hint="Period activity - confirmed checkouts only (not wallet credits)"
               delta={deltaLabel(primary?.verified_customer_payments, prevPrimary?.verified_customer_payments)}
               href={rangeHref(drills.verified_customer_payments || "/admin/finance/transactions?status=verified&view=business&asset=money")}
             />
             <Kpi
               label="Platform commissions & fees"
               value={primary ? money(primary.platform_commission_earned, primary.currency) : "Unavailable"}
-              hint="Only amounts recorded on payment rows at transaction time"
               delta={deltaLabel(primary?.platform_commission_earned, prevPrimary?.platform_commission_earned)}
               href={rangeHref(drills.platform_commission_earned || "/admin/finance/transactions?status=verified&view=business&asset=money")}
             />
             <Kpi
               label="Recorded recipient earnings"
               value={primary ? money(primary.provider_earnings, primary.currency) : "Unavailable"}
-              hint="Recipient net where stored - not inferred from current rates"
               delta={deltaLabel(primary?.provider_earnings, prevPrimary?.provider_earnings)}
             />
             <Kpi
@@ -300,13 +291,11 @@ export default function FinanceOverviewPage() {
             <Kpi
               label="Pending payout requests"
               value={primary ? money(primary.pending_withdrawals, primary.currency) : "Unavailable"}
-              hint="Current queue - withdrawals + coin redemptions"
               href={drills.pending_withdrawals || "/admin/finance/payouts?status=pending"}
             />
             <Kpi
               label="Recorded completed payouts"
               value={primary ? money(primary.completed_payouts, primary.currency) : "Unavailable"}
-              hint="Manually marked paid - not bank execution"
               href={drills.completed_payouts || "/admin/finance/payouts?status=paid"}
             />
           </div>
@@ -315,7 +304,6 @@ export default function FinanceOverviewPage() {
             <StatChip
               label="Business transactions"
               value={String(summary?.counts?.business_transactions ?? "-")}
-              hint="Checkout rows in period"
             />
             <StatChip
               label="Verified checkouts"
@@ -324,7 +312,6 @@ export default function FinanceOverviewPage() {
             <StatChip
               label="Ledger entries"
               value={String(summary?.counts?.ledger_entries ?? "-")}
-              hint="Wallet + coin movements - not purchases"
             />
             <StatChip
               label="Pending payment attempts"
@@ -334,18 +321,12 @@ export default function FinanceOverviewPage() {
 
           {summary?.balances_snapshot ? (
             <div className="rounded-xl border border-border bg-card p-4 text-sm shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wide text-text-hint">
-                Current balances (snapshot - not period activity)
-              </p>
               <p className="mt-1">
                 Provider wallets available:{" "}
                 {money(summary.balances_snapshot.provider_wallet_available, "ETB")}
                 {summary.balances_snapshot.provider_wallet_reserved
                   ? ` · Reserved: ${money(summary.balances_snapshot.provider_wallet_reserved, "ETB")}`
                   : ""}
-              </p>
-              <p className="mt-1 text-[11px] text-text-hint">
-                {summary.balances_snapshot.note}
               </p>
             </div>
           ) : null}
@@ -398,9 +379,6 @@ export default function FinanceOverviewPage() {
                 <h2 className="font-heading text-sm font-semibold">
                   Collections / refunds ({summary?.window?.bucket || "day"})
                 </h2>
-                <p className="text-[11px] text-text-hint">
-                  Chart totals use the same verified-checkout definition as KPIs
-                </p>
               </div>
               <div className="flex h-28 items-end gap-1" role="img" aria-label="Collections trend">
                 {trendRows.slice(-42).map((t) => {

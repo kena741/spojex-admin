@@ -27,7 +27,6 @@ export function PersonEngagementSection({ feedInterest }: Props) {
     <PersonSection
       id="engagement"
       title="Engagement"
-      description="What the For You feed has learned about this person."
       action={
         <Link
           href="/admin/feed-interests"

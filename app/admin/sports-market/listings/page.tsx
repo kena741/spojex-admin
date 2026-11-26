@@ -96,7 +96,6 @@ export default function SportsMarketListingsPage() {
     <div>
       <AdminPageHeader
         title="Sports Marketplace"
-        description="Review listings. Removed or rejected products disappear from the app immediately."
         actions={<AdminReloadButton onClick={refresh} refreshing={refreshing} />}
       />
       <SmTabs />

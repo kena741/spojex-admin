@@ -11,6 +11,7 @@ import {
   AdminModalFooter,
   AdminReloadButton,
 } from "@/components/admin-layout";
+import { SearchableSelect } from "@/components/searchable-select";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import {
   catalogRequest,
@@ -586,13 +587,22 @@ export default function ProfileConfigPage() {
           isNew={!liveIds.has(editingGroup.id)}
           onClose={() => setEditingGroup(null)}
           onSave={(next) => {
+            const batch = Array.isArray(next) ? next : [next];
             update((d) => {
-              const before = d.groups.find((g) => g.id === next.id);
+              let groups = d.groups;
+              for (const item of batch) {
+                groups = groups.some((g) => g.id === item.id)
+                  ? groups.map((g) => (g.id === item.id ? item : g))
+                  : [...groups, item];
+              }
+              const keys = new Set(batch.map((g) => g.key));
               return {
                 ...d,
-                groups: before ? d.groups.map((g) => (g.id === next.id ? next : g)) : [...d.groups, next],
+                groups,
                 // Fields follow their group to its tab.
-                fields: d.fields.map((f) => (f.group === next.key ? { ...f, section: next.section } : f)),
+                fields: d.fields.map((f) =>
+                  f.group && keys.has(f.group) ? { ...f, section: batch[0]?.section ?? f.section } : f,
+                ),
               };
             });
             setEditingGroup(null);
@@ -865,6 +875,18 @@ function audienceOptions(doc: CatalogDocument) {
       })),
     },
   ];
+}
+
+function categoryAudienceOptions(doc: CatalogDocument) {
+  return audienceOptions(doc)
+    .filter((group) => group.label !== "Roles")
+    .flatMap((group) =>
+      group.options.map((o) => ({
+        value: o.value,
+        label: o.label,
+        searchText: group.label,
+      })),
+    );
 }
 
 function AudienceSelect({
@@ -1247,6 +1269,8 @@ function FieldTable({
   );
 }
 
+const ACCOUNT_ROLES = ["fan", "athlete", "professional"] as const;
+
 function GroupEditor({
   group,
   doc,
@@ -1258,11 +1282,32 @@ function GroupEditor({
   doc: CatalogDocument;
   isNew: boolean;
   onClose: () => void;
-  onSave: (g: CatalogGroup) => void;
+  onSave: (g: CatalogGroup | CatalogGroup[]) => void;
 }) {
   const [g, setG] = useState<CatalogGroup>(group);
+  const [applyRoles, setApplyRoles] = useState<string[]>(() => {
+    if (group.scope_kind === "account") return [...ACCOUNT_ROLES];
+    if ((ACCOUNT_ROLES as readonly string[]).includes(group.scope_kind)) return [group.scope_kind];
+    return [];
+  });
+  const [categoryScopes, setCategoryScopes] = useState<string[]>(() =>
+    group.scope_kind === "sport" || group.scope_kind === "profession" ? [scopeValue(group)] : [],
+  );
   const keyValid = /^[a-z][a-z0-9_]{1,62}$/.test(g.key);
   const keyTaken = isNew && doc.groups.some((x) => x.key === g.key);
+  const hasCategories = categoryScopes.length > 0;
+  const everyone = applyRoles.length === ACCOUNT_ROLES.length;
+  const appliesOk = hasCategories || applyRoles.length > 0;
+
+  const buildScopes = (): { scope_kind: CatalogGroup["scope_kind"]; scope_ref: string | null }[] => {
+    if (hasCategories) return categoryScopes.map((value) => parseScope(value));
+    if (everyone || applyRoles.length === 0) return [{ scope_kind: "account", scope_ref: null }];
+    return applyRoles.map((role) => ({
+      scope_kind: role as CatalogGroup["scope_kind"],
+      scope_ref: null,
+    }));
+  };
+
   return (
     <AdminModal
       open
@@ -1272,8 +1317,22 @@ function GroupEditor({
       footer={
         <AdminModalFooter
           onCancel={onClose}
-          onSave={() => onSave({ ...g, label: g.label.trim(), item_label: g.item_label.trim() })}
-          disabled={!g.label.trim() || !keyValid || keyTaken}
+          onSave={() => {
+            const base = { ...g, label: g.label.trim(), item_label: g.item_label.trim() };
+            if (!isNew) {
+              onSave(base);
+              return;
+            }
+            const scopes = buildScopes();
+            onSave(
+              scopes.map((scope, i) => ({
+                ...base,
+                id: i === 0 ? base.id : newId(),
+                ...scope,
+              })),
+            );
+          }}
+          disabled={!g.label.trim() || !keyValid || keyTaken || (isNew && !appliesOk)}
           saveLabel="Apply to draft"
         />
       }
@@ -1308,13 +1367,72 @@ function GroupEditor({
               ))}
           </select>
         </Field>
-        <Field label="Applies to" tip={isNew ? undefined : "Locked after publishing."}>
-          <AudienceSelect
-            doc={doc}
-            value={scopeValue(g)}
-            disabled={!isNew}
-            onChange={(value) => setG({ ...g, ...parseScope(value) })}
-          />
+        <Field
+          label="Applied for"
+          tip={
+            isNew
+              ? "Pick roles and/or multiple sports or professions."
+              : "Locked after publishing. Archive and add a new group instead."
+          }
+        >
+          {!isNew ? (
+            <AudienceSelect
+              doc={doc}
+              value={scopeValue(g)}
+              disabled
+              onChange={() => undefined}
+            />
+          ) : (
+            <div className="space-y-2 rounded-lg border border-border bg-muted/30 px-3 py-2 sm:col-span-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={everyone && !hasCategories}
+                  disabled={hasCategories}
+                  onChange={(e) => {
+                    setCategoryScopes([]);
+                    setApplyRoles(e.target.checked ? [...ACCOUNT_ROLES] : []);
+                  }}
+                />
+                Everyone
+              </label>
+              <div className="flex flex-wrap gap-3">
+                {ACCOUNT_ROLES.map((role) => (
+                  <label key={role} className="flex items-center gap-1.5 text-sm capitalize">
+                    <input
+                      type="checkbox"
+                      checked={!hasCategories && applyRoles.includes(role)}
+                      disabled={hasCategories}
+                      onChange={(e) => {
+                        setCategoryScopes([]);
+                        setApplyRoles((prev) =>
+                          e.target.checked
+                            ? [...new Set([...prev, role])]
+                            : prev.filter((r) => r !== role),
+                        );
+                      }}
+                    />
+                    {role}
+                  </label>
+                ))}
+              </div>
+              <div>
+                <p className="mb-1 text-[11px] text-text-hint">Or sports / professions</p>
+                <SearchableSelect
+                  multiple
+                  value={categoryScopes}
+                  onChange={(next) => {
+                    setCategoryScopes(next);
+                    if (next.length) setApplyRoles([]);
+                  }}
+                  options={categoryAudienceOptions(doc)}
+                  placeholder="Select sports or professions"
+                  searchPlaceholder="Search sports & professions…"
+                  allowClear
+                />
+              </div>
+            </div>
+          )}
         </Field>
         <Field label="Max items">
           <input
@@ -1330,8 +1448,6 @@ function GroupEditor({
     </AdminModal>
   );
 }
-
-const ACCOUNT_ROLES = ["fan", "athlete", "professional"] as const;
 
 function FieldEditor({
   field,
@@ -1357,8 +1473,8 @@ function FieldEditor({
     if ((ACCOUNT_ROLES as readonly string[]).includes(field.scope_kind)) return [field.scope_kind];
     return [];
   });
-  const [categoryScope, setCategoryScope] = useState(() =>
-    field.scope_kind === "sport" || field.scope_kind === "profession" ? scopeValue(field) : "",
+  const [categoryScopes, setCategoryScopes] = useState<string[]>(() =>
+    field.scope_kind === "sport" || field.scope_kind === "profession" ? [scopeValue(field)] : [],
   );
   const group = f.group ? doc.groups.find((g) => g.key === f.group) ?? null : null;
   const typeLocked = !isNew && usage > 0;
@@ -1371,11 +1487,12 @@ function FieldEditor({
     setF({ ...f, validation: { ...f.validation, [key]: value === "" ? undefined : value } });
   const options = [...f.options].sort(bySort);
   const keyValid = /^[a-z][a-z0-9_]{1,62}$/.test(f.key);
+  const hasCategories = categoryScopes.length > 0;
   const everyone = applyRoles.length === ACCOUNT_ROLES.length;
-  const appliesOk = Boolean(categoryScope) || applyRoles.length > 0;
+  const appliesOk = hasCategories || applyRoles.length > 0;
 
   const buildScopes = (): { scope_kind: CatalogField["scope_kind"]; scope_ref: string | null }[] => {
-    if (categoryScope) return [parseScope(categoryScope)];
+    if (hasCategories) return categoryScopes.map((value) => parseScope(value));
     if (everyone || applyRoles.length === 0) return [{ scope_kind: "account", scope_ref: null }];
     return applyRoles.map((role) => ({
       scope_kind: role as CatalogField["scope_kind"],
@@ -1475,10 +1592,10 @@ function FieldEditor({
           </Field>
         )}
         <Field
-          label="Applies to"
+          label="Applied for"
           tip={
             isNew
-              ? "Pick one or more roles, or a specific sport/profession."
+              ? "Pick roles and/or multiple sports or professions."
               : "Locked after publishing. Archive and add a new field instead."
           }
         >
@@ -1494,10 +1611,10 @@ function FieldEditor({
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
-                  checked={everyone && !categoryScope}
-                  disabled={Boolean(categoryScope)}
+                  checked={everyone && !hasCategories}
+                  disabled={hasCategories}
                   onChange={(e) => {
-                    setCategoryScope("");
+                    setCategoryScopes([]);
                     setApplyRoles(e.target.checked ? [...ACCOUNT_ROLES] : []);
                   }}
                 />
@@ -1508,10 +1625,10 @@ function FieldEditor({
                   <label key={role} className="flex items-center gap-1.5 text-sm capitalize">
                     <input
                       type="checkbox"
-                      checked={!categoryScope && applyRoles.includes(role)}
-                      disabled={Boolean(categoryScope)}
+                      checked={!hasCategories && applyRoles.includes(role)}
+                      disabled={hasCategories}
                       onChange={(e) => {
-                        setCategoryScope("");
+                        setCategoryScopes([]);
                         setApplyRoles((prev) =>
                           e.target.checked
                             ? [...new Set([...prev, role])]
@@ -1524,29 +1641,19 @@ function FieldEditor({
                 ))}
               </div>
               <div>
-                <p className="mb-1 text-[11px] text-text-hint">Or narrow to one sport / profession</p>
-                <select
-                  className={inputClass}
-                  value={categoryScope}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    setCategoryScope(next);
-                    if (next) setApplyRoles([]);
+                <p className="mb-1 text-[11px] text-text-hint">Or sports / professions</p>
+                <SearchableSelect
+                  multiple
+                  value={categoryScopes}
+                  onChange={(next) => {
+                    setCategoryScopes(next);
+                    if (next.length) setApplyRoles([]);
                   }}
-                >
-                  <option value="">—</option>
-                  {audienceOptions(doc)
-                    .filter((g) => g.label !== "Roles")
-                    .map((g) => (
-                      <optgroup key={g.label} label={g.label}>
-                        {g.options.map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                </select>
+                  options={categoryAudienceOptions(doc)}
+                  placeholder="Select sports or professions"
+                  searchPlaceholder="Search sports & professions…"
+                  allowClear
+                />
               </div>
             </div>
           )}
@@ -1788,10 +1895,6 @@ function SectionsTab({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-1 text-sm text-text-secondary">
-          Who sees each tab
-          <InfoTip text="Roles decide who sees a tab. Tick sports or professions to narrow it. Kind sets the icon." />
-        </p>
         <button
           type="button"
           className={primaryButtonClass}

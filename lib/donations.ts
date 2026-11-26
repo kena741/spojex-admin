@@ -9,14 +9,15 @@ export const donationStatuses: { id: DonationStatus; label: string }[] = [
 
 export const donationLifecyclePolicy = {
   draft: "Not publicly listed; contributions rejected.",
-  active: "Accepts coin gifts and ETB checkouts.",
-  paused: "Listed but new contributions blocked; late ETB confirmations still settle.",
+  active: "Accepts coin gifts only.",
+  paused: "Listed but new contributions blocked.",
   closed: "No new contributions; history preserved. Reopen via activate with reason.",
   target_auto_close: false,
   over_100_percent:
     "Allowed - progress bar caps visually at 100% while totals and labels show overflow.",
   asset_lock: "Currency/asset cannot change after any contribution exists.",
-  disbursements: "Not implemented - do not infer payout from wallet credit.",
+  disbursements:
+    "Coin gifts credit the campaign beneficiary wallet when the gift completes. This tab lists those credits.",
 } as const;
 
 export function donationStatusLabel(status?: string | null) {

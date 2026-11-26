@@ -467,11 +467,6 @@ export default function LiveEventsPanel() {
 
   return (
     <>
-      <p className="mb-4 text-sm text-text-secondary">
-        <strong className="font-medium text-text-primary">Live Events</strong> is the former Video
-        tab: scheduled matches, fights, shows and streams. A countdown reaching zero never means
-        the event is live - it needs an explicit go-live.
-      </p>
       <div className="mb-3 flex flex-wrap gap-2">
         {liveEventLanes.map((item) => {
           const count = item.id === "all" ? undefined : laneCounts[item.id];
@@ -877,15 +872,6 @@ export default function LiveEventsPanel() {
                 onChange={(e) => patchForm({ ends_at: e.target.value })}
               />
             </label>
-            {form.starts_at && zonedLocalToIso(form.starts_at, form.timezone) ? (
-              <p className="text-xs text-text-secondary">
-                That is {new Date(zonedLocalToIso(form.starts_at, form.timezone)!).toLocaleString()}{" "}
-                in your browser&apos;s timezone.
-              </p>
-            ) : null}
-            <p className="text-xs text-text-secondary">
-              The app shows a countdown to this time. It does not go live by itself.
-            </p>
           </div>
         ) : null}
 

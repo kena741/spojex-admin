@@ -910,9 +910,6 @@ export default function OrganizationsPage() {
                 {selectedOwner.role ? ` · ${selectedOwner.role}` : ""}
               </p>
             ) : (
-              <p className="text-xs text-text-secondary">
-                Search an existing user, or create one with phone, email, and role. They are attached as owner immediately.
-              </p>
             )}
             {ownerPassword ? (
               <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">

@@ -258,11 +258,6 @@ export default function PaymentSettingsPage() {
                   onChange={(e) => updateChapaField("feePercent", e.target.value)}
                   className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
                 />
-                <p className="mt-1 text-xs text-text-hint">
-                  Added on top of every Chapa checkout (services, events, gym, stadium, coins,
-                  top-ups, donations, and more). Wallet pay is unchanged. Product payouts still
-                  use the base amount.
-                </p>
               </div>
               <div>
                 <label className="mb-2 block text-sm font-medium text-foreground">Public Key</label>
@@ -306,81 +301,6 @@ export default function PaymentSettingsPage() {
                   </button>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Telebirr */}
-          <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-            <h3 className="mb-4 text-lg font-bold text-foreground">Telebirr</h3>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-foreground">Name</label>
-                <input
-                  type="text"
-                  value={String(paymentSettings.telebirr?.name || "")}
-                  onChange={(e) => updatePaymentSetting("telebirr", "name", e.target.value)}
-                  className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-              {paymentSettings.telebirr &&
-                Object.keys(paymentSettings.telebirr)
-                  .filter((key) => key !== "name")
-                  .map((key) => (
-                    <div key={key}>
-                      <label className="mb-2 block text-sm font-medium capitalize text-foreground">
-                        {key}
-                      </label>
-                      <input
-                        type="text"
-                        value={String(paymentSettings.telebirr?.[key] || "")}
-                        onChange={(e) => updatePaymentSetting("telebirr", key, e.target.value)}
-                        className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-                      />
-                    </div>
-                  ))}
-            </div>
-          </div>
-
-          {/* Wallet */}
-          <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-            <h3 className="mb-4 text-lg font-bold text-foreground">Wallet</h3>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-foreground">Name</label>
-                <input
-                  type="text"
-                  value={String(paymentSettings.wallet?.name || "")}
-                  onChange={(e) => updatePaymentSetting("wallet", "name", e.target.value)}
-                  className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-              <div className="flex items-end">
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(paymentSettings.wallet?.enable)}
-                    onChange={(e) => updatePaymentSetting("wallet", "enable", e.target.checked)}
-                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                  />
-                  <span className="text-sm font-medium text-foreground">Enable</span>
-                </label>
-              </div>
-              {paymentSettings.wallet &&
-                Object.keys(paymentSettings.wallet)
-                  .filter((key) => key !== "name" && key !== "enable")
-                  .map((key) => (
-                    <div key={key}>
-                      <label className="mb-2 block text-sm font-medium capitalize text-foreground">
-                        {key}
-                      </label>
-                      <input
-                        type="text"
-                        value={String(paymentSettings.wallet?.[key] || "")}
-                        onChange={(e) => updatePaymentSetting("wallet", key, e.target.value)}
-                        className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-                      />
-                    </div>
-                  ))}
             </div>
           </div>
 

@@ -990,10 +990,6 @@ export default function StadiumDetailPage() {
         <div className="space-y-6">
           <section className="rounded-2xl border border-border bg-card p-5 sm:p-6">
             <h2 className="font-heading text-sm font-semibold">Weekly hours</h2>
-            <p className="mt-1 mb-5 text-sm text-text-secondary">
-              Set visiting hours for each day. Fans pay once for the day at any time - these slots only show when the
-              pitch is open so they can decide whether to go.
-            </p>
             <form onSubmit={saveHours} className="space-y-5">
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {stadiumWeekDays.map((day) => {
@@ -1137,9 +1133,6 @@ export default function StadiumDetailPage() {
 
           <section className="rounded-2xl border border-border bg-card p-5 sm:p-6">
             <h2 className="font-heading text-sm font-semibold">Block a slot</h2>
-            <p className="mt-1 mb-5 text-sm text-text-secondary">
-              Hide visiting hours for an emergency or an internal event. Fans cannot buy a day pass if the whole day is blocked.
-            </p>
             {canWrite ? (
               <form onSubmit={addBlock} className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 <label className="text-sm">
@@ -1230,10 +1223,6 @@ export default function StadiumDetailPage() {
       {tab === "pricing" ? (
         <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
           <h2 className="mb-1 font-heading text-sm font-semibold">Pricing &amp; passes</h2>
-          <p className="mb-3 text-sm text-text-secondary">
-            Configure each product explicitly. Empty = not offered. Zero = free. Changing prices does not
-            rewrite existing purchases.
-          </p>
           <ul className="mb-4 space-y-2 text-xs text-text-secondary">
             {stadiumPlanTypes.map((item) => {
               const def = STADIUM_PRODUCT_DEFINITIONS[item.id];
@@ -1323,10 +1312,6 @@ export default function StadiumDetailPage() {
                   <h2 className="font-heading text-sm font-semibold">
                     Hourly bookings ({bookings.length})
                   </h2>
-                  <p className="mt-1 text-xs text-text-hint">
-                    Booking status is separate from payment. Paid slots stuck in pending can be
-                    completed or cancelled here.
-                  </p>
                 </div>
                 {bookingAnalytics ? (
                   <p className="text-xs text-text-secondary">
@@ -1775,10 +1760,6 @@ export default function StadiumDetailPage() {
             </div>
             {managerMode === "assign" ? (
               <>
-                <p className="text-sm text-text-secondary md:col-span-2">
-                  Search by @username or email, then select a user from the list. Their platform profile role is
-                  left unchanged. No password reset.
-                </p>
                 <div className="space-y-2 md:col-span-2">
                   {managerSelected ? (
                     <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
@@ -1911,12 +1892,6 @@ export default function StadiumDetailPage() {
               </>
             ) : (
               <>
-                <p className="text-sm text-text-secondary md:col-span-2">
-                  Creates a SpoJex app login and assigns it to this stadium. Use a{" "}
-                  <span className="font-medium text-text-primary">different email than your admin account</span>
-                  . The password stays visible so you can share it. If that email already exists (and is not your
-                  admin login), that account is assigned and its app password is updated.
-                </p>
                 <label className="text-sm">
                   <span className="mb-1 block text-text-secondary">Full name</span>
                   <input

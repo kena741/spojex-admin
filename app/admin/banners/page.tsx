@@ -87,10 +87,6 @@ function BannerLinkFields({
           />
         </label>
       </div>
-      <p className="text-xs text-text-secondary">
-        Use a website link <em>or</em> store links, not both. Each device opens only its own
-        store; a device with no store link for it can&apos;t tap the banner.
-      </p>
     </div>
   );
 }

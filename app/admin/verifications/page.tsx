@@ -663,10 +663,6 @@ export default function VerificationCenterPage() {
                           Approve identity
                         </button>
                       </div>
-                      <p className="text-[11px] text-text-hint">
-                        Approval sets users.verified only. It does not verify organizations or gyms.
-                        Concurrent reviewers and stale pages are blocked via version checks.
-                      </p>
                     </div>
                   ) : null}
 

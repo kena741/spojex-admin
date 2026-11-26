@@ -423,7 +423,10 @@ export default function DonationDetailPage() {
     setError(null);
     setNotice(null);
     try {
-      const isCoin = form.currency.toUpperCase() === "COIN" || form.currency.toUpperCase() === "COINS";
+      const isCoin =
+        form.currency.toUpperCase() === "COIN" ||
+        form.currency.toUpperCase() === "COINS" ||
+        campaignIsCoin(campaign);
       const goalNum = Number(form.goal) || 0;
       const patch: Record<string, unknown> = {
         title: form.title.trim(),
@@ -665,9 +668,6 @@ export default function DonationDetailPage() {
                 ? ` of ${formatDonationAmount(Number(progress?.goal ?? 0), displayCurrency)} (${progress?.label || "0%"})`
                 : ""}
             </p>
-            {progress?.note ? (
-              <p className="mt-1 text-[11px] text-text-hint">{progress.note}</p>
-            ) : null}
           </section>
 
           <section className="space-y-4">
@@ -772,9 +772,6 @@ export default function DonationDetailPage() {
             <p className="text-xs text-text-hint">
               Lifecycle: {String((policy as Record<string, string>).active || donationLifecyclePolicy.active)}{" "}
               Pause: {String((policy as Record<string, string>).paused || donationLifecyclePolicy.paused)}
-            </p>
-            <p className="text-xs text-text-secondary">
-              Edit details and media in Settings. Financial activity stays in Contributions / Finance.
             </p>
           </section>
         </div>
@@ -902,10 +899,6 @@ export default function DonationDetailPage() {
           <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold">Disbursements</h2>
-              <p className="mt-1 text-sm text-text-secondary">
-                {(workspace.disbursements as { message?: string } | undefined)?.message ||
-                  "Completed contributions credit the recipient wallet at payment time."}
-              </p>
             </div>
             <Link
               href={
@@ -920,19 +913,23 @@ export default function DonationDetailPage() {
           {(() => {
             const d = workspace.disbursements as
               | {
-                  totals?: { etb?: string; coins?: string; recipient_count?: number };
-                  recipients?: {
-                    credited_user_id?: string;
-                    recipient_name?: string;
+                  totals?: {
+                    etb?: string;
+                    coins?: string;
+                    recipient_count?: number;
+                    supporter_count?: number;
+                  };
+                  supporters?: {
+                    supporter_user_id?: string | null;
+                    supporter_name?: string;
                     currency?: string;
-                    contribution_count?: number;
+                    amount?: string;
                     total_amount?: string;
-                    finance_href?: string;
                   }[];
                 }
               | undefined;
             const totals = d?.totals;
-            const recipients = d?.recipients ?? [];
+            const supporters = d?.supporters ?? [];
             return (
               <>
                 <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -945,43 +942,46 @@ export default function DonationDetailPage() {
                     <p className="mt-1 text-xl font-semibold tabular-nums">{totals?.coins ?? "0.00"}</p>
                   </div>
                   <div className="rounded-lg border border-border bg-muted/20 p-3">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-text-hint">Recipients</p>
-                    <p className="mt-1 text-xl font-semibold tabular-nums">{totals?.recipient_count ?? 0}</p>
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-text-hint">Supporters</p>
+                    <p className="mt-1 text-xl font-semibold tabular-nums">
+                      {totals?.supporter_count ?? supporters.length}
+                    </p>
                   </div>
                 </div>
-                {recipients.length === 0 ? (
-                  <p className="text-sm text-text-hint">No completed contribution credits yet.</p>
+                {supporters.length === 0 ? (
+                  <p className="text-sm text-text-hint">No completed contributions yet.</p>
                 ) : (
                   <div className="overflow-x-auto rounded-lg border border-border">
                     <table className="min-w-full text-left text-sm">
                       <thead className="border-b border-border bg-muted/30 text-xs text-text-hint">
                         <tr>
-                          <th className="px-3 py-2 font-medium">Recipient</th>
-                          <th className="px-3 py-2 font-medium">Currency</th>
-                          <th className="px-3 py-2 font-medium">Contributions</th>
-                          <th className="px-3 py-2 font-medium">Total</th>
+                          <th className="px-3 py-2 font-medium">Supporter</th>
+                          <th className="px-3 py-2 font-medium">Contribution amount</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {recipients.map((r, i) => (
-                          <tr key={`${r.credited_user_id || "none"}-${r.currency}-${i}`}>
-                            <td className="px-3 py-2">
-                              {r.credited_user_id ? (
-                                <Link
-                                  href={`/admin/people/${r.credited_user_id}`}
-                                  className="text-primary hover:underline"
-                                >
-                                  {r.recipient_name || r.credited_user_id}
-                                </Link>
-                              ) : (
-                                r.recipient_name || "Unassigned"
-                              )}
-                            </td>
-                            <td className="px-3 py-2 tabular-nums">{r.currency || "—"}</td>
-                            <td className="px-3 py-2 tabular-nums">{r.contribution_count ?? 0}</td>
-                            <td className="px-3 py-2 tabular-nums">{r.total_amount ?? "0"}</td>
-                          </tr>
-                        ))}
+                        {supporters.map((row, i) => {
+                          const amount = row.amount ?? row.total_amount ?? "0";
+                          return (
+                            <tr key={`${row.supporter_user_id || "anon"}-${row.currency}-${i}`}>
+                              <td className="px-3 py-2">
+                                {row.supporter_user_id ? (
+                                  <Link
+                                    href={`/admin/people/${row.supporter_user_id}`}
+                                    className="text-primary hover:underline"
+                                  >
+                                    {row.supporter_name || row.supporter_user_id}
+                                  </Link>
+                                ) : (
+                                  row.supporter_name || "Anonymous"
+                                )}
+                              </td>
+                              <td className="px-3 py-2 tabular-nums">
+                                {formatDonationAmount(Number(amount), row.currency || "COIN")}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -997,9 +997,6 @@ export default function DonationDetailPage() {
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-semibold">Settings</h2>
-              <p className="text-xs text-text-secondary">
-                Explicit save - edits do not autosave.
-              </p>
             </div>
             {canWrite ? (
               <div className="flex flex-wrap gap-2">
@@ -1109,22 +1106,14 @@ export default function DonationDetailPage() {
 
             <label className="text-sm">
               <span className="mb-1 block text-text-secondary">Asset</span>
-              <select
-                value={form.currency.toUpperCase().startsWith("COIN") ? "COIN" : "ETB"}
-                disabled={!editing || !canWrite || assetLocked || !form.currency.toUpperCase().startsWith("COIN")}
-                onChange={(e) => updateForm({ currency: e.target.value })}
+              <input
+                value={form.currency.toUpperCase().startsWith("COIN") ? "Coins" : "ETB (legacy)"}
+                disabled
                 className={fieldClass}
-              >
-                <option value="COIN">Coins</option>
-                {!form.currency.toUpperCase().startsWith("COIN") ? (
-                  <option value="ETB">ETB (legacy)</option>
-                ) : null}
-              </select>
-              {assetLocked ? (
-                <span className="mt-1 block text-[11px] text-text-hint">
-                  Locked after contributions - historical coins cannot be relabeled as ETB.
-                </span>
-              ) : null}
+              />
+              <span className="mt-1 block text-[11px] text-text-hint">
+                Donations use coins only. Legacy ETB campaigns stay read-only for asset.
+              </span>
             </label>
             <label className="text-sm">
               <span className="mb-1 block text-text-secondary">

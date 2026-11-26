@@ -67,13 +67,15 @@ export function gymAllowedActions(row: GymRow): GymAction[] {
     });
   }
 
-  if (listing === "active") {
-    actions.push({ id: "deactivate_listing", label: "Deactivate listing" });
-  } else if (listing === "inactive" || listing === "pending") {
+  // One visibility axis: Suspend / Reactivate (not also Deactivate / Activate).
+  if (listing === "inactive" || verification === "suspended") {
+    actions.push({ id: "reactivate", label: "Reactivate", tone: "success" });
+  } else if (listing !== "deleted" && listing !== "rejected") {
     actions.push({
-      id: "activate_listing",
-      label: "Activate listing",
-      tone: "success",
+      id: "suspend",
+      label: "Suspend",
+      tone: "danger",
+      needsReason: true,
     });
   }
 
@@ -83,16 +85,6 @@ export function gymAllowedActions(row: GymRow): GymAction[] {
       label: "Reject",
       tone: "danger",
       needsReason: true,
-    });
-  }
-
-  if (listing !== "deleted") {
-    actions.push({
-      id: "delete_gym",
-      label: "Delete gym",
-      tone: "danger",
-      needsReason: true,
-      description: "Hides the gym from the app. Payment and membership history are kept.",
     });
   }
 
@@ -111,15 +103,14 @@ export function gymAllowedActions(row: GymRow): GymAction[] {
     });
   }
 
-  if (listing !== "inactive" && verification !== "suspended") {
+  if (listing !== "deleted") {
     actions.push({
-      id: "suspend",
-      label: "Suspend",
+      id: "delete_gym",
+      label: "Delete gym",
       tone: "danger",
       needsReason: true,
+      description: "Hides the gym from the app. Payment and membership history are kept.",
     });
-  } else if (listing === "inactive" || verification === "suspended") {
-    actions.push({ id: "reactivate", label: "Reactivate", tone: "success" });
   }
 
   return actions;

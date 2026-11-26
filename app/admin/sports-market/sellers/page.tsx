@@ -57,7 +57,6 @@ export default function SportsMarketSellersPage() {
     <div>
       <AdminPageHeader
         title="Sports Marketplace"
-        description="Choose which existing Spojex users can sell. Revoking blocks their seller tools and hides their listings at once."
         actions={
           <>
             <AdminReloadButton onClick={refresh} refreshing={refreshing} />
@@ -167,10 +166,6 @@ export default function SportsMarketSellersPage() {
         label="Reason (sent to the seller)"
         saveLabel="Revoke access"
         extra={
-          <p className="text-sm text-text-secondary">
-            Their seller dashboard stops working and their listings leave the marketplace right away. Open orders stay
-            visible to you in Orders.
-          </p>
         }
         onClose={() => setRevoking(null)}
         onSubmit={async (reason) => {

@@ -107,7 +107,6 @@ export default function AwardsAnalyticsPage() {
     <div>
       <AdminPageHeader
         title="Awards analytics"
-        description="Votes, revenue and activity from the vote ledger and confirmed payments."
         backHref="/admin/awards"
         actions={<AdminReloadButton onClick={() => setNonce((n) => n + 1)} refreshing={loading} />}
       />

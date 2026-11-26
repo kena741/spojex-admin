@@ -427,14 +427,6 @@ export default function EventsPage() {
             placeholder="Organizer"
           />
         </div>
-        {windowFilter === "upcoming_14d" || startsFrom ? (
-          <p className="mt-2 text-[11px] text-text-hint">
-            Native Apps upcoming-14-day filter active
-            {startsFrom ? ` from ${startsFrom}` : ""}
-            {startsTo ? ` to ${startsTo}` : ""} - excludes cancelled/ended/completed. Timezone
-            Africa/Addis_Ababa.
-          </p>
-        ) : null}
       </AdminFilterPanel>
       <AdminTableShell>
         <div className="overflow-x-auto">

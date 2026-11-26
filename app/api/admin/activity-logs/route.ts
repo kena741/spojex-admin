@@ -3,6 +3,8 @@ import { requireAdminPermission, requireAdminSession } from "@/lib/admin-auth";
 import { logAdminActivity } from "@/lib/admin-activity-log";
 import { enrichActivityLogs } from "@/lib/activity-log-enrichment";
 import type { AdminActivityLog, CreateActivityLogPayload } from "@/lib/activity-log";
+import { getSpojexApiBaseUrl } from "@/lib/env";
+import { requestAccessToken } from "@/lib/spojex/server";
 
 type ActivityLogRow = {
   id: string;
@@ -36,6 +38,52 @@ export async function GET(request: Request) {
     const end = (searchParams.get("end") || "").trim();
     const limit = Math.min(Math.max(Number(searchParams.get("limit") || 50), 1), 200);
     const offset = Math.max(Number(searchParams.get("offset") || 0), 0);
+
+    const token = await requestAccessToken();
+    if (token) {
+      const params = new URLSearchParams({
+        limit: String(limit),
+        offset: String(offset),
+      });
+      if (adminId) params.set("admin_id", adminId);
+      if (action) params.set("action", action);
+      if (resourceType) params.set("resource_type", resourceType);
+      if (resourceId) params.set("resource_id", resourceId);
+      if (outcome) params.set("outcome", outcome);
+      if (start) params.set("start", start);
+      if (end) params.set("end", end);
+      try {
+        const res = await fetch(
+          `${getSpojexApiBaseUrl()}/api/v1/admin/activity-logs?${params}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+          },
+        );
+        const payload = (await res.json().catch(() => ({}))) as {
+          data?: AdminActivityLog[];
+          total?: number;
+          error?: string;
+          message?: string;
+        };
+        if (res.ok) {
+          const rows = (payload.data ?? []).map((row) => ({
+            ...row,
+            metadata: row.metadata ?? {},
+          })) as AdminActivityLog[];
+          const enriched = await enrichActivityLogs(client, rows);
+          return NextResponse.json({
+            data: enriched,
+            total: payload.total ?? enriched.length,
+            limit,
+            offset,
+            source: "python",
+          });
+        }
+      } catch {
+        // fall through to data-API list
+      }
+    }
 
     let query = client
       .from("admin_activity_log")

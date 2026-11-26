@@ -23,7 +23,6 @@ export default function SportsMarketOverviewPage() {
     <div>
       <AdminPageHeader
         title="Marketplace"
-        description="Buy & sell sports gear — revenue, commission, and order health."
         actions={<AdminReloadButton onClick={refresh} refreshing={refreshing} />}
       />
       <SmTabs />
@@ -162,10 +161,7 @@ function SettingsCard({ initial, canWrite, onSaved }: { initial: SmSettings; can
 
   return (
     <section className="max-w-xl rounded-xl border border-border bg-card p-4 shadow-sm sm:p-5">
-      <h2 className="mb-1 font-heading text-base font-semibold text-text-primary">Settings</h2>
-      <p className="mb-4 text-sm text-text-secondary">
-        Commission is charged on the product subtotal only, never on delivery fees. Changes apply to new orders.
-      </p>
+      <h2 className="mb-4 font-heading text-base font-semibold text-text-primary">Settings</h2>
       {error ? <AdminErrorAlert message={error} /> : null}
       <div className="space-y-4">
         <div>
@@ -189,12 +185,7 @@ function SettingsCard({ initial, canWrite, onSaved }: { initial: SmSettings; can
             checked={form.cod_enabled}
             onChange={(e) => setForm({ ...form, cod_enabled: e.target.checked })}
           />
-          <span>
-            <span className="font-medium text-text-primary">Allow cash on delivery</span>
-            <span className="block text-text-secondary">
-              The seller confirms the cash at delivery; the commission is then collected from their wallet or settled here.
-            </span>
-          </span>
+          <span className="font-medium text-text-primary">Allow cash on delivery</span>
         </label>
         <label className="flex items-start gap-3 text-sm">
           <input
@@ -204,16 +195,10 @@ function SettingsCard({ initial, canWrite, onSaved }: { initial: SmSettings; can
             checked={form.require_listing_approval}
             onChange={(e) => setForm({ ...form, require_listing_approval: e.target.checked })}
           />
-          <span>
-            <span className="font-medium text-text-primary">Review listings before they go live</span>
-            <span className="block text-text-secondary">New and edited listings wait in Listings → Waiting for review.</span>
-          </span>
+          <span className="font-medium text-text-primary">Review listings before they go live</span>
         </label>
         <div>
           <label className={labelClass}>Seller terms of service</label>
-          <p className="mb-2 text-xs text-text-secondary">
-            Shown on My store → Terms of service. Use blank lines between sections; the first line of each block can be a short heading.
-          </p>
           <textarea
             rows={12}
             disabled={!canWrite}

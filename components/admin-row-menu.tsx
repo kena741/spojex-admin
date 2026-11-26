@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +15,8 @@ export type AdminRowMenuItem = {
   disabled?: boolean;
   separatorBefore?: boolean;
 };
+
+type MenuPos = { top?: number; bottom?: number; left: number };
 
 /**
  * Compact ⋯ menu for dense admin tables (Stripe / Linear / Notion pattern).
@@ -31,8 +34,44 @@ export function AdminRowMenu({
   "aria-label"?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [pos, setPos] = useState<MenuPos | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
   const menuId = useId();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const updatePos = () => {
+    const el = rootRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const gap = 4;
+    const spaceBelow = window.innerHeight - rect.bottom - gap;
+    const openUp = spaceBelow < 200 && rect.top > spaceBelow;
+    setPos(
+      openUp
+        ? { bottom: window.innerHeight - rect.top + gap, left: align === "right" ? rect.right - 168 : rect.left }
+        : { top: rect.bottom + gap, left: align === "right" ? rect.right - 168 : rect.left },
+    );
+  };
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPos(null);
+      return;
+    }
+    updatePos();
+    const onScroll = () => updatePos();
+    window.addEventListener("resize", onScroll);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      window.removeEventListener("resize", onScroll);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [open, align]);
 
   useEffect(() => {
     if (!open) return;
@@ -40,7 +79,9 @@ export function AdminRowMenu({
       if (event.key === "Escape") setOpen(false);
     };
     const onPointer = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("mousedown", onPointer);
@@ -53,6 +94,59 @@ export function AdminRowMenu({
   if (items.length === 0) {
     return <span className="text-text-secondary">-</span>;
   }
+
+  const menu =
+    open && mounted && pos
+      ? createPortal(
+          <ul
+            ref={menuRef}
+            id={menuId}
+            role="menu"
+            style={{
+              position: "fixed",
+              top: pos.top,
+              bottom: pos.bottom,
+              left: Math.max(8, pos.left),
+            }}
+            className="z-[200] min-w-[10.5rem] rounded-lg border border-border bg-card py-1 shadow-xl"
+          >
+            {items.map((item) => (
+              <li key={item.id} role="none">
+                {item.separatorBefore ? (
+                  <div className="my-1 border-t border-border" aria-hidden />
+                ) : null}
+                {item.href ? (
+                  <Link
+                    role="menuitem"
+                    href={item.href}
+                    className={menuItemClass(item.tone, item.disabled)}
+                    onClick={() => {
+                      setOpen(false);
+                      item.onClick?.();
+                    }}
+                  >
+                    {item.label}
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={disabled || item.disabled}
+                    className={menuItemClass(item.tone, item.disabled)}
+                    onClick={() => {
+                      setOpen(false);
+                      item.onClick?.();
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>,
+          document.body,
+        )
+      : null;
 
   return (
     <div className="relative inline-flex" ref={rootRef}>
@@ -75,50 +169,7 @@ export function AdminRowMenu({
       >
         <MoreHorizontal className="h-4 w-4" />
       </button>
-      {open ? (
-        <ul
-          id={menuId}
-          role="menu"
-          className={cn(
-            "absolute z-30 mt-1 min-w-[10.5rem] rounded-lg border border-border bg-card py-1 shadow-lg",
-            align === "right" ? "right-0" : "left-0",
-          )}
-        >
-          {items.map((item) => (
-            <li key={item.id} role="none">
-              {item.separatorBefore ? (
-                <div className="my-1 border-t border-border" aria-hidden />
-              ) : null}
-              {item.href ? (
-                <Link
-                  role="menuitem"
-                  href={item.href}
-                  className={menuItemClass(item.tone, item.disabled)}
-                  onClick={() => {
-                    setOpen(false);
-                    item.onClick?.();
-                  }}
-                >
-                  {item.label}
-                </Link>
-              ) : (
-                <button
-                  type="button"
-                  role="menuitem"
-                  disabled={disabled || item.disabled}
-                  className={menuItemClass(item.tone, item.disabled)}
-                  onClick={() => {
-                    setOpen(false);
-                    item.onClick?.();
-                  }}
-                >
-                  {item.label}
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      {menu}
     </div>
   );
 }

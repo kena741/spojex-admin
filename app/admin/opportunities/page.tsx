@@ -378,13 +378,6 @@ export default function OpportunitiesPage() {
           value={`ETB ${Number(scope?.verified_collections || 0).toLocaleString()}`}
         />
       </section>
-      <p className="mb-4 text-[11px] text-text-hint">
-        {definitions.verified_collections ||
-          "Verified fee collections are customer application fees, not platform commission."}{" "}
-        {definitions.waitlist ||
-          "Waitlist = interest before applications open (not capacity overflow)."}
-      </p>
-
       <AdminFilterPanel>
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <AdminSearchInput

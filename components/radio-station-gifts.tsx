@@ -121,10 +121,6 @@ export function RadioStationGifts({ stationId }: { stationId: string }) {
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="font-heading text-sm font-semibold">Gifts received</h2>
-          <p className="text-xs text-text-secondary">
-            Coin gifts listeners sent to this station.
-            {data ? ` ETB value at the current rate (${data.etb_per_coin} ETB per coin).` : ""}
-          </p>
         </div>
         <form
           className="flex flex-wrap items-end gap-2 text-sm"

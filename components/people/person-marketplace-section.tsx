@@ -49,7 +49,6 @@ export function PersonMarketplaceSection({
     <PersonSection
       id="marketplace"
       title="Marketplace"
-      description="Services, bookings and money tied to this account."
     >
       <div className="@container">
         <div className="grid gap-3 @lg:grid-cols-2 @lg:items-start">

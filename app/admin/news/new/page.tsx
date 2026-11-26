@@ -744,10 +744,6 @@ export default function NewsComposerPage() {
                   Author: {staff?.full_name || staff?.email || "Signed-in admin"} (from your
                   account)
                 </p>
-                <p className="text-xs text-text-hint">
-                  Related entity linking (gym / stadium / event) requires a backend field - coming
-                  next. Publishing organization stays the owner.
-                </p>
               </div>
             ) : null}
           </div>

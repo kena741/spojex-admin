@@ -18,7 +18,7 @@ import {
 } from "@/components/admin-layout";
 import { StatusBadge } from "@/components/status-badge";
 import { adminCacheKey, invalidateAdminCache } from "@/lib/admin-session-cache";
-import { deleteAdmin, patchAdmin } from "@/lib/hooks";
+import { patchAdmin } from "@/lib/hooks";
 import { generateStadiumManagerPassword } from "@/lib/stadiums";
 import { useAdminPermissions } from "@/lib/use-admin-permissions";
 import { useAdminQuery } from "@/lib/use-admin-query";
@@ -320,10 +320,47 @@ export default function AdminsPage() {
     }
   };
 
+  const changePassword = async (row: AdminRow) => {
+    const password = generateStadiumManagerPassword();
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/admin/admins/${row.id}/password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const payload = (await res.json().catch(() => ({}))) as { error?: string; email?: string };
+      if (!res.ok) throw new Error(payload.error || "Password reset failed");
+      setCredentials({
+        email: payload.email || row.email || "",
+        password,
+        role: row.role,
+        name: row.full_name || row.email || "Admin",
+      });
+      setCreateOpen(true);
+      setNotice("New password generated. Copy it now — it is shown only once.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Password reset failed");
+    }
+  };
+
   const remove = async (row: AdminRow) => {
     try {
-      await deleteAdmin(`/api/admin/admins/${row.id}`);
+      // Active → suspend; suspended → purge. One "Delete" action does both when needed.
+      const first = await fetch(`/api/admin/admins/${row.id}`, { method: "DELETE" });
+      const firstPayload = (await first.json().catch(() => ({}))) as {
+        error?: string;
+        mode?: string;
+      };
+      if (!first.ok) throw new Error(firstPayload.error || "Delete failed");
+      if (firstPayload.mode === "suspended") {
+        const second = await fetch(`/api/admin/admins/${row.id}`, { method: "DELETE" });
+        const secondPayload = (await second.json().catch(() => ({}))) as { error?: string };
+        if (!second.ok) throw new Error(secondPayload.error || "Delete failed");
+      }
       await refresh();
+      setNotice("Admin deleted.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
     }
@@ -409,6 +446,16 @@ export default function AdminsPage() {
                       },
                     },
                     {
+                      id: "change-password",
+                      label: "Change password",
+                      onClick: () => {
+                        const ok = window.confirm(
+                          `Generate a new password for ${row.full_name || row.email || "this admin"}? The current password stops working immediately.`,
+                        );
+                        if (ok) void changePassword(row);
+                      },
+                    },
+                    {
                       id: "toggle-active",
                       label: row.is_active ? "Suspend" : "Re-enable",
                       onClick: () => {
@@ -424,14 +471,12 @@ export default function AdminsPage() {
                   if (staff?.id !== row.id) {
                     items.push({
                       id: "remove",
-                      label: row.is_active ? "Suspend access" : "Delete staff row",
+                      label: "Delete admin",
                       tone: "danger",
                       separatorBefore: true,
                       onClick: () => {
                         const ok = window.confirm(
-                          row.is_active
-                            ? "Suspend this admin? They lose access; the staff row stays for audit. Remove again later to delete the row."
-                            : "Permanently delete this suspended staff row? Audit log entries are kept (admin link cleared).",
+                          `Permanently delete ${row.full_name || row.email || "this admin"}? They lose access immediately. Audit log entries are kept.`,
                         );
                         if (ok) void remove(row);
                       },
@@ -552,8 +597,8 @@ export default function AdminsPage() {
         {credentials ? (
           <div className="space-y-3 text-sm">
             <p className="text-text-secondary">
-              Account created for <strong>{credentials.name}</strong>. Copy and send these
-              credentials now — the password is not shown again.
+              Credentials for <strong>{credentials.name}</strong>. Copy and send them now — the
+              password is not shown again.
             </p>
             <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3 font-mono text-xs">
               <p>
@@ -687,10 +732,6 @@ export default function AdminsPage() {
 
             {tab === "attach" ? (
               <div className="grid gap-3">
-                <p className="text-xs text-text-secondary">
-                  Find someone who already has a SpoJex account by email or username, then grant a
-                  staff role. No new password is created.
-                </p>
                 <AdminSearchInput
                   value={attachQuery}
                   onChange={(value) => {
@@ -756,10 +797,6 @@ export default function AdminsPage() {
                 }}
                 className="grid gap-3"
               >
-                <p className="text-xs text-text-secondary">
-                  Optional: send a one-time invite link. Prefer Create new when you need to hand
-                  them a password immediately.
-                </p>
                 <input
                   value={inviteForm.full_name}
                   onChange={(event) =>

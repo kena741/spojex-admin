@@ -13,6 +13,7 @@ import {
   AdminSelect,
   AdminTableShell,
 } from "@/components/admin-layout";
+import { SearchableSelect } from "@/components/searchable-select";
 import { adminCacheKey } from "@/lib/admin-session-cache";
 import { adminFetch, deleteAdmin, patchAdmin, postAdmin, uploadAdmin } from "@/lib/hooks";
 import { useAdminQuery } from "@/lib/use-admin-query";
@@ -26,6 +27,8 @@ const CATEGORIES = [
   { id: "jersey", label: "Jersey" },
   { id: "other", label: "Other" },
 ] as const;
+
+const CATEGORY_OPTIONS = CATEGORIES.map((c) => ({ value: c.id, label: c.label }));
 
 type ExpenseRow = {
   id: string;
@@ -309,13 +312,14 @@ export default function ExpensesPage() {
         }
       >
         <div className="grid gap-3">
-          <AdminSelect value={draftCategory} onChange={setDraftCategory}>
-            {CATEGORIES.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.label}
-              </option>
-            ))}
-          </AdminSelect>
+          <SearchableSelect
+            value={draftCategory}
+            onChange={setDraftCategory}
+            options={CATEGORY_OPTIONS}
+            placeholder="Category"
+            searchPlaceholder="Search category…"
+            allowClear={false}
+          />
           <input
             type="number"
             min={0}
